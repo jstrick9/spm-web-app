@@ -1,0 +1,790 @@
+
+<!doctype html>
+<html lang="en">
+
+<head>
+    <title>Code coverage report for routes/guests.ts</title>
+    <meta charset="utf-8" />
+    <link rel="stylesheet" href="../prettify.css" />
+    <link rel="stylesheet" href="../base.css" />
+    <link rel="shortcut icon" type="image/x-icon" href="../favicon.png" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <style type='text/css'>
+        .coverage-summary .sorter {
+            background-image: url(../sort-arrow-sprite.png);
+        }
+    </style>
+</head>
+    
+<body>
+<div class='wrapper'>
+    <div class='pad1'>
+        <h1><a href="../index.html">All files</a> / <a href="index.html">routes</a> guests.ts</h1>
+        <div class='clearfix'>
+            
+            <div class='fl pad1y space-right2'>
+                <span class="strong">89.21% </span>
+                <span class="quiet">Statements</span>
+                <span class='fraction'>182/204</span>
+            </div>
+        
+            
+            <div class='fl pad1y space-right2'>
+                <span class="strong">46.15% </span>
+                <span class="quiet">Branches</span>
+                <span class='fraction'>18/39</span>
+            </div>
+        
+            
+            <div class='fl pad1y space-right2'>
+                <span class="strong">100% </span>
+                <span class="quiet">Functions</span>
+                <span class='fraction'>1/1</span>
+            </div>
+        
+            
+            <div class='fl pad1y space-right2'>
+                <span class="strong">89.21% </span>
+                <span class="quiet">Lines</span>
+                <span class='fraction'>182/204</span>
+            </div>
+        
+            
+        </div>
+        <p class="quiet">
+            Press <em>n</em> or <em>j</em> to go to the next uncovered block, <em>b</em>, <em>p</em> or <em>k</em> for the previous block.
+        </p>
+        <template id="filterTemplate">
+            <div class="quiet">
+                Filter:
+                <input type="search" id="fileSearch">
+            </div>
+        </template>
+    </div>
+    <div class='status-line high'></div>
+    <pre><table class="coverage">
+<tr><td class="line-count quiet"><a name='L1'></a><a href='#L1'>1</a>
+<a name='L2'></a><a href='#L2'>2</a>
+<a name='L3'></a><a href='#L3'>3</a>
+<a name='L4'></a><a href='#L4'>4</a>
+<a name='L5'></a><a href='#L5'>5</a>
+<a name='L6'></a><a href='#L6'>6</a>
+<a name='L7'></a><a href='#L7'>7</a>
+<a name='L8'></a><a href='#L8'>8</a>
+<a name='L9'></a><a href='#L9'>9</a>
+<a name='L10'></a><a href='#L10'>10</a>
+<a name='L11'></a><a href='#L11'>11</a>
+<a name='L12'></a><a href='#L12'>12</a>
+<a name='L13'></a><a href='#L13'>13</a>
+<a name='L14'></a><a href='#L14'>14</a>
+<a name='L15'></a><a href='#L15'>15</a>
+<a name='L16'></a><a href='#L16'>16</a>
+<a name='L17'></a><a href='#L17'>17</a>
+<a name='L18'></a><a href='#L18'>18</a>
+<a name='L19'></a><a href='#L19'>19</a>
+<a name='L20'></a><a href='#L20'>20</a>
+<a name='L21'></a><a href='#L21'>21</a>
+<a name='L22'></a><a href='#L22'>22</a>
+<a name='L23'></a><a href='#L23'>23</a>
+<a name='L24'></a><a href='#L24'>24</a>
+<a name='L25'></a><a href='#L25'>25</a>
+<a name='L26'></a><a href='#L26'>26</a>
+<a name='L27'></a><a href='#L27'>27</a>
+<a name='L28'></a><a href='#L28'>28</a>
+<a name='L29'></a><a href='#L29'>29</a>
+<a name='L30'></a><a href='#L30'>30</a>
+<a name='L31'></a><a href='#L31'>31</a>
+<a name='L32'></a><a href='#L32'>32</a>
+<a name='L33'></a><a href='#L33'>33</a>
+<a name='L34'></a><a href='#L34'>34</a>
+<a name='L35'></a><a href='#L35'>35</a>
+<a name='L36'></a><a href='#L36'>36</a>
+<a name='L37'></a><a href='#L37'>37</a>
+<a name='L38'></a><a href='#L38'>38</a>
+<a name='L39'></a><a href='#L39'>39</a>
+<a name='L40'></a><a href='#L40'>40</a>
+<a name='L41'></a><a href='#L41'>41</a>
+<a name='L42'></a><a href='#L42'>42</a>
+<a name='L43'></a><a href='#L43'>43</a>
+<a name='L44'></a><a href='#L44'>44</a>
+<a name='L45'></a><a href='#L45'>45</a>
+<a name='L46'></a><a href='#L46'>46</a>
+<a name='L47'></a><a href='#L47'>47</a>
+<a name='L48'></a><a href='#L48'>48</a>
+<a name='L49'></a><a href='#L49'>49</a>
+<a name='L50'></a><a href='#L50'>50</a>
+<a name='L51'></a><a href='#L51'>51</a>
+<a name='L52'></a><a href='#L52'>52</a>
+<a name='L53'></a><a href='#L53'>53</a>
+<a name='L54'></a><a href='#L54'>54</a>
+<a name='L55'></a><a href='#L55'>55</a>
+<a name='L56'></a><a href='#L56'>56</a>
+<a name='L57'></a><a href='#L57'>57</a>
+<a name='L58'></a><a href='#L58'>58</a>
+<a name='L59'></a><a href='#L59'>59</a>
+<a name='L60'></a><a href='#L60'>60</a>
+<a name='L61'></a><a href='#L61'>61</a>
+<a name='L62'></a><a href='#L62'>62</a>
+<a name='L63'></a><a href='#L63'>63</a>
+<a name='L64'></a><a href='#L64'>64</a>
+<a name='L65'></a><a href='#L65'>65</a>
+<a name='L66'></a><a href='#L66'>66</a>
+<a name='L67'></a><a href='#L67'>67</a>
+<a name='L68'></a><a href='#L68'>68</a>
+<a name='L69'></a><a href='#L69'>69</a>
+<a name='L70'></a><a href='#L70'>70</a>
+<a name='L71'></a><a href='#L71'>71</a>
+<a name='L72'></a><a href='#L72'>72</a>
+<a name='L73'></a><a href='#L73'>73</a>
+<a name='L74'></a><a href='#L74'>74</a>
+<a name='L75'></a><a href='#L75'>75</a>
+<a name='L76'></a><a href='#L76'>76</a>
+<a name='L77'></a><a href='#L77'>77</a>
+<a name='L78'></a><a href='#L78'>78</a>
+<a name='L79'></a><a href='#L79'>79</a>
+<a name='L80'></a><a href='#L80'>80</a>
+<a name='L81'></a><a href='#L81'>81</a>
+<a name='L82'></a><a href='#L82'>82</a>
+<a name='L83'></a><a href='#L83'>83</a>
+<a name='L84'></a><a href='#L84'>84</a>
+<a name='L85'></a><a href='#L85'>85</a>
+<a name='L86'></a><a href='#L86'>86</a>
+<a name='L87'></a><a href='#L87'>87</a>
+<a name='L88'></a><a href='#L88'>88</a>
+<a name='L89'></a><a href='#L89'>89</a>
+<a name='L90'></a><a href='#L90'>90</a>
+<a name='L91'></a><a href='#L91'>91</a>
+<a name='L92'></a><a href='#L92'>92</a>
+<a name='L93'></a><a href='#L93'>93</a>
+<a name='L94'></a><a href='#L94'>94</a>
+<a name='L95'></a><a href='#L95'>95</a>
+<a name='L96'></a><a href='#L96'>96</a>
+<a name='L97'></a><a href='#L97'>97</a>
+<a name='L98'></a><a href='#L98'>98</a>
+<a name='L99'></a><a href='#L99'>99</a>
+<a name='L100'></a><a href='#L100'>100</a>
+<a name='L101'></a><a href='#L101'>101</a>
+<a name='L102'></a><a href='#L102'>102</a>
+<a name='L103'></a><a href='#L103'>103</a>
+<a name='L104'></a><a href='#L104'>104</a>
+<a name='L105'></a><a href='#L105'>105</a>
+<a name='L106'></a><a href='#L106'>106</a>
+<a name='L107'></a><a href='#L107'>107</a>
+<a name='L108'></a><a href='#L108'>108</a>
+<a name='L109'></a><a href='#L109'>109</a>
+<a name='L110'></a><a href='#L110'>110</a>
+<a name='L111'></a><a href='#L111'>111</a>
+<a name='L112'></a><a href='#L112'>112</a>
+<a name='L113'></a><a href='#L113'>113</a>
+<a name='L114'></a><a href='#L114'>114</a>
+<a name='L115'></a><a href='#L115'>115</a>
+<a name='L116'></a><a href='#L116'>116</a>
+<a name='L117'></a><a href='#L117'>117</a>
+<a name='L118'></a><a href='#L118'>118</a>
+<a name='L119'></a><a href='#L119'>119</a>
+<a name='L120'></a><a href='#L120'>120</a>
+<a name='L121'></a><a href='#L121'>121</a>
+<a name='L122'></a><a href='#L122'>122</a>
+<a name='L123'></a><a href='#L123'>123</a>
+<a name='L124'></a><a href='#L124'>124</a>
+<a name='L125'></a><a href='#L125'>125</a>
+<a name='L126'></a><a href='#L126'>126</a>
+<a name='L127'></a><a href='#L127'>127</a>
+<a name='L128'></a><a href='#L128'>128</a>
+<a name='L129'></a><a href='#L129'>129</a>
+<a name='L130'></a><a href='#L130'>130</a>
+<a name='L131'></a><a href='#L131'>131</a>
+<a name='L132'></a><a href='#L132'>132</a>
+<a name='L133'></a><a href='#L133'>133</a>
+<a name='L134'></a><a href='#L134'>134</a>
+<a name='L135'></a><a href='#L135'>135</a>
+<a name='L136'></a><a href='#L136'>136</a>
+<a name='L137'></a><a href='#L137'>137</a>
+<a name='L138'></a><a href='#L138'>138</a>
+<a name='L139'></a><a href='#L139'>139</a>
+<a name='L140'></a><a href='#L140'>140</a>
+<a name='L141'></a><a href='#L141'>141</a>
+<a name='L142'></a><a href='#L142'>142</a>
+<a name='L143'></a><a href='#L143'>143</a>
+<a name='L144'></a><a href='#L144'>144</a>
+<a name='L145'></a><a href='#L145'>145</a>
+<a name='L146'></a><a href='#L146'>146</a>
+<a name='L147'></a><a href='#L147'>147</a>
+<a name='L148'></a><a href='#L148'>148</a>
+<a name='L149'></a><a href='#L149'>149</a>
+<a name='L150'></a><a href='#L150'>150</a>
+<a name='L151'></a><a href='#L151'>151</a>
+<a name='L152'></a><a href='#L152'>152</a>
+<a name='L153'></a><a href='#L153'>153</a>
+<a name='L154'></a><a href='#L154'>154</a>
+<a name='L155'></a><a href='#L155'>155</a>
+<a name='L156'></a><a href='#L156'>156</a>
+<a name='L157'></a><a href='#L157'>157</a>
+<a name='L158'></a><a href='#L158'>158</a>
+<a name='L159'></a><a href='#L159'>159</a>
+<a name='L160'></a><a href='#L160'>160</a>
+<a name='L161'></a><a href='#L161'>161</a>
+<a name='L162'></a><a href='#L162'>162</a>
+<a name='L163'></a><a href='#L163'>163</a>
+<a name='L164'></a><a href='#L164'>164</a>
+<a name='L165'></a><a href='#L165'>165</a>
+<a name='L166'></a><a href='#L166'>166</a>
+<a name='L167'></a><a href='#L167'>167</a>
+<a name='L168'></a><a href='#L168'>168</a>
+<a name='L169'></a><a href='#L169'>169</a>
+<a name='L170'></a><a href='#L170'>170</a>
+<a name='L171'></a><a href='#L171'>171</a>
+<a name='L172'></a><a href='#L172'>172</a>
+<a name='L173'></a><a href='#L173'>173</a>
+<a name='L174'></a><a href='#L174'>174</a>
+<a name='L175'></a><a href='#L175'>175</a>
+<a name='L176'></a><a href='#L176'>176</a>
+<a name='L177'></a><a href='#L177'>177</a>
+<a name='L178'></a><a href='#L178'>178</a>
+<a name='L179'></a><a href='#L179'>179</a>
+<a name='L180'></a><a href='#L180'>180</a>
+<a name='L181'></a><a href='#L181'>181</a>
+<a name='L182'></a><a href='#L182'>182</a>
+<a name='L183'></a><a href='#L183'>183</a>
+<a name='L184'></a><a href='#L184'>184</a>
+<a name='L185'></a><a href='#L185'>185</a>
+<a name='L186'></a><a href='#L186'>186</a>
+<a name='L187'></a><a href='#L187'>187</a>
+<a name='L188'></a><a href='#L188'>188</a>
+<a name='L189'></a><a href='#L189'>189</a>
+<a name='L190'></a><a href='#L190'>190</a>
+<a name='L191'></a><a href='#L191'>191</a>
+<a name='L192'></a><a href='#L192'>192</a>
+<a name='L193'></a><a href='#L193'>193</a>
+<a name='L194'></a><a href='#L194'>194</a>
+<a name='L195'></a><a href='#L195'>195</a>
+<a name='L196'></a><a href='#L196'>196</a>
+<a name='L197'></a><a href='#L197'>197</a>
+<a name='L198'></a><a href='#L198'>198</a>
+<a name='L199'></a><a href='#L199'>199</a>
+<a name='L200'></a><a href='#L200'>200</a>
+<a name='L201'></a><a href='#L201'>201</a>
+<a name='L202'></a><a href='#L202'>202</a>
+<a name='L203'></a><a href='#L203'>203</a>
+<a name='L204'></a><a href='#L204'>204</a>
+<a name='L205'></a><a href='#L205'>205</a>
+<a name='L206'></a><a href='#L206'>206</a>
+<a name='L207'></a><a href='#L207'>207</a>
+<a name='L208'></a><a href='#L208'>208</a>
+<a name='L209'></a><a href='#L209'>209</a>
+<a name='L210'></a><a href='#L210'>210</a>
+<a name='L211'></a><a href='#L211'>211</a>
+<a name='L212'></a><a href='#L212'>212</a>
+<a name='L213'></a><a href='#L213'>213</a>
+<a name='L214'></a><a href='#L214'>214</a>
+<a name='L215'></a><a href='#L215'>215</a>
+<a name='L216'></a><a href='#L216'>216</a>
+<a name='L217'></a><a href='#L217'>217</a>
+<a name='L218'></a><a href='#L218'>218</a>
+<a name='L219'></a><a href='#L219'>219</a>
+<a name='L220'></a><a href='#L220'>220</a>
+<a name='L221'></a><a href='#L221'>221</a>
+<a name='L222'></a><a href='#L222'>222</a>
+<a name='L223'></a><a href='#L223'>223</a>
+<a name='L224'></a><a href='#L224'>224</a>
+<a name='L225'></a><a href='#L225'>225</a>
+<a name='L226'></a><a href='#L226'>226</a>
+<a name='L227'></a><a href='#L227'>227</a>
+<a name='L228'></a><a href='#L228'>228</a>
+<a name='L229'></a><a href='#L229'>229</a>
+<a name='L230'></a><a href='#L230'>230</a>
+<a name='L231'></a><a href='#L231'>231</a>
+<a name='L232'></a><a href='#L232'>232</a>
+<a name='L233'></a><a href='#L233'>233</a>
+<a name='L234'></a><a href='#L234'>234</a>
+<a name='L235'></a><a href='#L235'>235</a>
+<a name='L236'></a><a href='#L236'>236</a></td><td class="line-coverage quiet"><span class="cline-any cline-yes">1x</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-yes">1x</span>
+<span class="cline-any cline-yes">1x</span>
+<span class="cline-any cline-yes">1x</span>
+<span class="cline-any cline-yes">1x</span>
+<span class="cline-any cline-yes">1x</span>
+<span class="cline-any cline-yes">1x</span>
+<span class="cline-any cline-yes">1x</span>
+<span class="cline-any cline-yes">1x</span>
+<span class="cline-any cline-yes">1x</span>
+<span class="cline-any cline-yes">1x</span>
+<span class="cline-any cline-yes">1x</span>
+<span class="cline-any cline-yes">1x</span>
+<span class="cline-any cline-yes">1x</span>
+<span class="cline-any cline-yes">1x</span>
+<span class="cline-any cline-yes">1x</span>
+<span class="cline-any cline-yes">1x</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-yes">1x</span>
+<span class="cline-any cline-yes">1x</span>
+<span class="cline-any cline-yes">1x</span>
+<span class="cline-any cline-yes">1x</span>
+<span class="cline-any cline-yes">1x</span>
+<span class="cline-any cline-yes">1x</span>
+<span class="cline-any cline-yes">1x</span>
+<span class="cline-any cline-yes">1x</span>
+<span class="cline-any cline-yes">1x</span>
+<span class="cline-any cline-yes">1x</span>
+<span class="cline-any cline-yes">1x</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-yes">1x</span>
+<span class="cline-any cline-yes">1x</span>
+<span class="cline-any cline-yes">1x</span>
+<span class="cline-any cline-yes">1x</span>
+<span class="cline-any cline-yes">1x</span>
+<span class="cline-any cline-yes">1x</span>
+<span class="cline-any cline-yes">1x</span>
+<span class="cline-any cline-yes">1x</span>
+<span class="cline-any cline-yes">1x</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-yes">2x</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-yes">2x</span>
+<span class="cline-any cline-yes">2x</span>
+<span class="cline-any cline-yes">2x</span>
+<span class="cline-any cline-yes">2x</span>
+<span class="cline-any cline-yes">2x</span>
+<span class="cline-any cline-yes">2x</span>
+<span class="cline-any cline-yes">2x</span>
+<span class="cline-any cline-yes">2x</span>
+<span class="cline-any cline-yes">2x</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-yes">2x</span>
+<span class="cline-any cline-yes">4x</span>
+<span class="cline-any cline-yes">4x</span>
+<span class="cline-any cline-yes">4x</span>
+<span class="cline-any cline-yes">4x</span>
+<span class="cline-any cline-yes">4x</span>
+<span class="cline-any cline-yes">4x</span>
+<span class="cline-any cline-yes">4x</span>
+<span class="cline-any cline-yes">4x</span>
+<span class="cline-any cline-yes">4x</span>
+<span class="cline-any cline-yes">4x</span>
+<span class="cline-any cline-yes">4x</span>
+<span class="cline-any cline-yes">4x</span>
+<span class="cline-any cline-yes">4x</span>
+<span class="cline-any cline-yes">4x</span>
+<span class="cline-any cline-yes">2x</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-yes">2x</span>
+<span class="cline-any cline-yes">1x</span>
+<span class="cline-any cline-yes">1x</span>
+<span class="cline-any cline-yes">1x</span>
+<span class="cline-any cline-yes">1x</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-yes">2x</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-yes">2x</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-yes">2x</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-yes">2x</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-yes">2x</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-yes">2x</span>
+<span class="cline-any cline-yes">1x</span>
+<span class="cline-any cline-yes">1x</span>
+<span class="cline-any cline-yes">1x</span>
+<span class="cline-any cline-yes">1x</span>
+<span class="cline-any cline-yes">1x</span>
+<span class="cline-any cline-yes">1x</span>
+<span class="cline-any cline-yes">2x</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-yes">2x</span>
+<span class="cline-any cline-yes">1x</span>
+<span class="cline-any cline-yes">1x</span>
+<span class="cline-any cline-yes">1x</span>
+<span class="cline-any cline-yes">1x</span>
+<span class="cline-any cline-yes">2x</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-yes">2x</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-yes">2x</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-yes">2x</span>
+<span class="cline-any cline-yes">1x</span>
+<span class="cline-any cline-yes">1x</span>
+<span class="cline-any cline-yes">1x</span>
+<span class="cline-any cline-yes">1x</span>
+<span class="cline-any cline-yes">1x</span>
+<span class="cline-any cline-yes">1x</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-yes">1x</span>
+<span class="cline-any cline-yes">1x</span>
+<span class="cline-any cline-yes">1x</span>
+<span class="cline-any cline-yes">1x</span>
+<span class="cline-any cline-yes">1x</span>
+<span class="cline-any cline-yes">1x</span>
+<span class="cline-any cline-yes">1x</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-yes">1x</span>
+<span class="cline-any cline-yes">1x</span>
+<span class="cline-any cline-yes">1x</span>
+<span class="cline-any cline-yes">1x</span>
+<span class="cline-any cline-yes">1x</span>
+<span class="cline-any cline-yes">1x</span>
+<span class="cline-any cline-yes">1x</span>
+<span class="cline-any cline-yes">1x</span>
+<span class="cline-any cline-yes">1x</span>
+<span class="cline-any cline-yes">1x</span>
+<span class="cline-any cline-yes">1x</span>
+<span class="cline-any cline-yes">1x</span>
+<span class="cline-any cline-yes">1x</span>
+<span class="cline-any cline-yes">1x</span>
+<span class="cline-any cline-yes">1x</span>
+<span class="cline-any cline-yes">1x</span>
+<span class="cline-any cline-yes">1x</span>
+<span class="cline-any cline-yes">2x</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-yes">2x</span>
+<span class="cline-any cline-yes">1x</span>
+<span class="cline-any cline-yes">1x</span>
+<span class="cline-any cline-yes">1x</span>
+<span class="cline-any cline-yes">1x</span>
+<span class="cline-any cline-yes">1x</span>
+<span class="cline-any cline-yes">1x</span>
+<span class="cline-any cline-yes">1x</span>
+<span class="cline-any cline-yes">1x</span>
+<span class="cline-any cline-yes">1x</span>
+<span class="cline-any cline-yes">1x</span>
+<span class="cline-any cline-yes">1x</span>
+<span class="cline-any cline-yes">1x</span>
+<span class="cline-any cline-yes">1x</span>
+<span class="cline-any cline-yes">1x</span>
+<span class="cline-any cline-yes">1x</span>
+<span class="cline-any cline-yes">1x</span>
+<span class="cline-any cline-yes">1x</span>
+<span class="cline-any cline-yes">2x</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-yes">2x</span>
+<span class="cline-any cline-yes">2x</span>
+<span class="cline-any cline-yes">2x</span>
+<span class="cline-any cline-yes">2x</span>
+<span class="cline-any cline-yes">2x</span>
+<span class="cline-any cline-yes">2x</span>
+<span class="cline-any cline-yes">2x</span>
+<span class="cline-any cline-yes">2x</span>
+<span class="cline-any cline-yes">2x</span>
+<span class="cline-any cline-yes">2x</span>
+<span class="cline-any cline-yes">2x</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-yes">2x</span>
+<span class="cline-any cline-yes">3x</span>
+<span class="cline-any cline-yes">3x</span>
+<span class="cline-any cline-yes">3x</span>
+<span class="cline-any cline-yes">3x</span>
+<span class="cline-any cline-yes">3x</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-yes">3x</span>
+<span class="cline-any cline-yes">3x</span>
+<span class="cline-any cline-yes">3x</span>
+<span class="cline-any cline-yes">3x</span>
+<span class="cline-any cline-yes">3x</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-yes">1x</span>
+<span class="cline-any cline-yes">1x</span>
+<span class="cline-any cline-yes">1x</span>
+<span class="cline-any cline-yes">1x</span>
+<span class="cline-any cline-yes">1x</span>
+<span class="cline-any cline-yes">1x</span>
+<span class="cline-any cline-yes">1x</span>
+<span class="cline-any cline-yes">1x</span>
+<span class="cline-any cline-yes">1x</span>
+<span class="cline-any cline-yes">1x</span>
+<span class="cline-any cline-yes">1x</span>
+<span class="cline-any cline-yes">1x</span>
+<span class="cline-any cline-yes">1x</span>
+<span class="cline-any cline-yes">1x</span>
+<span class="cline-any cline-yes">1x</span>
+<span class="cline-any cline-yes">1x</span>
+<span class="cline-any cline-yes">1x</span>
+<span class="cline-any cline-yes">1x</span>
+<span class="cline-any cline-yes">2x</span>
+<span class="cline-any cline-yes">2x</span>
+<span class="cline-any cline-neutral">&nbsp;</span></td><td class="text"><pre class="prettyprint lang-js">import type { FastifyInstance } from 'fastify';
+import { z } from 'zod';
+import { requireAuth } from '../middleware/auth.js';
+import { can } from '../lib/rbac.js';
+import {
+  auditRepo, eventsRepo, guestsRepo, rsvpRepo, portalConfigRepo,
+} from '../db/repos/index.js';
+import { BadRequest, Forbidden, NotFound } from '../lib/errors.js';
+import { hashPassword, verifyPassword } from '../lib/crypto.js';
+&nbsp;
+const guestSchema = z.object({
+  fullName:             z.string().min(1).max(200),
+  email:                z.string().email().max(254).optional(),
+  phone:                z.string().max(40).optional(),
+  partyName:            z.string().max(200).optional(),
+  rsvpStatus:           z.enum(['pending','attending','declined','maybe']).optional(),
+  dietaryRestrictions:  z.string().max(2000).optional(),
+  accessibilityNotes:   z.string().max(2000).optional(),
+  tableAssignment:      z.string().max(60).optional(),
+  roomAssignment:       z.string().max(60).optional(),
+  seatAssignment:       z.string().max(60).optional(),
+  plusOneAllowed:       z.boolean().optional(),
+  allowPortalAccess:    z.boolean().optional(),
+  allowLodgingAccess:   z.boolean().optional(),
+  metadata:             z.record(z.unknown()).optional(),
+});
+&nbsp;
+const rsvpSchema = z.object({
+  guestId:           z.string().optional(),
+  attending:         z.boolean(),
+  attendingDays:     z.array(z.string()).optional(),
+  mealChoice:        z.string().max(60).optional(),
+  plusOneName:       z.string().max(200).optional(),
+  plusOneMealChoice: z.string().max(60).optional(),
+  dietaryNotes:      z.string().max(2000).optional(),
+  specialNeeds:      z.string().max(2000).optional(),
+  notes:             z.string().max(2000).optional(),
+});
+&nbsp;
+const portalConfigSchema = z.object({
+  enabled:            z.boolean(),
+  password:           z.string().min(4).max(200).optional(),
+  clearPassword:      z.boolean().optional(),
+  accessStartsAt:     z.string().optional(),
+  accessEndsAt:       z.string().optional(),
+  gracePeriodHours:   z.number().int().min(0).max(720).optional(),
+  config:             z.record(z.unknown()).optional(),
+});
+&nbsp;
+export async function guestRoutes(app: FastifyInstance) {
+  // ─── List guests for an event ─────────────────────────
+  app.get('/api/events/:eventId/guests', { preHandler: requireAuth }, async (req) =&gt; {
+    const { eventId } = req.params as { eventId: string };
+    const orgMap = eventsRepo.orgMapForUser(req.auth!.userId);
+    if (!can(req.auth!.memberships, { eventId }, 'guests.view', orgMap)) <span class="branch-0 cbranch-no" title="branch not covered" >throw Forbidden();</span>
+    return {
+      guests: guestsRepo.listForEvent(eventId),
+      counts: guestsRepo.countByStatus(eventId),
+    };
+  });
+&nbsp;
+  app.post('/api/events/:eventId/guests', { preHandler: requireAuth }, async (req, reply) =&gt; {
+    const { eventId } = req.params as { eventId: string };
+    const event = eventsRepo.findById(eventId);
+    if (!event) <span class="branch-0 cbranch-no" title="branch not covered" >throw NotFound();</span>
+    const orgMap = eventsRepo.orgMapForUser(req.auth!.userId);
+    if (!can(req.auth!.memberships, { eventId }, 'guests.manage', orgMap)) <span class="branch-0 cbranch-no" title="branch not covered" >throw Forbidden();</span>
+    const parsed = guestSchema.safeParse(req.body);
+    if (!parsed.success) <span class="branch-0 cbranch-no" title="branch not covered" >throw BadRequest('invalid-input', parsed.error.issues);</span>
+    const guest = guestsRepo.create(event.organization_id, eventId, parsed.data);
+    auditRepo.log({
+      organizationId: event.organization_id, actorUserId: req.auth!.userId,
+      actorLabel: req.auth!.email, action: 'guest.create',
+      targetType: 'guest', targetId: guest.id, ip: req.ip,
+    });
+    return reply.code(201).send({ guest });
+  });
+&nbsp;
+  app.patch('/api/guests/:id', { preHandler: requireAuth }, async (req) =&gt; {
+    const { id } = req.params as { id: string };
+    const guest = guestsRepo.findById(id);
+    if (!guest) <span class="branch-0 cbranch-no" title="branch not covered" >throw NotFound();</span>
+    if (!can(req.auth!.memberships, { organizationId: guest.organization_id }, 'guests.manage')) throw Forbidden(<span class="branch-0 cbranch-no" title="branch not covered" >);</span>
+<span class="cstat-no" title="statement not covered" >    const parsed = guestSchema.partial().safeParse(req.body);</span>
+<span class="cstat-no" title="statement not covered" >    if (!parsed.success) throw BadRequest('invalid-input', parsed.error.issues);</span>
+<span class="cstat-no" title="statement not covered" >    return { guest: guestsRepo.update(id, parsed.data) };</span>
+  });
+&nbsp;
+  app.delete('/api/guests/:id', { preHandler: requireAuth }, async (req, reply) =&gt; {
+<span class="cstat-no" title="statement not covered" >    const { id } = req.params as { id: string };</span>
+<span class="cstat-no" title="statement not covered" >    const guest = guestsRepo.findById(id);</span>
+<span class="cstat-no" title="statement not covered" >    if (!guest) throw NotFound();</span>
+<span class="cstat-no" title="statement not covered" >    if (!can(req.auth!.memberships, { organizationId: guest.organization_id }, 'guests.manage')) throw Forbidden();</span>
+<span class="cstat-no" title="statement not covered" >    guestsRepo.softDelete(id);</span>
+<span class="cstat-no" title="statement not covered" >    return reply.code(204).send();</span>
+  });
+&nbsp;
+  app.post('/api/guests/:id/portal-token', { preHandler: requireAuth }, async (req) =&gt; {
+<span class="cstat-no" title="statement not covered" >    const { id } = req.params as { id: string };</span>
+<span class="cstat-no" title="statement not covered" >    const guest = guestsRepo.findById(id);</span>
+<span class="cstat-no" title="statement not covered" >    if (!guest) throw NotFound();</span>
+<span class="cstat-no" title="statement not covered" >    if (!can(req.auth!.memberships, { organizationId: guest.organization_id }, 'guests.manage')) throw Forbidden();</span>
+<span class="cstat-no" title="statement not covered" >    const token = guestsRepo.rotatePortalToken(id);</span>
+<span class="cstat-no" title="statement not covered" >    return { token };</span>
+  });
+&nbsp;
+  app.delete('/api/guests/:id/portal-token', { preHandler: requireAuth }, async (req, reply) =&gt; {
+    const { id } = req.params as { id: string };
+    const guest = guestsRepo.findById(id);
+    if (!guest) <span class="branch-0 cbranch-no" title="branch not covered" >throw NotFound();</span>
+    if (!can(req.auth!.memberships, { organizationId: guest.organization_id }, 'guests.manage')) <span class="branch-0 cbranch-no" title="branch not covered" >throw Forbidden();</span>
+    guestsRepo.revokePortalToken(id);
+    return reply.code(204).send();
+  });
+&nbsp;
+  // ─── RSVPs (authenticated list) ───────────────────────
+  app.get('/api/events/:eventId/rsvps', { preHandler: requireAuth }, async (req) =&gt; {
+    const { eventId } = req.params as { eventId: string };
+    const orgMap = eventsRepo.orgMapForUser(req.auth!.userId);
+    if (!can(req.auth!.memberships, { eventId }, 'rsvp.view', orgMap)) <span class="branch-0 cbranch-no" title="branch not covered" >throw Forbidden();</span>
+    return { rsvps: rsvpRepo.listForEvent(eventId) };
+  });
+&nbsp;
+  // ─── Portal config (authenticated) ────────────────────
+  app.get('/api/events/:eventId/portal-config', { preHandler: requireAuth }, async (req) =&gt; {
+<span class="cstat-no" title="statement not covered" >    const { eventId } = req.params as { eventId: string };</span>
+<span class="cstat-no" title="statement not covered" >    const orgMap = eventsRepo.orgMapForUser(req.auth!.userId);</span>
+<span class="cstat-no" title="statement not covered" >    if (!can(req.auth!.memberships, { eventId }, 'portal.config.manage', orgMap)) throw Forbidden();</span>
+<span class="cstat-no" title="statement not covered" >    return { config: portalConfigRepo.getForEvent(eventId) };</span>
+  });
+&nbsp;
+  app.put('/api/events/:eventId/portal-config', { preHandler: requireAuth }, async (req) =&gt; {
+    const { eventId } = req.params as { eventId: string };
+    const event = eventsRepo.findById(eventId);
+    if (!event) <span class="branch-0 cbranch-no" title="branch not covered" >throw NotFound();</span>
+    if (!can(req.auth!.memberships, { organizationId: event.organization_id }, 'portal.config.manage')) <span class="branch-0 cbranch-no" title="branch not covered" >throw Forbidden();</span>
+    const parsed = portalConfigSchema.safeParse(req.body);
+    if (!parsed.success) <span class="branch-0 cbranch-no" title="branch not covered" >throw BadRequest('invalid-input', parsed.error.issues);</span>
+&nbsp;
+    let passwordHash: string | null | undefined;
+    let passwordSalt: string | null | undefined;
+    if (parsed.data.password) {
+      const rec = hashPassword(parsed.data.password);
+      passwordHash = rec.passwordHash;
+      passwordSalt = rec.passwordSalt;
+<span class="branch-0 cbranch-no" title="branch not covered" >    } else if (parsed.data.clearPassword) {</span>
+<span class="cstat-no" title="statement not covered" >      passwordHash = null;</span>
+<span class="cstat-no" title="statement not covered" >      passwordSalt = null;</span>
+<span class="cstat-no" title="statement not covered" >    }</span>
+&nbsp;
+    const config = portalConfigRepo.upsert({
+      organizationId: event.organization_id,
+      eventId,
+      enabled: parsed.data.enabled,
+      passwordHash, passwordSalt,
+      accessStartsAt: parsed.data.accessStartsAt,
+      accessEndsAt: parsed.data.accessEndsAt,
+      gracePeriodHours: parsed.data.gracePeriodHours,
+      config: parsed.data.config,
+      updatedBy: req.auth!.userId,
+    });
+    auditRepo.log({
+      organizationId: event.organization_id, actorUserId: req.auth!.userId,
+      actorLabel: req.auth!.email, action: 'portal_config.update',
+      targetType: 'event', targetId: eventId, ip: req.ip,
+    });
+    return { config };
+  });
+&nbsp;
+  // ─── PUBLIC portal endpoints ──────────────────────────
+  app.get('/api/portal/:eventId/info', async (req, reply) =&gt; {
+    const { eventId } = req.params as { eventId: string };
+    const event = eventsRepo.findById(eventId);
+    if (!event) <span class="branch-0 cbranch-no" title="branch not covered" >throw NotFound();</span>
+    const cfg = portalConfigRepo.getForEvent(eventId) as { enabled: number; password_hash: string | null } | undefined;
+    const requiresPassword = !!<span class="branch-0 cbranch-no" title="branch not covered" >cfg?.password_hash;</span>
+    const guestList = guestsRepo.listForEvent(eventId)
+      .filter((g) =&gt; g.allow_portal_access)
+      .map((g) =&gt; ({ id: g.id, fullName: g.full_name }));
+    return {
+      event: {
+        id: event.id, title: event.title,
+        startDate: event.start_date, endDate: event.end_date,
+      },
+      portalEnabled: !!<span class="branch-0 cbranch-no" title="branch not covered" >cfg?.enabled,</span>
+      requiresPassword,
+      guests: guestList,
+    };
+  });
+&nbsp;
+  app.post('/api/portal/:eventId/verify-password', async (req, reply) =&gt; {
+    const { eventId } = req.params as { eventId: string };
+    const { password } = (req.<span class="branch-0 cbranch-no" title="branch not covered" >body ?? {}) as { password?: string };</span>
+    const cfg = portalConfigRepo.getForEvent(eventId) as { password_hash: string | null; password_salt: string | null } | undefined;
+    if (!cfg?.password_hash || !cfg.password_salt) <span class="branch-0 cbranch-no" title="branch not covered" >return { ok: true }; // no password set</span>
+    if (!password) <span class="branch-0 cbranch-no" title="branch not covered" >return reply.code(401).send({ ok: false });</span>
+    const ok = verifyPassword(password, {
+      passwordHash: cfg.password_hash, passwordSalt: cfg.password_salt,
+    });
+    return reply.code(ok ? 200 : 401).send({ ok });
+  });
+&nbsp;
+  app.post('/api/portal/:eventId/rsvp', async (req, reply) =&gt; {
+    const { eventId } = req.params as { eventId: string };
+    const event = eventsRepo.findById(eventId);
+    if (!event) <span class="branch-0 cbranch-no" title="branch not covered" >throw NotFound();</span>
+    const parsed = rsvpSchema.safeParse(req.body);
+    if (!parsed.success) <span class="branch-0 cbranch-no" title="branch not covered" >throw BadRequest('invalid-input', parsed.error.issues);</span>
+&nbsp;
+    if (parsed.data.guestId) {
+      const g = guestsRepo.findById(parsed.data.guestId);
+      if (!g || g.event_id !== eventId) throw BadRequest('guest-not-in-event');
+      if (!g.allow_portal_access) throw new (await import('../lib/errors.js')).HttpError(403, 'portal-access-revoked');
+    }
+&nbsp;
+    const rsvpId = rsvpRepo.submit({
+      organizationId: event.organization_id, eventId,
+      guestId: parsed.data.guestId,
+      attending: parsed.data.attending,
+      attendingDays: parsed.data.attendingDays,
+      mealChoice: parsed.data.mealChoice,
+      plusOneName: parsed.data.plusOneName,
+      plusOneMealChoice: parsed.data.plusOneMealChoice,
+      dietaryNotes: parsed.data.dietaryNotes,
+      specialNeeds: parsed.data.specialNeeds,
+      notes: parsed.data.notes,
+      ip: req.ip, userAgent: req.headers['user-agent'],
+    });
+    auditRepo.log({
+      organizationId: event.organization_id, action: 'rsvp.submit',
+      targetType: 'rsvp', targetId: rsvpId, ip: req.ip, userAgent: req.headers['user-agent'],
+    });
+    return reply.code(201).send({ ok: true, rsvpId });
+  });
+}
+&nbsp;</pre></td></tr></table></pre>
+
+                <div class='push'></div><!-- for sticky footer -->
+            </div><!-- /wrapper -->
+            <div class='footer quiet pad2 space-top1 center small'>
+                Code coverage generated by
+                <a href="https://istanbul.js.org/" target="_blank" rel="noopener noreferrer">istanbul</a>
+                at 2026-05-19T16:48:20.639Z
+            </div>
+        <script src="../prettify.js"></script>
+        <script>
+            window.onload = function () {
+                prettyPrint();
+            };
+        </script>
+        <script src="../sorter.js"></script>
+        <script src="../block-navigation.js"></script>
+    </body>
+</html>
+    
