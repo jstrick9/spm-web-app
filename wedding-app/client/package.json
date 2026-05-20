@@ -1,26 +1,28 @@
 {
-  "name": "wedding-poc-client",
+  "name": "wedding-app",
   "version": "0.1.0",
   "private": true,
-  "type": "module",
+  "description": "Self-hosted wedding venue platform - Fastify + SQLite + React",
   "engines": {
-    "node": ">=20.0.0 <23.0.0"
+    "node": ">=20.0.0 <23.0.0",
+    "//": "Node 20 or 22 LTS. better-sqlite3 prebuilt binaries are LTS-only."
   },
   "scripts": {
-    "dev": "vite",
-    "build": "vite build",
-    "preview": "vite preview",
-    "typecheck": "tsc --noEmit"
-  },
-  "dependencies": {
-    "react": "^18.3.1",
-    "react-dom": "^18.3.1"
-  },
-  "devDependencies": {
-    "@types/react": "^18.3.5",
-    "@types/react-dom": "^18.3.0",
-    "@vitejs/plugin-react": "^4.3.1",
-    "typescript": "^5.6.2",
-    "vite": "^5.4.6"
+    "install:all":   "npm --prefix server install && npm --prefix client install",
+    "migrate":       "npm --prefix server run migrate",
+    "seed":          "npm --prefix server run seed",
+    "reset":         "bash scripts/reset-local.sh",
+    "reset:win":     "powershell -ExecutionPolicy Bypass -File scripts\\reset-local.ps1",
+    "dev:server":    "npm --prefix server run dev",
+    "dev:client":    "npm --prefix client run dev",
+    "build":         "npm --prefix client run build && npm --prefix server run build",
+    "test":          "npm --prefix server test",
+    "test:coverage": "npm --prefix server test -- --coverage",
+    "typecheck":     "npm --prefix server run typecheck && npm --prefix client run typecheck",
+    "smoke":         "bash scripts/smoke-test.sh",
+    "ci":            "npm run typecheck && npm run test:coverage && npm run build && npm run smoke",
+    "docker:build":  "docker compose build",
+    "docker:up":     "docker compose up -d",
+    "docker:logs":   "docker compose logs -f"
   }
 }
