@@ -10,8 +10,11 @@ import { applySchema } from '../db/migrate.js';
 process.env.TEST_DB = ':memory:';
 process.env.JWT_SECRET = 'test-secret';
 
-beforeAll(() => {
+beforeAll(async () => {
   applySchema();
+  // Seed system roles so memberships have valid role_id FKs.
+  const { rolesRepo } = await import('../db/repos/roles.js');
+  rolesRepo.ensureSystemRoles();
 });
 
 afterAll(async () => {

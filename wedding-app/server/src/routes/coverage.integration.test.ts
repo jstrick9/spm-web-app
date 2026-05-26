@@ -23,6 +23,9 @@ beforeEach(() => {
     'catalog_items','venues','sub_events','event_memberships','events',
     'organization_memberships','organizations','users',
   ]) db.prepare(`DELETE FROM ${t}`).run();
+  // Wipe custom roles + their grants but keep system rows intact.
+  db.prepare(`DELETE FROM role_permissions WHERE role_id IN (SELECT id FROM roles WHERE is_system = 0)`).run();
+  db.prepare(`DELETE FROM roles WHERE is_system = 0`).run();
 });
 
 async function register(email = `cov-${Math.random()}@x.com`) {

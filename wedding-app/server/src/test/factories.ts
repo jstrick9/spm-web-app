@@ -1,10 +1,10 @@
 /**
  * Test helpers: create realistic users/orgs/events without ceremony.
- * Each call returns the row + a JWT for authentication in HTTP tests.
  */
 import { hashPassword } from '../lib/crypto.js';
 import { slugify } from '../lib/slug.js';
 import { orgsRepo, usersRepo, eventsRepo, guestsRepo } from '../db/repos/index.js';
+import { SYSTEM_ROLE_IDS } from '../lib/permissions.js';
 import type { FastifyInstance } from 'fastify';
 
 let counter = 0;
@@ -39,6 +39,22 @@ export function makeEvent(orgId: string, createdBy: string, title = `Wedding-${+
 
 export function makeGuest(orgId: string, eventId: string, name = `Guest-${++counter}`) {
   return guestsRepo.create(orgId, eventId, { fullName: name });
+}
+
+/**
+ * Add a user to an org as some system role. Useful for testing
+ * non-owner permission flows.
+ */
+export function addUserToOrgAs(
+  orgId: string,
+  userId: string,
+  roleKey: keyof typeof SYSTEM_ROLE_IDS,
+) {
+  orgsRepo.addMember({
+    orgId,
+    userId,
+    roleId: SYSTEM_ROLE_IDS[roleKey],
+  });
 }
 
 export function signTokenForUser(app: FastifyInstance, userId: string, email: string, sv = 1): string {

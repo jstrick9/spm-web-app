@@ -1,7 +1,7 @@
 import { db } from '../database.js';
 import { uuid } from '../../lib/crypto.js';
 import { parseJson, stringifyJson } from '../../lib/json.js';
-import type { AppRole } from '../../lib/rbac.js';
+import { SYSTEM_ROLE_IDS } from '../../lib/permissions.js';
 
 export interface OrgRow {
   id: string;
@@ -11,8 +11,8 @@ export interface OrgRow {
   support_email: string | null;
   phone: string | null;
   website_url: string | null;
-  branding: string;   // JSON
-  settings: string;   // JSON
+  branding: string;
+  settings: string;
   created_at: string;
 }
 
@@ -20,7 +20,7 @@ export interface MembershipRow {
   id: string;
   organization_id: string;
   user_id: string;
-  role: AppRole;
+  role_id: string;
   status: 'invited' | 'active' | 'suspended' | 'disabled';
   invited_by: string | null;
   created_at: string;
@@ -42,9 +42,9 @@ export const orgsRepo = {
         `INSERT INTO organizations (id, name, slug, owner_id) VALUES (?, ?, ?, ?)`
       ).run(id, input.name, input.slug, input.ownerId);
       db.prepare(
-        `INSERT INTO organization_memberships (id, organization_id, user_id, role)
-         VALUES (?, ?, ?, 'owner')`
-      ).run(uuid(), id, input.ownerId);
+        `INSERT INTO organization_memberships (id, organization_id, user_id, role_id)
+         VALUES (?, ?, ?, ?)`
+      ).run(uuid(), id, input.ownerId, SYSTEM_ROLE_IDS.owner);
     });
     tx();
     return id;
@@ -59,22 +59,23 @@ export const orgsRepo = {
     ).all(userId) as OrgRow[];
   },
 
-  listMembers(orgId: string): Array<MembershipRow & { email: string; full_name: string }> {
+  listMembers(orgId: string): Array<MembershipRow & { email: string; full_name: string; role_key: string; role_name: string }> {
     return db.prepare(
-      `SELECT m.*, u.email, u.full_name
+      `SELECT m.*, u.email, u.full_name, r.key AS role_key, r.name AS role_name
        FROM organization_memberships m
        JOIN users u ON u.id = m.user_id
+       JOIN roles r ON r.id = m.role_id
        WHERE m.organization_id = ?
-       ORDER BY m.created_at`
-    ).all(orgId) as Array<MembershipRow & { email: string; full_name: string }>;
+       ORDER BY r.hierarchy DESC, m.created_at`
+    ).all(orgId) as never;
   },
 
-  addMember(input: { orgId: string; userId: string; role: AppRole; invitedBy?: string }): MembershipRow {
+  addMember(input: { orgId: string; userId: string; roleId: string; invitedBy?: string }): MembershipRow {
     const id = uuid();
     db.prepare(
-      `INSERT INTO organization_memberships (id, organization_id, user_id, role, invited_by)
+      `INSERT INTO organization_memberships (id, organization_id, user_id, role_id, invited_by)
        VALUES (?, ?, ?, ?, ?)`
-    ).run(id, input.orgId, input.userId, input.role, input.invitedBy ?? null);
+    ).run(id, input.orgId, input.userId, input.roleId, input.invitedBy ?? null);
     return db.prepare(`SELECT * FROM organization_memberships WHERE id = ?`).get(id) as MembershipRow;
   },
 
@@ -82,6 +83,15 @@ export const orgsRepo = {
     const res = db.prepare(
       `DELETE FROM organization_memberships WHERE organization_id = ? AND user_id = ?`
     ).run(orgId, userId);
+    return res.changes > 0;
+  },
+
+  updateMemberRole(orgId: string, userId: string, roleId: string): boolean {
+    const res = db.prepare(
+      `UPDATE organization_memberships
+       SET role_id = ?, updated_at = datetime('now')
+       WHERE organization_id = ? AND user_id = ?`
+    ).run(roleId, orgId, userId);
     return res.changes > 0;
   },
 

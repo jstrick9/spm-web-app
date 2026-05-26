@@ -1,6 +1,6 @@
-/** Re-export all repos from one entry point for convenience. */
 export { usersRepo } from './users.js';
 export { orgsRepo } from './orgs.js';
+export { rolesRepo } from './roles.js';
 export { eventsRepo, subEventsRepo } from './events.js';
 export { venuesRepo } from './venues.js';
 export { catalogRepo, type CatalogKind, type CatalogItem } from './catalog.js';
@@ -13,3 +13,5 @@ export { staffTasksRepo, staffAreasRepo, staffShiftsRepo } from './staff.js';
 export { eventQuestionsRepo, eventAnswersRepo } from './questions.js';
 export { messagesRepo } from './messages.js';
 export { auditRepo } from './audit.js';
+export { integrationsRepo } from './integrations.js';
+export { jobsRepo, type JobRow, type JobStatus } from './jobs.js';

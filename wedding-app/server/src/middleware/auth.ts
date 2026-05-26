@@ -1,18 +1,19 @@
 /**
- * Loads the JWT, the user, and their memberships onto every authenticated
- * request. Downstream handlers call `can(req.auth.memberships, ...)` for
- * authorization.
+ * JWT verification + membership loading.
+ *
+ * Memberships now reference roles.id. We also load role.key and role.name
+ * on the auth payload so clients can display them without an extra query.
  */
 import type { FastifyReply, FastifyRequest } from 'fastify';
 import { db } from '../db/database.js';
-import type { AppRole, Membership } from '../lib/rbac.js';
+import type { Membership } from '../lib/rbac.js';
 
 declare module 'fastify' {
   interface FastifyRequest {
     auth?: {
       userId: string;
       email: string;
-      memberships: Membership[];
+      memberships: Array<Membership & { roleKey: string; roleName: string }>;
     };
   }
 }
@@ -51,21 +52,31 @@ export async function requireAuth(
   }
 
   const orgMems = db.prepare(
-    `SELECT organization_id, role FROM organization_memberships
-     WHERE user_id = ? AND status = 'active'`
-  ).all(payload.sub) as Array<{ organization_id: string; role: AppRole }>;
+    `SELECT om.organization_id, om.role_id, r.key AS role_key, r.name AS role_name
+     FROM organization_memberships om
+     JOIN roles r ON r.id = om.role_id
+     WHERE om.user_id = ? AND om.status = 'active'`
+  ).all(payload.sub) as Array<{ organization_id: string; role_id: string; role_key: string; role_name: string }>;
 
   const eventMems = db.prepare(
-    `SELECT event_id, role FROM event_memberships
-     WHERE user_id = ? AND status = 'active'`
-  ).all(payload.sub) as Array<{ event_id: string; role: AppRole }>;
+    `SELECT em.event_id, em.role_id, r.key AS role_key, r.name AS role_name
+     FROM event_memberships em
+     JOIN roles r ON r.id = em.role_id
+     WHERE em.user_id = ? AND em.status = 'active'`
+  ).all(payload.sub) as Array<{ event_id: string; role_id: string; role_key: string; role_name: string }>;
 
   req.auth = {
     userId: userRow.id,
     email: userRow.email,
     memberships: [
-      ...orgMems.map((m) => ({ organizationId: m.organization_id, role: m.role })),
-      ...eventMems.map((m) => ({ eventId: m.event_id, role: m.role })),
+      ...orgMems.map((m) => ({
+        organizationId: m.organization_id,
+        roleId: m.role_id, roleKey: m.role_key, roleName: m.role_name,
+      })),
+      ...eventMems.map((m) => ({
+        eventId: m.event_id,
+        roleId: m.role_id, roleKey: m.role_key, roleName: m.role_name,
+      })),
     ],
   };
 }

@@ -2,7 +2,6 @@ import { db } from '../database.js';
 import { uuid } from '../../lib/crypto.js';
 import { parseJson, stringifyJson } from '../../lib/json.js';
 import { slugifyUnique } from '../../lib/slug.js';
-import type { AppRole } from '../../lib/rbac.js';
 
 export type EventStatus = 'lead' | 'hold' | 'booked' | 'planning' | 'completed' | 'cancelled' | 'lost';
 
@@ -103,15 +102,50 @@ export const eventsRepo = {
     return res.changes > 0;
   },
 
-  listForOrg(orgId: string, opts: { status?: EventStatus; includeDeleted?: boolean } = {}): EventRow[] {
+  listForOrg(orgId: string, opts: {
+    status?: EventStatus | EventStatus[];
+    search?: string;
+    /** Filter by date range (inclusive). Either bound optional. */
+    startsAfter?: string;
+    startsBefore?: string;
+    includeDeleted?: boolean;
+    limit?: number;
+    offset?: number;
+  } = {}): EventRow[] {
     let sql = `SELECT * FROM events WHERE organization_id = ?`;
     const params: unknown[] = [orgId];
     if (!opts.includeDeleted) sql += ` AND deleted_at IS NULL`;
-    if (opts.status) { sql += ` AND status = ?`; params.push(opts.status); }
-    sql += ` ORDER BY start_date NULLS LAST, created_at DESC`;
-    // SQLite NULLS LAST workaround
-    sql = sql.replace('NULLS LAST', 'IS NULL, start_date');
+    if (opts.status) {
+      const arr = Array.isArray(opts.status) ? opts.status : [opts.status];
+      sql += ` AND status IN (${arr.map(() => '?').join(',')})`;
+      params.push(...arr);
+    }
+    if (opts.search) {
+      sql += ` AND (title LIKE ? COLLATE NOCASE OR slug LIKE ? COLLATE NOCASE)`;
+      const like = `%${opts.search}%`;
+      params.push(like, like);
+    }
+    if (opts.startsAfter)  { sql += ` AND (start_date IS NULL OR start_date >= ?)`; params.push(opts.startsAfter); }
+    if (opts.startsBefore) { sql += ` AND (start_date IS NULL OR start_date <= ?)`; params.push(opts.startsBefore); }
+    sql += ` ORDER BY start_date IS NULL, start_date, created_at DESC`;
+    if (opts.limit)  { sql += ` LIMIT ?`;  params.push(opts.limit); }
+    if (opts.offset) { sql += ` OFFSET ?`; params.push(opts.offset); }
     return db.prepare(sql).all(...params) as EventRow[];
+  },
+
+  /** Count events grouped by status, for the kanban-style status board. */
+  countByStatus(orgId: string): Record<EventStatus, number> {
+    const rows = db.prepare(
+      `SELECT status, COUNT(*) AS n FROM events
+       WHERE organization_id = ? AND deleted_at IS NULL
+       GROUP BY status`
+    ).all(orgId) as Array<{ status: EventStatus; n: number }>;
+    const out: Record<EventStatus, number> = {
+      lead: 0, hold: 0, booked: 0, planning: 0,
+      completed: 0, cancelled: 0, lost: 0,
+    };
+    for (const r of rows) out[r.status] = r.n;
+    return out;
   },
 
   /** event_id → organization_id map for events the user can see. */
@@ -128,21 +162,22 @@ export const eventsRepo = {
     return map;
   },
 
-  // ── Event memberships (couple, day-of planner, etc.) ──
-  addMember(input: { eventId: string; userId: string; role: AppRole }): void {
+  // ── Event memberships (couple, day-of planner, vendor) ──
+  addMember(input: { eventId: string; userId: string; roleId: string }): void {
     db.prepare(
-      `INSERT OR REPLACE INTO event_memberships (id, event_id, user_id, role)
+      `INSERT OR REPLACE INTO event_memberships (id, event_id, user_id, role_id)
        VALUES (?, ?, ?, ?)`
-    ).run(uuid(), input.eventId, input.userId, input.role);
+    ).run(uuid(), input.eventId, input.userId, input.roleId);
   },
 
   listMembers(eventId: string) {
     return db.prepare(
-      `SELECT em.*, u.email, u.full_name
+      `SELECT em.*, u.email, u.full_name, r.key AS role_key, r.name AS role_name
        FROM event_memberships em
        JOIN users u ON u.id = em.user_id
+       JOIN roles r ON r.id = em.role_id
        WHERE em.event_id = ?
-       ORDER BY em.created_at`
+       ORDER BY r.hierarchy DESC, em.created_at`
     ).all(eventId);
   },
 };

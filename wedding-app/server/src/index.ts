@@ -10,6 +10,7 @@ import { resolve } from 'node:path';
 import { existsSync } from 'node:fs';
 
 import { authRoutes }      from './routes/auth.js';
+import { roleRoutes }      from './routes/roles.js';
 import { eventRoutes }     from './routes/events.js';
 import { venueRoutes }     from './routes/venues.js';
 import { catalogRoutes }   from './routes/catalog.js';
@@ -22,8 +23,12 @@ import { staffRoutes }     from './routes/staff.js';
 import { questionRoutes }  from './routes/questions.js';
 import { messageRoutes }   from './routes/messages.js';
 import { auditRoutes }     from './routes/audit.js';
+import { platformConfigRoutes } from './routes/platformConfig.js';
+import { integrationRoutes }    from './routes/integrations.js';
+import { startWorker }          from './jobs/worker.js';
 
 import { db } from './db/database.js';
+import { rolesRepo } from './db/repos/index.js';
 import { HttpError } from './lib/errors.js';
 
 const PORT        = Number(process.env.PORT ?? 3000);
@@ -40,6 +45,21 @@ if (JWT_SECRET === 'dev-secret-change-me-in-production' && process.env.NODE_ENV 
 db.exec(`CREATE TABLE IF NOT EXISTS schema_version (
   version INTEGER PRIMARY KEY, applied_at TEXT NOT NULL DEFAULT (datetime('now'))
 );`);
+
+// Seed/refresh the 7 system roles into the roles table on every boot.
+// Idempotent: re-syncs permission grants if the code-side definitions
+// changed (e.g. a deploy added a new permission to the 'admin' system role).
+// Silently skipped if the roles table doesn't exist yet (fresh boot before
+// migrate; test harness applies the schema in its own setup).
+const rolesTableExists = (
+  db.prepare(`SELECT name FROM sqlite_master WHERE type='table' AND name='roles'`)
+    .get() as { name?: string } | undefined
+)?.name === 'roles';
+if (rolesTableExists) {
+  rolesRepo.ensureSystemRoles();
+}
+
+
 
 export async function buildApp() {
   const app = Fastify({
@@ -66,18 +86,30 @@ export async function buildApp() {
     allowList: process.env.NODE_ENV === 'test' ? ['127.0.0.1', '::1'] : undefined,
   });
 
-  // Global error handler — converts thrown HttpErrors into clean JSON.
+  // Global error handler. Recognizes:
+  //   - HttpError instances (thrown via lib/errors.ts helpers)
+  //   - Any Error decorated with { statusCode: number; code: string }
+  //     (used by repo-level helpers like rolesRepo, rbac.assertCan)
+  //   - Fastify/Zod validation errors
+  // Anything else becomes 500.
   app.setErrorHandler((err, _req, reply) => {
     if (err instanceof HttpError) {
       return reply.code(err.statusCode).send({
-        error: err.code,
-        message: err.message,
-        details: err.details,
+        error: err.code, message: err.message, details: err.details,
       });
     }
-    // Validation errors from Zod or Fastify schemas
+    const decorated = err as Error & { statusCode?: number; code?: string };
+    if (typeof decorated.statusCode === 'number' && typeof decorated.code === 'string') {
+      return reply.code(decorated.statusCode).send({
+        error: decorated.code,
+        message: decorated.message,
+      });
+    }
     if ((err as { validation?: unknown }).validation) {
-      return reply.code(400).send({ error: 'invalid-input', details: (err as { validation: unknown }).validation });
+      return reply.code(400).send({
+        error: 'invalid-input',
+        details: (err as { validation: unknown }).validation,
+      });
     }
     app.log.error(err);
     return reply.code(500).send({ error: 'internal-error' });
@@ -92,6 +124,7 @@ export async function buildApp() {
 
   // Mount domain routes
   await app.register(authRoutes);
+  await app.register(roleRoutes);
   await app.register(eventRoutes);
   await app.register(venueRoutes);
   await app.register(catalogRoutes);
@@ -104,6 +137,8 @@ export async function buildApp() {
   await app.register(questionRoutes);
   await app.register(messageRoutes);
   await app.register(auditRoutes);
+  await app.register(platformConfigRoutes);
+  await app.register(integrationRoutes);
 
   // Serve front-end if built
   if (existsSync(CLIENT_DIST)) {
@@ -126,6 +161,10 @@ if (invokedDirectly) {
     try {
       await app.listen({ port: PORT, host: HOST });
       app.log.info(`Wedding app server listening on http://${HOST}:${PORT}`);
+      // Start the in-process job worker for the integration framework.
+      // (Test harness builds the app via buildApp() without listening, so
+      // the worker isn't started in tests — they exercise jobs directly.)
+      startWorker();
     } catch (err) {
       app.log.error(err);
       process.exit(1);

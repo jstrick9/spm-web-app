@@ -65,7 +65,24 @@ export async function eventRoutes(app: FastifyInstance) {
     if (!can(req.auth!.memberships, { organizationId: orgId }, 'events.view')) {
       throw Forbidden();
     }
-    return { events: eventsRepo.listForOrg(orgId) };
+    const q = req.query as {
+      status?: string; search?: string;
+      startsAfter?: string; startsBefore?: string;
+      limit?: string; offset?: string;
+    };
+    const statusList = q.status
+      ? q.status.split(',').filter(Boolean) as Array<'lead'|'hold'|'booked'|'planning'|'completed'|'cancelled'|'lost'>
+      : undefined;
+    const events = eventsRepo.listForOrg(orgId, {
+      status: statusList,
+      search: q.search,
+      startsAfter: q.startsAfter,
+      startsBefore: q.startsBefore,
+      limit: q.limit ? Number(q.limit) : undefined,
+      offset: q.offset ? Number(q.offset) : undefined,
+    });
+    const counts = eventsRepo.countByStatus(orgId);
+    return { events, counts };
   });
 
   app.post('/api/events', { preHandler: requireAuth }, async (req, reply) => {
