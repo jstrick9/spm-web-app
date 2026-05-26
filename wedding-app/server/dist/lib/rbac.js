@@ -1,132 +1,77 @@
 /**
- * Role-Based Access Control resolver.
+ * RBAC resolver — now backed by the `roles` + `role_permissions` tables.
  *
- * Every route handler must call `can(req.auth.memberships, scope, 'permission.id')`
- * BEFORE doing any work. Never inspect role strings directly. This is the
- * fix for the "decorative RBAC" problem flagged in the original-app review.
+ * External API is unchanged from Phase 1:
+ *   - can(memberships, scope, permission, eventOrgMap?)
+ *   - assertCan(memberships, scope, permission, eventOrgMap?)
+ *   - resolvePermissions(memberships, scope, eventOrgMap?)
  *
- * Permission ids are hierarchical strings. We keep a flat set per role here
- * (instead of role inheritance) because debugging "which permission did
- * which inherited role grant?" was the most painful part of the old system.
+ * Internally, memberships now carry a `roleId` (not a hard-coded role
+ * string), and permission lookup is a DB query (with a small per-process
+ * cache). System roles have predictable ids ('sys_owner', 'sys_admin', ...).
+ *
+ * Custom roles are created at runtime via /api/orgs/:id/roles and stored
+ * in the same tables.
+ *
+ * Cache invalidation: rolesRepo.* mutations clear the cache. Worst case
+ * (race between an update and a check) is one stale permission check; the
+ * next request rebuilds the cache.
  */
-const ROLE_PERMISSIONS = {
-    owner: [
-        'org.view', 'org.manage', 'org.members.invite', 'org.members.remove',
-        'org.branding.manage', 'org.settings.manage',
-        'events.view', 'events.create', 'events.edit', 'events.delete', 'events.members.invite',
-        'venues.view', 'venues.manage',
-        'catalog.view', 'catalog.manage',
-        'layouts.view', 'layouts.create', 'layouts.edit', 'layouts.delete', 'layouts.publish',
-        'guests.view', 'guests.manage', 'guests.assign', 'guests.import', 'guests.export',
-        'rsvp.view', 'rsvp.submit', 'rsvp.manage',
-        'portal.config.manage', 'portal.guest.view',
-        'decor.view', 'decor.manage', 'decor.design',
-        'vendors.view', 'vendors.manage',
-        'timeline.view', 'timeline.manage',
-        'staff.view', 'staff.manage',
-        'questions.view', 'questions.manage',
-        'messages.send',
-        'audit.view',
-    ],
-    admin: [
-        'org.view', 'org.members.invite',
-        'org.branding.manage', 'org.settings.manage',
-        'events.view', 'events.create', 'events.edit', 'events.delete', 'events.members.invite',
-        'venues.view', 'venues.manage',
-        'catalog.view', 'catalog.manage',
-        'layouts.view', 'layouts.create', 'layouts.edit', 'layouts.delete', 'layouts.publish',
-        'guests.view', 'guests.manage', 'guests.assign', 'guests.import', 'guests.export',
-        'rsvp.view', 'rsvp.submit', 'rsvp.manage',
-        'portal.config.manage', 'portal.guest.view',
-        'decor.view', 'decor.manage', 'decor.design',
-        'vendors.view', 'vendors.manage',
-        'timeline.view', 'timeline.manage',
-        'staff.view', 'staff.manage',
-        'questions.view', 'questions.manage',
-        'messages.send',
-        'audit.view',
-    ],
-    planner: [
-        'org.view',
-        'events.view', 'events.create', 'events.edit',
-        'venues.view',
-        'catalog.view',
-        'layouts.view', 'layouts.create', 'layouts.edit', 'layouts.publish',
-        'guests.view', 'guests.manage', 'guests.assign', 'guests.import', 'guests.export',
-        'rsvp.view', 'rsvp.submit',
-        'portal.config.manage', 'portal.guest.view',
-        'decor.view', 'decor.design',
-        'vendors.view', 'vendors.manage',
-        'timeline.view', 'timeline.manage',
-        'staff.view',
-        'questions.view',
-        'messages.send',
-    ],
-    couple: [
-        'events.view',
-        'venues.view',
-        'layouts.view',
-        'guests.view', 'guests.manage', 'guests.assign', 'guests.import', 'guests.export',
-        'rsvp.view', 'rsvp.submit',
-        'portal.guest.view',
-        'decor.view', 'decor.design',
-        'vendors.view',
-        'timeline.view',
-        'questions.view',
-        'messages.send',
-    ],
-    staff: [
-        'events.view',
-        'venues.view',
-        'layouts.view',
-        'guests.view',
-        'rsvp.view',
-        'decor.view',
-        'vendors.view',
-        'timeline.view', 'timeline.manage',
-        'staff.view', 'staff.manage',
-    ],
-    guest: [
-        'rsvp.submit',
-        'portal.guest.view',
-    ],
-};
+import { db } from '../db/database.js';
+import { isValidPermissionId } from './permissions.js';
+// ─── Cache ──────────────────────────────────────────────
+// In-process cache of roleId -> Set<PermissionId>. Cleared whenever a
+// role's permissions change (see invalidateRoleCache, called from
+// rolesRepo).
+const _cache = new Map();
+export function invalidateRoleCache(roleId) {
+    if (roleId)
+        _cache.delete(roleId);
+    else
+        _cache.clear();
+}
+function permissionsForRole(roleId) {
+    const cached = _cache.get(roleId);
+    if (cached)
+        return cached;
+    const rows = db.prepare(`SELECT permission_id FROM role_permissions WHERE role_id = ?`).all(roleId);
+    const out = new Set();
+    for (const r of rows) {
+        if (isValidPermissionId(r.permission_id))
+            out.add(r.permission_id);
+    }
+    _cache.set(roleId, out);
+    return out;
+}
+// ─── The resolver ───────────────────────────────────────
 /**
- * Returns all permissions granted via any membership matching the scope.
+ * Returns the union of permissions granted to a user via any membership
+ * that matches the scope.
  *
- *   - scope.organizationId set: org memberships matching that org count.
- *     Event memberships count IF the event belongs to that org (looked
- *     up via eventOrgMap).
- *   - scope.eventId set: event memberships matching that event count;
- *     org memberships count if the event's org matches.
- *   - empty scope: union over ALL memberships (use sparingly).
+ *   - empty scope: union over ALL memberships
+ *   - org scope set: org memberships matching the org count; event
+ *     memberships for events in that org count (via eventOrgMap)
+ *   - event scope set: event memberships matching the event count; org
+ *     memberships for the event's org count
  */
 export function resolvePermissions(memberships, scope = {}, eventOrgMap = {}) {
     const out = new Set();
     for (const m of memberships) {
         let matches = false;
-        if (!scope.organizationId && !scope.eventId) {
+        if (!scope.organizationId && !scope.eventId)
             matches = true;
-        }
-        if (scope.organizationId && m.organizationId === scope.organizationId) {
+        if (scope.organizationId && m.organizationId === scope.organizationId)
             matches = true;
-        }
-        if (scope.eventId && m.eventId === scope.eventId) {
+        if (scope.eventId && m.eventId === scope.eventId)
             matches = true;
-        }
-        if (scope.eventId &&
-            m.organizationId &&
-            eventOrgMap[scope.eventId] === m.organizationId) {
+        if (scope.eventId && m.organizationId &&
+            eventOrgMap[scope.eventId] === m.organizationId)
             matches = true;
-        }
-        if (scope.organizationId &&
-            m.eventId &&
-            eventOrgMap[m.eventId] === scope.organizationId) {
-            // Edge case: querying org scope with an event-membership user
+        if (scope.organizationId && m.eventId &&
+            eventOrgMap[m.eventId] === scope.organizationId)
             matches = true;
-        }
         if (matches) {
-            for (const p of ROLE_PERMISSIONS[m.role] ?? [])
+            for (const p of permissionsForRole(m.roleId))
                 out.add(p);
         }
     }
@@ -135,7 +80,6 @@ export function resolvePermissions(memberships, scope = {}, eventOrgMap = {}) {
 export function can(memberships, scope, permission, eventOrgMap = {}) {
     return resolvePermissions(memberships, scope, eventOrgMap).has(permission);
 }
-/** Throw a 403-style error if the permission is missing. */
 export function assertCan(memberships, scope, permission, eventOrgMap = {}) {
     if (!can(memberships, scope, permission, eventOrgMap)) {
         const err = new Error(`forbidden: missing ${permission}`);
@@ -143,11 +87,5 @@ export function assertCan(memberships, scope, permission, eventOrgMap = {}) {
         err.code = 'forbidden';
         throw err;
     }
-}
-/** For debugging / admin UI: which roles grant a given permission. */
-export function rolesGranting(permission) {
-    return Object.entries(ROLE_PERMISSIONS)
-        .filter(([, perms]) => perms.includes(permission))
-        .map(([role]) => role);
 }
 //# sourceMappingURL=rbac.js.map

@@ -55,7 +55,20 @@ export async function eventRoutes(app) {
         if (!can(req.auth.memberships, { organizationId: orgId }, 'events.view')) {
             throw Forbidden();
         }
-        return { events: eventsRepo.listForOrg(orgId) };
+        const q = req.query;
+        const statusList = q.status
+            ? q.status.split(',').filter(Boolean)
+            : undefined;
+        const events = eventsRepo.listForOrg(orgId, {
+            status: statusList,
+            search: q.search,
+            startsAfter: q.startsAfter,
+            startsBefore: q.startsBefore,
+            limit: q.limit ? Number(q.limit) : undefined,
+            offset: q.offset ? Number(q.offset) : undefined,
+        });
+        const counts = eventsRepo.countByStatus(orgId);
+        return { events, counts };
     });
     app.post('/api/events', { preHandler: requireAuth }, async (req, reply) => {
         const parsed = createEventSchema.safeParse(req.body);

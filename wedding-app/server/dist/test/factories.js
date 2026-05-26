@@ -1,10 +1,10 @@
 /**
  * Test helpers: create realistic users/orgs/events without ceremony.
- * Each call returns the row + a JWT for authentication in HTTP tests.
  */
 import { hashPassword } from '../lib/crypto.js';
 import { slugify } from '../lib/slug.js';
 import { orgsRepo, usersRepo, eventsRepo, guestsRepo } from '../db/repos/index.js';
+import { SYSTEM_ROLE_IDS } from '../lib/permissions.js';
 let counter = 0;
 const uniqueEmail = (prefix = 'test') => `${prefix}-${++counter}-${Date.now()}@example.com`;
 export function makeUser(opts = {}) {
@@ -33,6 +33,17 @@ export function makeEvent(orgId, createdBy, title = `Wedding-${++counter}`) {
 }
 export function makeGuest(orgId, eventId, name = `Guest-${++counter}`) {
     return guestsRepo.create(orgId, eventId, { fullName: name });
+}
+/**
+ * Add a user to an org as some system role. Useful for testing
+ * non-owner permission flows.
+ */
+export function addUserToOrgAs(orgId, userId, roleKey) {
+    orgsRepo.addMember({
+        orgId,
+        userId,
+        roleId: SYSTEM_ROLE_IDS[roleKey],
+    });
 }
 export function signTokenForUser(app, userId, email, sv = 1) {
     return app.jwt.sign({ sub: userId, email, sv });

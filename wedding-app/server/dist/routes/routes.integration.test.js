@@ -19,6 +19,9 @@ beforeEach(() => {
     ];
     for (const t of tables)
         db.prepare(`DELETE FROM ${t}`).run();
+    // Wipe custom roles + their grants but keep system rows intact.
+    db.prepare(`DELETE FROM role_permissions WHERE role_id IN (SELECT id FROM roles WHERE is_system = 0)`).run();
+    db.prepare(`DELETE FROM roles WHERE is_system = 0`).run();
 });
 // Helper: register a fresh user and return their token + org id
 async function registerUser(email = `u-${Math.random().toString(36).slice(2)}@x.com`) {
@@ -45,7 +48,7 @@ describe('Auth flow', () => {
         const me = await authedRequest(token, 'GET', '/api/auth/me');
         expect(me.statusCode).toBe(200);
         expect(me.json().user.email).toBe(email);
-        expect(me.json().memberships[0].role).toBe('owner');
+        expect(me.json().memberships[0].roleKey).toBe('owner');
     });
     it('register with duplicate email returns 409', async () => {
         await registerUser('dupe@x.com');
