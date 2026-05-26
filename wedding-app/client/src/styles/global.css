@@ -1,0 +1,74 @@
+@import "tailwindcss";
+
+/*
+ * Tailwind v4 inline theme.
+ * We bind our brand tokens (defined in tokens.css) as Tailwind utilities
+ * so you can write `bg-brand text-fg-muted` instead of `bg-[rgb(var(--color-brand))]`.
+ */
+@theme {
+  --color-bg:            rgb(var(--color-bg)         / <alpha-value>);
+  --color-surface:       rgb(var(--color-surface)    / <alpha-value>);
+  --color-surface-2:     rgb(var(--color-surface-2)  / <alpha-value>);
+  --color-border:        rgb(var(--color-border)     / <alpha-value>);
+  --color-border-strong: rgb(var(--color-border-strong) / <alpha-value>);
+
+  --color-fg:         rgb(var(--color-fg)        / <alpha-value>);
+  --color-fg-muted:   rgb(var(--color-fg-muted)  / <alpha-value>);
+  --color-fg-subtle:  rgb(var(--color-fg-subtle) / <alpha-value>);
+  --color-fg-inverse: rgb(var(--color-fg-inverse) / <alpha-value>);
+
+  --color-brand:        rgb(var(--color-brand)        / <alpha-value>);
+  --color-brand-fg:     rgb(var(--color-brand-fg)     / <alpha-value>);
+  --color-brand-soft:   rgb(var(--color-brand-soft)   / <alpha-value>);
+  --color-brand-strong: rgb(var(--color-brand-strong) / <alpha-value>);
+  --color-accent:       rgb(var(--color-accent)       / <alpha-value>);
+  --color-accent-soft:  rgb(var(--color-accent-soft)  / <alpha-value>);
+
+  --color-success:      rgb(var(--color-success)      / <alpha-value>);
+  --color-success-soft: rgb(var(--color-success-soft) / <alpha-value>);
+  --color-warning:      rgb(var(--color-warning)      / <alpha-value>);
+  --color-warning-soft: rgb(var(--color-warning-soft) / <alpha-value>);
+  --color-danger:       rgb(var(--color-danger)       / <alpha-value>);
+  --color-danger-soft:  rgb(var(--color-danger-soft)  / <alpha-value>);
+  --color-info:         rgb(var(--color-info)         / <alpha-value>);
+  --color-info-soft:    rgb(var(--color-info-soft)    / <alpha-value>);
+
+  /* Chart palette */
+  --color-chart-1: rgb(var(--chart-1) / <alpha-value>);
+  --color-chart-2: rgb(var(--chart-2) / <alpha-value>);
+  --color-chart-3: rgb(var(--chart-3) / <alpha-value>);
+  --color-chart-4: rgb(var(--chart-4) / <alpha-value>);
+  --color-chart-5: rgb(var(--chart-5) / <alpha-value>);
+  --color-chart-6: rgb(var(--chart-6) / <alpha-value>);
+  --color-chart-7: rgb(var(--chart-7) / <alpha-value>);
+  --color-chart-8: rgb(var(--chart-8) / <alpha-value>);
+
+  --radius-card: 12px;
+  --radius-pill: 9999px;
+
+  --shadow-card:    0 1px 2px rgb(0 0 0 / 0.04);
+  --shadow-elev-1:  0 4px 12px rgb(0 0 0 / 0.06), 0 1px 2px rgb(0 0 0 / 0.04);
+  --shadow-elev-2:  0 16px 32px rgb(0 0 0 / 0.08), 0 4px 8px rgb(0 0 0 / 0.04);
+}
+
+/* Tokens (CSS variables + base styles) */
+@import "./tokens.css";
+
+/*
+ * App-level utility additions.
+ * Keep this section small; prefer Tailwind utilities + the theme above.
+ */
+@layer utilities {
+  /* The hero gradient used on the public portal landing */
+  .bg-hero-editorial {
+    background:
+      radial-gradient(circle at 20% 20%, rgb(var(--color-brand-soft) / 0.6), transparent 40%),
+      radial-gradient(circle at 80% 80%, rgb(var(--color-accent-soft) / 0.5), transparent 40%),
+      rgb(var(--color-bg));
+  }
+
+  /* Hairline border used on dense data tables */
+  .border-hairline {
+    border: 1px solid rgb(var(--color-border) / 0.7);
+  }
+}

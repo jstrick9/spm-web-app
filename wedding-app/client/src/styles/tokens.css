@@ -1,0 +1,160 @@
+/* ============================================================
+ * Brand tokens — the design system's source of truth.
+ *
+ * Three palettes coexist:
+ *   1. NEUTRAL    — surface, text, borders (greys with subtle warmth)
+ *   2. BRAND      — deep aubergine (#4A1942) + golden accent for the
+ *                   editorial / couple-facing aesthetic
+ *   3. DATA       — semantic colors for the dashboard aesthetic
+ *                   (status, charts, KPIs)
+ *
+ * Dark mode is a single class flip (`.dark` on <html>) re-binding the
+ * same variables.
+ *
+ * Typography pairs:
+ *   - 'Fraunces' serif for editorial headlines (couple-facing)
+ *   - 'Inter' sans for everything else
+ *   - 'JetBrains Mono' for code/data tables
+ *
+ * Spacing follows 4px scale via Tailwind. Border-radius is 'card' (12px)
+ * for cards, 'pill' (9999px) for badges, 'sm' (6px) for inputs.
+ * ============================================================ */
+
+@layer base {
+  :root {
+    /* ─── Neutral surface ───────────────────────────── */
+    --color-bg:            253 250 248;   /* warm off-white */
+    --color-surface:       255 255 255;   /* card background */
+    --color-surface-2:     247 244 240;   /* subtle elevation */
+    --color-border:        232 226 220;
+    --color-border-strong: 209 199 188;
+
+    /* ─── Text ─────────────────────────────────────── */
+    --color-fg:            28 25 22;       /* near-black, warm */
+    --color-fg-muted:      89 82 76;
+    --color-fg-subtle:     142 132 122;
+    --color-fg-inverse:    255 255 255;
+
+    /* ─── Brand (aubergine + gold) ─────────────────── */
+    --color-brand:         74 25 66;       /* #4A1942 */
+    --color-brand-fg:      255 255 255;
+    --color-brand-soft:    241 230 240;
+    --color-brand-strong:  56 19 50;
+    --color-accent:        201 165 96;     /* golden champagne */
+    --color-accent-soft:   245 237 218;
+
+    /* ─── Semantic / status ────────────────────────── */
+    --color-success:       16 125 86;
+    --color-success-soft:  220 244 234;
+    --color-warning:       180 109 0;
+    --color-warning-soft:  254 243 199;
+    --color-danger:        185 28 28;
+    --color-danger-soft:   254 226 226;
+    --color-info:          37 99 235;
+    --color-info-soft:     219 234 254;
+
+    /* ─── Data viz palette (categorical, 8 colors, color-blind safe) */
+    --chart-1: 74 25 66;       /* brand */
+    --chart-2: 201 165 96;     /* accent */
+    --chart-3: 16 125 86;      /* green */
+    --chart-4: 37 99 235;      /* blue */
+    --chart-5: 234 88 12;      /* orange */
+    --chart-6: 168 85 247;     /* purple */
+    --chart-7: 14 165 233;     /* sky */
+    --chart-8: 220 38 127;     /* magenta */
+
+    /* ─── Spacing scale extensions ─────────────────── */
+    --radius-sm:    6px;
+    --radius-md:    8px;
+    --radius-card:  12px;
+    --radius-lg:    16px;
+    --radius-pill:  9999px;
+
+    /* ─── Elevation ────────────────────────────────── */
+    --shadow-sm:   0 1px 2px rgb(0 0 0 / 0.04);
+    --shadow-md:   0 4px 12px rgb(0 0 0 / 0.06), 0 1px 2px rgb(0 0 0 / 0.04);
+    --shadow-lg:   0 16px 32px rgb(0 0 0 / 0.08), 0 4px 8px rgb(0 0 0 / 0.04);
+    --shadow-xl:   0 24px 48px rgb(0 0 0 / 0.12), 0 8px 16px rgb(0 0 0 / 0.06);
+
+    /* ─── Motion (per Material 3 + Apple guidelines) ── */
+    --duration-instant: 100ms;
+    --duration-fast:    180ms;
+    --duration-medium:  280ms;
+    --duration-slow:    420ms;
+    --ease-out:         cubic-bezier(0.16, 1, 0.3, 1);
+    --ease-in-out:      cubic-bezier(0.65, 0, 0.35, 1);
+  }
+
+  /* ─── Dark mode ─────────────────────────────────── */
+  .dark {
+    --color-bg:            18 16 20;
+    --color-surface:       26 22 28;
+    --color-surface-2:     34 28 36;
+    --color-border:        58 50 64;
+    --color-border-strong: 85 73 92;
+
+    --color-fg:            245 240 240;
+    --color-fg-muted:      176 168 168;
+    --color-fg-subtle:     130 122 130;
+    --color-fg-inverse:    18 16 20;
+
+    --color-brand:         167 92 156;    /* lighter for contrast on dark */
+    --color-brand-fg:      255 255 255;
+    --color-brand-soft:    56 28 52;
+    --color-brand-strong:  214 154 204;
+    --color-accent:        228 196 124;
+    --color-accent-soft:   58 48 28;
+
+    --color-success-soft:  18 50 38;
+    --color-warning-soft:  64 44 8;
+    --color-danger-soft:   72 28 28;
+    --color-info-soft:     20 38 76;
+
+    --shadow-sm:   0 1px 2px rgb(0 0 0 / 0.4);
+    --shadow-md:   0 4px 12px rgb(0 0 0 / 0.4), 0 1px 2px rgb(0 0 0 / 0.3);
+    --shadow-lg:   0 16px 32px rgb(0 0 0 / 0.5), 0 4px 8px rgb(0 0 0 / 0.3);
+    --shadow-xl:   0 24px 48px rgb(0 0 0 / 0.6), 0 8px 16px rgb(0 0 0 / 0.4);
+  }
+
+  html {
+    color-scheme: light dark;
+  }
+
+  body {
+    background: rgb(var(--color-bg));
+    color: rgb(var(--color-fg));
+    font-family: 'Inter', system-ui, -apple-system, sans-serif;
+    font-feature-settings: 'cv11', 'ss01';   /* Inter alt forms */
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    text-rendering: optimizeLegibility;
+  }
+
+  /* ─── Type stack ────────────────────────────────── */
+  .font-display {
+    /* Editorial display (Fraunces). Falls back to system serif. */
+    font-family: 'Fraunces', 'Cambria', Georgia, serif;
+    font-variation-settings: 'opsz' 144, 'SOFT' 50;
+    letter-spacing: -0.01em;
+  }
+  .font-mono {
+    font-family: 'JetBrains Mono', ui-monospace, 'SF Mono', Menlo, monospace;
+  }
+
+  /* ─── Focus rings (a11y) ───────────────────────── */
+  *:focus-visible {
+    outline: none;
+    box-shadow:
+      0 0 0 2px rgb(var(--color-surface)),
+      0 0 0 4px rgb(var(--color-brand));
+    border-radius: var(--radius-sm);
+  }
+
+  /* ─── Scroll polish ────────────────────────────── */
+  html { scroll-behavior: smooth; }
+
+  /* Reduced motion */
+  @media (prefers-reduced-motion: reduce) {
+    * { animation-duration: 0.01ms !important; transition-duration: 0.01ms !important; }
+  }
+}

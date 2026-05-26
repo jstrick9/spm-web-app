@@ -1,88 +1,63 @@
 /**
- * POC app — single-file React UI that exercises every server endpoint.
+ * App root.
  *
- * Three "screens":
- *   1. Login / Register  (when no JWT)
- *   2. Dashboard         (events list, guest list, RSVPs, audit)
- *   3. Public Guest Portal  (no auth, accessed via #/portal/<eventId>)
- *
- * Styles are inline (matches the original app's preview constraints).
- * This is intentionally minimal so the architecture is the star.
+ * Three top-level surfaces:
+ *   1. Login / Register (no auth)
+ *   2. Authenticated app — AppShell + hash routes
+ *        /                 → Dashboard
+ *        /events           → Events list (Day 1)
+ *        /events/:id       → Event detail (Day 1)
+ *        /guests           → Cross-event guest browser (placeholder; Day 2 builds)
+ *        /system           → System (sync control panel)
+ *        /system/platform  → Platform Studio (theme presets)
+ *        /preview          → Design system styleguide (dev)
+ *   3. Public Guest Portal (no auth) — /portal/:eventId
  */
+import {
+  Calendar, Cog, Home, LayoutDashboard, Palette, Users,
+} from 'lucide-react';
 import { useEffect, useState, type CSSProperties } from 'react';
-import { ApiError, api, getToken, setToken } from './lib/api';
+import { ApiError, getToken, sdk, setToken } from './sdk';
+import type { SdkUser } from './sdk/types';
+import { AppShell, PageBody, PageHeader } from './ui/AppShell';
+import { Button } from './ui/Button';
+import { Card, CardContent, CardHeader, CardTitle } from './ui/Card';
+import { CommandPalette, type CommandItem } from './ui/CommandPalette';
+import { EmptyState } from './ui/EmptyState';
+import { Input } from './ui/Input';
+import { Label } from './ui/Label';
+import { useToast } from './ui/Toast';
+import { ConfigProvider } from './config/ConfigProvider';
+import { UiPreview } from './ui/preview/UiPreview';
+import { ControlPanel } from './components/ControlPanel';
+import { WidgetSlot } from './config/widgets/WidgetSlot';
+import { PlatformStudio } from './screens/PlatformStudio';
+import { EventsList } from './screens/events/EventsList';
+import { EventDetail } from './screens/events/EventDetail';
+import { matchPath, useRouter } from './lib/router';
+import type { PartialPlatformConfig } from './config/schema';
 
-// ─── shared inline styles ────────────────────────────────────
-const card: CSSProperties = {
-  background: '#fff',
-  borderRadius: 12,
-  padding: 24,
-  boxShadow: '0 1px 3px rgba(0,0,0,0.06), 0 1px 2px rgba(0,0,0,0.04)',
-  maxWidth: 720,
-  margin: '24px auto',
-};
-const btn: CSSProperties = {
-  background: '#4A1942',
-  color: 'white',
-  border: 'none',
-  padding: '10px 16px',
-  borderRadius: 8,
-  cursor: 'pointer',
-  fontWeight: 500,
-  fontSize: 14,
-};
-const btnSecondary: CSSProperties = { ...btn, background: '#e5e7eb', color: '#1f2937' };
-const input: CSSProperties = {
-  width: '100%',
-  padding: '10px 12px',
-  border: '1px solid #d1d5db',
-  borderRadius: 8,
-  fontSize: 14,
-  marginBottom: 12,
-};
-const label: CSSProperties = { display: 'block', fontSize: 13, fontWeight: 500, marginBottom: 4, color: '#374151' };
-const errStyle: CSSProperties = { color: '#dc2626', fontSize: 13, marginBottom: 12 };
-
-// ─── data shapes (mirror server repos) ───────────────────────
-interface User { id: string; email: string; fullName?: string; }
-interface Org  { id: string; name: string; slug: string; }
-interface Event { id: string; organization_id: string; title: string; start_date: string | null; status: string; }
-interface Guest { id: string; full_name: string; email: string | null; rsvp_status: string; plus_one_allowed: number; }
-interface Rsvp  { id: string; guest_name?: string; attending: number; meal_choice: string | null; submitted_at: string; notes: string | null; }
-
-// ─── tiny hash-router (avoids react-router dep for POC) ──────
-function useHash(): string {
-  const [hash, setHash] = useState(window.location.hash);
-  useEffect(() => {
-    const fn = () => setHash(window.location.hash);
-    window.addEventListener('hashchange', fn);
-    return () => window.removeEventListener('hashchange', fn);
-  }, []);
-  return hash;
-}
-
-// ════════════════════════════════════════════════════════════
-// ROOT
-// ════════════════════════════════════════════════════════════
 export default function App() {
-  const hash = useHash();
-  const portalMatch = hash.match(/^#\/portal\/([^/?]+)/);
-  if (portalMatch) return <GuestPortal eventId={portalMatch[1]} />;
+  const { path } = useRouter();
+
+  // Public surfaces (no auth)
+  if (path === '/preview') return <UiPreview />;
+  const portal = matchPath('/portal/:eventId', path);
+  if (portal) return <GuestPortal eventId={portal.eventId} />;
+
+  // Authenticated app
   return <PlatformApp />;
 }
 
-// ════════════════════════════════════════════════════════════
-// PLATFORM (authenticated)
-// ════════════════════════════════════════════════════════════
 function PlatformApp() {
-  const [user, setUser] = useState<User | null>(null);
+  const [user, setUser] = useState<SdkUser | null>(null);
   const [bootstrapped, setBootstrapped] = useState(false);
 
   useEffect(() => {
     (async () => {
       if (!getToken()) { setBootstrapped(true); return; }
       try {
-        const me = await api.get<{ user: User }>('/api/auth/me');
+        const me = await sdk.auth.me();
         setUser(me.user);
       } catch {
         setToken(null);
@@ -92,370 +67,277 @@ function PlatformApp() {
     })();
   }, []);
 
-  if (!bootstrapped) return <div style={{ padding: 40, textAlign: 'center' }}>Loading…</div>;
-
+  if (!bootstrapped) return <BootSplash />;
   if (!user) return <AuthScreen onAuth={setUser} />;
 
-  return <Dashboard user={user} onLogout={() => { setToken(null); setUser(null); }} />;
+  return <AuthenticatedApp user={user} onLogout={() => {
+    void sdk.auth.logout();
+    setUser(null);
+  }} />;
 }
 
-// ─── Auth (login + register tabs) ────────────────────────────
-function AuthScreen({ onAuth }: { onAuth: (u: User) => void }) {
+function BootSplash() {
+  return (
+    <div className="min-h-screen bg-bg flex items-center justify-center">
+      <div className="text-center space-y-3">
+        <div className="font-display text-2xl text-brand-strong">Wedding Venue Intelligence</div>
+        <div className="text-sm text-fg-muted">Loading…</div>
+      </div>
+    </div>
+  );
+}
+
+function AuthenticatedApp({ user, onLogout }: { user: SdkUser; onLogout: () => void }) {
+  const { hash, navigate } = useRouter();
+  const [orgConfig, setOrgConfig] = useState<PartialPlatformConfig | undefined>();
+  const [userConfig, setUserConfig] = useState<PartialPlatformConfig | undefined>();
+  const [orgId, setOrgId] = useState<string | null>(null);
+  const [paletteOpen, setPaletteOpen] = useState(false);
+
+  useEffect(() => {
+    sdk.orgs.list().then((r) => {
+      if (r.organizations[0]) {
+        const id = r.organizations[0].id;
+        setOrgId(id);
+        sdk.platformConfig.getOrg(id).then((r2) => setOrgConfig(r2.config));
+      }
+    });
+    sdk.platformConfig.getUserPreferences().then((r) => setUserConfig(r.config));
+  }, []);
+
+  // ⌘K / Ctrl-K
+  useEffect(() => {
+    const handler = (e: KeyboardEvent) => {
+      if ((e.metaKey || e.ctrlKey) && e.key === 'k') {
+        e.preventDefault();
+        setPaletteOpen((o) => !o);
+      }
+    };
+    window.addEventListener('keydown', handler);
+    return () => window.removeEventListener('keydown', handler);
+  }, []);
+
+  const commandItems: CommandItem[] = [
+    { id: 'nav.dashboard', label: 'Dashboard',           hint: 'Navigation', icon: <LayoutDashboard className="h-4 w-4" />, onSelect: () => navigate('/') },
+    { id: 'nav.events',    label: 'Events',              hint: 'Navigation', icon: <Calendar className="h-4 w-4" />,        onSelect: () => navigate('/events') },
+    { id: 'nav.guests',    label: 'Guests',              hint: 'Navigation', icon: <Users className="h-4 w-4" />,           onSelect: () => navigate('/guests') },
+    { id: 'nav.system',    label: 'System',              hint: 'Navigation', icon: <Cog className="h-4 w-4" />,             onSelect: () => navigate('/system') },
+    { id: 'nav.studio',    label: 'Platform Studio',     hint: 'Settings',   icon: <Palette className="h-4 w-4" />,         onSelect: () => navigate('/system/platform') },
+    { id: 'act.logout',    label: 'Sign out',            hint: 'Account',                                                   onSelect: onLogout },
+    { id: 'nav.preview',   label: 'Open Design Preview', hint: 'Developer',  keywords: ['styleguide'],                       onSelect: () => navigate('/preview') },
+  ];
+
+  return (
+    <ConfigProvider org={orgConfig} user={userConfig}>
+      <AppShell
+        user={user}
+        currentPath={hash}
+        onLogout={onLogout}
+        onOpenCommandPalette={() => setPaletteOpen(true)}
+      >
+        <Routes user={user} orgId={orgId} onOrgConfigChanged={setOrgConfig} />
+      </AppShell>
+
+      <CommandPalette
+        open={paletteOpen}
+        onOpenChange={setPaletteOpen}
+        items={commandItems}
+      />
+    </ConfigProvider>
+  );
+}
+
+// ─── Route table ────────────────────────────────────────────
+function Routes({
+  user, orgId, onOrgConfigChanged,
+}: {
+  user: SdkUser;
+  orgId: string | null;
+  onOrgConfigChanged: (c: PartialPlatformConfig) => void;
+}) {
+  const { path } = useRouter();
+
+  // Events: list + detail
+  const detail = matchPath('/events/:eventId', path);
+  if (detail) return <EventDetail eventId={detail.eventId} />;
+  if (path === '/events') {
+    if (!orgId) return <Loading />;
+    return <EventsList orgId={orgId} />;
+  }
+
+  // System
+  if (path === '/system/platform') {
+    if (!orgId) return <Loading />;
+    return <PlatformStudio orgId={orgId} onSaved={onOrgConfigChanged} />;
+  }
+  if (path === '/system') {
+    return (
+      <>
+        <PageHeader title="System" description="Diagnostics, sync, and feature flags for the dual-write layer." />
+        <PageBody>
+          <Card><CardContent className="pt-6"><ControlPanel /></CardContent></Card>
+        </PageBody>
+      </>
+    );
+  }
+
+  if (path === '/guests') {
+    return (
+      <>
+        <PageHeader title="Guests" description="Browse guests across every event in your organization." />
+        <PageBody>
+          <Card>
+            <CardContent className="py-10 text-center text-sm text-fg-muted">
+              <p>The cross-event guest browser arrives in Week 1 Day 2.</p>
+              <p className="mt-2">
+                For now, drill into a specific event from the
+                {' '}<a className="text-brand underline" href="#/events">Events list</a>{' '}
+                to manage its guests.
+              </p>
+            </CardContent>
+          </Card>
+        </PageBody>
+      </>
+    );
+  }
+
+  // Default = dashboard
+  return <DashboardScreen user={user} orgId={orgId} />;
+}
+
+function Loading() {
+  return (
+    <PageBody>
+      <div className="text-fg-muted text-sm py-10 text-center">Loading…</div>
+    </PageBody>
+  );
+}
+
+// ─── Dashboard ──────────────────────────────────────────────
+function DashboardScreen({ user, orgId }: { user: SdkUser; orgId: string | null }) {
+  return (
+    <>
+      <PageHeader
+        title={<>Welcome back, <span className="font-display">{user.fullName ?? user.email.split('@')[0]}</span></>}
+        description="A snapshot of your venue's performance."
+      />
+      <PageBody>
+        {orgId ? (
+          <WidgetSlot id="venue.dashboard.kpis" orgId={orgId} />
+        ) : (
+          <EmptyState
+            icon={<Home className="h-5 w-5" />}
+            title="No organization yet"
+            description="Sign in as a venue owner to see your dashboard."
+          />
+        )}
+
+        <div className="mt-8">
+          <Card>
+            <CardHeader>
+              <CardTitle>Getting started</CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-2 text-sm">
+              <p className="text-fg-muted">
+                Browse the <a className="text-brand underline" href="#/events">Events</a> tab — kanban + table views, search, filters, and a proper create flow.
+              </p>
+              <p className="text-fg-muted">
+                Open <a className="text-brand underline" href="#/system/platform">Platform Studio</a> to re-skin the entire app from a curated preset.
+              </p>
+              <p className="text-fg-subtle">
+                Press <kbd className="rounded border border-border bg-surface-2 px-1 text-[10px]">⌘K</kbd> for quick navigation.
+              </p>
+            </CardContent>
+          </Card>
+        </div>
+      </PageBody>
+    </>
+  );
+}
+
+// ─── Login / Register ───────────────────────────────────────
+function AuthScreen({ onAuth }: { onAuth: (u: SdkUser) => void }) {
+  const { toast } = useToast();
   const [mode, setMode] = useState<'login' | 'register'>('login');
   const [email, setEmail] = useState('owner@demo.local');
   const [password, setPassword] = useState('wedding123');
   const [fullName, setFullName] = useState('');
   const [orgName, setOrgName] = useState('');
-  const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
 
   async function submit(e: React.FormEvent) {
     e.preventDefault();
-    setError(null); setBusy(true);
+    setBusy(true);
     try {
-      const body = mode === 'login'
-        ? { email, password }
-        : { email, password, fullName, orgName };
-      const res = await api.post<{ token: string; user: User }>(
-        `/api/auth/${mode}`,
-        body,
-        { auth: false },
-      );
-      setToken(res.token);
+      const res = mode === 'login'
+        ? await sdk.auth.login(email, password)
+        : await sdk.auth.register({ email, password, fullName, orgName });
       onAuth(res.user);
     } catch (err) {
       const e = err as ApiError;
-      setError(
-        e.code === 'invalid-credentials' ? 'Email or password is incorrect.' :
-        e.code === 'email-already-registered' ? 'That email is already registered.' :
-        e.code === 'invalid-input' ? 'Please check the form fields.' :
-        `Error: ${e.message}`
-      );
-    } finally {
-      setBusy(false);
-    }
+      toast({
+        title: 'Sign-in failed',
+        description:
+          e.code === 'invalid-credentials' ? 'Email or password is incorrect.' :
+          e.code === 'email-already-registered' ? 'That email is already registered.' :
+          e.kind === 'offline' ? 'Server unreachable. Check your connection.' :
+          e.message,
+        variant: 'destructive',
+      });
+    } finally { setBusy(false); }
   }
 
   return (
-    <div style={{ ...card, marginTop: 80, maxWidth: 420 }}>
-      <h1 style={{ margin: '0 0 4px', color: '#4A1942' }}>Wedding Venue POC</h1>
-      <p style={{ color: '#6b7280', marginTop: 0 }}>
-        Self-hosted backend, SQLite on disk.
-      </p>
-
-      <div style={{ display: 'flex', gap: 8, marginBottom: 16 }}>
-        <button
-          onClick={() => setMode('login')}
-          style={mode === 'login' ? btn : btnSecondary}
-        >Log in</button>
-        <button
-          onClick={() => setMode('register')}
-          style={mode === 'register' ? btn : btnSecondary}
-        >Create account</button>
-      </div>
-
-      <form onSubmit={submit}>
-        {mode === 'register' && (
-          <>
-            <label style={label}>Your name</label>
-            <input style={input} value={fullName} onChange={(e) => setFullName(e.target.value)} required />
-            <label style={label}>Venue / organization name</label>
-            <input style={input} value={orgName} onChange={(e) => setOrgName(e.target.value)} required />
-          </>
-        )}
-        <label style={label}>Email</label>
-        <input style={input} type="email" value={email} onChange={(e) => setEmail(e.target.value)} required />
-        <label style={label}>Password</label>
-        <input style={input} type="password" value={password} onChange={(e) => setPassword(e.target.value)} required minLength={8} />
-        {error && <div style={errStyle}>{error}</div>}
-        <button type="submit" style={{ ...btn, width: '100%' }} disabled={busy}>
-          {busy ? '…' : mode === 'login' ? 'Sign in' : 'Create account'}
-        </button>
-      </form>
-
-      <p style={{ color: '#9ca3af', fontSize: 12, marginTop: 16, marginBottom: 0 }}>
-        Demo seed: <code>owner@demo.local</code> / <code>wedding123</code>
-      </p>
-    </div>
-  );
-}
-
-// ─── Dashboard ───────────────────────────────────────────────
-function Dashboard({ user, onLogout }: { user: User; onLogout: () => void }) {
-  const [orgs, setOrgs] = useState<Org[]>([]);
-  const [activeOrgId, setActiveOrgId] = useState<string | null>(null);
-  const [events, setEvents] = useState<Event[]>([]);
-  const [activeEventId, setActiveEventId] = useState<string | null>(null);
-
-  useEffect(() => {
-    api.get<{ organizations: Org[] }>('/api/orgs').then((r) => {
-      setOrgs(r.organizations);
-      if (r.organizations[0]) setActiveOrgId(r.organizations[0].id);
-    });
-  }, []);
-
-  useEffect(() => {
-    if (!activeOrgId) return;
-    api.get<{ events: Event[] }>(`/api/orgs/${activeOrgId}/events`).then((r) => {
-      setEvents(r.events);
-      if (r.events[0] && !activeEventId) setActiveEventId(r.events[0].id);
-    });
-  }, [activeOrgId]);
-
-  return (
-    <>
-      <header style={{
-        background: '#4A1942', color: 'white', padding: '16px 24px',
-        display: 'flex', justifyContent: 'space-between', alignItems: 'center',
-      }}>
-        <div>
-          <strong>Wedding Venue POC</strong>
-          <span style={{ marginLeft: 12, opacity: 0.7, fontSize: 13 }}>
-            Signed in as {user.email}
-          </span>
-        </div>
-        <button onClick={onLogout} style={btnSecondary}>Log out</button>
-      </header>
-
-      <div style={card}>
-        <h2 style={{ marginTop: 0 }}>Your Organizations</h2>
-        <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-          {orgs.map((o) => (
-            <button
-              key={o.id}
-              onClick={() => { setActiveOrgId(o.id); setActiveEventId(null); }}
-              style={o.id === activeOrgId ? btn : btnSecondary}
-            >{o.name}</button>
-          ))}
-        </div>
-      </div>
-
-      {activeOrgId && (
-        <EventsSection
-          orgId={activeOrgId}
-          events={events}
-          activeEventId={activeEventId}
-          onSelectEvent={setActiveEventId}
-          onCreate={(e) => setEvents((prev) => [...prev, e])}
-        />
-      )}
-
-      {activeEventId && <GuestsSection eventId={activeEventId} />}
-      {activeEventId && <RsvpsSection eventId={activeEventId} />}
-      {activeEventId && (
-        <div style={card}>
-          <h3 style={{ marginTop: 0 }}>Public Guest Portal Link</h3>
-          <p style={{ color: '#6b7280', fontSize: 14 }}>
-            Share this URL — no login required for guests.
+    <div className="min-h-screen bg-hero-editorial flex items-center justify-center p-4">
+      <Card className="w-full max-w-md">
+        <CardHeader>
+          <CardTitle className="font-display text-3xl">Wedding Venue Intelligence</CardTitle>
+          <p className="text-sm text-fg-muted">
+            Self-hosted backend. Configurable everything.
           </p>
-          <code style={{
-            display: 'block', padding: 12, background: '#f3f4f6',
-            borderRadius: 6, wordBreak: 'break-all',
-          }}>
-            {window.location.origin}/#/portal/{activeEventId}
-          </code>
-          <a
-            href={`#/portal/${activeEventId}`}
-            target="_blank"
-            rel="noreferrer"
-            style={{ ...btn, display: 'inline-block', marginTop: 12, textDecoration: 'none' }}
-          >Open portal in new tab</a>
-        </div>
-      )}
-    </>
-  );
-}
-
-// ─── Events section ──────────────────────────────────────────
-function EventsSection({
-  orgId, events, activeEventId, onSelectEvent, onCreate,
-}: {
-  orgId: string;
-  events: Event[];
-  activeEventId: string | null;
-  onSelectEvent: (id: string) => void;
-  onCreate: (e: Event) => void;
-}) {
-  const [title, setTitle] = useState('');
-  const [startDate, setStartDate] = useState('');
-  const [busy, setBusy] = useState(false);
-
-  async function create(e: React.FormEvent) {
-    e.preventDefault();
-    setBusy(true);
-    try {
-      const res = await api.post<{ event: Event }>('/api/events', {
-        organizationId: orgId,
-        title,
-        startDate: startDate || undefined,
-      });
-      onCreate(res.event);
-      onSelectEvent(res.event.id);
-      setTitle(''); setStartDate('');
-    } finally { setBusy(false); }
-  }
-
-  return (
-    <div style={card}>
-      <h2 style={{ marginTop: 0 }}>Events</h2>
-      <ul style={{ listStyle: 'none', padding: 0 }}>
-        {events.map((e) => (
-          <li key={e.id} style={{ marginBottom: 8 }}>
-            <button
-              onClick={() => onSelectEvent(e.id)}
-              style={{
-                ...(e.id === activeEventId ? btn : btnSecondary),
-                width: '100%', textAlign: 'left',
-              }}
-            >
-              <strong>{e.title}</strong>
-              <span style={{ opacity: 0.7, marginLeft: 12 }}>
-                {e.start_date ?? 'no date'} · {e.status}
-              </span>
-            </button>
-          </li>
-        ))}
-      </ul>
-      <form onSubmit={create} style={{ borderTop: '1px solid #e5e7eb', paddingTop: 16, marginTop: 16 }}>
-        <label style={label}>New event title</label>
-        <input style={input} value={title} onChange={(e) => setTitle(e.target.value)} required />
-        <label style={label}>Start date (optional)</label>
-        <input style={input} type="date" value={startDate} onChange={(e) => setStartDate(e.target.value)} />
-        <button type="submit" style={btn} disabled={busy || !title}>
-          {busy ? '…' : 'Create event'}
-        </button>
-      </form>
-    </div>
-  );
-}
-
-// ─── Guests section ──────────────────────────────────────────
-function GuestsSection({ eventId }: { eventId: string }) {
-  const [guests, setGuests] = useState<Guest[]>([]);
-  const [fullName, setFullName] = useState('');
-  const [email, setEmail] = useState('');
-  const [busy, setBusy] = useState(false);
-
-  useEffect(() => { reload(); /* eslint-disable-line */ }, [eventId]);
-  async function reload() {
-    const r = await api.get<{ guests: Guest[] }>(`/api/events/${eventId}/guests`);
-    setGuests(r.guests);
-  }
-
-  async function add(e: React.FormEvent) {
-    e.preventDefault();
-    setBusy(true);
-    try {
-      await api.post('/api/guests', {
-        eventId,
-        fullName,
-        email: email || undefined,
-      });
-      setFullName(''); setEmail('');
-      await reload();
-    } finally { setBusy(false); }
-  }
-
-  return (
-    <div style={card}>
-      <h2 style={{ marginTop: 0 }}>Guests</h2>
-      <table style={{ width: '100%', borderCollapse: 'collapse' }}>
-        <thead>
-          <tr style={{ background: '#f9fafb', textAlign: 'left' }}>
-            <th style={{ padding: 8 }}>Name</th>
-            <th style={{ padding: 8 }}>Email</th>
-            <th style={{ padding: 8 }}>RSVP</th>
-          </tr>
-        </thead>
-        <tbody>
-          {guests.map((g) => (
-            <tr key={g.id} style={{ borderTop: '1px solid #e5e7eb' }}>
-              <td style={{ padding: 8 }}>{g.full_name}</td>
-              <td style={{ padding: 8, color: '#6b7280' }}>{g.email ?? '—'}</td>
-              <td style={{ padding: 8 }}>
-                <span style={rsvpBadge(g.rsvp_status)}>{g.rsvp_status}</span>
-              </td>
-            </tr>
-          ))}
-          {guests.length === 0 && (
-            <tr><td colSpan={3} style={{ padding: 16, textAlign: 'center', color: '#9ca3af' }}>No guests yet.</td></tr>
-          )}
-        </tbody>
-      </table>
-      <form onSubmit={add} style={{ borderTop: '1px solid #e5e7eb', paddingTop: 16, marginTop: 16 }}>
-        <label style={label}>Add guest</label>
-        <input style={input} placeholder="Full name" value={fullName} onChange={(e) => setFullName(e.target.value)} required />
-        <input style={input} type="email" placeholder="Email (optional)" value={email} onChange={(e) => setEmail(e.target.value)} />
-        <button type="submit" style={btn} disabled={busy || !fullName}>
-          {busy ? '…' : 'Add guest'}
-        </button>
-      </form>
-    </div>
-  );
-}
-
-function rsvpBadge(status: string): CSSProperties {
-  const colors: Record<string, [string, string]> = {
-    pending:   ['#fef3c7', '#92400e'],
-    attending: ['#d1fae5', '#065f46'],
-    declined:  ['#fee2e2', '#991b1b'],
-    maybe:     ['#dbeafe', '#1e40af'],
-  };
-  const [bg, fg] = colors[status] ?? colors.pending;
-  return {
-    background: bg, color: fg, padding: '2px 8px', borderRadius: 99,
-    fontSize: 12, fontWeight: 500,
-  };
-}
-
-// ─── RSVPs section ───────────────────────────────────────────
-function RsvpsSection({ eventId }: { eventId: string }) {
-  const [rsvps, setRsvps] = useState<Rsvp[]>([]);
-
-  useEffect(() => {
-    const tick = () => api.get<{ rsvps: Rsvp[] }>(`/api/events/${eventId}/rsvps`).then((r) => setRsvps(r.rsvps));
-    tick();
-    const id = setInterval(tick, 5000); // simple polling — production would use SSE/websocket
-    return () => clearInterval(id);
-  }, [eventId]);
-
-  return (
-    <div style={card}>
-      <h2 style={{ marginTop: 0 }}>Live RSVP Submissions</h2>
-      <p style={{ color: '#6b7280', fontSize: 13, marginTop: 0 }}>
-        Refreshes every 5 seconds.
-      </p>
-      {rsvps.length === 0 && (
-        <p style={{ color: '#9ca3af', textAlign: 'center', padding: 24 }}>
-          No RSVPs yet. Open the guest portal in another tab to submit one.
-        </p>
-      )}
-      <ul style={{ listStyle: 'none', padding: 0 }}>
-        {rsvps.map((r) => (
-          <li key={r.id} style={{ padding: 12, borderBottom: '1px solid #f3f4f6' }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-              <strong>{r.guest_name ?? '(unknown guest)'}</strong>
-              <span style={{ color: '#6b7280', fontSize: 12 }}>
-                {new Date(r.submitted_at).toLocaleString()}
-              </span>
+        </CardHeader>
+        <CardContent>
+          <div className="flex gap-2 mb-4">
+            <Button variant={mode === 'login' ? 'default' : 'secondary'} onClick={() => setMode('login')}>Log in</Button>
+            <Button variant={mode === 'register' ? 'default' : 'secondary'} onClick={() => setMode('register')}>Create account</Button>
+          </div>
+          <form onSubmit={submit} className="space-y-3">
+            {mode === 'register' && (
+              <>
+                <div>
+                  <Label htmlFor="fn">Your name</Label>
+                  <Input id="fn" value={fullName} onChange={(e) => setFullName(e.target.value)} required className="mt-1.5" />
+                </div>
+                <div>
+                  <Label htmlFor="on">Venue / organization name</Label>
+                  <Input id="on" value={orgName} onChange={(e) => setOrgName(e.target.value)} required className="mt-1.5" />
+                </div>
+              </>
+            )}
+            <div>
+              <Label htmlFor="em">Email</Label>
+              <Input id="em" type="email" value={email} onChange={(e) => setEmail(e.target.value)} required className="mt-1.5" />
             </div>
-            <div style={{ fontSize: 14, color: '#374151', marginTop: 4 }}>
-              {r.attending ? '✅ Attending' : '❌ Not attending'}
-              {r.meal_choice ? ` · ${r.meal_choice}` : ''}
-              {r.notes ? <div style={{ marginTop: 4, color: '#6b7280' }}>"{r.notes}"</div> : null}
+            <div>
+              <Label htmlFor="pw">Password</Label>
+              <Input id="pw" type="password" value={password} onChange={(e) => setPassword(e.target.value)} required minLength={8} className="mt-1.5" />
             </div>
-          </li>
-        ))}
-      </ul>
+            <Button type="submit" className="w-full" isLoading={busy}>
+              {mode === 'login' ? 'Sign in' : 'Create account'}
+            </Button>
+          </form>
+          <p className="text-xs text-fg-subtle mt-4">
+            Demo seed: <code>owner@demo.local</code> / <code>wedding123</code>
+          </p>
+        </CardContent>
+      </Card>
     </div>
   );
 }
 
-// ════════════════════════════════════════════════════════════
-// PUBLIC GUEST PORTAL  (no auth)
-// ════════════════════════════════════════════════════════════
+// ─── Public Guest Portal (unchanged from Phase 2 — Day 4 rebuilds) ────
 function GuestPortal({ eventId }: { eventId: string }) {
-  const [event, setEvent] = useState<{ title: string; startDate: string | null } | null>(null);
+  const [info, setInfo] = useState<{ title: string; startDate: string | null } | null>(null);
   const [guests, setGuests] = useState<Array<{ id: string; fullName: string }>>([]);
   const [selectedGuestId, setSelectedGuestId] = useState('');
   const [attending, setAttending] = useState(true);
@@ -465,118 +347,81 @@ function GuestPortal({ eventId }: { eventId: string }) {
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    // Public endpoint: no auth header sent (api.ts gates on { auth: false }).
-    // Returns the event AND a sparse {id, fullName} list of invited guests
-    // so the guest can pick their name from a dropdown.
-    api.get<{
-      event: { id: string; title: string; startDate: string | null };
-      guests: Array<{ id: string; fullName: string }>;
-    }>(`/api/portal/${eventId}/info`, { auth: false })
-      .then((r) => {
-        setEvent({ title: r.event.title, startDate: r.event.startDate });
-        setGuests(r.guests);
-      })
-      .catch(() => setError('Event not found. Check the URL.'));
+    sdk.portal.info(eventId)
+      .then((r) => { setInfo({ title: r.event.title, startDate: r.event.startDate }); setGuests(r.guests); })
+      .catch(() => setError('Event not found.'));
   }, [eventId]);
 
   async function submit(e: React.FormEvent) {
     e.preventDefault();
     setError(null);
-    if (!selectedGuestId) {
-      setError('Please pick your name from the list above.');
-      return;
-    }
+    if (!selectedGuestId) { setError('Please pick your name.'); return; }
     try {
-      await api.post(
-        `/api/portal/${eventId}/rsvp`,
-        {
-          guestId: selectedGuestId,
-          attending,
-          mealChoice,
-          notes: notes || undefined,
-        },
-        { auth: false },
-      );
+      await sdk.portal.submitRsvp(eventId, { guestId: selectedGuestId, attending, mealChoice, notes: notes || undefined });
       setDone(true);
     } catch (err) {
-      const e = err as ApiError;
-      setError(
-        e.code === 'guest-not-in-event' ? 'That guest is not on the list for this event.' :
-        e.code === 'portal-access-revoked' ? 'Portal access has been revoked for that guest.' :
-        `Submission failed: ${e.message}`
-      );
+      setError((err as ApiError).message);
     }
   }
 
-  if (error) return <div style={{ ...card, marginTop: 80 }}><p style={errStyle}>{error}</p></div>;
-  if (!event) return <div style={{ padding: 40, textAlign: 'center' }}>Loading…</div>;
+  if (error && !info) return <Card className="max-w-md mx-auto mt-20"><CardContent className="pt-6 text-danger">{error}</CardContent></Card>;
+  if (!info) return <BootSplash />;
+  if (done) return (
+    <div className="min-h-screen bg-hero-editorial flex items-center justify-center p-4">
+      <Card className="max-w-md text-center">
+        <CardContent className="pt-10 pb-8">
+          <div className="text-6xl mb-4">💌</div>
+          <h2 className="font-display text-2xl">Thank you</h2>
+          <p className="mt-2 text-fg-muted">Your RSVP for {info.title} has been received.</p>
+        </CardContent>
+      </Card>
+    </div>
+  );
 
-  if (done) {
-    return (
-      <div style={{ ...card, marginTop: 80, textAlign: 'center' }}>
-        <div style={{ fontSize: 48, marginBottom: 8 }}>💌</div>
-        <h2>Thank you!</h2>
-        <p>Your RSVP for <strong>{event.title}</strong> has been received.</p>
-      </div>
-    );
-  }
-
+  const inputStyle: CSSProperties = { width: '100%' };
   return (
-    <div style={{ ...card, marginTop: 60 }}>
-      <h1 style={{ color: '#4A1942', marginTop: 0 }}>{event.title}</h1>
-      <p style={{ color: '#6b7280' }}>
-        {event.startDate ? `On ${event.startDate}.` : ''} Please RSVP below.
-      </p>
-      <form onSubmit={submit}>
-        <label style={label}>Your name (so we can match your invitation)</label>
-        <select
-          style={input}
-          value={selectedGuestId}
-          onChange={(e) => setSelectedGuestId(e.target.value)}
-          required
-        >
-          <option value="">— pick your name —</option>
-          {guests.map((g) => (
-            <option key={g.id} value={g.id}>{g.fullName}</option>
-          ))}
-        </select>
-        {guests.length === 0 && (
-          <p style={{ fontSize: 12, color: '#9ca3af', marginTop: -8 }}>
-            No guests have been added to this event yet.
-          </p>
-        )}
-
-        <label style={label}>Will you attend?</label>
-        <div style={{ display: 'flex', gap: 8, marginBottom: 16 }}>
-          <button type="button" onClick={() => setAttending(true)}
-            style={attending ? btn : btnSecondary}>✅ Yes</button>
-          <button type="button" onClick={() => setAttending(false)}
-            style={!attending ? btn : btnSecondary}>❌ No</button>
-        </div>
-
-        {attending && (
-          <>
-            <label style={label}>Meal preference</label>
-            <select style={input} value={mealChoice} onChange={(e) => setMealChoice(e.target.value)}>
-              <option value="standard">Standard</option>
-              <option value="vegetarian">Vegetarian</option>
-              <option value="vegan">Vegan</option>
-              <option value="gluten-free">Gluten-free</option>
-            </select>
-          </>
-        )}
-
-        <label style={label}>Notes (allergies, accessibility, well-wishes)</label>
-        <textarea
-          style={{ ...input, minHeight: 80 }}
-          value={notes}
-          onChange={(e) => setNotes(e.target.value)}
-        />
-
-        {error && <div style={errStyle}>{error}</div>}
-
-        <button type="submit" style={{ ...btn, width: '100%' }}>Submit RSVP</button>
-      </form>
+    <div className="min-h-screen bg-hero-editorial p-4">
+      <Card className="max-w-md mx-auto mt-12">
+        <CardHeader>
+          <CardTitle className="font-display text-3xl">{info.title}</CardTitle>
+          <p className="text-sm text-fg-muted">{info.startDate ? `On ${info.startDate}.` : ''} Please RSVP below.</p>
+        </CardHeader>
+        <CardContent>
+          <form onSubmit={submit} className="space-y-4">
+            <div>
+              <Label htmlFor="gn">Your name</Label>
+              <select id="gn" required value={selectedGuestId} onChange={(e) => setSelectedGuestId(e.target.value)} className="mt-1.5 w-full h-10 px-3 rounded-md border border-border bg-surface">
+                <option value="">— pick your name —</option>
+                {guests.map((g) => <option key={g.id} value={g.id}>{g.fullName}</option>)}
+              </select>
+            </div>
+            <div>
+              <Label>Will you attend?</Label>
+              <div className="flex gap-2 mt-1.5">
+                <Button type="button" variant={attending ? 'default' : 'secondary'} onClick={() => setAttending(true)}>Yes</Button>
+                <Button type="button" variant={!attending ? 'default' : 'secondary'} onClick={() => setAttending(false)}>No</Button>
+              </div>
+            </div>
+            {attending && (
+              <div>
+                <Label htmlFor="meal">Meal preference</Label>
+                <select id="meal" value={mealChoice} onChange={(e) => setMealChoice(e.target.value)} className="mt-1.5 w-full h-10 px-3 rounded-md border border-border bg-surface">
+                  <option value="standard">Standard</option>
+                  <option value="vegetarian">Vegetarian</option>
+                  <option value="vegan">Vegan</option>
+                  <option value="gluten-free">Gluten-free</option>
+                </select>
+              </div>
+            )}
+            <div>
+              <Label htmlFor="notes">Notes</Label>
+              <textarea id="notes" value={notes} onChange={(e) => setNotes(e.target.value)} className="mt-1.5 w-full min-h-[80px] p-3 rounded-md border border-border bg-surface text-sm" style={inputStyle} />
+            </div>
+            {error && <p className="text-sm text-danger">{error}</p>}
+            <Button type="submit" className="w-full">Submit RSVP</Button>
+          </form>
+        </CardContent>
+      </Card>
     </div>
   );
 }
