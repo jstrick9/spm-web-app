@@ -16,6 +16,12 @@ export interface VendorInput {
 }
 
 export const vendorsSdk = {
+  portalInfo(vendorId: string) {
+    return api.get(`/api/portal/vendors/${vendorId}/info`, { auth: false });
+  },
+  submitQuestionnaire(vendorId: string, payload: Record<string, any>) {
+    return api.post(`/api/portal/vendors/${vendorId}/questionnaire`, payload, { auth: false });
+  },
   list(orgId: string, opts: { eventId?: string } = {}): Promise<{ vendors: SdkVendor[] }> {
     const qs = opts.eventId ? `?eventId=${encodeURIComponent(opts.eventId)}` : '';
     return api.get(`/api/orgs/${orgId}/vendors${qs}`);

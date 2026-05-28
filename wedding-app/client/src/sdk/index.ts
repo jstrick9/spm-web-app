@@ -22,6 +22,9 @@ import { layoutsSdk } from './layouts.js';
 import { guestsSdk, rsvpSdk, portalSdk } from './guests.js';
 import { vendorsSdk } from './vendors.js';
 import { timelineSdk } from './timeline.js';
+import { staffSdk } from './staff.js';
+import { questionsSdk } from './questions.js';
+import { feedbackSdk } from './feedback.js';
 import { platformConfigSdk } from './platformConfig.js';
 
 export const sdk = {
@@ -37,7 +40,10 @@ export const sdk = {
   portal:   portalSdk,
   vendors:  vendorsSdk,
   timeline: timelineSdk,
-  platformConfig: platformConfigSdk,
+  staff:    staffSdk, questionsSdk, feedbackSdk,
+  questions: questionsSdk,
+  feedback: feedbackSdk,
+  platformConfig: platformConfigSdk, staffSdk,
 } as const;
 
 // Re-export domain SDKs too so per-domain imports work

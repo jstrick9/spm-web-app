@@ -1,5 +1,5 @@
 import { api } from './client.js';
-import type { SdkGuest, SdkGuestCounts, SdkRsvp, SdkPortalInfo } from './types.js';
+import type { SdkGuest, SdkGuestCounts, SdkRsvp, SdkPortalInfo, SdkPortalConfig } from './types.js';
 
 export interface GuestInput {
   fullName: string;
@@ -39,6 +39,11 @@ export const guestsSdk = {
     return api.post(`/api/events/${eventId}/guests`, input);
   },
 
+  
+  bulkCreate(eventId: string, mode: 'skip' | 'replace' | 'append', guests: GuestInput[]): Promise<{ inserted: number; updated: number; skipped: number }> {
+    return api.post(`/api/events/${eventId}/guests/bulk`, { mode, guests });
+  },
+
   update(guestId: string, patch: Partial<GuestInput>): Promise<{ guest: SdkGuest }> {
     return api.patch(`/api/guests/${guestId}`, patch);
   },
@@ -54,6 +59,23 @@ export const guestsSdk = {
   revokePortalToken(guestId: string): Promise<void> {
     return api.delete(`/api/guests/${guestId}/portal-token`);
   },
+
+  getPortalConfig(eventId: string): Promise<{ config: SdkPortalConfig | undefined }> {
+    return api.get(`/api/events/${eventId}/portal-config`);
+  },
+  
+  updatePortalConfig(eventId: string, payload: {
+    enabled: boolean;
+    password?: string;
+    clearPassword?: boolean;
+    accessStartsAt?: string;
+    accessEndsAt?: string;
+    gracePeriodHours?: number;
+    config?: Record<string, unknown>;
+  }): Promise<{ config: SdkPortalConfig }> {
+    return api.put(`/api/events/${eventId}/portal-config`, payload);
+  },
+
 };
 
 export const rsvpSdk = {

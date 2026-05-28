@@ -139,7 +139,8 @@ export interface SdkPortalInfo {
   };
   portalEnabled: boolean;
   requiresPassword: boolean;
-  guests: Array<{ id: string; fullName: string }>;
+  guests: Array<{ id: string; fullName: string; tableAssignment?: string | null; seatAssignment?: string | null }>;
+  layout?: Record<string, any> | null;
 }
 
 // ─── Venues / Catalog / Layouts / Vendors / Timeline / Staff ───
@@ -178,6 +179,7 @@ export interface SdkLayout {
   venue_id: string | null;
   name: string;
   visibility: 'private' | 'event' | 'venue' | 'public';
+  approval_status?: 'draft' | 'pending' | 'approved' | 'rejected';
   revision: number;
   payload: string;       // JSON
   is_template: 0 | 1;
@@ -215,6 +217,7 @@ export interface SdkTimelineItem {
   location: string | null;
   notes: string | null;
   vendor_id: string | null;
+  metadata?: string;
   completed: 0 | 1;
   assigned_to: string | null;
   created_at: string;
@@ -231,4 +234,92 @@ export interface ApiErrorBody {
   error: string;
   message?: string;
   details?: unknown;
+}
+
+
+export interface SdkStaffTask {
+  id: string;
+  organization_id: string;
+  event_id: string | null;
+  title: string;
+  description: string | null;
+  phase: 'pre-event' | 'during-event' | 'post-event';
+  status: 'not-started' | 'in-progress' | 'completed' | 'blocked';
+  priority: 'low' | 'medium' | 'high' | 'critical';
+  due_at: string | null;
+  estimated_minutes: number | null;
+  completed_at: string | null;
+  completed_by: string | null;
+  assigned_staff: string[];
+  assigned_areas: string[];
+  tags: string[];
+  checklist: { id: string; label: string; completed: boolean }[];
+  notes: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface SdkStaffArea {
+  id: string;
+  organization_id: string;
+  name: string;
+  description: string | null;
+  color: string | null;
+  icon: string | null;
+  venue_id: string | null;
+  assigned_staff: string[];
+  created_at: string;
+  updated_at: string;
+}
+
+export interface SdkStaffShift {
+  id: string;
+  organization_id: string;
+  staff_id: string;
+  area_id: string | null;
+  event_id: string | null;
+  role: 'coordinator' | 'setup' | 'cleaning' | 'parking' | 'other';
+  starts_at: string;
+  ends_at: string;
+  notes: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+
+export interface SdkPortalConfig {
+  id: string;
+  organization_id: string;
+  event_id: string;
+  enabled: number;
+  password_hash: string | null;
+  password_salt: string | null;
+  access_starts_at: string | null;
+  access_ends_at: string | null;
+  grace_period_hours: number;
+  config: string;
+}
+
+
+export interface SdkEventQuestion {
+  id: string;
+  organization_id: string;
+  question: string;
+  group_name: string;
+  answer_type: 'dropdown' | 'integer' | 'text' | 'date' | 'boolean' | 'multiselect';
+  options: string; // JSON array
+  workflow: string; // JSON object
+  required: number;
+  sort_order: number;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface SdkEventAnswer {
+  id: string;
+  event_id: string;
+  question_id: string;
+  answer: string | null;
+  answered_by: string | null;
+  answered_at: string;
 }

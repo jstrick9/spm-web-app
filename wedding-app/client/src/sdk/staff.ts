@@ -1,0 +1,37 @@
+import { api } from './client.js';
+import type { SdkStaffTask } from './types.js';
+
+export interface TaskInput {
+  title: string;
+  description?: string;
+  phase?: 'pre-event' | 'during-event' | 'post-event';
+  status?: 'not-started' | 'in-progress' | 'completed' | 'blocked';
+  priority?: 'low' | 'medium' | 'high' | 'critical';
+  dueAt?: string;
+  estimatedMinutes?: number;
+  assignedStaff?: string[];
+  assignedAreas?: string[];
+  tags?: string[];
+  checklist?: { id: string; label: string; completed: boolean }[];
+  notes?: string;
+  eventId?: string | null;
+}
+
+export const staffSdk = {
+  listTasks(orgId: string, opts: { eventId?: string; status?: string } = {}): Promise<{ tasks: SdkStaffTask[] }> {
+    const q = new URLSearchParams();
+    if (opts.eventId) q.set('eventId', opts.eventId);
+    if (opts.status) q.set('status', opts.status);
+    const qs = q.toString();
+    return api.get(`/api/orgs/${orgId}/staff/tasks${qs ? `?${qs}` : ''}`);
+  },
+  createTask(orgId: string, input: TaskInput): Promise<{ task: SdkStaffTask }> {
+    return api.post(`/api/orgs/${orgId}/staff/tasks`, input);
+  },
+  updateTask(taskId: string, patch: Partial<TaskInput>): Promise<{ task: SdkStaffTask }> {
+    return api.patch(`/api/staff/tasks/${taskId}`, patch);
+  },
+  deleteTask(taskId: string): Promise<void> {
+    return api.delete(`/api/staff/tasks/${taskId}`);
+  }
+};

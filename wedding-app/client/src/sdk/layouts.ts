@@ -23,7 +23,7 @@ export const layoutsSdk = {
   }): Promise<{ layout: SdkLayout }> {
     return api.post('/api/layouts', input);
   },
-  save(layoutId: string, payload: Record<string, unknown>, opts: { changeDescription?: string; expectedRevision?: number } = {}): Promise<{ layout: SdkLayout }> {
+  save(layoutId: string, payload: Record<string, unknown>, opts: { changeDescription?: string; expectedRevision?: number; approvalStatus?: string } = {}): Promise<{ layout: SdkLayout }> {
     return api.post(`/api/layouts/${layoutId}/save`, { payload, ...opts });
   },
   listVersions(layoutId: string) {
