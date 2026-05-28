@@ -1,7 +1,7 @@
 import { z } from 'zod';
 import { requireAuth } from '../middleware/auth.js';
 import { can } from '../lib/rbac.js';
-import { auditRepo, eventsRepo, guestsRepo, rsvpRepo, portalConfigRepo, } from '../db/repos/index.js';
+import { auditRepo, eventsRepo, guestsRepo, rsvpRepo, portalConfigRepo, layoutsRepo } from '../db/repos/index.js';
 import { BadRequest, Forbidden, NotFound } from '../lib/errors.js';
 import { hashPassword, verifyPassword } from '../lib/crypto.js';
 const guestSchema = z.object({
@@ -47,10 +47,46 @@ export async function guestRoutes(app) {
         const orgMap = eventsRepo.orgMapForUser(req.auth.userId);
         if (!can(req.auth.memberships, { eventId }, 'guests.view', orgMap))
             throw Forbidden();
+        const event = eventsRepo.findById(eventId);
+        if (!event)
+            throw NotFound();
+        const layouts = layoutsRepo.listForOrg(event.organization_id, { eventId });
+        const layout = layouts.length > 0 ? layouts[0] : null;
+        let layoutPayload = null;
+        if (layout) {
+            try {
+                layoutPayload = typeof layout.payload === 'string' ? JSON.parse(layout.payload) : layout.payload;
+            }
+            catch { }
+        }
         return {
+            layout: layoutPayload,
             guests: guestsRepo.listForEvent(eventId),
             counts: guestsRepo.countByStatus(eventId),
         };
+    });
+    app.post('/api/events/:eventId/guests/bulk', { preHandler: requireAuth }, async (req, reply) => {
+        const { eventId } = req.params;
+        const event = eventsRepo.findById(eventId);
+        if (!event)
+            throw NotFound();
+        const orgMap = eventsRepo.orgMapForUser(req.auth.userId);
+        if (!can(req.auth.memberships, { eventId }, 'guests.manage', orgMap))
+            throw Forbidden();
+        const bulkSchema = z.object({
+            mode: z.enum(['skip', 'replace', 'append']),
+            guests: z.array(guestSchema),
+        });
+        const parsed = bulkSchema.safeParse(req.body);
+        if (!parsed.success)
+            throw BadRequest('invalid-input', parsed.error.issues);
+        const result = guestsRepo.bulkCreate(event.organization_id, eventId, parsed.data.mode, parsed.data.guests);
+        auditRepo.log({
+            organizationId: event.organization_id, actorUserId: req.auth.userId,
+            actorLabel: req.auth.email, action: 'guest.bulk_create',
+            targetType: 'event', targetId: eventId, ip: req.ip,
+        });
+        return reply.code(201).send(result);
     });
     app.post('/api/events/:eventId/guests', { preHandler: requireAuth }, async (req, reply) => {
         const { eventId } = req.params;
@@ -178,7 +214,7 @@ export async function guestRoutes(app) {
         const requiresPassword = !!cfg?.password_hash;
         const guestList = guestsRepo.listForEvent(eventId)
             .filter((g) => g.allow_portal_access)
-            .map((g) => ({ id: g.id, fullName: g.full_name }));
+            .map((g) => ({ id: g.id, fullName: g.full_name, tableAssignment: g.table_assignment, seatAssignment: g.seat_assignment }));
         return {
             event: {
                 id: event.id, title: event.title,

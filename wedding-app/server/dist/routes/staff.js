@@ -44,7 +44,9 @@ export async function staffRoutes(app) {
         const { eventId, status } = req.query;
         if (!can(req.auth.memberships, { organizationId: orgId }, 'staff.view'))
             throw Forbidden();
-        return { tasks: staffTasksRepo.listForOrg(orgId, { eventId, status: status }) };
+        const isManager = can(req.auth.memberships, { organizationId: orgId }, 'staff.manage');
+        const assignedTo = isManager ? undefined : req.auth.userId;
+        return { tasks: staffTasksRepo.listForOrg(orgId, { eventId, status: status, assignedTo }) };
     });
     app.post('/api/orgs/:orgId/staff/tasks', { preHandler: requireAuth }, async (req, reply) => {
         const { orgId } = req.params;

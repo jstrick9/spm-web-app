@@ -23,6 +23,26 @@ const paymentSchema = z.object({
     notes: z.string().max(2000).optional(),
 });
 export async function vendorRoutes(app) {
+    // ─── Public Portal Endpoints ───────────────────────
+    app.get('/api/portal/vendors/:id/info', async (req, reply) => {
+        const { id } = req.params;
+        const v = vendorsRepo.findById(id);
+        if (!v)
+            throw NotFound();
+        // We need the event and timeline
+        let event = null;
+        let timeline = [];
+        if (v.event_id) {
+            const { eventsRepo, timelineRepo } = await import('../db/repos/index.js');
+            event = eventsRepo.findById(v.event_id);
+            timeline = timelineRepo.listForEvent(v.event_id);
+        }
+        return {
+            vendor: v,
+            event,
+            timeline,
+        };
+    });
     app.get('/api/orgs/:orgId/vendors', { preHandler: requireAuth }, async (req) => {
         const { orgId } = req.params;
         const { eventId } = req.query;
@@ -87,6 +107,28 @@ export async function vendorRoutes(app) {
         if (!parsed.success)
             throw BadRequest('invalid-input', parsed.error.issues);
         return reply.code(201).send({ payment: vendorsRepo.addPayment(id, parsed.data) });
+    });
+    app.post('/api/portal/vendors/:id/questionnaire', async (req, reply) => {
+        const { id } = req.params;
+        const { vendorsRepo } = await import('../db/repos/index.js');
+        const v = vendorsRepo.findById(id);
+        if (!v)
+            throw NotFound();
+        const parsed = z.record(z.unknown()).safeParse(req.body);
+        if (!parsed.success)
+            throw BadRequest('invalid-input', parsed.error.issues);
+        let meta = {};
+        try {
+            meta = JSON.parse(v.metadata);
+        }
+        catch { }
+        meta.questionnaire = {
+            ...(meta.questionnaire || {}),
+            ...parsed.data,
+            submittedAt: new Date().toISOString()
+        };
+        const updated = vendorsRepo.update(id, { metadata: meta });
+        return { ok: true, vendor: updated };
     });
 }
 //# sourceMappingURL=vendors.js.map
