@@ -1,3 +1,5 @@
+import { WelcomeModal } from './components/onboarding/WelcomeModal';
+import { ErrorBoundary } from './ui/ErrorBoundary';
 /**
  * App root.
  *
@@ -18,7 +20,7 @@ import {
 } from 'lucide-react';
 import { useEffect, useState, type CSSProperties } from 'react';
 import { ApiError, getToken, sdk, setToken } from './sdk';
-import type { SdkUser } from './sdk/types';
+import type { SdkUser, SdkMembership } from './sdk/types';
 import { AppShell, PageBody, PageHeader } from './ui/AppShell';
 import { Button } from './ui/Button';
 import { Card, CardContent, CardHeader, CardTitle } from './ui/Card';
@@ -28,12 +30,30 @@ import { Input } from './ui/Input';
 import { Label } from './ui/Label';
 import { useToast } from './ui/Toast';
 import { ConfigProvider } from './config/ConfigProvider';
+import { ReloadPrompt } from './ReloadPrompt';
 import { UiPreview } from './ui/preview/UiPreview';
 import { ControlPanel } from './components/ControlPanel';
+import { AdminPanel } from './screens/system/admin/AdminPanel';
 import { WidgetSlot } from './config/widgets/WidgetSlot';
 import { PlatformStudio } from './screens/PlatformStudio';
+import { CatalogScreen } from './screens/catalog/CatalogScreen';
+import { VenueBuilder } from './screens/catalog/venue/VenueBuilder';
+import { IntegrationHub } from './screens/system/IntegrationHub';
+import { EventQuestionsStudio } from './screens/system/questions/EventQuestionsStudio';
+import { HelpCircle, Package } from 'lucide-react';
+import { InventoryManager } from './screens/system/inventory/InventoryManager';
+import { AnalyticsDashboard } from './screens/system/AnalyticsDashboard';
+import { Link2 } from 'lucide-react';
+import { GlobalCalendar } from './screens/calendar/GlobalCalendar';
+import { VendorCheckInApp } from './screens/checkin/VendorCheckInApp';
+import { MapPin } from 'lucide-react';
+import { Layers } from 'lucide-react';
 import { EventsList } from './screens/events/EventsList';
+import { List } from 'lucide-react';
 import { EventDetail } from './screens/events/EventDetail';
+import { RunSheet } from './screens/events/runsheet/RunSheet';
+import { VendorPortal } from './screens/VendorPortal';
+import { PublicGuestPortal } from './screens/portal/PublicGuestPortal';
 import { matchPath, useRouter } from './lib/router';
 import type { PartialPlatformConfig } from './config/schema';
 
@@ -43,14 +63,17 @@ export default function App() {
   // Public surfaces (no auth)
   if (path === '/preview') return <UiPreview />;
   const portal = matchPath('/portal/:eventId', path);
-  if (portal) return <GuestPortal eventId={portal.eventId} />;
+  if (portal) return <PublicGuestPortal eventId={portal.eventId} />;
+  const vendorPortal = matchPath('/vendor/:vendorId', path);
+  if (vendorPortal) return <VendorPortal vendorId={vendorPortal.vendorId} />;
 
   // Authenticated app
-  return <PlatformApp />;
+  return <ErrorBoundary><PlatformApp /></ErrorBoundary>;
 }
 
 function PlatformApp() {
   const [user, setUser] = useState<SdkUser | null>(null);
+  const [memberships, setMemberships] = useState<SdkMembership[]>([]);
   const [bootstrapped, setBootstrapped] = useState(false);
 
   useEffect(() => {
@@ -59,6 +82,7 @@ function PlatformApp() {
       try {
         const me = await sdk.auth.me();
         setUser(me.user);
+        setMemberships(me.memberships);
       } catch {
         setToken(null);
       } finally {
@@ -68,9 +92,9 @@ function PlatformApp() {
   }, []);
 
   if (!bootstrapped) return <BootSplash />;
-  if (!user) return <AuthScreen onAuth={setUser} />;
+  if (!user) return <AuthScreen onAuth={(u, m) => { setUser(u); setMemberships(m || []); }} />;
 
-  return <AuthenticatedApp user={user} onLogout={() => {
+  return <AuthenticatedApp user={user} memberships={memberships} onLogout={() => {
     void sdk.auth.logout();
     setUser(null);
   }} />;
@@ -87,7 +111,7 @@ function BootSplash() {
   );
 }
 
-function AuthenticatedApp({ user, onLogout }: { user: SdkUser; onLogout: () => void }) {
+function AuthenticatedApp({ user, memberships, onLogout }: { user: SdkUser; memberships: SdkMembership[]; onLogout: () => void }) {
   const { hash, navigate } = useRouter();
   const [orgConfig, setOrgConfig] = useState<PartialPlatformConfig | undefined>();
   const [userConfig, setUserConfig] = useState<PartialPlatformConfig | undefined>();
@@ -119,9 +143,15 @@ function AuthenticatedApp({ user, onLogout }: { user: SdkUser; onLogout: () => v
 
   const commandItems: CommandItem[] = [
     { id: 'nav.dashboard', label: 'Dashboard',           hint: 'Navigation', icon: <LayoutDashboard className="h-4 w-4" />, onSelect: () => navigate('/') },
-    { id: 'nav.events',    label: 'Events',              hint: 'Navigation', icon: <Calendar className="h-4 w-4" />,        onSelect: () => navigate('/events') },
+    { id: 'nav.events',    label: 'Events',              hint: 'Navigation', icon: <List className="h-4 w-4" />,        onSelect: () => navigate('/events') },
+    { id: 'nav.calendar',  label: 'Calendar',            hint: 'Navigation', icon: <Calendar className="h-4 w-4" />,        onSelect: () => navigate('/calendar') },
     { id: 'nav.guests',    label: 'Guests',              hint: 'Navigation', icon: <Users className="h-4 w-4" />,           onSelect: () => navigate('/guests') },
     { id: 'nav.system',    label: 'System',              hint: 'Navigation', icon: <Cog className="h-4 w-4" />,             onSelect: () => navigate('/system') },
+    { id: 'nav.integrations',label: 'Integration Hub',   hint: 'Settings',   icon: <Link2 className="h-4 w-4" />,           onSelect: () => navigate('/system/integrations') },
+    { id: 'nav.questions',   label: 'Event Questions',   hint: 'Settings',   icon: <HelpCircle className="h-4 w-4" />,      onSelect: () => navigate('/system/questions') },
+    { id: 'nav.inventory',   label: 'Inventory Manager', hint: 'Operations', icon: <Package className="h-4 w-4" />,         onSelect: () => navigate('/system/inventory') },
+    { id: 'nav.catalog',   label: 'Catalog Studio',      hint: 'Settings',   icon: <Layers className="h-4 w-4" />,          onSelect: () => navigate('/system/catalog') },
+    { id: 'nav.venue',     label: 'Venue Builder',       hint: 'Settings',   icon: <Home className="h-4 w-4" />,          onSelect: () => navigate('/system/venue') },
     { id: 'nav.studio',    label: 'Platform Studio',     hint: 'Settings',   icon: <Palette className="h-4 w-4" />,         onSelect: () => navigate('/system/platform') },
     { id: 'act.logout',    label: 'Sign out',            hint: 'Account',                                                   onSelect: onLogout },
     { id: 'nav.preview',   label: 'Open Design Preview', hint: 'Developer',  keywords: ['styleguide'],                       onSelect: () => navigate('/preview') },
@@ -135,50 +165,89 @@ function AuthenticatedApp({ user, onLogout }: { user: SdkUser; onLogout: () => v
         onLogout={onLogout}
         onOpenCommandPalette={() => setPaletteOpen(true)}
       >
-        <Routes user={user} orgId={orgId} onOrgConfigChanged={setOrgConfig} />
+        <Routes user={user} memberships={memberships} orgId={orgId} onOrgConfigChanged={setOrgConfig} />
       </AppShell>
 
+      <ReloadPrompt />
       <CommandPalette
         open={paletteOpen}
         onOpenChange={setPaletteOpen}
         items={commandItems}
       />
+      <WelcomeModal memberships={memberships} onComplete={() => {}} />
     </ConfigProvider>
   );
 }
 
 // ─── Route table ────────────────────────────────────────────
 function Routes({
-  user, orgId, onOrgConfigChanged,
+  user, memberships, orgId, onOrgConfigChanged,
 }: {
   user: SdkUser;
+  memberships: SdkMembership[];
   orgId: string | null;
   onOrgConfigChanged: (c: PartialPlatformConfig) => void;
 }) {
   const { path } = useRouter();
 
   // Events: list + detail
+  const runsheet = matchPath('/events/:eventId/run-sheet', path);
+  if (runsheet) return <RunSheet eventId={runsheet.eventId} />;
+
+  const checkin = matchPath('/events/:eventId/check-in', path);
+  if (checkin) {
+    if (!orgId) return <Loading />;
+    return <VendorCheckInApp eventId={checkin.eventId} organizationId={orgId} />;
+  }
+
   const detail = matchPath('/events/:eventId', path);
-  if (detail) return <EventDetail eventId={detail.eventId} />;
+  if (detail) return <EventDetail eventId={detail.eventId} user={user} />;
   if (path === '/events') {
     if (!orgId) return <Loading />;
     return <EventsList orgId={orgId} />;
   }
+  if (path === '/calendar') {
+    if (!orgId) return <Loading />;
+    return <GlobalCalendar orgId={orgId} />;
+  }
 
   // System
+  if (path === '/system/venue') {
+    if (!orgId) return <Loading />;
+    return (
+      <>
+        <PageHeader title="Venue Builder" description="Draw your venue's structural floorplan boundaries." />
+        <PageBody><VenueBuilder orgId={orgId} /></PageBody>
+      </>
+    );
+  }
+  if (path === '/system/catalog') {
+    if (!orgId) return <Loading />;
+    return <CatalogScreen orgId={orgId} />;
+  }
+  if (path === '/system/questions') {
+    if (!orgId) return <Loading />;
+    return <EventQuestionsStudio orgId={orgId} />;
+  }
+  if (path === '/reports') {
+    if (!orgId) return <Loading />;
+    return <AnalyticsDashboard orgId={orgId} />;
+  }
+  if (path === '/system/inventory') {
+    if (!orgId) return <Loading />;
+    return <InventoryManager orgId={orgId} />;
+  }
+  if (path === '/system/integrations') {
+    if (!orgId) return <Loading />;
+    return <IntegrationHub orgId={orgId} />;
+  }
   if (path === '/system/platform') {
     if (!orgId) return <Loading />;
     return <PlatformStudio orgId={orgId} onSaved={onOrgConfigChanged} />;
   }
   if (path === '/system') {
-    return (
-      <>
-        <PageHeader title="System" description="Diagnostics, sync, and feature flags for the dual-write layer." />
-        <PageBody>
-          <Card><CardContent className="pt-6"><ControlPanel /></CardContent></Card>
-        </PageBody>
-      </>
-    );
+    if (!orgId) return <Loading />;
+    return <AdminPanel orgId={orgId} />;
   }
 
   if (path === '/guests') {
@@ -242,7 +311,7 @@ function DashboardScreen({ user, orgId }: { user: SdkUser; orgId: string | null 
                 Browse the <a className="text-brand underline" href="#/events">Events</a> tab — kanban + table views, search, filters, and a proper create flow.
               </p>
               <p className="text-fg-muted">
-                Open <a className="text-brand underline" href="#/system/platform">Platform Studio</a> to re-skin the entire app from a curated preset.
+                Open <a className="text-brand underline" href="#/system/platform">Platform Studio</a> to re-skin the entire app from a curated preset, or set up your layout inventory in the <a className="text-brand underline" href="#/system/catalog">Catalog Studio</a>.
               </p>
               <p className="text-fg-subtle">
                 Press <kbd className="rounded border border-border bg-surface-2 px-1 text-[10px]">⌘K</kbd> for quick navigation.
@@ -256,7 +325,7 @@ function DashboardScreen({ user, orgId }: { user: SdkUser; orgId: string | null 
 }
 
 // ─── Login / Register ───────────────────────────────────────
-function AuthScreen({ onAuth }: { onAuth: (u: SdkUser) => void }) {
+function AuthScreen({ onAuth }: { onAuth: (u: SdkUser, m?: SdkMembership[]) => void }) {
   const { toast } = useToast();
   const [mode, setMode] = useState<'login' | 'register'>('login');
   const [email, setEmail] = useState('owner@demo.local');
@@ -272,7 +341,9 @@ function AuthScreen({ onAuth }: { onAuth: (u: SdkUser) => void }) {
       const res = mode === 'login'
         ? await sdk.auth.login(email, password)
         : await sdk.auth.register({ email, password, fullName, orgName });
-      onAuth(res.user);
+      // In auth screen, we need to fetch memberships after login
+      const me = await sdk.auth.me();
+      onAuth(me.user, me.memberships);
     } catch (err) {
       const e = err as ApiError;
       toast({
@@ -335,93 +406,4 @@ function AuthScreen({ onAuth }: { onAuth: (u: SdkUser) => void }) {
   );
 }
 
-// ─── Public Guest Portal (unchanged from Phase 2 — Day 4 rebuilds) ────
-function GuestPortal({ eventId }: { eventId: string }) {
-  const [info, setInfo] = useState<{ title: string; startDate: string | null } | null>(null);
-  const [guests, setGuests] = useState<Array<{ id: string; fullName: string }>>([]);
-  const [selectedGuestId, setSelectedGuestId] = useState('');
-  const [attending, setAttending] = useState(true);
-  const [mealChoice, setMealChoice] = useState('standard');
-  const [notes, setNotes] = useState('');
-  const [done, setDone] = useState(false);
-  const [error, setError] = useState<string | null>(null);
 
-  useEffect(() => {
-    sdk.portal.info(eventId)
-      .then((r) => { setInfo({ title: r.event.title, startDate: r.event.startDate }); setGuests(r.guests); })
-      .catch(() => setError('Event not found.'));
-  }, [eventId]);
-
-  async function submit(e: React.FormEvent) {
-    e.preventDefault();
-    setError(null);
-    if (!selectedGuestId) { setError('Please pick your name.'); return; }
-    try {
-      await sdk.portal.submitRsvp(eventId, { guestId: selectedGuestId, attending, mealChoice, notes: notes || undefined });
-      setDone(true);
-    } catch (err) {
-      setError((err as ApiError).message);
-    }
-  }
-
-  if (error && !info) return <Card className="max-w-md mx-auto mt-20"><CardContent className="pt-6 text-danger">{error}</CardContent></Card>;
-  if (!info) return <BootSplash />;
-  if (done) return (
-    <div className="min-h-screen bg-hero-editorial flex items-center justify-center p-4">
-      <Card className="max-w-md text-center">
-        <CardContent className="pt-10 pb-8">
-          <div className="text-6xl mb-4">💌</div>
-          <h2 className="font-display text-2xl">Thank you</h2>
-          <p className="mt-2 text-fg-muted">Your RSVP for {info.title} has been received.</p>
-        </CardContent>
-      </Card>
-    </div>
-  );
-
-  const inputStyle: CSSProperties = { width: '100%' };
-  return (
-    <div className="min-h-screen bg-hero-editorial p-4">
-      <Card className="max-w-md mx-auto mt-12">
-        <CardHeader>
-          <CardTitle className="font-display text-3xl">{info.title}</CardTitle>
-          <p className="text-sm text-fg-muted">{info.startDate ? `On ${info.startDate}.` : ''} Please RSVP below.</p>
-        </CardHeader>
-        <CardContent>
-          <form onSubmit={submit} className="space-y-4">
-            <div>
-              <Label htmlFor="gn">Your name</Label>
-              <select id="gn" required value={selectedGuestId} onChange={(e) => setSelectedGuestId(e.target.value)} className="mt-1.5 w-full h-10 px-3 rounded-md border border-border bg-surface">
-                <option value="">— pick your name —</option>
-                {guests.map((g) => <option key={g.id} value={g.id}>{g.fullName}</option>)}
-              </select>
-            </div>
-            <div>
-              <Label>Will you attend?</Label>
-              <div className="flex gap-2 mt-1.5">
-                <Button type="button" variant={attending ? 'default' : 'secondary'} onClick={() => setAttending(true)}>Yes</Button>
-                <Button type="button" variant={!attending ? 'default' : 'secondary'} onClick={() => setAttending(false)}>No</Button>
-              </div>
-            </div>
-            {attending && (
-              <div>
-                <Label htmlFor="meal">Meal preference</Label>
-                <select id="meal" value={mealChoice} onChange={(e) => setMealChoice(e.target.value)} className="mt-1.5 w-full h-10 px-3 rounded-md border border-border bg-surface">
-                  <option value="standard">Standard</option>
-                  <option value="vegetarian">Vegetarian</option>
-                  <option value="vegan">Vegan</option>
-                  <option value="gluten-free">Gluten-free</option>
-                </select>
-              </div>
-            )}
-            <div>
-              <Label htmlFor="notes">Notes</Label>
-              <textarea id="notes" value={notes} onChange={(e) => setNotes(e.target.value)} className="mt-1.5 w-full min-h-[80px] p-3 rounded-md border border-border bg-surface text-sm" style={inputStyle} />
-            </div>
-            {error && <p className="text-sm text-danger">{error}</p>}
-            <Button type="submit" className="w-full">Submit RSVP</Button>
-          </form>
-        </CardContent>
-      </Card>
-    </div>
-  );
-}

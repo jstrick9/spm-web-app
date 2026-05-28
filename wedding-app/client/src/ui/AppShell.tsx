@@ -33,6 +33,7 @@ import {
 } from '../config/ConfigProvider';
 import { Button } from './Button';
 import { ThemeToggle } from './ThemeToggle';
+import { NotificationCenter } from '../components/notifications/NotificationCenter';
 import { cn } from './lib/cn';
 import type { SdkUser } from '../sdk/types';
 
@@ -64,9 +65,9 @@ export function AppShell({ user, currentPath = '', onLogout, onOpenCommandPalett
   useEffect(() => { setMobileOpen(false); }, [currentPath]);
 
   return (
-    <div className="min-h-screen bg-bg text-fg">
+    <div className="min-h-screen bg-bg text-fg print:min-h-0 print:bg-white print:text-black">
       {/* TopBar */}
-      <header className="sticky top-0 z-30 border-b border-border bg-surface/95 backdrop-blur supports-[backdrop-filter]:bg-surface/80">
+      <header className="sticky top-0 z-30 border-b border-border bg-surface/95 backdrop-blur supports-[backdrop-filter]:bg-surface/80 print:hidden">
         <div className="flex h-14 items-center gap-3 px-4 sm:px-6">
           {/* Hamburger (mobile only) */}
           <Button
@@ -107,6 +108,7 @@ export function AppShell({ user, currentPath = '', onLogout, onOpenCommandPalett
           )}
 
           <ThemeToggle />
+          <NotificationCenter />
 
           {/* User menu — simple version (no dropdown yet) */}
           <div className="flex items-center gap-2 rounded-md px-2 py-1.5 hover:bg-surface-2">
@@ -126,7 +128,7 @@ export function AppShell({ user, currentPath = '', onLogout, onOpenCommandPalett
         <Sidebar
           navItems={navItems}
           currentPath={currentPath}
-          className="hidden md:flex"
+          className="hidden md:flex print:hidden"
         />
 
         {/* Sidebar (mobile drawer) */}
@@ -158,7 +160,7 @@ export function AppShell({ user, currentPath = '', onLogout, onOpenCommandPalett
         )}
 
         {/* Main content */}
-        <main className="flex-1 min-w-0">
+        <main className="flex-1 min-w-0 print:m-0 print:p-0">
           {children}
         </main>
       </div>
@@ -246,7 +248,7 @@ export function PageHeader({
   back?: { label: string; href: string };
 }) {
   return (
-    <div className="border-b border-border bg-surface">
+    <div className="border-b border-border bg-surface print:hidden">
       <div className="mx-auto max-w-7xl px-4 sm:px-6 py-5">
         {back && (
           <a
@@ -274,7 +276,7 @@ export function PageHeader({
 /** PageBody — standard padded container for page content. */
 export function PageBody({ children, className }: { children: ReactNode; className?: string }) {
   return (
-    <div className={cn('mx-auto max-w-7xl px-4 sm:px-6 py-6', className)}>
+    <div className={cn('mx-auto max-w-7xl px-4 sm:px-6 py-6 print:m-0 print:p-0 print:max-w-none', className)}>
       {children}
     </div>
   );
