@@ -7,7 +7,7 @@ export interface EventQuestionRow {
   organization_id: string;
   question: string;
   group_name: string;
-  answer_type: 'dropdown' | 'integer' | 'text';
+  answer_type: 'dropdown' | 'integer' | 'text' | 'date' | 'boolean' | 'multiselect';
   options: string;   // JSON array
   workflow: string;  // JSON object
   required: number;

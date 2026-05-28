@@ -19,6 +19,7 @@ const saveSchema = z.object({
   payload:           z.record(z.unknown()),
   changeDescription: z.string().max(2000).optional(),
   expectedRevision:  z.number().int().min(1).optional(),
+  approvalStatus:    z.enum(['draft','pending','approved','rejected']).optional(),
 });
 
 export async function layoutRoutes(app: FastifyInstance) {
@@ -78,6 +79,7 @@ export async function layoutRoutes(app: FastifyInstance) {
         updatedBy: req.auth!.userId,
         changeDescription: parsed.data.changeDescription,
         expectedRevision: parsed.data.expectedRevision,
+        approvalStatus: parsed.data.approvalStatus,
       });
       return { layout: saved };
     } catch (err) {

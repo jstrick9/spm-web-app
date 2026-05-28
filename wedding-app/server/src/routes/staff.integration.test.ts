@@ -1,0 +1,71 @@
+import { describe, it, expect, beforeEach, afterEach } from 'vitest';
+import { FastifyInstance } from 'fastify';
+import { buildApp } from '../index.js';
+import { db } from '../db/database.js';
+import { orgsRepo, usersRepo, rolesRepo, staffTasksRepo } from '../db/repos/index.js';
+
+import { applyAllMigrations } from '../db/migrate.js';
+
+describe('Staff RBAC Integration', () => {
+  let app: FastifyInstance;
+  let orgId: string;
+  let adminToken: string;
+  let staffToken: string;
+  let staffId: string;
+  let ownerId: string;
+
+  beforeEach(async () => {
+    applyAllMigrations();
+    const { rolesRepo } = await import('../db/repos/index.js'); rolesRepo.ensureSystemRoles();
+    app = await buildApp();
+    db.exec('BEGIN');
+
+    const owner = usersRepo.create({ email: 'owner@test.com', fullName: 'Owner', passwordHash: 'x', passwordSalt: 'x' });
+    ownerId = owner.id;
+    orgId = orgsRepo.createWithOwner({ name: 'Test Org', slug: 'test-org', ownerId: owner.id });
+
+    // Create a staff user
+    const staff = usersRepo.create({ email: 'staff@test.com', fullName: 'Staff', passwordHash: 'x', passwordSalt: 'x' });
+    staffId = staff.id;
+    
+    // Create roles
+    const staffRole = rolesRepo.createCustom({ organizationId: orgId, key: 'test_staff', name: 'Staff', createdBy: owner.id, hierarchy: 10, permissions: ['staff.view'] as any[] });
+    orgsRepo.addMember({ orgId, userId: staff.id, roleId: staffRole.id });
+
+    // Get tokens
+    adminToken = app.jwt.sign({ sub: owner.id, email: owner.email, sv: owner.session_version });
+    staffToken = app.jwt.sign({ sub: staff.id, email: staff.email, sv: staff.session_version });
+  });
+
+  afterEach(async () => {
+    db.exec('ROLLBACK');
+    await app.close();
+  });
+
+  it('restricts staff to see only their assigned tasks', async () => {
+    // Admin creates two tasks
+    staffTasksRepo.create(orgId, ownerId, { title: 'Admin Task', assignedStaff: [] });
+    staffTasksRepo.create(orgId, ownerId, { title: 'Staff Task', assignedStaff: [staffId] });
+
+    // Admin should see both tasks
+    const adminRes = await app.inject({
+      method: 'GET',
+      url: `/api/orgs/${orgId}/staff/tasks`,
+      headers: { authorization: `Bearer ${adminToken}` }
+    });
+    expect(adminRes.statusCode).toBe(200);
+    const adminData = JSON.parse(adminRes.payload);
+    expect(adminData.tasks).toHaveLength(2);
+
+    // Staff should see only their assigned task
+    const staffRes = await app.inject({
+      method: 'GET',
+      url: `/api/orgs/${orgId}/staff/tasks`,
+      headers: { authorization: `Bearer ${staffToken}` }
+    });
+    expect(staffRes.statusCode).toBe(200);
+    const staffData = JSON.parse(staffRes.payload);
+    expect(staffData.tasks).toHaveLength(1);
+    expect(staffData.tasks[0].title).toBe('Staff Task');
+  });
+});

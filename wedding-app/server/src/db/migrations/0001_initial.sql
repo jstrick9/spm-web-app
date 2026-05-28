@@ -233,6 +233,8 @@ CREATE TABLE IF NOT EXISTS layouts (
   name            TEXT NOT NULL,
   visibility      TEXT NOT NULL DEFAULT 'event'
                   CHECK (visibility IN ('private','event','venue','public')),
+  approval_status TEXT NOT NULL DEFAULT 'draft'
+                  CHECK (approval_status IN ('draft','pending','approved','rejected')),
   revision        INTEGER NOT NULL DEFAULT 1 CHECK (revision > 0),
   payload         TEXT NOT NULL DEFAULT '{}',
   is_template     INTEGER NOT NULL DEFAULT 0,
@@ -519,7 +521,7 @@ CREATE TABLE IF NOT EXISTS event_questions (
   question        TEXT NOT NULL,
   group_name      TEXT NOT NULL DEFAULT 'Other',
   answer_type     TEXT NOT NULL DEFAULT 'text'
-                  CHECK (answer_type IN ('dropdown','integer','text')),
+                  CHECK (answer_type IN ('dropdown','integer','text','date','boolean','multiselect')),
   options         TEXT NOT NULL DEFAULT '[]',
   workflow        TEXT NOT NULL DEFAULT '{}',
   required        INTEGER NOT NULL DEFAULT 0,

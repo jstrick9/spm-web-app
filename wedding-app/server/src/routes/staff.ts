@@ -50,7 +50,9 @@ export async function staffRoutes(app: FastifyInstance) {
     const { orgId } = req.params as { orgId: string };
     const { eventId, status } = req.query as { eventId?: string; status?: string };
     if (!can(req.auth!.memberships, { organizationId: orgId }, 'staff.view')) throw Forbidden();
-    return { tasks: staffTasksRepo.listForOrg(orgId, { eventId, status: status as never }) };
+    const isManager = can(req.auth!.memberships, { organizationId: orgId }, 'staff.manage');
+    const assignedTo = isManager ? undefined : req.auth!.userId;
+    return { tasks: staffTasksRepo.listForOrg(orgId, { eventId, status: status as never, assignedTo }) };
   });
 
   app.post('/api/orgs/:orgId/staff/tasks', { preHandler: requireAuth }, async (req, reply) => {

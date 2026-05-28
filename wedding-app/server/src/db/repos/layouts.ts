@@ -9,6 +9,7 @@ export interface LayoutRow {
   venue_id: string | null;
   name: string;
   visibility: 'private' | 'event' | 'venue' | 'public';
+  approval_status: 'draft' | 'pending' | 'approved' | 'rejected';
   revision: number;
   payload: string;       // JSON: tables, fixtures, guests-on-tables, etc.
   is_template: number;
@@ -54,6 +55,7 @@ export const layoutsRepo = {
     venueId?: string;
     name: string;
     visibility?: LayoutRow['visibility'];
+  approvalStatus?: LayoutRow['approval_status'];
     payload: Record<string, unknown>;
     isTemplate?: boolean;
     createdBy: string;
@@ -71,6 +73,7 @@ export const layoutsRepo = {
       input.venueId ?? null,
       input.name,
       input.visibility ?? 'event',
+      input.approvalStatus ?? 'draft',
       stringifyJson(input.payload),
       input.isTemplate ? 1 : 0,
       input.createdBy,
@@ -91,6 +94,7 @@ export const layoutsRepo = {
     updatedBy: string;
     changeDescription?: string;
     expectedRevision?: number;  // optimistic concurrency
+    approvalStatus?: string;
   }): LayoutRow {
     const tx = db.transaction(() => {
       const current = this.findById(input.layoutId);

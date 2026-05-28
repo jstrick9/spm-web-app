@@ -56,6 +56,43 @@ export const guestsRepo = {
     ).all(eventId) as GuestRow[];
   },
 
+  
+  bulkCreate(orgId: string, eventId: string, mode: 'skip' | 'replace' | 'append', inputs: GuestInput[]) {
+    return db.transaction(() => {
+      let inserted = 0;
+      let updated = 0;
+      let skipped = 0;
+      const existing = this.listForEvent(eventId);
+      const byEmail = new Map<string, GuestRow>();
+      for (const g of existing) {
+        if (g.email) {
+          byEmail.set(g.email.toLowerCase(), g);
+        }
+      }
+
+      for (const input of inputs) {
+        const emailKey = input.email ? input.email.toLowerCase() : null;
+        let match = emailKey ? byEmail.get(emailKey) : undefined;
+        
+        if (match && mode === 'skip') {
+          skipped++;
+          continue;
+        }
+        
+        if (match && mode === 'replace') {
+          this.update(match.id, input);
+          updated++;
+          continue;
+        }
+        
+        // append or no match
+        this.create(orgId, eventId, input);
+        inserted++;
+      }
+      return { inserted, updated, skipped };
+    })();
+  },
+
   create(orgId: string, eventId: string, input: GuestInput): GuestRow {
     const id = uuid();
     db.prepare(

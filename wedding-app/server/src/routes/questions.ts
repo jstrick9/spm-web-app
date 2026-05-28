@@ -8,7 +8,7 @@ import { BadRequest, Forbidden, NotFound } from '../lib/errors.js';
 const questionSchema = z.object({
   question:    z.string().min(1).max(500),
   groupName:   z.string().max(120).optional(),
-  answerType:  z.enum(['dropdown','integer','text']).optional(),
+  answerType:  z.enum(['dropdown','integer','text','date','boolean','multiselect']).optional(),
   options:     z.array(z.unknown()).optional(),
   workflow:    z.record(z.unknown()).optional(),
   required:    z.boolean().optional(),

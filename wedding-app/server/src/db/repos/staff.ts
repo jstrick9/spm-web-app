@@ -41,11 +41,17 @@ export interface StaffTaskInput {
 }
 
 export const staffTasksRepo = {
-  listForOrg(orgId: string, opts: { eventId?: string; status?: StaffTaskRow['status'] } = {}): StaffTaskRow[] {
+  listForOrg(orgId: string, opts: { eventId?: string; status?: StaffTaskRow['status']; assignedTo?: string } = {}): StaffTaskRow[] {
     let sql = `SELECT * FROM staff_tasks WHERE organization_id = ?`;
     const params: unknown[] = [orgId];
     if (opts.eventId) { sql += ` AND event_id = ?`; params.push(opts.eventId); }
     if (opts.status)  { sql += ` AND status = ?`;   params.push(opts.status); }
+    if (opts.assignedTo) {
+      // Since assigned_staff is a JSON array of strings, we can use JSON_EACH in SQLite or a LIKE query.
+      // Since we just want to know if assignedTo is inside the JSON array:
+      sql += ` AND EXISTS (SELECT 1 FROM json_each(assigned_staff) WHERE value = ?)`;
+      params.push(opts.assignedTo);
+    }
     sql += ` ORDER BY due_at IS NULL, due_at, created_at`;
     return db.prepare(sql).all(...params) as StaffTaskRow[];
   },
