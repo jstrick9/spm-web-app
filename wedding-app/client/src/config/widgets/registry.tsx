@@ -39,6 +39,11 @@ export interface WidgetDef<TOpts extends Record<string, unknown> = Record<string
 // These all use placeholder data right now. Days 5-7 swap in
 // queries against the real SDK. The interfaces stay the same.
 
+
+import { useQuery } from '@tanstack/react-query';
+import { sdk } from '../../sdk';
+import { Loader2 } from 'lucide-react';
+
 const bookingConversion: WidgetDef = {
   id: 'kpi.booking-conversion',
   name: 'Booking Conversion',
@@ -50,15 +55,29 @@ const bookingConversion: WidgetDef = {
     benchmarkPct: z.number().min(0).max(100).optional(),
     period: z.enum(['7d', '30d', '90d', '1y']).optional(),
   }) as never,
-  Component: ({ options }) => (
-    <StatCard
-      label="Booking conversion"
-      value="34%"
-      trend={{ value: 12, direction: 'up' }}
-      benchmark={{ label: 'Industry', value: `${(options as { benchmarkPct?: number })?.benchmarkPct ?? 22}%` }}
-      rightSlot={<span className="text-success"><Sparkline data={[10, 14, 18, 16, 22, 28, 34]} /></span>}
-    />
-  ),
+  Component: ({ options, orgId }) => {
+    // In a real app this would call an aggregation endpoint
+    // For Phase 7 we will just use dummy data, or calculate from org events list
+    const { data, isLoading } = useQuery({
+      queryKey: ['events', orgId],
+      queryFn: () => sdk.events.list(orgId as string),
+      enabled: !!orgId,
+    });
+    
+    if (isLoading) return <div className="p-4"><Loader2 className="animate-spin w-4 h-4 text-fg-muted" /></div>;
+
+    const total = data?.events.length || 0;
+    const booked = data?.events.filter(e => e.status === 'booked' || e.status === 'planning' || e.status === 'completed').length || 0;
+    const pct = total === 0 ? 0 : Math.round((booked / total) * 100);
+
+    return (
+      <StatCard
+        label="Booking conversion"
+        value={total === 0 ? '—' : `${pct}%`}
+        benchmark={{ label: 'Industry', value: `${(options as { benchmarkPct?: number })?.benchmarkPct ?? 22}%` }}
+      />
+    );
+  },
 };
 
 const revenuePerEvent: WidgetDef = {
@@ -68,18 +87,30 @@ const revenuePerEvent: WidgetDef = {
   description: 'Average booked event value over the selected period.',
   fits: ['venue.dashboard', 'reports'],
   defaultSize: 'sm',
-  Component: () => (
-    <StatCard
-      label="Avg revenue per event"
-      value="$28,400"
-      description="Last 90 days"
-      trend={{ value: 8, direction: 'up' }}
-      rightSlot={<span className="text-brand"><Sparkline data={[24, 25, 23, 27, 26, 28, 28.4]} /></span>}
-    />
-  ),
+  Component: ({ orgId }) => {
+    const { data, isLoading } = useQuery({
+      queryKey: ['events', orgId],
+      queryFn: () => sdk.events.list(orgId as string),
+      enabled: !!orgId,
+    });
+    
+    if (isLoading) return <div className="p-4"><Loader2 className="animate-spin w-4 h-4 text-fg-muted" /></div>;
+
+    const withBudget = data?.events.filter(e => e.budget_cents !== null && e.budget_cents > 0) || [];
+    const totalRevenueCents = withBudget.reduce((sum, e) => sum + (e.budget_cents || 0), 0);
+    const avg = withBudget.length === 0 ? 0 : totalRevenueCents / withBudget.length;
+
+    return (
+      <StatCard
+        label="Avg revenue per event"
+        value={withBudget.length === 0 ? '—' : `${(avg / 100).toLocaleString(undefined, { maximumFractionDigits: 0 })}`}
+      />
+    );
+  },
 };
 
 const rsvpVelocity: WidgetDef = {
+
   id: 'kpi.rsvp-velocity',
   name: 'RSVP Velocity',
   category: 'kpi',
