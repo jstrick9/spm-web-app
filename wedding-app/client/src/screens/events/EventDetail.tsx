@@ -32,6 +32,21 @@ import { useToast } from '../../ui/Toast';
 import { WidgetSlot } from '../../config/widgets/WidgetSlot';
 import { STATUS_META, StatusBadge, statusOrder } from './statusMeta';
 import { EventGuestsTab } from './guests/EventGuestsTab';
+import { CanvasPage } from './layouts/CanvasPage';
+import { GuestPortalSettingsTab } from './portal/GuestPortalSettingsTab';
+import { EventInvitesTab } from './invites/EventInvitesTab';
+import { EventFeedbackTab } from './feedback/EventFeedbackTab';
+import { BarChart } from 'lucide-react';
+import { Mail } from 'lucide-react';
+import { EventVendorsTab } from './vendors/EventVendorsTab';
+import { EventTimelineTab } from './timeline/EventTimelineTab';
+import { EventStaffTab } from './staff/EventStaffTab';
+import { ChatSystem } from './chat/ChatSystem';
+import { EventBudgetTab } from './budget/EventBudgetTab';
+import { EventContractsTab } from './contracts/EventContractsTab';
+import { EventGalleryTab } from './gallery/EventGalleryTab';
+import { DollarSign, Printer, FileSignature, ImageIcon, ScanLine } from 'lucide-react';
+import { ClipboardCheck } from 'lucide-react';
 import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from '../../ui/Select';
@@ -39,9 +54,9 @@ import { useEffect, useState } from 'react';
 
 interface Props { eventId: string }
 
-type TabId = 'overview' | 'guests' | 'timeline' | 'vendors' | 'layout' | 'portal' | 'settings';
+type TabId = 'overview' | 'guests' | 'timeline' | 'vendors' | 'budget' | 'contracts' | 'gallery' | 'staff' | 'layout' | 'invites' | 'feedback' | 'chat' | 'portal' | 'settings';
 
-export function EventDetail({ eventId }: Props) {
+export function EventDetail({ eventId, user }: Props & { user: any }) {
   const { navigate, query } = useRouter();
   const initialTab = (query.get('tab') as TabId | null) ?? 'overview';
   const [tab, setTab] = useState<TabId>(initialTab);
@@ -130,22 +145,43 @@ export function EventDetail({ eventId }: Props) {
           </span>
         }
         actions={
+          <>
           <a href={`#/portal/${eventId}`} target="_blank" rel="noreferrer">
             <Button variant="outline">
               <ExternalLink className="h-3.5 w-3.5" />
               View guest portal
             </Button>
           </a>
+          <a href={`#/events/${eventId}/run-sheet`} target="_blank" rel="noreferrer">
+            <Button variant="outline">
+              <Printer className="h-3.5 w-3.5 mr-1" />
+              Print Run Sheet
+            </Button>
+          </a>
+          <a href={`#/events/${eventId}/check-in`} target="_blank" rel="noreferrer">
+            <Button variant="default">
+              <ScanLine className="h-3.5 w-3.5 mr-1" />
+              Vendor Check-In
+            </Button>
+          </a>
+          </>
         }
       />
 
       <PageBody className="space-y-6">
-        <Tabs value={tab} onValueChange={(v) => setTab(v as TabId)}>
+        <Tabs value={tab} onValueChange={(v) => setTab(v as TabId)} className="print:hidden">
           <TabsList className="overflow-x-auto">
             <TabsTrigger value="overview"><LayoutGrid className="h-3.5 w-3.5 mr-1" />Overview</TabsTrigger>
             <TabsTrigger value="guests"><Users className="h-3.5 w-3.5 mr-1" />Guests</TabsTrigger>
+            <TabsTrigger value="invites"><Mail className="h-3.5 w-3.5 mr-1" />Invites</TabsTrigger>
+            <TabsTrigger value="feedback"><BarChart className="h-3.5 w-3.5 mr-1" />Polls & Feedback</TabsTrigger>
             <TabsTrigger value="timeline"><ClipboardList className="h-3.5 w-3.5 mr-1" />Timeline</TabsTrigger>
             <TabsTrigger value="vendors"><Truck className="h-3.5 w-3.5 mr-1" />Vendors</TabsTrigger>
+            <TabsTrigger value="budget"><DollarSign className="h-3.5 w-3.5 mr-1" />Budget</TabsTrigger>
+            <TabsTrigger value="contracts"><FileSignature className="h-3.5 w-3.5 mr-1" />Contracts</TabsTrigger>
+            <TabsTrigger value="gallery"><ImageIcon className="h-3.5 w-3.5 mr-1" />Gallery</TabsTrigger>
+            <TabsTrigger value="staff"><ClipboardCheck className="h-3.5 w-3.5 mr-1" />Staff</TabsTrigger>
+            <TabsTrigger value="chat"><MessageCircle className="h-3.5 w-3.5 mr-1" />Chat</TabsTrigger>
             <TabsTrigger value="layout"><MapPin className="h-3.5 w-3.5 mr-1" />Layout</TabsTrigger>
             <TabsTrigger value="portal"><LinkIcon className="h-3.5 w-3.5 mr-1" />Portal</TabsTrigger>
             <TabsTrigger value="settings"><Cog className="h-3.5 w-3.5 mr-1" />Settings</TabsTrigger>
@@ -159,20 +195,48 @@ export function EventDetail({ eventId }: Props) {
             <EventGuestsTab eventId={eventId} />
           </TabsContent>
 
+          <TabsContent value="invites">
+            <EventInvitesTab eventId={eventId} />
+          </TabsContent>
+
+          <TabsContent value="feedback">
+            <EventFeedbackTab eventId={eventId} />
+          </TabsContent>
+
           <TabsContent value="timeline">
-            <ComingSoon title="Timeline" description="Week 8 — drag-and-drop day-of schedule editor." />
+            <EventTimelineTab eventId={eventId} />
           </TabsContent>
 
           <TabsContent value="vendors">
-            <ComingSoon title="Vendors" description="Weeks 5-6 — full Vendor Management System with vendor portal." />
+            <EventVendorsTab eventId={eventId} organizationId={event.organization_id} />
+          </TabsContent>
+
+          <TabsContent value="budget">
+            <EventBudgetTab eventId={eventId} organizationId={event.organization_id} />
+          </TabsContent>
+
+          <TabsContent value="contracts">
+            <EventContractsTab eventId={eventId} />
+          </TabsContent>
+
+          <TabsContent value="gallery">
+            <EventGalleryTab eventId={eventId} />
+          </TabsContent>
+
+          <TabsContent value="staff">
+            <EventStaffTab eventId={eventId} organizationId={event.organization_id} />
           </TabsContent>
 
           <TabsContent value="layout">
-            <ComingSoon title="Floor Plan" description="Weeks 2-3 — full-parity floor plan canvas with tables, fixtures, decor, and zones." />
+            <CanvasPage event={event} />
+          </TabsContent>
+
+          <TabsContent value="chat">
+            <ChatSystem eventId={eventId} currentUser={user} />
           </TabsContent>
 
           <TabsContent value="portal">
-            <ComingSoon title="Guest Portal" description="Day 4 of Week 1 — public RSVP page configuration." />
+            <GuestPortalSettingsTab eventId={eventId} />
           </TabsContent>
 
           <TabsContent value="settings">

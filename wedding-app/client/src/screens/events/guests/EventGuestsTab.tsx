@@ -13,6 +13,7 @@ import type { SdkGuest } from '../../../sdk/types';
 import { Card, CardContent } from '../../../ui/Card';
 import { Skeleton } from '../../../ui/Skeleton';
 import { GuestFormDialog } from './GuestFormDialog';
+import { ImportGuestsDialog } from './ImportGuestsDialog';
 import { GuestDetailDrawer } from './GuestDetailDrawer';
 import { GuestsTable, type GuestSortKey } from './GuestsTable';
 import { GuestsToolbar, type GuestStatusFilter } from './GuestsToolbar';
@@ -28,6 +29,7 @@ export function EventGuestsTab({ eventId }: Props) {
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
 
   const [createOpen, setCreateOpen] = useState(false);
+  const [importOpen, setImportOpen] = useState(false);
   const [detailGuest, setDetailGuest] = useState<SdkGuest | null>(null);
   const [detailOpen, setDetailOpen] = useState(false);
 
@@ -98,6 +100,7 @@ export function EventGuestsTab({ eventId }: Props) {
         selectedIds={[...selectedIds]}
         onSelectionCleared={() => setSelectedIds(new Set())}
         onAddClick={() => setCreateOpen(true)}
+        onImportClick={() => setImportOpen(true)}
       />
 
       {query.isLoading ? (
@@ -123,6 +126,13 @@ export function EventGuestsTab({ eventId }: Props) {
           onAddGuest={() => setCreateOpen(true)}
         />
       )}
+
+      <ImportGuestsDialog
+        eventId={eventId}
+        open={importOpen}
+        onOpenChange={setImportOpen}
+        onImported={() => query.refetch()}
+      />
 
       <GuestFormDialog
         eventId={eventId}
