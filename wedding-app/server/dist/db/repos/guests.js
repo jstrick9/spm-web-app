@@ -8,6 +8,37 @@ export const guestsRepo = {
     listForEvent(eventId) {
         return db.prepare(`SELECT * FROM guests WHERE event_id = ? AND deleted_at IS NULL ORDER BY full_name`).all(eventId);
     },
+    bulkCreate(orgId, eventId, mode, inputs) {
+        return db.transaction(() => {
+            let inserted = 0;
+            let updated = 0;
+            let skipped = 0;
+            const existing = this.listForEvent(eventId);
+            const byEmail = new Map();
+            for (const g of existing) {
+                if (g.email) {
+                    byEmail.set(g.email.toLowerCase(), g);
+                }
+            }
+            for (const input of inputs) {
+                const emailKey = input.email ? input.email.toLowerCase() : null;
+                let match = emailKey ? byEmail.get(emailKey) : undefined;
+                if (match && mode === 'skip') {
+                    skipped++;
+                    continue;
+                }
+                if (match && mode === 'replace') {
+                    this.update(match.id, input);
+                    updated++;
+                    continue;
+                }
+                // append or no match
+                this.create(orgId, eventId, input);
+                inserted++;
+            }
+            return { inserted, updated, skipped };
+        })();
+    },
     create(orgId, eventId, input) {
         const id = uuid();
         db.prepare(`INSERT INTO guests

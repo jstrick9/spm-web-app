@@ -16,6 +16,9 @@ beforeEach(() => {
     ];
     for (const t of tables)
         db.prepare(`DELETE FROM ${t}`).run();
+    // Wipe custom roles + their grants but keep system rows intact.
+    db.prepare(`DELETE FROM role_permissions WHERE role_id IN (SELECT id FROM roles WHERE is_system = 0)`).run();
+    db.prepare(`DELETE FROM roles WHERE is_system = 0`).run();
 });
 describe('events repo', () => {
     it('creates and lists events for an org', () => {
@@ -44,7 +47,7 @@ describe('events repo', () => {
         // otherUser has no membership in orgA, so should see nothing
         expect(eventsRepo.orgMapForUser(otherUser.id)).toEqual({});
         // Add them as event-couple
-        eventsRepo.addMember({ eventId: evtA.id, userId: otherUser.id, role: 'couple' });
+        eventsRepo.addMember({ eventId: evtA.id, userId: otherUser.id, roleId: 'sys_couple' });
         expect(eventsRepo.orgMapForUser(otherUser.id)).toEqual({ [evtA.id]: orgA.id });
     });
     it('update applies partial patch, metadata round-trips', () => {

@@ -28,7 +28,7 @@ export const layoutsRepo = {
         db.prepare(`INSERT INTO layouts
          (id, organization_id, event_id, venue_id, name, visibility,
           revision, payload, is_template, created_by, updated_by)
-       VALUES (?, ?, ?, ?, ?, ?, 1, ?, ?, ?, ?)`).run(id, input.organizationId, input.eventId ?? null, input.venueId ?? null, input.name, input.visibility ?? 'event', stringifyJson(input.payload), input.isTemplate ? 1 : 0, input.createdBy, input.createdBy);
+       VALUES (?, ?, ?, ?, ?, ?, 1, ?, ?, ?, ?)`).run(id, input.organizationId, input.eventId ?? null, input.venueId ?? null, input.name, input.visibility ?? 'event', input.approvalStatus ?? 'draft', stringifyJson(input.payload), input.isTemplate ? 1 : 0, input.createdBy, input.createdBy);
         // Snapshot revision 1 in versions.
         this._snapshot(id, 1, input.payload, input.createdBy, 'initial');
         return this.findById(id);

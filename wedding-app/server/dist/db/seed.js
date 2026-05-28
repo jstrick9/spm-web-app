@@ -3,7 +3,10 @@
  * Run:  npm run seed
  */
 import { hashPassword } from '../lib/crypto.js';
-import { eventsRepo, guestsRepo, orgsRepo, usersRepo, catalogRepo, vendorsRepo, timelineRepo, staffTasksRepo, } from './repos/index.js';
+import { eventsRepo, guestsRepo, orgsRepo, usersRepo, catalogRepo, vendorsRepo, timelineRepo, staffTasksRepo, rolesRepo, } from './repos/index.js';
+// Ensure system roles exist BEFORE we create any memberships.
+// (Critical: createWithOwner inserts a membership referencing sys_owner.)
+rolesRepo.ensureSystemRoles();
 const DEMO_EMAIL = 'owner@demo.local';
 const DEMO_PASSWORD = 'wedding123';
 let user = usersRepo.findByEmail(DEMO_EMAIL);
