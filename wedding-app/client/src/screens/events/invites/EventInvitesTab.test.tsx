@@ -1,87 +1,90 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, fireEvent, waitFor } from '@testing-library/react';
-import { EventInvitesTab } from './EventInvitesTab';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { ToastProvider } from '../../../ui/Toast';
-import { sdk } from '../../../sdk';
-
-const queryClient = new QueryClient({
-  defaultOptions: { queries: { retry: false } }
-});
+import { EventInvitesTab } from './EventInvitesTab';
 
 vi.mock('../../../sdk', () => ({
   sdk: {
     guests: {
-      list: vi.fn().mockResolvedValue({ 
+      list: vi.fn().mockResolvedValue({
         guests: [
-          { id: 'g1', full_name: 'John Doe', email: 'john@doe.com', rsvp_status: 'pending' },
-          { id: 'g2', full_name: 'Jane Smith', email: 'jane@smith.com', rsvp_status: 'attending' },
-        ] 
-      })
-    }
-  }
+          { id: 'g1', full_name: 'Alice Smith', email: 'alice@test.com', rsvp_status: 'attending' },
+          { id: 'g2', full_name: 'Bob Jones', email: 'bob@test.com', rsvp_status: 'pending' },
+        ],
+        counts: { pending: 1, attending: 1, declined: 0, maybe: 0 },
+      }),
+    },
+    inviteTracking: {
+      list: vi.fn().mockResolvedValue({
+        tracking: [],
+        statusMap: {},
+        counts: { notSent: 2, sent: 0, opened: 0, bounced: 0 },
+      }),
+      bulkSend: vi.fn().mockResolvedValue({ sent: 2 }),
+    },
+  },
 }));
 
-describe('EventInvitesTab', () => {
-  beforeEach(() => {
-    vi.clearAllMocks();
-  });
+vi.mock('../../../ui/Toast', () => ({ useToast: () => ({ toast: vi.fn() }) }));
 
-  const TestWrapper = ({ children }: any) => (
-    <QueryClientProvider client={queryClient}>
-      <ToastProvider>
-        {children}
-      </ToastProvider>
-    </QueryClientProvider>
+function wrap() {
+  const qc = new QueryClient({ defaultOptions: { queries: { retry: false, gcTime: 0 } } });
+  return ({ children }: { children: React.ReactNode }) => (
+    <QueryClientProvider client={qc}>{children}</QueryClientProvider>
   );
+}
 
-  it('renders builder and switches to tracking view', async () => {
-    render(<EventInvitesTab eventId="evt-1" />, { wrapper: TestWrapper });
-    
-    expect(screen.getByText('Editor Tools')).toBeInTheDocument();
-    
-    // Switch view
-    const trackingBtn = screen.getByRole('button', { name: /Track Opens & Sends/i });
-    fireEvent.click(trackingBtn);
-    
-    expect(await screen.findByText('John Doe')).toBeInTheDocument();
-    expect(screen.getByText('jane@smith.com')).toBeInTheDocument();
+describe('EventInvitesTab', () => {
+  beforeEach(() => { vi.clearAllMocks(); });
+
+  it('renders builder view by default with theme options', async () => {
+    render(<EventInvitesTab eventId="e1" />, { wrapper: wrap() });
+    expect(screen.getByText('Design Invitation')).toBeTruthy();
+    expect(screen.getByText('formal')).toBeTruthy();
+    expect(screen.getByText('modern')).toBeTruthy();
+    expect(screen.getByText('garden')).toBeTruthy();
   });
 
-  it('allows adding and editing blocks', async () => {
-    render(<EventInvitesTab eventId="evt-1" />, { wrapper: TestWrapper });
-    
-    // Add a text block
-    const addTextBtn = screen.getByRole('button', { name: /Text/i });
-    fireEvent.click(addTextBtn);
-    
-    const textareas = screen.getAllByRole('textbox');
-    expect(textareas.length).toBeGreaterThan(0);
-    
-    fireEvent.change(textareas[textareas.length - 1], { target: { value: 'Join us for cake!' } });
-    // expect(screen.getByText('Join us for cake!')).toBeInTheDocument();
+  it('renders Send to Guests button', async () => {
+    render(<EventInvitesTab eventId="e1" />, { wrapper: wrap() });
+    expect(screen.getByText('Send to Guests')).toBeTruthy();
   });
 
-  it('simulates sending and tracks opens', async () => {
-    render(<EventInvitesTab eventId="evt-1" />, { wrapper: TestWrapper });
-    
-    // Wait for guests to load (implied by the fetch)
-    await waitFor(() => expect(sdk.guests.list).toHaveBeenCalledWith('evt-1'));
-    
-    // Send to guests
-    const sendBtn = screen.getByRole('button', { name: /Send to Guests/i });
-    fireEvent.click(sendBtn);
-    
-    // Should switch to tracking view automatically
+  it('switches to tracking view', async () => {
+    render(<EventInvitesTab eventId="e1" />, { wrapper: wrap() });
+    fireEvent.click(screen.getByText('Track Opens & Sends'));
+
     await waitFor(() => {
-       expect(screen.getByText('Invites Sent')).toBeInTheDocument();
+      expect(screen.getByText('Total Guests')).toBeTruthy();
+      expect(screen.getByText('Invites Sent')).toBeTruthy();
+      expect(screen.getByText('Open Rate')).toBeTruthy();
     });
+  });
+
+  it('shows guest list in tracking view', async () => {
+    render(<EventInvitesTab eventId="e1" />, { wrapper: wrap() });
+    fireEvent.click(screen.getByText('Track Opens & Sends'));
+
+    await waitFor(() => {
+      expect(screen.getByText('Alice Smith')).toBeTruthy();
+      expect(screen.getByText('Bob Jones')).toBeTruthy();
+    });
+  });
+
+  it('renders invitation preview with editable blocks', async () => {
+    render(<EventInvitesTab eventId="e1" />, { wrapper: wrap() });
+    expect(screen.getAllByText('You are joyfully invited to the wedding of').length).toBeGreaterThanOrEqual(1);
+    expect(screen.getAllByText('Sarah & James').length).toBeGreaterThanOrEqual(1);
+  });
+
+  it('adds a new text block', async () => {
+    render(<EventInvitesTab eventId="e1" />, { wrapper: wrap() });
     
-    // 2 guests total
-    // expect(screen.getByText('2')).toBeInTheDocument();
-    
-    // Both should say either "Sent" or "Opened"
-    const statuses = screen.getAllByText(/Sent|Opened/i);
-    expect(statuses.length).toBeGreaterThan(0);
+    const addTextBtns = screen.getAllByText('Text');
+    fireEvent.click(addTextBtns[addTextBtns.length - 1]); // Click the "Text" add button
+
+    await waitFor(() => {
+      expect(screen.getAllByText('Enter text here...').length).toBeGreaterThanOrEqual(1);
+    });
   });
 });

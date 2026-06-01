@@ -41,6 +41,7 @@ const schema = z.object({
     (v) => v === '' || v === undefined ? undefined : Number(v),
     z.number().int().min(0, 'Cannot be negative').optional(),
   ),
+  leadSource: z.enum(['website','referral','the_knot','weddingwire','facebook','instagram','google','walk_in','other','']).optional(),
   budgetDollars: z.preprocess(
     (v) => v === '' || v === undefined ? undefined : Number(v),
     z.number().min(0, 'Cannot be negative').optional(),
@@ -87,6 +88,7 @@ export function CreateEventDialog({ orgId, open, onOpenChange, onCreated }: Prop
         budgetCents: values.budgetDollars !== undefined
           ? Math.round(values.budgetDollars * 100)
           : undefined,
+        leadSource: values.leadSource || undefined,
       });
       return res.event;
     },

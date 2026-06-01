@@ -140,7 +140,7 @@ export function VendorTimelineChart({ eventId }: Props) {
              </div>
 
              {/* Tracks */}
-             <div className="space-y-4">
+             <div className="space-y-4 overflow-x-auto">
                 {vendorTracks.map((track, idx) => (
                   <div key={track!.vendor.id} className="flex relative h-10 items-center group">
                      {/* Vendor Label */}

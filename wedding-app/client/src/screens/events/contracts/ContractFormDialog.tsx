@@ -99,7 +99,7 @@ export function ContractFormDialog({ open, onOpenChange, onSave }: Props) {
 
             <DialogFooter className="pt-4 mt-2 border-t">
               <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>Cancel</Button>
-              <Button type="submit">Draft Document</Button>
+              <Button type="submit" disabled={form.formState.isSubmitting}>Draft Document</Button>
             </DialogFooter>
           </form>
         </Form>

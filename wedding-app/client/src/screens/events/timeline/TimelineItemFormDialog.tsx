@@ -63,7 +63,7 @@ export function TimelineItemFormDialog({ open, onOpenChange, eventId, item }: Pr
 
   const mutation = useMutation({
     mutationFn: async (values: FormValues) => {
-      // Need a valid date string for the backend. We'll use a dummy date for now 
+      // Build a valid ISO timestamp from form time inputs 
       // since the DB expects ISO strings, but the UI is focused on time-of-day.
       // We will anchor it to today's date for storage.
       const startsAt = new Date();

@@ -1,33 +1,55 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { render, screen, fireEvent } from '@testing-library/react';
+import { render, screen, waitFor } from '@testing-library/react';
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { EventGalleryTab } from './EventGalleryTab';
-import { ToastProvider } from '../../../ui/Toast';
+
+vi.mock('../../../sdk', () => ({
+  sdk: {
+    gallery: {
+      list: vi.fn().mockResolvedValue({
+        images: [
+          { id: 'g1', filename: 'rose.jpg', url: 'data:image/jpeg;base64,abc', category: 'florals', caption: 'Pink roses', sort_order: 0, created_at: '2026-01-01' },
+          { id: 'g2', filename: 'lights.jpg', url: 'data:image/jpeg;base64,def', category: 'lighting', caption: null, sort_order: 1, created_at: '2026-01-02' },
+        ],
+        counts: { florals: 1, lighting: 1 },
+      }),
+      upload: vi.fn().mockResolvedValue({ image: { id: 'g3' } }),
+      update: vi.fn().mockResolvedValue({ image: {} }),
+      delete: vi.fn().mockResolvedValue(undefined),
+    },
+  },
+}));
+vi.mock('../../../ui/Toast', () => ({ useToast: () => ({ toast: vi.fn() }) }));
+vi.mock('../../../lib/usePermission', () => ({ usePermission: () => true }));
+
+function wrap() {
+  const qc = new QueryClient({ defaultOptions: { queries: { retry: false, gcTime: 0 } } });
+  return ({ children }: { children: React.ReactNode }) => <QueryClientProvider client={qc}>{children}</QueryClientProvider>;
+}
 
 describe('EventGalleryTab', () => {
-  beforeEach(() => {
-    vi.clearAllMocks();
+  beforeEach(() => { vi.clearAllMocks(); });
+
+  it('renders gallery images from server', async () => {
+    render(<EventGalleryTab eventId="e1" />, { wrapper: wrap() });
+    await waitFor(() => {
+      const images = screen.getAllByRole('img');
+      expect(images.length).toBeGreaterThanOrEqual(2);
+    });
   });
 
-  it('renders gallery sidebar and categories', () => {
-    render(<ToastProvider><EventGalleryTab eventId="test-event" /></ToastProvider>);
-    
-    expect(screen.getByText('Photo & Mood Board Gallery')).toBeInTheDocument();
-    
-    // Check categories load
-    expect(screen.getByRole('button', { name: /All Photos/i })).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: /florals/i })).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: /linens/i })).toBeInTheDocument();
-    
-    // Check initial sample images render
-    expect(screen.getByText('2')).toBeInTheDocument(); // All photos count
+  it('renders category filter chips with counts', async () => {
+    render(<EventGalleryTab eventId="e1" />, { wrapper: wrap() });
+    await waitFor(() => {
+      expect(screen.getByText(/florals \(1\)/i)).toBeTruthy();
+      expect(screen.getByText(/lighting \(1\)/i)).toBeTruthy();
+    });
   });
 
-  it('filters by category', () => {
-    render(<ToastProvider><EventGalleryTab eventId="test-event" /></ToastProvider>);
-    
-    const filterBtn = screen.getByRole('button', { name: /lighting/i });
-    fireEvent.click(filterBtn);
-    
-    expect(screen.getByText('No photos in this category')).toBeInTheDocument();
+  it('shows upload button when user has gallery.manage', async () => {
+    render(<EventGalleryTab eventId="e1" />, { wrapper: wrap() });
+    await waitFor(() => {
+      expect(screen.getByText('Upload')).toBeTruthy();
+    });
   });
 });

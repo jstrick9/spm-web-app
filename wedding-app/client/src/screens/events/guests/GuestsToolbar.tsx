@@ -1,4 +1,4 @@
-import { Plus, Search, Upload, X } from 'lucide-react';
+import { Mail, Plus, Search, Upload, X } from 'lucide-react';
 import type { SdkRsvpStatus } from '../../../sdk/types';
 import { Button } from '../../../ui/Button';
 import { Input } from '../../../ui/Input';
@@ -19,15 +19,16 @@ interface Props {
   onSelectionCleared: () => void;
   onAddClick: () => void;
   onImportClick?: () => void;
+  onCopyEmails?: () => void;
 }
 
 export function GuestsToolbar({
   eventId, search, onSearchChange, statusFilter, onStatusFilterChange,
-  counts, selectedIds, onSelectionCleared, onAddClick, onImportClick,
+  counts, selectedIds, onSelectionCleared, onAddClick, onImportClick, onCopyEmails,
 }: Props) {
   const total = counts ? counts.pending + counts.attending + counts.declined + counts.maybe : 0;
   return (
-    <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
+    <div className="flex flex-col gap-2 sm:gap-3 sm:flex-row sm:items-center">
       <div className="flex-1 min-w-0">
         <Input
           startSlot={<Search className="h-4 w-4" />}
@@ -64,7 +65,7 @@ export function GuestsToolbar({
         ))}
       </div>
 
-      <div className="flex items-center gap-2">
+      <div className="flex items-center gap-1.5 sm:gap-2 flex-wrap">
         {selectedIds.length > 0 && (
           <BulkActionsMenu
             eventId={eventId}
@@ -75,6 +76,16 @@ export function GuestsToolbar({
         {onImportClick && (
           <Button variant="outline" onClick={onImportClick}>
             <Upload className="h-4 w-4" /> Import CSV
+          </Button>
+        )}
+        {onCopyEmails && (
+          <Button variant="outline" onClick={onCopyEmails}>
+            <Mail className="h-4 w-4" /> Copy Emails
+          </Button>
+        )}
+        {onCopyEmails && (
+          <Button variant="outline" onClick={onCopyEmails}>
+            <Mail className="h-4 w-4" /> Copy Emails
           </Button>
         )}
         <Button onClick={onAddClick}>

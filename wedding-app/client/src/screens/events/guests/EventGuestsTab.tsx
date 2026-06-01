@@ -15,10 +15,20 @@ import { Skeleton } from '../../../ui/Skeleton';
 import { GuestFormDialog } from './GuestFormDialog';
 import { ImportGuestsDialog } from './ImportGuestsDialog';
 import { GuestDetailDrawer } from './GuestDetailDrawer';
+import { SeatingReport } from './SeatingReport';
 import { GuestsTable, type GuestSortKey } from './GuestsTable';
 import { GuestsToolbar, type GuestStatusFilter } from './GuestsToolbar';
 
 interface Props { eventId: string }
+
+function sortValue(g: any, key: string): string {
+  if (key === "name") return g.full_name?.toLowerCase() ?? "";
+  if (key === "email") return g.email?.toLowerCase() ?? "";
+  if (key === "rsvp") return g.rsvp_status ?? "";
+  if (key === "table") return g.table_assignment?.toLowerCase() ?? "";
+  if (key === "party") return g.party_name?.toLowerCase() ?? "";
+  return "";
+}
 
 export function EventGuestsTab({ eventId }: Props) {
   const [search, setSearch] = useState('');
@@ -30,8 +40,17 @@ export function EventGuestsTab({ eventId }: Props) {
 
   const [createOpen, setCreateOpen] = useState(false);
   const [importOpen, setImportOpen] = useState(false);
+  const [seatingOpen, setSeatingOpen] = useState(false);
   const [detailGuest, setDetailGuest] = useState<SdkGuest | null>(null);
   const [detailOpen, setDetailOpen] = useState(false);
+
+  const eventQuery = useQuery({
+    queryKey: ["event", eventId],
+    queryFn: () => sdk.events.get(eventId),
+    staleTime: 60_000,
+  });
+  const eventTitle = eventQuery.data?.event?.title ?? "Event";
+  const eventDate = eventQuery.data?.event?.start_date ?? null;
 
   const query = useQuery({
     queryKey: ['guests', eventId],
@@ -101,6 +120,10 @@ export function EventGuestsTab({ eventId }: Props) {
         onSelectionCleared={() => setSelectedIds(new Set())}
         onAddClick={() => setCreateOpen(true)}
         onImportClick={() => setImportOpen(true)}
+        onCopyEmails={() => {
+          const emails = (query.data?.guests ?? []).filter(g => g.email).map(g => g.email).join(", ");
+          if (emails) { navigator.clipboard.writeText(emails); }
+        }}
       />
 
       {query.isLoading ? (
@@ -140,6 +163,7 @@ export function EventGuestsTab({ eventId }: Props) {
         onOpenChange={setCreateOpen}
       />
 
+
       <GuestDetailDrawer
         guest={detailGuest}
         open={detailOpen}
@@ -152,16 +176,25 @@ export function EventGuestsTab({ eventId }: Props) {
           setDetailGuest(null);
         }}
       />
+
+      {/* Seating & Dietary Report */}
+      <div className="flex justify-end mt-2 print:hidden">
+        <button
+          onClick={() => setSeatingOpen(true)}
+          className="text-xs text-fg-muted hover:text-brand underline"
+        >
+          Print Seating &amp; Dietary Report
+        </button>
+      </div>
+
+      {seatingOpen && (
+        <SeatingReport
+          eventTitle={eventTitle}
+          eventDate={eventDate}
+          guests={visibleGuests}
+          onClose={() => setSeatingOpen(false)}
+        />
+      )}
     </div>
   );
-}
-
-function sortValue(g: SdkGuest, k: GuestSortKey): string {
-  switch (k) {
-    case 'name':  return g.full_name.toLowerCase();
-    case 'email': return (g.email ?? '').toLowerCase();
-    case 'party': return (g.party_name ?? '').toLowerCase();
-    case 'rsvp':  return g.rsvp_status;
-    case 'table': return (g.table_assignment ?? '').toLowerCase();
-  }
 }

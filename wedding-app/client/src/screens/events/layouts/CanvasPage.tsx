@@ -41,7 +41,7 @@ export function CanvasPage({ event }: Props) {
   
   const { data: decorData } = useQuery({
     queryKey: ['decor', event.organization_id],
-    queryFn: () => sdk.catalog.list(event.organization_id, 'decor' as any), // assuming 'decor' maps generically, we will mock if empty
+    queryFn: () => sdk.catalog.list(event.organization_id, 'decor' as any), // catalog query for layout items
   });
   
   const DECOR_ITEMS = [

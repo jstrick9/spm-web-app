@@ -1,43 +1,37 @@
+import React, { Suspense } from "react";
 /**
  * EventDetail — the screen you land on when you click an event.
  *
- * Tab structure (the "spine" of all per-event work):
- *   - Overview  → intelligence widgets + headline numbers (Day 1)
- *   - Guests    → guest list, RSVPs, table assignment (Day 2)
- *   - Timeline  → day-of schedule (Week 8)
- *   - Vendors   → vendors booked for this event (Week 5)
- *   - Layout    → floor plan canvas (Week 2-3)
- *   - Portal    → guest portal config + share link (Day 4)
- *   - Settings  → status, dates, budget, primary contact (Day 1 inline)
- *
- * Tabs that aren't ready yet show a friendly "coming soon" stub instead
- * of being hidden. That way the platform looks complete from day one;
- * each subsequent day fills in another tab.
+ * Phase 19 Day 2: RBAC-gated tabs. Each tab requires a specific permission
+ * to be visible. Users without the permission never see the tab trigger.
+ * If they somehow navigate to it (e.g. URL manipulation), the content
+ * renders a "No access" card instead of crashing with a 403.
  */
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import {
-  Calendar, ChevronRight, ClipboardList, Cog, ExternalLink,
+  Calendar, ClipboardList, Cog, ExternalLink,
   LayoutGrid, Link as LinkIcon, MapPin, MessageCircle, Truck, Users,
+  Lock, Copy,
 } from 'lucide-react';
-import { sdk, ApiError } from '../../sdk';
+import { sdk } from '../../sdk';
 import { useRouter } from '../../lib/router';
 import { PageBody, PageHeader } from '../../ui/AppShell';
 import { Button } from '../../ui/Button';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../../ui/Card';
+import { Card, CardContent } from '../../ui/Card';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '../../ui/Tabs';
-import { Badge } from '../../ui/Badge';
 import { Skeleton } from '../../ui/Skeleton';
-import { StatCard } from '../../ui/StatCard';
 import { useToast } from '../../ui/Toast';
+import { StatCard } from '../../ui/StatCard';
 import { WidgetSlot } from '../../config/widgets/WidgetSlot';
-import { STATUS_META, StatusBadge, statusOrder } from './statusMeta';
+import { EventProgressCard } from './EventProgressCard';
+import { EventQuickSwitcher } from './EventQuickSwitcher';
+import { StatusBadge } from './statusMeta';
 import { EventGuestsTab } from './guests/EventGuestsTab';
-import { CanvasPage } from './layouts/CanvasPage';
+const CanvasPage = React.lazy(() => import('./layouts/CanvasPage').then(m => ({ default: m.CanvasPage })));
 import { GuestPortalSettingsTab } from './portal/GuestPortalSettingsTab';
 import { EventInvitesTab } from './invites/EventInvitesTab';
 import { EventFeedbackTab } from './feedback/EventFeedbackTab';
-import { BarChart } from 'lucide-react';
-import { Mail } from 'lucide-react';
+import { BarChart, Mail, DollarSign, Printer, FileSignature, ImageIcon, ScanLine, ClipboardCheck, CalendarPlus } from 'lucide-react';
 import { EventVendorsTab } from './vendors/EventVendorsTab';
 import { EventTimelineTab } from './timeline/EventTimelineTab';
 import { EventStaffTab } from './staff/EventStaffTab';
@@ -45,21 +39,61 @@ import { ChatSystem } from './chat/ChatSystem';
 import { EventBudgetTab } from './budget/EventBudgetTab';
 import { EventContractsTab } from './contracts/EventContractsTab';
 import { EventGalleryTab } from './gallery/EventGalleryTab';
-import { DollarSign, Printer, FileSignature, ImageIcon, ScanLine } from 'lucide-react';
-import { ClipboardCheck } from 'lucide-react';
-import {
-  Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
-} from '../../ui/Select';
-import { useEffect, useState } from 'react';
+import { EventSettingsForm } from './settings/EventSettingsForm';
+import { usePermissions } from '../../lib/usePermission';
+import { useEffect, useState, useMemo, type ReactNode } from 'react';
 
 interface Props { eventId: string }
 
 type TabId = 'overview' | 'guests' | 'timeline' | 'vendors' | 'budget' | 'contracts' | 'gallery' | 'staff' | 'layout' | 'invites' | 'feedback' | 'chat' | 'portal' | 'settings';
 
+// ─── Tab definitions with RBAC mapping ──────────────────
+interface TabDef {
+  id: TabId;
+  label: string;
+  icon: ReactNode;
+  /** Permission required to see this tab. null = always visible. */
+  permission: string | null;
+}
+
+const TAB_DEFS: TabDef[] = [
+  { id: 'overview',  label: 'Overview',          icon: <LayoutGrid className="h-3.5 w-3.5 mr-1" />,    permission: null },
+  { id: 'guests',    label: 'Guests',            icon: <Users className="h-3.5 w-3.5 mr-1" />,         permission: 'guests.view' },
+  { id: 'invites',   label: 'Invites',           icon: <Mail className="h-3.5 w-3.5 mr-1" />,          permission: 'invites.view' },
+  { id: 'feedback',  label: 'Polls & Feedback',  icon: <BarChart className="h-3.5 w-3.5 mr-1" />,      permission: 'feedback.view' },
+  { id: 'timeline',  label: 'Timeline',          icon: <ClipboardList className="h-3.5 w-3.5 mr-1" />, permission: 'timeline.view' },
+  { id: 'vendors',   label: 'Vendors',           icon: <Truck className="h-3.5 w-3.5 mr-1" />,         permission: 'vendors.view' },
+  { id: 'budget',    label: 'Budget',             icon: <DollarSign className="h-3.5 w-3.5 mr-1" />,    permission: 'budget.view' },
+  { id: 'contracts', label: 'Contracts',          icon: <FileSignature className="h-3.5 w-3.5 mr-1" />, permission: 'contracts.view' },
+  { id: 'gallery',   label: 'Gallery',            icon: <ImageIcon className="h-3.5 w-3.5 mr-1" />,     permission: 'gallery.view' },
+  { id: 'staff',     label: 'Staff',              icon: <ClipboardCheck className="h-3.5 w-3.5 mr-1" />,permission: 'staff.view' },
+  { id: 'chat',      label: 'Chat',               icon: <MessageCircle className="h-3.5 w-3.5 mr-1" />, permission: 'messages.view' },
+  { id: 'layout',    label: 'Layout',             icon: <MapPin className="h-3.5 w-3.5 mr-1" />,        permission: 'layouts.view' },
+  { id: 'portal',    label: 'Portal',             icon: <LinkIcon className="h-3.5 w-3.5 mr-1" />,      permission: 'portal.config.manage' },
+  { id: 'settings',  label: 'Settings',           icon: <Cog className="h-3.5 w-3.5 mr-1" />,           permission: 'events.edit' },
+];
+
 export function EventDetail({ eventId, user }: Props & { user: any }) {
   const { navigate, query } = useRouter();
   const initialTab = (query.get('tab') as TabId | null) ?? 'overview';
   const [tab, setTab] = useState<TabId>(initialTab);
+
+  // ── RBAC: check all tab permissions at once ──
+  const permIds = TAB_DEFS.filter(t => t.permission).map(t => t.permission!);
+  const perms = usePermissions(permIds);
+
+  const visibleTabs = useMemo(() => {
+    return TAB_DEFS.filter(t => {
+      if (!t.permission) return true;     // overview always visible
+      return perms[t.permission] !== false; // show if permission granted (or unknown while loading)
+    });
+  }, [perms]);
+
+  // If current tab is not visible, fall back to overview
+  useEffect(() => {
+    const allowed = visibleTabs.some(t => t.id === tab);
+    if (!allowed) setTab('overview');
+  }, [visibleTabs, tab]);
 
   // Keep tab in URL so refresh + sharing works
   useEffect(() => {
@@ -81,6 +115,19 @@ export function EventDetail({ eventId, user }: Props & { user: any }) {
     queryKey: ['guests', eventId],
     queryFn: () => sdk.guests.list(eventId),
     staleTime: 10_000,
+  });
+
+  // ── Phase 33: Duplicate event (hooks must be before conditionals) ──
+  const { toast } = useToast();
+  const qc = useQueryClient();
+  const duplicateMutation = useMutation({
+    mutationFn: () => sdk.events.duplicate(eventId),
+    onSuccess: (res: any) => {
+      qc.invalidateQueries({ queryKey: ['events'] });
+      toast({ title: 'Event duplicated!', description: `"${res.event.title}" created as a new lead.`, variant: 'success' });
+      navigate(`/events/${res.event.id}`);
+    },
+    onError: () => toast({ title: 'Could not duplicate event', variant: 'destructive' }),
   });
 
   if (eventQuery.isLoading) {
@@ -121,6 +168,7 @@ export function EventDetail({ eventId, user }: Props & { user: any }) {
           <span className="flex items-center gap-3 flex-wrap">
             <span className="font-display">{event.title}</span>
             <StatusBadge status={event.status} />
+            <EventQuickSwitcher currentEventId={eventId} orgId={event.organization_id} />
           </span>
         }
         description={
@@ -156,8 +204,18 @@ export function EventDetail({ eventId, user }: Props & { user: any }) {
             <Button variant="outline">
               <Printer className="h-3.5 w-3.5 mr-1" />
               Print Run Sheet
+          </Button>
+          </a>
+          <a href={`/api/events/${eventId}/export.ics`} download>
+            <Button variant="outline">
+              <CalendarPlus className="h-3.5 w-3.5 mr-1" />
+              Add to Calendar
             </Button>
           </a>
+          <Button variant="outline" onClick={() => duplicateMutation.mutate()} isLoading={duplicateMutation.isPending}>
+            <Copy className="h-3.5 w-3.5 mr-1" />
+            Duplicate
+          </Button>
           <a href={`#/events/${eventId}/check-in`} target="_blank" rel="noreferrer">
             <Button variant="default">
               <ScanLine className="h-3.5 w-3.5 mr-1" />
@@ -170,77 +228,55 @@ export function EventDetail({ eventId, user }: Props & { user: any }) {
 
       <PageBody className="space-y-6">
         <Tabs value={tab} onValueChange={(v) => setTab(v as TabId)} className="print:hidden">
-          <TabsList className="overflow-x-auto">
-            <TabsTrigger value="overview"><LayoutGrid className="h-3.5 w-3.5 mr-1" />Overview</TabsTrigger>
-            <TabsTrigger value="guests"><Users className="h-3.5 w-3.5 mr-1" />Guests</TabsTrigger>
-            <TabsTrigger value="invites"><Mail className="h-3.5 w-3.5 mr-1" />Invites</TabsTrigger>
-            <TabsTrigger value="feedback"><BarChart className="h-3.5 w-3.5 mr-1" />Polls & Feedback</TabsTrigger>
-            <TabsTrigger value="timeline"><ClipboardList className="h-3.5 w-3.5 mr-1" />Timeline</TabsTrigger>
-            <TabsTrigger value="vendors"><Truck className="h-3.5 w-3.5 mr-1" />Vendors</TabsTrigger>
-            <TabsTrigger value="budget"><DollarSign className="h-3.5 w-3.5 mr-1" />Budget</TabsTrigger>
-            <TabsTrigger value="contracts"><FileSignature className="h-3.5 w-3.5 mr-1" />Contracts</TabsTrigger>
-            <TabsTrigger value="gallery"><ImageIcon className="h-3.5 w-3.5 mr-1" />Gallery</TabsTrigger>
-            <TabsTrigger value="staff"><ClipboardCheck className="h-3.5 w-3.5 mr-1" />Staff</TabsTrigger>
-            <TabsTrigger value="chat"><MessageCircle className="h-3.5 w-3.5 mr-1" />Chat</TabsTrigger>
-            <TabsTrigger value="layout"><MapPin className="h-3.5 w-3.5 mr-1" />Layout</TabsTrigger>
-            <TabsTrigger value="portal"><LinkIcon className="h-3.5 w-3.5 mr-1" />Portal</TabsTrigger>
-            <TabsTrigger value="settings"><Cog className="h-3.5 w-3.5 mr-1" />Settings</TabsTrigger>
-          </TabsList>
+          <div className="relative"><div className="absolute right-0 top-0 bottom-0 w-8 bg-gradient-to-l from-surface to-transparent pointer-events-none z-10 md:hidden" /><TabsList className="overflow-x-auto scrollbar-none" aria-label="Event detail sections">
+            {visibleTabs.map(t => (
+              <TabsTrigger key={t.id} value={t.id}>
+                {t.icon}{t.label}
+              </TabsTrigger>
+            ))}
+          </TabsList></div>
 
           <TabsContent value="overview">
             <OverviewTab eventId={eventId} counts={guestsQuery.data?.counts} />
           </TabsContent>
-
           <TabsContent value="guests">
             <EventGuestsTab eventId={eventId} />
           </TabsContent>
-
           <TabsContent value="invites">
             <EventInvitesTab eventId={eventId} />
           </TabsContent>
-
           <TabsContent value="feedback">
             <EventFeedbackTab eventId={eventId} />
           </TabsContent>
-
           <TabsContent value="timeline">
             <EventTimelineTab eventId={eventId} />
           </TabsContent>
-
           <TabsContent value="vendors">
             <EventVendorsTab eventId={eventId} organizationId={event.organization_id} />
           </TabsContent>
-
           <TabsContent value="budget">
             <EventBudgetTab eventId={eventId} organizationId={event.organization_id} />
           </TabsContent>
-
           <TabsContent value="contracts">
             <EventContractsTab eventId={eventId} />
           </TabsContent>
-
           <TabsContent value="gallery">
             <EventGalleryTab eventId={eventId} />
           </TabsContent>
-
           <TabsContent value="staff">
             <EventStaffTab eventId={eventId} organizationId={event.organization_id} />
           </TabsContent>
-
-          <TabsContent value="layout">
-            <CanvasPage event={event} />
-          </TabsContent>
-
           <TabsContent value="chat">
             <ChatSystem eventId={eventId} currentUser={user} />
           </TabsContent>
-
+          <TabsContent value="layout">
+            <Suspense fallback={<div className="p-12 text-center text-fg-muted">Loading floor plan...</div>}><CanvasPage event={event} /></Suspense>
+          </TabsContent>
           <TabsContent value="portal">
             <GuestPortalSettingsTab eventId={eventId} />
           </TabsContent>
-
           <TabsContent value="settings">
-            <SettingsTab eventId={eventId} />
+            <EventSettingsForm eventId={eventId} />
           </TabsContent>
         </Tabs>
       </PageBody>
@@ -263,7 +299,6 @@ function OverviewTab({
 
   return (
     <div className="space-y-6">
-      {/* KPI band: real-data widgets where we can */}
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
         <StatCard
           label="Guests invited"
@@ -285,7 +320,9 @@ function OverviewTab({
         />
       </div>
 
-      {/* Admin-configurable intelligence widget slot */}
+
+      {/* Event readiness tracker */}
+      <EventProgressCard eventId={eventId} />
       <div>
         <h3 className="mb-3 text-sm font-medium uppercase tracking-wider text-fg-subtle">
           Intelligence
@@ -293,98 +330,5 @@ function OverviewTab({
         <WidgetSlot id="event.detail.intelligence" eventId={eventId} />
       </div>
     </div>
-  );
-}
-
-// ─── Settings tab (status + simple inline editing) ────────
-function SettingsTab({ eventId }: { eventId: string }) {
-  const qc = useQueryClient();
-  const { toast } = useToast();
-  const eventQuery = useQuery({
-    queryKey: ['event', eventId],
-    queryFn: () => sdk.events.get(eventId),
-  });
-  const event = eventQuery.data?.event;
-
-  const updateStatus = useMutation({
-    mutationFn: (status: typeof statusOrder[number]) => sdk.events.update(eventId, { status }),
-    onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ['event', eventId] });
-      qc.invalidateQueries({ queryKey: ['events'] });
-      toast({ title: 'Status updated', variant: 'success' });
-    },
-    onError: (e) => toast({
-      title: 'Could not update', description: (e as ApiError).message, variant: 'destructive',
-    }),
-  });
-
-  if (!event) return <Skeleton className="h-48" />;
-
-  return (
-    <div className="grid gap-4 max-w-2xl">
-      <Card>
-        <CardHeader>
-          <CardTitle className="text-base">Event status</CardTitle>
-          <CardDescription>
-            Track this event through your sales + planning pipeline.
-          </CardDescription>
-        </CardHeader>
-        <CardContent>
-          <Select
-            value={event.status}
-            onValueChange={(v) => updateStatus.mutate(v as typeof statusOrder[number])}
-            disabled={updateStatus.isPending}
-          >
-            <SelectTrigger className="max-w-xs"><SelectValue /></SelectTrigger>
-            <SelectContent>
-              {statusOrder.map((s) => (
-                <SelectItem key={s} value={s}>
-                  {STATUS_META[s].label} — <span className="text-fg-subtle">{STATUS_META[s].description}</span>
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-        </CardContent>
-      </Card>
-
-      <Card>
-        <CardHeader>
-          <CardTitle className="text-base">Coming soon</CardTitle>
-          <CardDescription>
-            Inline-edit title, dates, budget, primary contact, sub-events, and metadata
-            — landing in the rest of Week 1.
-          </CardDescription>
-        </CardHeader>
-      </Card>
-
-      <Card className="border-danger/20">
-        <CardHeader>
-          <CardTitle className="text-base text-danger">Danger zone</CardTitle>
-          <CardDescription>
-            Deleting an event soft-deletes it and all related guests / layouts.
-            Currently disabled in the UI; use the API directly if needed.
-          </CardDescription>
-        </CardHeader>
-        <CardContent>
-          <Button variant="destructive" disabled>Delete event</Button>
-        </CardContent>
-      </Card>
-    </div>
-  );
-}
-
-// ─── Stub used by tabs that aren't built yet ──────────────
-function ComingSoon({ title, description, cta }: { title: string; description: string; cta?: React.ReactNode }) {
-  return (
-    <Card>
-      <CardContent className="py-10 text-center space-y-3">
-        <Badge variant="info" className="mx-auto">
-          <Calendar className="h-3 w-3" /> Roadmap
-        </Badge>
-        <h3 className="text-lg font-semibold">{title}</h3>
-        <p className="text-sm text-fg-muted max-w-md mx-auto">{description}</p>
-        {cta}
-      </CardContent>
-    </Card>
   );
 }
