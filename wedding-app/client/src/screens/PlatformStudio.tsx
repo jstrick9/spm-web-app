@@ -39,7 +39,7 @@ export function PlatformStudio({ orgId, onSaved }: Props) {
   const [hovered, setHovered] = useState<string | null>(null);
 
   useEffect(() => {
-    sdk.platformConfig.getOrg(orgId).then((r) => setServerConfig(r.config));
+    sdk.platformConfig.getOrg(orgId).then((r) => setServerConfig(r.config)).catch(() => { /* config not available yet */ });
   }, [orgId]);
 
   // While hovering, show that preset live. When un-hovering, clear preview.

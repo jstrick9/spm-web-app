@@ -1,164 +1,223 @@
-import React, { useState } from 'react';
-import { Package, Search, Plus, Barcode, AlertTriangle, ArrowDownToLine, ArrowUpToLine, Filter } from 'lucide-react';
+/**
+ * InventoryManager — Phase 21: wired to real inventory backend.
+ */
+import { useState } from 'react';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { Package, Search, Plus, AlertTriangle, Trash2 } from 'lucide-react';
+import { sdk } from '../../../sdk';
+import type { SdkInventoryItem } from '../../../sdk/inventory';
 import { PageBody, PageHeader } from '../../../ui/AppShell';
 import { Card, CardContent } from '../../../ui/Card';
 import { Button } from '../../../ui/Button';
 import { Input } from '../../../ui/Input';
+import { Label } from '../../../ui/Label';
 import { Badge } from '../../../ui/Badge';
-import { DataTable, type Column } from '../../../ui/DataTable';
+import { StatCard } from '../../../ui/StatCard';
+import { Skeleton } from '../../../ui/Skeleton';
+import { useToast } from '../../../ui/Toast';
+import {
+  Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle, DialogTrigger,
+} from '../../../ui/Dialog';
+import {
+  Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
+} from '../../../ui/Select';
 
-interface Props {
-  orgId: string;
-}
+interface Props { orgId: string }
 
-interface InventoryItem {
-  id: string;
-  sku: string;
-  name: string;
-  category: 'chair' | 'linen' | 'centerpiece' | 'av' | 'other';
-  totalCount: number;
-  availableCount: number;
-  condition: 'good' | 'fair' | 'poor' | 'maintenance';
-  ownerType: 'venue' | 'vendor_rental';
-}
+const CONDITION_BADGE: Record<string, 'success' | 'warning' | 'danger' | 'default'> = {
+  good: 'success', fair: 'warning', poor: 'danger', maintenance: 'danger',
+};
 
 export function InventoryManager({ orgId }: Props) {
+  const { toast } = useToast();
+  const qc = useQueryClient();
   const [search, setSearch] = useState('');
-  
-  // Simulated data state for Inventory tracking
-  const [items, setItems] = useState<InventoryItem[]>([
-    { id: 'inv1', sku: 'CHR-CHIAVARI-GLD', name: 'Gold Chiavari Chair', category: 'chair', totalCount: 200, availableCount: 185, condition: 'good', ownerType: 'venue' },
-    { id: 'inv2', sku: 'LIN-120-WHT', name: '120" Round Linen - White', category: 'linen', totalCount: 40, availableCount: 40, condition: 'good', ownerType: 'venue' },
-    { id: 'inv3', sku: 'AV-UPLIGHT-01', name: 'Wireless Uplight (RGB)', category: 'av', totalCount: 24, availableCount: 4, condition: 'maintenance', ownerType: 'vendor_rental' },
-    { id: 'inv4', sku: 'DEC-VSE-TALL', name: 'Tall Glass Cylinder Vase', category: 'centerpiece', totalCount: 30, availableCount: 2, condition: 'fair', ownerType: 'venue' },
-  ]);
+  const [addOpen, setAddOpen] = useState(false);
 
-  const filtered = items.filter(item => 
-    item.name.toLowerCase().includes(search.toLowerCase()) || 
+  const { data, isLoading } = useQuery({
+    queryKey: ['inventory', orgId],
+    queryFn: () => sdk.inventory.list(orgId),
+  });
+
+  const items = data?.items ?? [];
+  const stats = data?.stats ?? { total: 0, lowStock: 0, maintenance: 0 };
+
+  const filtered = items.filter(item =>
+    item.name.toLowerCase().includes(search.toLowerCase()) ||
     item.sku.toLowerCase().includes(search.toLowerCase())
   );
 
-  const lowStockItems = items.filter(i => i.availableCount < 10);
-  const maintenanceItems = items.filter(i => i.condition === 'maintenance' || i.condition === 'poor');
+  const deleteMutation = useMutation({
+    mutationFn: (id: string) => sdk.inventory.delete(id),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['inventory', orgId] });
+      toast({ title: 'Item removed', variant: 'success' });
+    },
+  });
 
-  const columns: Column<InventoryItem>[] = [
-    {
-      id: 'sku',
-      header: 'SKU / Barcode',
-      cell: (i) => <span className="font-mono text-xs text-fg-muted">{i.sku}</span>
-    },
-    {
-      id: 'name',
-      header: 'Item Details',
-      cell: (i) => (
-        <div>
-          <div className="font-medium text-fg">{i.name}</div>
-          <div className="text-[10px] uppercase tracking-wider text-fg-subtle mt-0.5">{i.category} • {i.ownerType.replace('_', ' ')}</div>
-        </div>
-      )
-    },
-    {
-      id: 'stock',
-      header: 'Availability',
-      cell: (i) => {
-        const isLow = i.availableCount < 10;
-        return (
-          <div className="flex items-center gap-2">
-            <span className="font-semibold">{i.availableCount}</span>
-            <span className="text-fg-subtle text-xs">/ {i.totalCount}</span>
-            {isLow && <Badge variant="warning" className="text-[10px] ml-2">Low Stock</Badge>}
-          </div>
-        );
-      }
-    },
-    {
-      id: 'condition',
-      header: 'Condition',
-      cell: (i) => (
-        <Badge variant={
-          i.condition === 'good' ? 'success' : 
-          i.condition === 'fair' ? 'warning' : 'danger'
-        } className="text-[10px] uppercase">
-          {i.condition}
-        </Badge>
-      )
-    },
-    {
-      id: 'actions',
-      header: '',
-      className: 'w-0 text-right',
-      cell: (i) => (
-        <div className="flex items-center gap-2 justify-end">
-          <Button variant="ghost" size="xs" className="h-7 text-xs">Check Out</Button>
-          <Button variant="ghost" size="xs" className="h-7 text-xs">Return</Button>
-        </div>
-      )
-    }
-  ];
+  if (isLoading) {
+    return <><PageHeader title="Inventory" /><PageBody><Skeleton className="h-48" /></PageBody></>;
+  }
 
   return (
     <>
       <PageHeader
         title="Inventory Manager"
-        description="Track physical assets, check in/out logs, and monitor condition."
-        actions={
-          <div className="flex gap-2">
-            <Button variant="outline"><Barcode className="w-4 h-4 mr-1" /> Scan Asset</Button>
-            <Button><Plus className="w-4 h-4 mr-1" /> Add Item</Button>
-          </div>
-        }
+        description="Track physical assets, stock levels, and maintenance status."
       />
-      <PageBody className="space-y-6">
-         
-         {/* Alerts Row */}
-         {(lowStockItems.length > 0 || maintenanceItems.length > 0) && (
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              {lowStockItems.length > 0 && (
-                <div className="bg-warning-soft border border-warning/30 p-4 rounded-lg flex items-start gap-3">
-                   <AlertTriangle className="w-5 h-5 text-warning shrink-0 mt-0.5" />
-                   <div>
-                     <h4 className="font-semibold text-warning-strong text-sm">Low Stock Alert</h4>
-                     <p className="text-xs text-warning-strong/80 mt-1">You have {lowStockItems.length} items running extremely low on available counts.</p>
-                   </div>
-                </div>
-              )}
-              {maintenanceItems.length > 0 && (
-                <div className="bg-danger-soft border border-danger/30 p-4 rounded-lg flex items-start gap-3">
-                   <AlertTriangle className="w-5 h-5 text-danger shrink-0 mt-0.5" />
-                   <div>
-                     <h4 className="font-semibold text-danger-strong text-sm">Maintenance Required</h4>
-                     <p className="text-xs text-danger-strong/80 mt-1">{maintenanceItems.length} assets are currently marked in poor condition or undergoing maintenance.</p>
-                   </div>
-                </div>
-              )}
-            </div>
-         )}
+      <PageBody className="space-y-5">
+        {/* KPI tiles */}
+        <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 sm:gap-3">
+          <StatCard label="Total Items" value={stats.total} />
+          <StatCard
+            label="Low Stock"
+            value={stats.lowStock}
+            description={stats.lowStock > 0 ? 'items below threshold' : undefined}
+          />
+          <StatCard
+            label="Maintenance"
+            value={stats.maintenance}
+            description={stats.maintenance > 0 ? 'need attention' : undefined}
+          />
+        </div>
 
-         {/* Master Data Grid */}
-         <Card>
-           <div className="p-4 border-b border-border flex flex-col sm:flex-row gap-4 justify-between bg-surface-2/30">
-              <div className="flex-1 max-w-sm">
-                <Input 
-                  startSlot={<Search className="w-4 h-4 text-fg-muted" />} 
-                  placeholder="Search SKU or item name..." 
-                  value={search}
-                  onChange={e => setSearch(e.target.value)}
-                />
+        {/* Alerts */}
+        {stats.lowStock > 0 && (
+          <Card className="border-warning/30 bg-warning/5">
+            <CardContent className="py-3 px-4 flex items-center gap-2 text-sm text-warning">
+              <AlertTriangle className="h-4 w-4 shrink-0" />
+              {stats.lowStock} item{stats.lowStock > 1 ? 's' : ''} below minimum stock level
+            </CardContent>
+          </Card>
+        )}
+
+        {/* Toolbar */}
+        <div className="flex items-center gap-3">
+          <div className="relative flex-1 max-w-sm">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-fg-muted" />
+            <Input
+              placeholder="Search by name or SKU…"
+              className="pl-9"
+              value={search}
+              onChange={e => setSearch(e.target.value)}
+            />
+          </div>
+          <AddInventoryDialog orgId={orgId} open={addOpen} onOpenChange={setAddOpen} />
+        </div>
+
+        {/* Table */}
+        <Card>
+          <CardContent className="p-0">
+            {filtered.length === 0 ? (
+              <div className="py-16 text-center text-fg-muted text-sm">
+                <Package className="h-8 w-8 mx-auto mb-2 text-fg-subtle" />
+                {search ? 'No items match your search.' : 'No inventory items yet.'}
               </div>
-              <div className="flex gap-2 shrink-0">
-                 <Button variant="outline" size="sm"><Filter className="w-4 h-4 mr-1" /> Filter</Button>
-                 <Button variant="outline" size="sm"><ArrowUpToLine className="w-4 h-4 mr-1" /> Export Logs</Button>
+            ) : (
+              <div className="overflow-x-auto">
+                <table className="w-full text-sm">
+                  <thead>
+                    <tr className="border-b border-border bg-surface-2/50">
+                      <th className="px-4 py-3 text-left font-medium text-fg-muted hidden sm:table-cell">SKU</th>
+                      <th className="px-4 py-3 text-left font-medium text-fg-muted">Item</th>
+                      <th className="px-4 py-3 text-center font-medium text-fg-muted">Total</th>
+                      <th className="px-4 py-3 text-center font-medium text-fg-muted">Available</th>
+                      <th className="px-4 py-3 text-left font-medium text-fg-muted hidden sm:table-cell">Condition</th>
+                      <th className="px-4 py-3 w-10" />
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {filtered.map(item => (
+                      <tr key={item.id} className="border-b border-border/50 hover:bg-surface-2/30">
+                        <td className="px-4 py-3 font-mono text-xs text-fg-muted hidden sm:table-cell">{item.sku || '—'}</td>
+                        <td className="px-4 py-3">
+                          <div className="font-medium">{item.name}</div>
+                          <div className="text-[10px] uppercase tracking-wider text-fg-subtle mt-0.5">
+                            {item.category} · {item.owner_type.replace('_', ' ')}
+                          </div>
+                        </td>
+                        <td className="px-4 py-3 text-center tabular-nums">{item.total_count}</td>
+                        <td className="px-4 py-3 text-center tabular-nums">
+                          <span className={item.available_count < 10 ? 'text-warning font-medium' : ''}>
+                            {item.available_count}
+                          </span>
+                        </td>
+                        <td className="px-4 py-3 hidden sm:table-cell">
+                          <Badge variant={CONDITION_BADGE[item.condition] ?? 'default'} className="text-[10px]">
+                            {item.condition}
+                          </Badge>
+                        </td>
+                        <td className="px-4 py-3">
+                          <button onClick={() => { if (window.confirm('Remove this inventory item?')) deleteMutation.mutate(item.id); }} className="p-1 text-fg-subtle hover:text-danger rounded">
+                            <Trash2 className="h-3.5 w-3.5" />
+                          </button>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
               </div>
-           </div>
-           
-           <DataTable 
-             data={filtered}
-             columns={columns}
-             getRowKey={i => i.id}
-             emptyMessage="No inventory assets found."
-           />
-         </Card>
+            )}
+          </CardContent>
+        </Card>
       </PageBody>
     </>
+  );
+}
+
+// ─── Add Dialog ─────────────────────────────────────────
+function AddInventoryDialog({ orgId, open, onOpenChange }: {
+  orgId: string; open: boolean; onOpenChange: (v: boolean) => void;
+}) {
+  const { toast } = useToast();
+  const qc = useQueryClient();
+  const [name, setName] = useState('');
+  const [sku, setSku] = useState('');
+  const [category, setCategory] = useState('other');
+  const [totalCount, setTotalCount] = useState('0');
+
+  const createMutation = useMutation({
+    mutationFn: () => sdk.inventory.create(orgId, {
+      name, sku: sku || undefined, category,
+      totalCount: parseInt(totalCount) || 0,
+      availableCount: parseInt(totalCount) || 0,
+    }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['inventory', orgId] });
+      toast({ title: 'Item added', variant: 'success' });
+      onOpenChange(false); setName(''); setSku(''); setTotalCount('0');
+    },
+    onError: () => { toast({ title: 'Could not add item', variant: 'destructive' }); },
+  });
+
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogTrigger asChild>
+        <Button size="sm"><Plus className="h-3.5 w-3.5 mr-1" /> Add Item</Button>
+      </DialogTrigger>
+      <DialogContent>
+        <DialogHeader><DialogTitle>Add Inventory Item</DialogTitle></DialogHeader>
+        <div className="space-y-3">
+          <div><Label>Name</Label><Input value={name} onChange={e => setName(e.target.value)} className="mt-1" /></div>
+          <div><Label>SKU (optional)</Label><Input value={sku} onChange={e => setSku(e.target.value)} className="mt-1 font-mono" /></div>
+          <div>
+            <Label>Category</Label>
+            <Select value={category} onValueChange={setCategory}>
+              <SelectTrigger className="mt-1"><SelectValue /></SelectTrigger>
+              <SelectContent>
+                {['chair','linen','centerpiece','av','lighting','tableware','other'].map(c => (
+                  <SelectItem key={c} value={c}>{c}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+          <div><Label>Count</Label><Input type="number" min={0} value={totalCount} onChange={e => setTotalCount(e.target.value)} className="mt-1" /></div>
+        </div>
+        <DialogFooter>
+          <Button variant="ghost" onClick={() => onOpenChange(false)}>Cancel</Button>
+          <Button onClick={() => createMutation.mutate()} disabled={!name.trim() || createMutation.isPending} isLoading={createMutation.isPending}>Add</Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
   );
 }

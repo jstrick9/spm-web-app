@@ -37,7 +37,7 @@ export function AnalyticsDashboard({ orgId }: Props) {
   // Metrics Calculations
   const bookedEvents = events.filter(e => e.status === 'booked' || e.status === 'planning' || e.status === 'completed');
   
-  // YoY or QoQ simulated comparison logic
+  // YoY or QoQ comparison using real event data
   const recentEvents = bookedEvents.filter(e => e.start_date && isAfter(parseISO(e.start_date), subDays(new Date(), 90)));
   const olderEvents = bookedEvents.filter(e => e.start_date && !isAfter(parseISO(e.start_date), subDays(new Date(), 90)));
 
@@ -73,11 +73,11 @@ export function AnalyticsDashboard({ orgId }: Props) {
       <PageBody className="space-y-8">
         
         {/* Top Line Aggregates */}
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
           <Card>
             <CardContent className="p-5">
                <div className="flex justify-between items-start">
-                 <div className="space-y-1">
+                 <div className="space-y-1 overflow-x-auto">
                    <p className="text-sm font-medium text-fg-muted">Gross Booked Revenue</p>
                    <p className="text-2xl font-bold">${(totalRevenue / 100).toLocaleString()}</p>
                  </div>
@@ -162,7 +162,9 @@ export function AnalyticsDashboard({ orgId }: Props) {
              <CardContent>
                 <div className="space-y-4">
                   {vendors.slice(0, 5).map(v => {
-                    const score = Math.floor(Math.random() * 20) + 80; // Mock score 80-100
+                    const contracted = v.contract_amount_cents ?? 0;
+                    const paid = v.amount_paid_cents ?? 0;
+                    const score = contracted > 0 ? Math.round((paid / contracted) * 100) : 0;
                     return (
                       <div key={v.id} className="flex items-center justify-between">
                          <div className="flex flex-col">
@@ -214,7 +216,68 @@ export function AnalyticsDashboard({ orgId }: Props) {
            </Card>
         </div>
 
+
+        {/* Revenue by Month Chart */}
+        <Card className="mt-6">
+          <CardHeader>
+            <CardTitle className="text-base flex items-center gap-2">
+              <DollarSign className="w-4 h-4 text-brand" /> Revenue by Month
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <RevenueChart events={events} />
+          </CardContent>
+        </Card>
+
       </PageBody>
     </>
+  );
+}
+
+/** Revenue by month bar chart using recharts. */
+function RevenueChart({ events }: { events: any[] }) {
+  const monthlyData = useMemo(() => {
+    const months: Record<string, number> = {};
+    const now = new Date();
+    // Initialize last 12 months
+    for (let i = 11; i >= 0; i--) {
+      const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
+      const key = d.toLocaleDateString(undefined, { month: 'short', year: '2-digit' });
+      months[key] = 0;
+    }
+    // Sum booked/planning/completed event budgets by their start_date month
+    for (const e of events) {
+      if (!e.start_date || !e.budget_cents) continue;
+      if (!['booked', 'planning', 'completed'].includes(e.status)) continue;
+      const d = new Date(e.start_date);
+      const key = d.toLocaleDateString(undefined, { month: 'short', year: '2-digit' });
+      if (key in months) months[key] += e.budget_cents / 100;
+    }
+    return Object.entries(months).map(([month, revenue]) => ({ month, revenue }));
+  }, [events]);
+
+  const maxRevenue = Math.max(1, ...monthlyData.map(d => d.revenue));
+
+  return (
+    <div className="space-y-1">
+      <div className="flex items-end gap-1 h-40">
+        {monthlyData.map((d, i) => (
+          <div key={i} className="flex-1 flex flex-col items-center gap-1">
+            <div className="w-full flex items-end justify-center" style={{ height: '100%' }}>
+              <div
+                className="w-full max-w-[32px] bg-brand rounded-t transition-all hover:bg-brand-strong"
+                style={{ height: d.revenue > 0 ? `${Math.max(4, (d.revenue / maxRevenue) * 100)}%` : '2px' }}
+                title={`$${d.revenue.toLocaleString()}`}
+              />
+            </div>
+          </div>
+        ))}
+      </div>
+      <div className="flex gap-1">
+        {monthlyData.map((d, i) => (
+          <div key={i} className="flex-1 text-center text-[9px] text-fg-subtle truncate">{d.month}</div>
+        ))}
+      </div>
+    </div>
   );
 }

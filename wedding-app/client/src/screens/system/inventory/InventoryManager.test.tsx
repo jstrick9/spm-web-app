@@ -1,33 +1,59 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { render, screen } from '@testing-library/react';
-import { InventoryManager } from './InventoryManager';
+import { render, screen, waitFor } from '@testing-library/react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import { InventoryManager } from './InventoryManager';
 
-const queryClient = new QueryClient({
-  defaultOptions: { queries: { retry: false } }
-});
+vi.mock('../../../sdk', () => ({
+  sdk: {
+    inventory: {
+      list: vi.fn().mockResolvedValue({
+        items: [
+          { id: 'i1', sku: 'CHR-001', name: 'Gold Chair', category: 'chair', total_count: 200, available_count: 185, condition: 'good', owner_type: 'venue', notes: null, created_at: '2026-01-01' },
+          { id: 'i2', sku: 'AV-UP-01', name: 'Wireless Uplight', category: 'av', total_count: 24, available_count: 4, condition: 'maintenance', owner_type: 'vendor_rental', notes: null, created_at: '2026-01-01' },
+        ],
+        stats: { total: 2, lowStock: 1, maintenance: 1 },
+      }),
+      create: vi.fn().mockResolvedValue({ item: { id: 'i3' } }),
+      delete: vi.fn().mockResolvedValue(undefined),
+    },
+  },
+}));
+vi.mock('../../../ui/Toast', () => ({ useToast: () => ({ toast: vi.fn() }) }));
+
+function wrap() {
+  const qc = new QueryClient({ defaultOptions: { queries: { retry: false, gcTime: 0 } } });
+  return ({ children }: { children: React.ReactNode }) => <QueryClientProvider client={qc}>{children}</QueryClientProvider>;
+}
 
 describe('InventoryManager', () => {
-  beforeEach(() => {
-    vi.clearAllMocks();
+  beforeEach(() => { vi.clearAllMocks(); });
+
+  it('renders KPI tiles', async () => {
+    render(<InventoryManager orgId="org1" />, { wrapper: wrap() });
+    await waitFor(() => {
+      expect(screen.getByText('Total Items')).toBeTruthy();
+      expect(screen.getByText('Low Stock')).toBeTruthy();
+      expect(screen.getByText('Maintenance')).toBeTruthy();
+    });
   });
 
-  const TestWrapper = ({ children }: any) => (
-    <QueryClientProvider client={queryClient}>{children}</QueryClientProvider>
-  );
+  it('renders inventory items from server', async () => {
+    render(<InventoryManager orgId="org1" />, { wrapper: wrap() });
+    await waitFor(() => {
+      expect(screen.getByText('Gold Chair')).toBeTruthy();
+      expect(screen.getByText('Wireless Uplight')).toBeTruthy();
+    });
+  });
 
-  it('renders inventory alerts and tracks stock states', async () => {
-    render(<InventoryManager orgId="org-1" />, { wrapper: TestWrapper });
-    
-    // Check titles
-    expect(screen.getByText('Inventory Manager')).toBeInTheDocument();
-    
-    // Check items
-    expect(screen.getByText('Gold Chiavari Chair')).toBeInTheDocument();
-    expect(screen.getByText('Wireless Uplight (RGB)')).toBeInTheDocument();
-    
-    // Check alert states
-    expect(screen.getByText('Low Stock Alert')).toBeInTheDocument();
-    expect(screen.getByText('Maintenance Required')).toBeInTheDocument();
+  it('shows low stock alert', async () => {
+    render(<InventoryManager orgId="org1" />, { wrapper: wrap() });
+    await waitFor(() => {
+      expect(screen.getByText(/below minimum stock level/)).toBeTruthy();
+    });
+  });
+
+  it('shows search input', async () => {
+    render(<InventoryManager orgId="org1" />, { wrapper: wrap() });
+    await waitFor(() => expect(screen.getByPlaceholderText(/Search by name or SKU/)).toBeTruthy());
   });
 });

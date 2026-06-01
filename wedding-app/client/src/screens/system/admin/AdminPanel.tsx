@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { TeamMembers } from './TeamMembers';import { Users } from 'lucide-react';
 import { useQuery } from '@tanstack/react-query';
 import { Shield, Database, Settings, Activity, Download, Upload, Server } from 'lucide-react';
 import { PageBody, PageHeader } from '../../../ui/AppShell';
@@ -15,7 +16,7 @@ interface Props {
 }
 
 export function AdminPanel({ orgId }: Props) {
-  const [activeTab, setActiveTab] = useState<'permissions' | 'backups' | 'settings' | 'diagnostics'>('permissions');
+  const [activeTab, setActiveTab] = useState<'team' | 'permissions' | 'backups' | 'settings' | 'diagnostics'>('team');
 
   return (
     <>
@@ -28,6 +29,7 @@ export function AdminPanel({ orgId }: Props) {
           <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as any)} className="flex-1 flex flex-col">
             <div className="border-b border-border p-4 bg-surface-2/30">
               <TabsList>
+                <TabsTrigger value="team"><Users className="w-4 h-4 mr-2" /> Team Members</TabsTrigger>
                 <TabsTrigger value="permissions"><Shield className="w-4 h-4 mr-2" /> Permissions Matrix</TabsTrigger>
                 <TabsTrigger value="backups"><Database className="w-4 h-4 mr-2" /> Backups & Data</TabsTrigger>
                 <TabsTrigger value="settings"><Settings className="w-4 h-4 mr-2" /> Global Preferences</TabsTrigger>
@@ -36,6 +38,9 @@ export function AdminPanel({ orgId }: Props) {
             </div>
             
             <div className="flex-1 p-6 bg-surface-2/10">
+              <TabsContent value="team" className="h-full m-0">
+                <TeamMembers orgId={orgId} />
+              </TabsContent>
               <TabsContent value="permissions" className="h-full m-0">
                 <PermissionsMatrix orgId={orgId} />
               </TabsContent>
@@ -84,7 +89,7 @@ function PermissionsMatrix({ orgId }: { orgId: string }) {
     return acc;
   }, {} as Record<string, typeof catalog>);
 
-  // Find permissions attached to each role by mocking an intersection (backend doesn't easily expose the reverse matrix, so we'll just render the structure visually)
+  // Render the actual permission matrix from real role data
   return (
     <div className="space-y-6">
       <div className="flex justify-between items-center">
@@ -95,7 +100,7 @@ function PermissionsMatrix({ orgId }: { orgId: string }) {
         <Button variant="outline" size="sm">Create Custom Role</Button>
       </div>
 
-      <div className="overflow-x-auto border border-border rounded-lg bg-surface shadow-sm">
+      <div className="overflow-x-auto border border-border rounded-lg bg-surface shadow-sm -mx-4 sm:mx-0">
         <table className="w-full text-sm text-left">
           <thead className="bg-surface-2 border-b border-border">
             <tr>
@@ -125,10 +130,10 @@ function PermissionsMatrix({ orgId }: { orgId: string }) {
                       <div className="text-[10px] text-fg-muted mt-0.5 max-w-[200px] truncate group-hover:whitespace-normal group-hover:break-words">{p.description}</div>
                     </td>
                     {roles.map(r => {
-                      // Simulated mock evaluation showing visually that Owners have everything, etc.
-                      const isOwner = r.key === 'owner';
-                      const isAdmin = r.key === 'admin' && !p.id.startsWith('org.');
-                      const hasPerm = isOwner || isAdmin || Math.random() > 0.5; // Demo distribution
+                      // Check real permission grants from the role data
+                      
+                      
+                      const hasPerm = r.permissions?.includes(p.id) ?? false;
                       
                       return (
                         <td key={`${r.id}-${p.id}`} className="px-4 py-3 text-center">
@@ -157,12 +162,16 @@ function BackupManager({ orgId }: { orgId: string }) {
 
   const handleExport = () => {
     setDownloading(true);
-    toast({ title: 'Preparing Database Export', description: 'Generating SQLite binary snapshot...' });
+    toast({ title: 'Preparing Backup', description: 'Downloading your organization data...' });
+    // Trigger real file download via the export endpoint
+    const link = document.createElement('a');
+    link.href = `/api/orgs/${orgId}/export/backup.json`;
+    link.download = `backup_${new Date().toISOString().slice(0,10)}.json`;
+    link.click();
     setTimeout(() => {
       setDownloading(false);
-      toast({ title: 'Export Complete', variant: 'success' });
-      // In a real implementation this hits an endpoint returning the DB blob.
-    }, 2000);
+      toast({ title: 'Backup Downloaded', variant: 'success' });
+    }, 1000);
   };
 
   const handleImport = () => {
@@ -185,13 +194,13 @@ function BackupManager({ orgId }: { orgId: string }) {
         <Card>
           <CardHeader>
             <CardTitle className="text-base flex items-center gap-2"><Download className="w-4 h-4 text-brand"/> Export Data</CardTitle>
-            <CardDescription>Download a complete .sqlite binary copy of your tenant data.</CardDescription>
+            <CardDescription>Download a complete JSON backup of all events, guests, vendors, and budget data.</CardDescription>
           </CardHeader>
           <CardContent>
             <Button className="w-full" disabled={downloading} onClick={handleExport}>
                {downloading ? 'Generating...' : 'Download Snapshot'}
             </Button>
-            <p className="text-[10px] text-center text-fg-subtle mt-3">Last export: 14 days ago</p>
+            <p className="text-[10px] text-center text-fg-subtle mt-3">Includes events, guests, vendors, budget, and timeline data</p>
           </CardContent>
         </Card>
 

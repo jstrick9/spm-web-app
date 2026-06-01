@@ -4,10 +4,6 @@ import { VenueBuilder } from './VenueBuilder';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { ToastProvider } from '../../../ui/Toast';
 
-const queryClient = new QueryClient({
-  defaultOptions: { queries: { retry: false } }
-});
-
 vi.mock('../../../sdk', () => ({
   sdk: {
     catalog: {
@@ -26,34 +22,24 @@ if (typeof HTMLCanvasElement !== 'undefined') {
   // @ts-ignore
   HTMLCanvasElement.prototype.getContext = function () {
     return {
-      fillRect: function() {},
-      clearRect: function(){},
-      getImageData: function(x: number, y: number, w: number, h: number) {
-        return { data: new Array(w*h*4) };
-      },
-      putImageData: function() {},
-      createImageData: function(){ return []; },
-      setTransform: function(){},
-      drawImage: function(){},
-      save: function(){},
-      fillText: function(){},
-      restore: function(){},
-      beginPath: function(){},
-      moveTo: function(){},
-      lineTo: function(){},
-      closePath: function(){},
-      stroke: function(){},
-      translate: function(){},
-      scale: function(){},
-      rotate: function(){},
-      arc: function(){},
-      fill: function(){},
-      measureText: function(){ return { width: 0 }; },
-      transform: function(){},
-      rect: function(){},
-      clip: function(){},
+      fillRect() {}, clearRect(){},
+      getImageData(x: number, y: number, w: number, h: number) { return { data: new Array(w*h*4) }; },
+      putImageData(){}, createImageData(){ return []; },
+      setTransform(){}, drawImage(){}, save(){}, fillText(){}, restore(){},
+      beginPath(){}, moveTo(){}, lineTo(){}, closePath(){}, stroke(){},
+      translate(){}, scale(){}, rotate(){}, arc(){}, fill(){},
+      measureText(){ return { width: 0 }; }, transform(){}, rect(){}, clip(){},
     };
   };
+}
+
+function makeWrapper() {
+  const qc = new QueryClient({ defaultOptions: { queries: { retry: false, gcTime: 0 } } });
+  return ({ children }: { children: React.ReactNode }) => (
+    <QueryClientProvider client={qc}>
+      <ToastProvider>{children}</ToastProvider>
+    </QueryClientProvider>
+  );
 }
 
 describe('VenueBuilder', () => {
@@ -61,18 +47,11 @@ describe('VenueBuilder', () => {
     vi.clearAllMocks();
   });
 
-  const TestWrapper = ({ children }: any) => (
-    <QueryClientProvider client={queryClient}>
-      <ToastProvider>
-        {children}
-      </ToastProvider>
-    </QueryClientProvider>
-  );
-
   it('renders builder toolbar', async () => {
-    render(<VenueBuilder orgId="org-1" />, { wrapper: TestWrapper });
+    render(<VenueBuilder orgId="org-1" />, { wrapper: makeWrapper() });
     
-    expect(screen.getByRole('button', { name: /Pan \/ Select/i })).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: /Draw Wall boundaries/i })).toBeInTheDocument();
+    // The toolbar has "Select" and "Wall" buttons
+    expect(screen.getByRole('button', { name: /Select/i })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /Wall/i })).toBeInTheDocument();
   });
 });

@@ -74,7 +74,7 @@ export function GlobalCalendar({ orgId }: Props) {
              </h2>
           </div>
           
-          <div className="flex-1 grid grid-cols-7 grid-rows-[auto_1fr] overflow-hidden">
+          <div className="flex-1 grid grid-cols-7 grid-rows-[auto_1fr] overflow-hidden text-xs sm:text-sm">
             {['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'].map(day => (
               <div key={day} className="py-2 text-center text-xs font-medium text-fg-subtle border-b border-r border-border bg-surface last:border-r-0">
                 {day}

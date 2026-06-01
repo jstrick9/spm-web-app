@@ -50,4 +50,10 @@ describe('AnalyticsDashboard', () => {
     // Total Vendors Tracked
     expect(screen.getByText('1')).toBeInTheDocument();
   });
+
+
+  it('renders Revenue by Month chart section', async () => {
+    render(<AnalyticsDashboard orgId="org-1" />, { wrapper: TestWrapper });
+    expect(await screen.findByText('Revenue by Month')).toBeInTheDocument();
+  });
 });

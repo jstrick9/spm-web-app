@@ -4,54 +4,68 @@ import { IntegrationHub } from './IntegrationHub';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { ToastProvider } from '../../ui/Toast';
 
-const queryClient = new QueryClient({
-  defaultOptions: { queries: { retry: false } }
-});
+// Mock SDK for webhooks
+vi.mock('../../sdk', () => ({
+  sdk: {
+    webhooks: {
+      list: vi.fn().mockResolvedValue({
+        webhooks: [
+          { id: 'wh1', url: 'https://hooks.zapier.com/test', is_active: 1, last_status: 200, failure_count: 0, organization_id: 'org-1', secret: '', event_types: '["*"]', description: null, last_triggered: null, created_at: '2026-01-01' },
+        ],
+      }),
+      create: vi.fn().mockResolvedValue({ webhook: { id: 'wh2' } }),
+      delete: vi.fn().mockResolvedValue(undefined),
+      test: vi.fn().mockResolvedValue({ ok: true }),
+      update: vi.fn().mockResolvedValue({ webhook: {} }),
+    },
+  },
+}));
 
-describe('IntegrationHub', () => {
-  beforeEach(() => {
-    vi.clearAllMocks();
-  });
-
-  const TestWrapper = ({ children }: any) => (
-    <QueryClientProvider client={queryClient}>
-      <ToastProvider>
-        {children}
-      </ToastProvider>
+function makeWrapper() {
+  const qc = new QueryClient({ defaultOptions: { queries: { retry: false, gcTime: 0 } } });
+  return ({ children }: { children: React.ReactNode }) => (
+    <QueryClientProvider client={qc}>
+      <ToastProvider>{children}</ToastProvider>
     </QueryClientProvider>
   );
+}
 
-  it('renders integration options and active connections', async () => {
-    render(<IntegrationHub orgId="org-1" />, { wrapper: TestWrapper });
+describe('IntegrationHub', () => {
+  beforeEach(() => { vi.clearAllMocks(); });
+
+  it('renders integration catalog and webhook section', async () => {
+    render(<IntegrationHub orgId="org-1" />, { wrapper: makeWrapper() });
     
     expect(screen.getByText('Integration Hub')).toBeInTheDocument();
-    
-    // Check specific integrations
     expect(screen.getByText('QuickBooks Online')).toBeInTheDocument();
-    expect(screen.getByText('Stripe')).toBeInTheDocument();
     expect(screen.getByText('Calendly')).toBeInTheDocument();
     
-    // Check connected status
-    // expect(screen.getByText('CONNECTED')).toBeInTheDocument();
-    expect(screen.getByText('Disconnect')).toBeInTheDocument();
+    // Webhook section
+    await waitFor(() => {
+      expect(screen.getByText('Outbound Webhooks')).toBeInTheDocument();
+    });
   });
 
-  it('allows connecting a new integration', async () => {
-    // vi.useFakeTimers();
-    render(<IntegrationHub orgId="org-1" />, { wrapper: TestWrapper });
-    
-    // QuickBooks is initially unconnected
-    const connectBtns = screen.getAllByRole('button', { name: /Connect/i });
-    fireEvent.click(connectBtns[0]); // Click connect on QuickBooks
-    
-    expect(screen.getByText('Connecting...')).toBeInTheDocument();
-    
-    // Fast forward timeout
-    // vi.runAllTimers();
+  it('shows real webhooks from backend', async () => {
+    render(<IntegrationHub orgId="org-1" />, { wrapper: makeWrapper() });
     
     await waitFor(() => {
-      // expect(screen.getAllByText('CONNECTED').length).toBe(2); // Stripe + Quickbooks
+      expect(screen.getByText('https://hooks.zapier.com/test')).toBeInTheDocument();
     });
-    // vi.useRealTimers();
+  });
+
+  it('shows Connect buttons for catalog integrations', () => {
+    render(<IntegrationHub orgId="org-1" />, { wrapper: makeWrapper() });
+    
+    const connectBtns = screen.getAllByRole('button', { name: /^Connect$/i });
+    expect(connectBtns.length).toBeGreaterThanOrEqual(4);
+  });
+
+  it('renders Add Webhook button', async () => {
+    render(<IntegrationHub orgId="org-1" />, { wrapper: makeWrapper() });
+    
+    await waitFor(() => {
+      expect(screen.getByText('Add Webhook')).toBeInTheDocument();
+    });
   });
 });
