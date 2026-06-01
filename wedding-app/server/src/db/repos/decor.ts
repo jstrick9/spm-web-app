@@ -42,6 +42,15 @@ export interface DecorPackageRow {
 }
 
 export const decorRepo = {
+
+  findItem(id: string): DecorItemRow | undefined {
+    return db.prepare("SELECT * FROM decor_items WHERE id = ?").get(id) as DecorItemRow | undefined;
+  },
+
+  findPackage(id: string): (DecorPackageRow & { organization_id: string }) | undefined {
+    return db.prepare("SELECT * FROM decor_packages WHERE id = ?").get(id) as (DecorPackageRow & { organization_id: string }) | undefined;
+  },
+
   // ─── Items ──────────────────────────────────────────────
   listItems(orgId: string): DecorItemRow[] {
     return db.prepare(

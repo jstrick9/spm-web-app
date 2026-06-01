@@ -63,9 +63,9 @@ export const layoutsRepo = {
     const id = uuid();
     db.prepare(
       `INSERT INTO layouts
-         (id, organization_id, event_id, venue_id, name, visibility,
+         (id, organization_id, event_id, venue_id, name, visibility, approval_status,
           revision, payload, is_template, created_by, updated_by)
-       VALUES (?, ?, ?, ?, ?, ?, 1, ?, ?, ?, ?)`
+       VALUES (?, ?, ?, ?, ?, ?, ?, 1, ?, ?, ?, ?)`
     ).run(
       id,
       input.organizationId,

@@ -180,6 +180,72 @@ export const guestsRepo = {
     ).run(id);
   },
 
+
+  /**
+   * List guests across all events in an organization.
+   * Supports search, RSVP status filter, event filter, pagination.
+   */
+  listForOrg(
+    orgId: string,
+    opts: {
+      search?: string;
+      rsvpStatus?: string[];
+      eventId?: string;
+      limit?: number;
+      offset?: number;
+    } = {}
+  ): { guests: (GuestRow & { event_title: string })[]; total: number } {
+    const conditions = [`g.organization_id = ?`, `g.deleted_at IS NULL`];
+    const params: unknown[] = [orgId];
+
+    if (opts.search) {
+      conditions.push(`(g.full_name LIKE ? OR g.email LIKE ? OR g.party_name LIKE ?)`);
+      const s = `%${opts.search}%`;
+      params.push(s, s, s);
+    }
+    if (opts.rsvpStatus?.length) {
+      conditions.push(`g.rsvp_status IN (${opts.rsvpStatus.map(() => "?").join(",")})`);
+      params.push(...opts.rsvpStatus);
+    }
+    if (opts.eventId) {
+      conditions.push(`g.event_id = ?`);
+      params.push(opts.eventId);
+    }
+
+    const where = conditions.join(" AND ");
+
+    const countRow = db.prepare(
+      `SELECT COUNT(*) AS total FROM guests g WHERE ${where}`
+    ).get(...params) as { total: number };
+
+    const limit = opts.limit ?? 50;
+    const offset = opts.offset ?? 0;
+    params.push(limit, offset);
+
+    const guests = db.prepare(
+      `SELECT g.*, e.title AS event_title
+       FROM guests g
+       LEFT JOIN events e ON e.id = g.event_id
+       WHERE ${where}
+       ORDER BY g.full_name ASC
+       LIMIT ? OFFSET ?`
+    ).all(...params) as (GuestRow & { event_title: string })[];
+
+    return { guests, total: countRow.total };
+  },
+
+  /** Aggregate RSVP counts across all events in an org */
+  countByStatusForOrg(orgId: string): Record<string, number> {
+    const rows = db.prepare(
+      `SELECT rsvp_status, COUNT(*) AS n FROM guests
+       WHERE organization_id = ? AND deleted_at IS NULL
+       GROUP BY rsvp_status`
+    ).all(orgId) as Array<{ rsvp_status: string; n: number }>;
+    const out: Record<string, number> = { pending: 0, attending: 0, declined: 0, maybe: 0 };
+    for (const r of rows) out[r.rsvp_status] = r.n;
+    return out;
+  },
+
   countByStatus(eventId: string): Record<string, number> {
     const rows = db.prepare(
       `SELECT rsvp_status, COUNT(*) AS n FROM guests

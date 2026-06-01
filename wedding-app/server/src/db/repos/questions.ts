@@ -15,6 +15,10 @@ export interface EventQuestionRow {
 }
 
 export const eventQuestionsRepo = {
+  findById(id: string) {
+    return db.prepare("SELECT * FROM event_questions WHERE id = ?").get(id) as { id: string; organization_id: string } | undefined;
+  },
+
   listForOrg(orgId: string): EventQuestionRow[] {
     return db.prepare(
       `SELECT * FROM event_questions WHERE organization_id = ? ORDER BY group_name, sort_order, question`

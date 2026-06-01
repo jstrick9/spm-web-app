@@ -175,6 +175,10 @@ export interface StaffShiftRow {
 }
 
 export const staffShiftsRepo = {
+  findById(id: string) {
+    return db.prepare("SELECT * FROM staff_shifts WHERE id = ?").get(id) as { id: string; organization_id: string } | undefined;
+  },
+
   listForOrg(orgId: string, opts: { eventId?: string } = {}): StaffShiftRow[] {
     let sql = `SELECT * FROM staff_shifts WHERE organization_id = ?`;
     const params: unknown[] = [orgId];

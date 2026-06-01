@@ -1,6 +1,13 @@
 /**
- * Idempotent seed: demo user, org, sample event, sample guests.
+ * Idempotent seed: creates a rich demo environment.
+ *
  * Run:  npm run seed
+ *
+ * Phase 23: expanded from 1 event + 5 guests to a full demo:
+ *   - 4 events across pipeline stages
+ *   - 20+ guests with diverse RSVPs
+ *   - 5 vendors with payments
+ *   - Budget items, timeline, contracts, inventory
  */
 import { hashPassword } from '../lib/crypto.js';
 import {
@@ -8,9 +15,10 @@ import {
   catalogRepo, vendorsRepo, timelineRepo, staffTasksRepo,
   rolesRepo,
 } from './repos/index.js';
+import { budgetRepo } from './repos/budget.js';
+import { contractsRepo } from './repos/contracts.js';
+import { inventoryRepo } from './repos/inventory.js';
 
-// Ensure system roles exist BEFORE we create any memberships.
-// (Critical: createWithOwner inserts a membership referencing sys_owner.)
 rolesRepo.ensureSystemRoles();
 
 const DEMO_EMAIL = 'owner@demo.local';
@@ -31,66 +39,159 @@ if (!user) {
 const existingOrgs = orgsRepo.listForUser(user.id);
 let orgId: string;
 if (existingOrgs.length === 0) {
-  orgId = orgsRepo.createWithOwner({
-    name: 'Seven Paths Manor', slug: `seven-paths-manor-${user.id.slice(0,6)}`, ownerId: user.id,
-  });
+  orgId = orgsRepo.createWithOwner({ name: 'Seven Paths Manor', slug: 'seven-paths-manor', ownerId: user.id });
   console.log(`[seed] created organization Seven Paths Manor (${orgId})`);
 
-  // Seed a few catalog items so the app feels populated
+  // Catalog items
   catalogRepo.create(orgId, { kind: 'table', name: 'Round 6ft (10 seats)', spec: { capacity: 10, shape: 'circle' } });
   catalogRepo.create(orgId, { kind: 'table', name: 'Rectangle 8ft (8 seats)', spec: { capacity: 8, shape: 'rectangle' } });
+  catalogRepo.create(orgId, { kind: 'table', name: 'Cocktail High-Top', spec: { capacity: 4, shape: 'circle' } });
   catalogRepo.create(orgId, { kind: 'chair', name: 'Chiavari Gold', spec: {} });
   catalogRepo.create(orgId, { kind: 'chair', name: 'Folding White', spec: {} });
   catalogRepo.create(orgId, { kind: 'linen', name: 'Ivory', spec: { color: '#fff8e7' } });
   catalogRepo.create(orgId, { kind: 'linen', name: 'Burgundy', spec: { color: '#80142b' } });
-  console.log(`[seed] added 6 catalog items`);
+  catalogRepo.create(orgId, { kind: 'linen', name: 'Navy', spec: { color: '#1e3a5f' } });
+  console.log(`[seed] added 8 catalog items`);
+
+  // Inventory
+  inventoryRepo.create(orgId, { name: 'Gold Chiavari Chair', sku: 'CHR-001', category: 'chair', totalCount: 200, availableCount: 185, createdBy: user.id });
+  inventoryRepo.create(orgId, { name: '120" Round Linen - White', sku: 'LIN-120-WHT', category: 'linen', totalCount: 40, availableCount: 38, createdBy: user.id });
+  inventoryRepo.create(orgId, { name: 'Wireless Uplight (RGB)', sku: 'AV-UP-01', category: 'av', totalCount: 24, availableCount: 4, condition: 'maintenance', ownerType: 'vendor_rental', createdBy: user.id });
+  inventoryRepo.create(orgId, { name: 'Tall Glass Cylinder Vase', sku: 'DEC-VASE-01', category: 'centerpiece', totalCount: 30, availableCount: 28, createdBy: user.id });
+  inventoryRepo.create(orgId, { name: 'LED String Lights (100ft)', sku: 'LGT-STR-01', category: 'lighting', totalCount: 12, availableCount: 10, createdBy: user.id });
+  console.log(`[seed] added 5 inventory items`);
 } else {
   orgId = existingOrgs[0].id;
   console.log(`[seed] reusing org ${existingOrgs[0].name} (${orgId})`);
 }
 
 const events = eventsRepo.listForOrg(orgId);
-let eventId: string;
 if (events.length === 0) {
-  const event = eventsRepo.create({
-    organizationId: orgId, title: 'Smith and Jones Wedding',
+  // ─── Event 1: Booked wedding (the main demo event) ────
+  const e1 = eventsRepo.create({
+    organizationId: orgId, title: 'Smith & Jones Wedding',
     startDate: '2026-09-12', endDate: '2026-09-12',
-    createdBy: user.id, status: 'booked', guestCount: 80,
+    createdBy: user.id, status: 'booked', guestCount: 120,
+    budgetCents: 4500000,
   });
-  eventId = event.id;
-  console.log(`[seed] created event Smith and Jones (${event.id})`);
+  console.log(`[seed] created event: Smith & Jones Wedding`);
 
-  for (const name of ['Aunt Mary', 'Uncle Bob', 'Cousin Lin', 'Best Man Tom', 'Maid of Honor Lisa']) {
-    guestsRepo.create(orgId, event.id, {
-      fullName: name,
-      plusOneAllowed: name.includes('Best Man') || name.includes('Maid'),
+  // 15 guests with varied RSVPs
+  const guestData = [
+    { name: 'Sarah Johnson', rsvp: 'attending' as const, table: 'Head Table', dietary: null, party: 'Bride Family' },
+    { name: 'Michael Johnson', rsvp: 'attending' as const, table: 'Head Table', dietary: null, party: 'Bride Family' },
+    { name: 'Aunt Mary Smith', rsvp: 'attending' as const, table: 'Table 1', dietary: 'Vegetarian', party: 'Bride Family' },
+    { name: 'Uncle Bob Smith', rsvp: 'attending' as const, table: 'Table 1', dietary: null, party: 'Bride Family' },
+    { name: 'Cousin Lin Torres', rsvp: 'maybe' as const, table: null, dietary: 'Gluten-free', party: 'Bride Family' },
+    { name: 'Tom Williams', rsvp: 'attending' as const, table: 'Table 2', dietary: null, party: 'Best Man' },
+    { name: 'Lisa Anderson', rsvp: 'attending' as const, table: 'Table 2', dietary: 'Vegan', party: 'Maid of Honor' },
+    { name: 'David Chen', rsvp: 'attending' as const, table: 'Table 3', dietary: null, party: 'Groom Friends' },
+    { name: 'Emma Rodriguez', rsvp: 'pending' as const, table: null, dietary: null, party: 'Groom Friends' },
+    { name: 'James Wilson', rsvp: 'pending' as const, table: null, dietary: null, party: 'Groom Friends' },
+    { name: 'Olivia Brown', rsvp: 'declined' as const, table: null, dietary: null, party: 'Colleagues' },
+    { name: 'Daniel Kim', rsvp: 'attending' as const, table: 'Table 4', dietary: 'Kosher', party: 'Colleagues' },
+    { name: 'Sophia Martinez', rsvp: 'attending' as const, table: 'Table 4', dietary: null, party: 'Colleagues' },
+    { name: 'Grandma Rose Smith', rsvp: 'attending' as const, table: 'Table 1', dietary: null, party: 'Bride Family', accessibility: 'Wheelchair access needed' },
+    { name: 'Dr. Patricia Lee', rsvp: 'pending' as const, table: null, dietary: 'Pescatarian', party: 'Family Friends' },
+  ];
+  for (const g of guestData) {
+    guestsRepo.create(orgId, e1.id, {
+      fullName: g.name, rsvpStatus: g.rsvp,
+      tableAssignment: g.table ?? undefined,
+      dietaryRestrictions: g.dietary ?? undefined,
+      partyName: g.party,
+      accessibilityNotes: (g as any).accessibility ?? undefined,
+      plusOneAllowed: g.party === 'Best Man' || g.party === 'Maid of Honor',
     });
   }
-  console.log(`[seed] seeded 5 sample guests`);
+  console.log(`[seed] seeded 15 guests for Smith & Jones`);
 
-  // Sample vendor + timeline + staff task
-  vendorsRepo.create(orgId, {
-    name: 'Sunshine DJs', category: 'music',
-    contractAmountCents: 150_000, isPreferred: true, eventId: event.id,
+  // 5 vendors with payments
+  const v1 = vendorsRepo.create(orgId, { name: 'Sunshine DJs', category: 'DJ / Music', contactName: 'DJ Ray', email: 'ray@sunshinedjs.com', phone: '555-0101', contractAmountCents: 250000, isPreferred: true, eventId: e1.id });
+  vendorsRepo.addPayment(v1.id, { amountCents: 125000, paidAt: '2026-06-01', method: 'check' });
+  const v2 = vendorsRepo.create(orgId, { name: 'Bloom & Petal Florals', category: 'Florist', contactName: 'Maria Flores', email: 'maria@bloomandpetal.com', contractAmountCents: 350000, isPreferred: true, eventId: e1.id });
+  vendorsRepo.addPayment(v2.id, { amountCents: 175000, paidAt: '2026-07-15', method: 'card' });
+  const v3 = vendorsRepo.create(orgId, { name: 'Capture Studios', category: 'Photography', contactName: 'Alex Photo', email: 'alex@capture.com', contractAmountCents: 450000, eventId: e1.id });
+  vendorsRepo.addPayment(v3.id, { amountCents: 450000, paidAt: '2026-08-01', method: 'wire' });
+  vendorsRepo.create(orgId, { name: 'Sweet Endings Bakery', category: 'Catering', contactName: 'Chef Anna', email: 'anna@sweetendings.com', contractAmountCents: 180000, eventId: e1.id });
+  vendorsRepo.create(orgId, { name: 'Premier Linens', category: 'Rentals', contractAmountCents: 120000, eventId: e1.id });
+  console.log(`[seed] seeded 5 vendors with payments`);
+
+  // Budget items
+  budgetRepo.create(orgId, e1.id, { category: 'Venue', title: 'Base Rental Fee', plannedCents: 1200000, actualCents: 1200000, paidCents: 600000 }, user.id);
+  budgetRepo.create(orgId, e1.id, { category: 'Catering', title: 'Dinner Service (120 pax)', plannedCents: 960000, actualCents: 1020000, paidCents: 500000 }, user.id);
+  budgetRepo.create(orgId, e1.id, { category: 'Florals', title: 'Arch + Centerpieces', plannedCents: 350000 }, user.id);
+  budgetRepo.create(orgId, e1.id, { category: 'Photography', title: 'Full Day + Album', plannedCents: 450000, actualCents: 450000, paidCents: 450000 }, user.id);
+  budgetRepo.create(orgId, e1.id, { category: 'DJ / Music', title: 'Ceremony + Reception', plannedCents: 250000, paidCents: 125000 }, user.id);
+  budgetRepo.create(orgId, e1.id, { category: 'Cake', title: 'Custom 4-tier', plannedCents: 180000 }, user.id);
+  budgetRepo.create(orgId, e1.id, { category: 'Rentals', title: 'Linens & Tableware', plannedCents: 120000 }, user.id);
+  console.log(`[seed] seeded 7 budget items`);
+
+  // Timeline
+  timelineRepo.create(orgId, e1.id, { title: 'Vendor Load-In', startsAt: '2026-09-12T10:00:00Z', durationMin: 120, category: 'setup' });
+  timelineRepo.create(orgId, e1.id, { title: 'Guest Arrival & Cocktails', startsAt: '2026-09-12T15:30:00Z', durationMin: 60, category: 'ceremony' });
+  timelineRepo.create(orgId, e1.id, { title: 'Ceremony', startsAt: '2026-09-12T16:30:00Z', durationMin: 30, category: 'ceremony' });
+  timelineRepo.create(orgId, e1.id, { title: 'Family Photos', startsAt: '2026-09-12T17:00:00Z', durationMin: 45, category: 'ceremony' });
+  timelineRepo.create(orgId, e1.id, { title: 'Reception & Dinner', startsAt: '2026-09-12T18:00:00Z', durationMin: 180, category: 'reception' });
+  timelineRepo.create(orgId, e1.id, { title: 'First Dance', startsAt: '2026-09-12T19:30:00Z', durationMin: 5, category: 'reception' });
+  timelineRepo.create(orgId, e1.id, { title: 'Cake Cutting', startsAt: '2026-09-12T20:00:00Z', durationMin: 15, category: 'reception' });
+  timelineRepo.create(orgId, e1.id, { title: 'Dance Floor Opens', startsAt: '2026-09-12T20:30:00Z', durationMin: 150, category: 'reception' });
+  timelineRepo.create(orgId, e1.id, { title: 'Send-Off', startsAt: '2026-09-12T23:00:00Z', durationMin: 30, category: 'teardown' });
+  console.log(`[seed] seeded 9 timeline items`);
+
+  // Contracts
+  contractsRepo.create({ organizationId: orgId, eventId: e1.id, title: 'Master Venue Agreement', recipientName: 'Sarah Johnson', amountCents: 1200000, content: 'This Master Venue Agreement is entered into between Seven Paths Manor and the Client for the exclusive use of the venue on the date specified.', createdBy: user.id });
+  contractsRepo.create({ organizationId: orgId, eventId: e1.id, title: 'Photography Package', recipientName: 'Alex Photo', recipientEmail: 'alex@capture.com', amountCents: 450000, createdBy: user.id });
+  console.log(`[seed] seeded 2 contracts`);
+
+  // Staff tasks
+  staffTasksRepo.create(orgId, user.id, { title: 'Set up ceremony chairs (120)', priority: 'high', phase: 'pre-event', estimatedMinutes: 90 });
+  staffTasksRepo.create(orgId, user.id, { title: 'Arrange centerpieces on tables', priority: 'medium', phase: 'pre-event', estimatedMinutes: 60 });
+  staffTasksRepo.create(orgId, user.id, { title: 'Sound check with DJ', priority: 'high', phase: 'pre-event', estimatedMinutes: 30 });
+  staffTasksRepo.create(orgId, user.id, { title: 'Welcome guests and direct parking', priority: 'medium', phase: 'during-event' });
+  staffTasksRepo.create(orgId, user.id, { title: 'Break down tables and clean', priority: 'low', phase: 'post-event', estimatedMinutes: 120 });
+  console.log(`[seed] seeded 5 staff tasks`);
+
+  // ─── Event 2: Planning stage ──────────────────────────
+  const e2 = eventsRepo.create({
+    organizationId: orgId, title: 'Davis Garden Reception',
+    startDate: '2026-10-18', endDate: '2026-10-18',
+    createdBy: user.id, status: 'planning', guestCount: 75,
+    budgetCents: 2800000,
   });
-  timelineRepo.create(orgId, event.id, {
-    title: 'Ceremony', startsAt: '2026-09-12T16:00:00Z', durationMin: 30,
+  for (const name of ['Mark Davis', 'Jennifer Davis', 'Robert Park', 'Grace Lee', 'Tommy Nguyen']) {
+    guestsRepo.create(orgId, e2.id, { fullName: name, rsvpStatus: 'pending' });
+  }
+  console.log(`[seed] created event: Davis Garden Reception`);
+
+  // ─── Event 3: Lead (inquiry) ──────────────────────────
+  eventsRepo.create({
+    organizationId: orgId, title: 'Thompson-Baker Celebration',
+    startDate: '2026-12-05', endDate: '2026-12-05',
+    createdBy: user.id, status: 'lead', guestCount: 200,
+    budgetCents: 7500000,
   });
-  timelineRepo.create(orgId, event.id, {
-    title: 'Reception', startsAt: '2026-09-12T17:30:00Z', durationMin: 240,
+  console.log(`[seed] created event: Thompson-Baker (lead)`);
+
+  // ─── Event 4: Completed (past) ────────────────────────
+  const e4 = eventsRepo.create({
+    organizationId: orgId, title: 'Martinez Wedding',
+    startDate: '2026-03-15', endDate: '2026-03-15',
+    createdBy: user.id, status: 'completed', guestCount: 95,
+    budgetCents: 3200000,
   });
-  staffTasksRepo.create(orgId, user.id, {
-    title: 'Set up reception chairs', priority: 'high', phase: 'pre-event',
-  });
+  for (const name of ['Carlos Martinez', 'Ana Martinez', 'Pedro Garcia', 'Sofia Reyes', 'Diego Hernandez', 'Isabella Cruz', 'Luis Torres', 'Carmen Flores']) {
+    guestsRepo.create(orgId, e4.id, { fullName: name, rsvpStatus: 'attending', tableAssignment: `Table ${Math.ceil(Math.random() * 5)}` });
+  }
+  console.log(`[seed] created event: Martinez Wedding (completed)`);
+
 } else {
-  eventId = events[0].id;
-  console.log(`[seed] reusing event ${events[0].id}`);
+  console.log(`[seed] events already exist — skipping seed data`);
 }
 
 console.log('');
-console.log('----------------------------------------------');
+console.log('──────────────────────────────────────────────');
 console.log(`Demo login:   ${DEMO_EMAIL} / ${DEMO_PASSWORD}`);
 console.log(`Org id:       ${orgId}`);
-console.log(`Event id:     ${eventId}`);
-console.log(`Portal URL:   http://localhost:3000/#/portal/${eventId}`);
-console.log('----------------------------------------------');
+console.log(`Portal URL:   http://localhost:5173/#/portal/<eventId>`);
+console.log('──────────────────────────────────────────────');

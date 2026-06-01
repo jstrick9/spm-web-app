@@ -80,6 +80,15 @@ export const usersRepo = {
     ).run(...values);
   },
 
+  /** Change password — hashes + stores + bumps session version. */
+  changePassword(userId: string, newHash: string, newSalt: string): void {
+    db.prepare(
+      `UPDATE users SET password_hash = ?, password_salt = ?,
+       password_updated_at = datetime('now'), session_version = session_version + 1,
+       updated_at = datetime('now') WHERE id = ?`
+    ).run(newHash, newSalt, userId);
+  },
+
   /** Bump session version → invalidates all existing JWTs for this user. */
   invalidateSessions(userId: string): void {
     db.prepare(
