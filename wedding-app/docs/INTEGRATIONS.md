@@ -15,10 +15,10 @@ a day; security, retry, audit, and admin UI are handled by the framework.
 | Persistent job queue + in-process worker | ✅ `src/db/repos/jobs.ts`, `src/jobs/worker.ts` |
 | Admin REST endpoints (CRUD + test-connection + audit log) | ✅ `src/routes/integrations.ts` |
 | **First provider: Email (SMTP)** | ✅ `src/integrations/providers/email_smtp.ts` |
-| Admin UI to set up + manage integrations | ⏳ Week 1 Day 2 (next) |
+| Admin UI to set up + manage integrations | ✅ Phase 20 — IntegrationHub with real webhook CRUD |
 | OAuth start/callback infrastructure | ⏳ Week 2 (when Calendly lands) |
-| Inbound webhook receiver | ⏳ Week 2 |
-| Outbound webhook (Zapier-style) | ⏳ Week 10 |
+| Inbound webhook receiver | ✅ Phase 34 — POST /api/webhooks/inbound/:id with HMAC verification |
+| Outbound webhook (Zapier-style) | ✅ Phase 19 — webhook dispatcher + HMAC signing + delivery log |
 | Calendly / Google Cal / Outlook / Square / DocuSign / Twilio / Dropbox | ⏳ woven into Weeks 2, 4, 5, 6, 8, 9 |
 
 ## Architecture (TL;DR)
