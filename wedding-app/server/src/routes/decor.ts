@@ -29,6 +29,9 @@ export async function decorRoutes(app: FastifyInstance) {
 
   app.patch('/api/decor/items/:id', { preHandler: requireAuth }, async (req) => {
     const { id } = req.params as { id: string };
+    const item = decorRepo.findItem(id);
+    if (!item) throw NotFound();
+    if (!can(req.auth!.memberships, { organizationId: item.organization_id }, "decor.manage")) throw Forbidden();
     const parsed = z.object({
       categoryId: z.string().nullable().optional(),
       name: z.string().optional(),
@@ -117,6 +120,8 @@ export async function decorRoutes(app: FastifyInstance) {
   });
 
   app.delete('/api/decor/packages/:id', { preHandler: requireAuth }, async (req, reply) => {
+    const pkg = decorRepo.findPackage((req.params as { id: string }).id);
+    if (pkg && !can(req.auth!.memberships, { organizationId: pkg.organization_id }, "decor.manage")) throw Forbidden();
     decorRepo.deletePackage((req.params as { id: string }).id);
     return reply.code(204).send();
   });

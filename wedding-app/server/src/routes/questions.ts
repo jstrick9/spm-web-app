@@ -32,6 +32,9 @@ export async function questionRoutes(app: FastifyInstance) {
 
   app.patch('/api/questions/:id', { preHandler: requireAuth }, async (req) => {
     const { id } = req.params as { id: string };
+    const q = eventQuestionsRepo.findById(id);
+    if (!q) throw NotFound();
+    if (!can(req.auth!.memberships, { organizationId: q.organization_id }, "questions.manage")) throw Forbidden();
     const parsed = questionSchema.partial().safeParse(req.body);
     if (!parsed.success) throw BadRequest('invalid-input', parsed.error.issues);
     const updated = eventQuestionsRepo.update(id, parsed.data);
@@ -40,6 +43,8 @@ export async function questionRoutes(app: FastifyInstance) {
   });
 
   app.delete('/api/questions/:id', { preHandler: requireAuth }, async (req, reply) => {
+    const qd = eventQuestionsRepo.findById((req.params as { id: string }).id);
+    if (qd && !can(req.auth!.memberships, { organizationId: qd.organization_id }, "questions.manage")) throw Forbidden();
     eventQuestionsRepo.delete((req.params as { id: string }).id);
     return reply.code(204).send();
   });

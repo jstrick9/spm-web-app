@@ -121,6 +121,8 @@ export async function staffRoutes(app: FastifyInstance) {
   });
 
   app.delete('/api/staff/shifts/:id', { preHandler: requireAuth }, async (req, reply) => {
+    const shift = staffShiftsRepo.findById((req.params as { id: string }).id);
+    if (shift && !can(req.auth!.memberships, { organizationId: shift.organization_id }, "staff.manage")) throw Forbidden();
     staffShiftsRepo.delete((req.params as { id: string }).id);
     return reply.code(204).send();
   });

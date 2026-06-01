@@ -1,8 +1,9 @@
 import type { FastifyInstance } from 'fastify';
+import { broadcastSSE } from "./sse.js";
 import { z } from 'zod';
 import { requireAuth } from '../middleware/auth.js';
 import { can } from '../lib/rbac.js';
-import { auditRepo, eventsRepo, guestsRepo, rsvpRepo, portalConfigRepo, layoutsRepo } from '../db/repos/index.js';
+import { auditRepo, eventsRepo, guestsRepo, rsvpRepo, portalConfigRepo, layoutsRepo, orgsRepo } from '../db/repos/index.js';
 import { BadRequest, Forbidden, NotFound } from '../lib/errors.js';
 import { hashPassword, verifyPassword } from '../lib/crypto.js';
 
@@ -69,6 +70,35 @@ export async function guestRoutes(app: FastifyInstance) {
     };
   });
 
+
+  // ─── List guests across all events in an org ──────────
+  app.get("/api/orgs/:orgId/guests", { preHandler: requireAuth }, async (req) => {
+    const { orgId } = req.params as { orgId: string };
+    if (!can(req.auth!.memberships, { organizationId: orgId }, "guests.view")) throw Forbidden();
+
+    const q = req.query as {
+      search?: string;
+      rsvpStatus?: string;
+      eventId?: string;
+      limit?: string;
+      offset?: string;
+    };
+    const rsvpStatusList = q.rsvpStatus
+      ? q.rsvpStatus.split(",").filter(Boolean)
+      : undefined;
+
+    const result = guestsRepo.listForOrg(orgId, {
+      search: q.search,
+      rsvpStatus: rsvpStatusList,
+      eventId: q.eventId,
+      limit: q.limit ? Number(q.limit) : undefined,
+      offset: q.offset ? Number(q.offset) : undefined,
+    });
+    const counts = guestsRepo.countByStatusForOrg(orgId);
+
+    return { guests: result.guests, total: result.total, counts };
+  });
+
   
   app.post('/api/events/:eventId/guests/bulk', { preHandler: requireAuth }, async (req, reply) => {
     const { eventId } = req.params as { eventId: string };
@@ -108,6 +138,7 @@ export async function guestRoutes(app: FastifyInstance) {
       actorLabel: req.auth!.email, action: 'guest.create',
       targetType: 'guest', targetId: guest.id, ip: req.ip,
     });
+    broadcastSSE(event.organization_id, "guest.created", { guestId: guest.id, eventId, name: guest.full_name }, req.auth!.userId);
     return reply.code(201).send({ guest });
   });
 
@@ -118,7 +149,9 @@ export async function guestRoutes(app: FastifyInstance) {
     if (!can(req.auth!.memberships, { organizationId: guest.organization_id }, 'guests.manage')) throw Forbidden();
     const parsed = guestSchema.partial().safeParse(req.body);
     if (!parsed.success) throw BadRequest('invalid-input', parsed.error.issues);
-    return { guest: guestsRepo.update(id, parsed.data) };
+    const updated = guestsRepo.update(id, parsed.data);
+    broadcastSSE(guest.organization_id, "guest.updated", { guestId: id, eventId: guest.event_id }, req.auth!.userId);
+    return { guest: updated };
   });
 
   app.delete('/api/guests/:id', { preHandler: requireAuth }, async (req, reply) => {
@@ -209,9 +242,23 @@ export async function guestRoutes(app: FastifyInstance) {
     if (!event) throw NotFound();
     const cfg = portalConfigRepo.getForEvent(eventId) as { enabled: number; password_hash: string | null } | undefined;
     const requiresPassword = !!cfg?.password_hash;
+    // Security: return 404 if portal is explicitly disabled
+    if (cfg && !cfg.enabled) throw NotFound("portal-disabled");
     const guestList = guestsRepo.listForEvent(eventId)
       .filter((g) => g.allow_portal_access)
       .map((g) => ({ id: g.id, fullName: g.full_name, tableAssignment: g.table_assignment, seatAssignment: g.seat_assignment }));
+    // Include org theme for portal styling
+    const org = orgsRepo.findById(event.organization_id);
+    let themeConfig = null;
+    if (org) {
+      try {
+        const settings = typeof org.settings === "string" ? JSON.parse(org.settings) : org.settings;
+        themeConfig = settings?.platformConfig?.theme ?? null;
+      } catch {}
+    }
+    // Include layout for the map viewer
+    const layouts = layoutsRepo.listForOrg(event.organization_id, { eventId });
+    const layoutPayload = layouts.length > 0 ? (typeof layouts[0].payload === "string" ? JSON.parse(layouts[0].payload) : layouts[0].payload) : null;
     return {
       event: {
         id: event.id, title: event.title,
@@ -220,6 +267,8 @@ export async function guestRoutes(app: FastifyInstance) {
       portalEnabled: !!cfg?.enabled,
       requiresPassword,
       guests: guestList,
+      layout: layoutPayload,
+      theme: themeConfig,
     };
   });
 
@@ -265,6 +314,7 @@ export async function guestRoutes(app: FastifyInstance) {
       organizationId: event.organization_id, action: 'rsvp.submit',
       targetType: 'rsvp', targetId: rsvpId, ip: req.ip, userAgent: req.headers['user-agent'],
     });
+    broadcastSSE(event.organization_id, "rsvp.submitted", { rsvpId, eventId, attending: parsed.data.attending });
     return reply.code(201).send({ ok: true, rsvpId });
   });
 }

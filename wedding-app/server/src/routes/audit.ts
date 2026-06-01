@@ -11,7 +11,7 @@ export async function auditRoutes(app: FastifyInstance) {
     if (!can(req.auth!.memberships, { organizationId: orgId }, 'audit.view')) throw Forbidden();
     return {
       logs: auditRepo.listForOrg(orgId, {
-        limit: limit ? Number(limit) : undefined,
+        limit: limit ? Number(limit) : 200, // default cap to prevent unbounded queries
         action,
       }),
     };

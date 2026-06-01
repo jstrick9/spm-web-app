@@ -1,4 +1,5 @@
 import type { FastifyInstance } from 'fastify';
+import { BadRequest, NotFound } from '../lib/errors.js';
 import { z } from 'zod';
 import { hashPassword, verifyPassword } from '../lib/crypto.js';
 import { slugify } from '../lib/slug.js';
@@ -18,7 +19,7 @@ const loginSchema = z.object({
 });
 
 export async function authRoutes(app: FastifyInstance) {
-  app.post('/api/auth/register', async (req, reply) => {
+  app.post('/api/auth/register', { config: { rateLimit: { max: 5, timeWindow: '1 minute' } } }, async (req, reply) => {
     const parsed = registerSchema.safeParse(req.body);
     if (!parsed.success) {
       return reply.code(400).send({ error: 'invalid-input', issues: parsed.error.issues });
@@ -50,7 +51,7 @@ export async function authRoutes(app: FastifyInstance) {
     });
   });
 
-  app.post('/api/auth/login', async (req, reply) => {
+  app.post('/api/auth/login', { config: { rateLimit: { max: 10, timeWindow: '1 minute' } } }, async (req, reply) => {
     const parsed = loginSchema.safeParse(req.body);
     if (!parsed.success) return reply.code(400).send({ error: 'invalid-input' });
 
@@ -105,4 +106,42 @@ export async function authRoutes(app: FastifyInstance) {
     });
     return { ok: true };
   });
+
+  // ─── Change password ──────────────────────────────────
+  app.post("/api/auth/change-password", { preHandler: requireAuth, config: { rateLimit: { max: 5, timeWindow: "1 minute" } } }, async (req) => {
+    const parsed = z.object({
+      currentPassword: z.string().min(1),
+      newPassword: z.string().min(8).max(200),
+    }).safeParse(req.body);
+    if (!parsed.success) throw BadRequest("invalid-input", parsed.error.issues);
+
+    const user = usersRepo.findById(req.auth!.userId);
+    if (!user) throw NotFound();
+
+    const valid = verifyPassword(parsed.data.currentPassword, {
+      passwordHash: user.password_hash, passwordSalt: user.password_salt,
+    });
+    if (!valid) return { error: "invalid-current-password" };
+
+    const pwd = hashPassword(parsed.data.newPassword);
+    usersRepo.changePassword(req.auth!.userId, pwd.passwordHash, pwd.passwordSalt);
+    auditRepo.log({
+      actorUserId: req.auth!.userId, actorLabel: req.auth!.email,
+      action: "user.password.change", ip: req.ip,
+    });
+    return { ok: true };
+  });
+
+  // ─── Update profile ───────────────────────────────────
+  app.patch("/api/auth/profile", { preHandler: requireAuth }, async (req) => {
+    const parsed = z.object({
+      fullName: z.string().min(1).max(200).optional(),
+      phone: z.string().max(40).optional(),
+    }).safeParse(req.body);
+    if (!parsed.success) throw BadRequest("invalid-input", parsed.error.issues);
+    usersRepo.updateProfile(req.auth!.userId, parsed.data);
+    const user = usersRepo.findById(req.auth!.userId);
+    return { user: { id: user!.id, email: user!.email, fullName: user!.full_name, phone: user!.phone } };
+  });
+
 }

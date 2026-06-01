@@ -1,4 +1,5 @@
 import type { FastifyInstance } from 'fastify';
+import { broadcastSSE } from "./sse.js";
 import { z } from 'zod';
 import { requireAuth } from '../middleware/auth.js';
 import { can } from '../lib/rbac.js';
@@ -18,6 +19,9 @@ const createEventSchema = z.object({
   guestCount:     z.number().int().min(0).optional(),
   budgetCents:    z.number().int().min(0).optional(),
   primaryContactUserId: z.string().optional(),
+  leadSource: z.enum(['website','referral','the_knot','weddingwire','facebook','instagram','google','walk_in','other']).optional(),
+  rsvpDeadline: z.string().optional(),
+  venueId: z.string().optional(),
 });
 
 const updateEventSchema = createEventSchema.partial().omit({ organizationId: true });
@@ -107,6 +111,7 @@ export async function eventRoutes(app: FastifyInstance) {
       actorLabel: req.auth!.email, action: 'event.create',
       targetType: 'event', targetId: event.id, ip: req.ip,
     });
+    broadcastSSE(parsed.data.organizationId, "event.created", { eventId: event.id, title: event.title }, req.auth!.userId);
     return reply.code(201).send({ event });
   });
 
@@ -136,6 +141,9 @@ export async function eventRoutes(app: FastifyInstance) {
       startDate: 'start_date', endDate: 'end_date',
       guestCount: 'guest_count', budgetCents: 'budget_cents',
       primaryContactUserId: 'primary_contact_user_id',
+      leadSource: 'lead_source',
+      rsvpDeadline: 'rsvp_deadline',
+      venueId: 'venue_id',
     };
     for (const [k, col] of Object.entries(keyMap)) {
       if (k in dataIn && dataIn[k] !== undefined) patch[col] = dataIn[k];
@@ -146,7 +154,39 @@ export async function eventRoutes(app: FastifyInstance) {
       actorLabel: req.auth!.email, action: 'event.update',
       targetType: 'event', targetId: eventId, ip: req.ip,
     });
+    broadcastSSE(event.organization_id, "event.updated", { eventId, title: updated?.title }, req.auth!.userId);
     return { event: updated };
+  });
+
+
+  // ─── Duplicate event (copy as template) ───────────────
+  app.post("/api/events/:eventId/duplicate", { preHandler: requireAuth }, async (req, reply) => {
+    const { eventId } = req.params as { eventId: string };
+    const source = eventsRepo.findById(eventId);
+    if (!source) throw NotFound();
+    const orgMap = eventsRepo.orgMapForUser(req.auth!.userId);
+    if (!can(req.auth!.memberships, { organizationId: source.organization_id }, "events.create", orgMap)) throw Forbidden();
+
+    const event = eventsRepo.create({
+      organizationId: source.organization_id,
+      title: `${source.title} (Copy)`,
+      status: "lead",
+      startDate: source.start_date ?? undefined,
+      endDate: source.end_date ?? undefined,
+      guestCount: source.guest_count,
+      budgetCents: source.budget_cents ?? undefined,
+      createdBy: req.auth!.userId,
+    });
+
+    auditRepo.log({
+      organizationId: source.organization_id, actorUserId: req.auth!.userId,
+      actorLabel: req.auth!.email, action: "event.duplicate",
+      targetType: "event", targetId: event.id, ip: req.ip,
+      details: { sourceEventId: eventId },
+    });
+
+    broadcastSSE(source.organization_id, "event.created", { eventId: event.id, title: event.title }, req.auth!.userId);
+    return reply.code(201).send({ event });
   });
 
   app.delete('/api/events/:eventId', { preHandler: requireAuth }, async (req, reply) => {
@@ -184,6 +224,11 @@ export async function eventRoutes(app: FastifyInstance) {
 
   app.delete('/api/sub-events/:subId', { preHandler: requireAuth }, async (req, reply) => {
     const { subId } = req.params as { subId: string };
+    const sub = subEventsRepo.findById(subId);
+    if (sub) {
+      const ev = eventsRepo.findById(sub.event_id);
+      if (ev && !can(req.auth!.memberships, { organizationId: ev.organization_id }, "events.edit")) throw Forbidden();
+    }
     subEventsRepo.delete(subId);
     return reply.code(204).send();
   });

@@ -33,17 +33,20 @@ export async function feedbackRoutes(app: FastifyInstance) {
     eventsRepo.update(id, { metadata: meta });
   };
 
-  // Polls
+  // ─── Polls ──────────────────────────────────────────────
   app.get('/api/events/:eventId/polls', { preHandler: requireAuth }, async (req) => {
     const { eventId } = req.params as { eventId: string };
+    const orgMap = eventsRepo.orgMapForUser(req.auth!.userId);
+    if (!can(req.auth!.memberships, { eventId }, 'feedback.view', orgMap)) throw Forbidden();
     const { meta } = getEventMeta(eventId);
     return { polls: meta.polls || [] };
   });
 
   app.post('/api/events/:eventId/polls', { preHandler: requireAuth }, async (req) => {
     const { eventId } = req.params as { eventId: string };
+    const orgMap = eventsRepo.orgMapForUser(req.auth!.userId);
+    if (!can(req.auth!.memberships, { eventId }, 'feedback.manage', orgMap)) throw Forbidden();
     const { ev, meta } = getEventMeta(eventId);
-    if (!can(req.auth!.memberships, { eventId }, 'events.edit', eventsRepo.orgMapForUser(req.auth!.userId))) throw Forbidden();
     
     const parsed = pollSchema.safeParse(req.body);
     if (!parsed.success) throw BadRequest('invalid-input');
@@ -55,8 +58,8 @@ export async function feedbackRoutes(app: FastifyInstance) {
     return { poll: newPoll };
   });
 
+  // Voting is intentionally public (guests vote from the portal without auth)
   app.post('/api/events/:eventId/polls/:pollId/vote', async (req) => {
-    // Voting can be done by public guests, so no auth required here
     const { eventId, pollId } = req.params as { eventId: string; pollId: string };
     const { optionId } = req.body as { optionId: string };
     
@@ -74,15 +77,19 @@ export async function feedbackRoutes(app: FastifyInstance) {
     return { poll };
   });
 
-  // Feedback
+  // ─── Feedback ───────────────────────────────────────────
   app.get('/api/events/:eventId/feedback', { preHandler: requireAuth }, async (req) => {
     const { eventId } = req.params as { eventId: string };
+    const orgMap = eventsRepo.orgMapForUser(req.auth!.userId);
+    if (!can(req.auth!.memberships, { eventId }, 'feedback.view', orgMap)) throw Forbidden();
     const { meta } = getEventMeta(eventId);
     return { feedback: meta.feedback || [] };
   });
 
   app.post('/api/events/:eventId/feedback', { preHandler: requireAuth }, async (req) => {
     const { eventId } = req.params as { eventId: string };
+    const orgMap = eventsRepo.orgMapForUser(req.auth!.userId);
+    if (!can(req.auth!.memberships, { eventId }, 'feedback.manage', orgMap)) throw Forbidden();
     const { ev, meta } = getEventMeta(eventId);
     
     const parsed = feedbackSchema.safeParse(req.body);

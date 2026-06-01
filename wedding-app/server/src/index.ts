@@ -26,6 +26,19 @@ import { auditRoutes }     from './routes/audit.js';
 import { platformConfigRoutes } from './routes/platformConfig.js';
 import { integrationRoutes }    from './routes/integrations.js';
 import { startWorker }          from './jobs/worker.js';
+import { pushRoutes }           from "./routes/push.js";
+import { sseRoutes }            from "./routes/sse.js";
+import { webhookRoutes }        from "./routes/webhooks.js";
+import { budgetRoutes }         from "./routes/budget.js";
+import { contractRoutes }       from "./routes/contracts.js";
+import { inventoryRoutes }      from "./routes/inventory.js";
+import { galleryRoutes }        from "./routes/gallery.js";
+import { checkinRoutes }        from "./routes/checkins.js";
+import { inviteTrackingRoutes } from "./routes/inviteTracking.js";
+import { exportRoutes }          from "./routes/exports.js";
+import { webhookReceiverRoutes } from "./routes/webhookReceiver.js";
+import { intelligenceRoutes }   from "./routes/intelligence.js";
+import { feedbackRoutes }       from "./routes/feedback.js";
 
 import { db } from './db/database.js';
 import { rolesRepo } from './db/repos/index.js';
@@ -66,10 +79,11 @@ export async function buildApp() {
     logger: { level: process.env.LOG_LEVEL ?? 'info' },
     trustProxy: true,
     disableRequestLogging: process.env.NODE_ENV === 'test',
+    bodyLimit: 2 * 1024 * 1024, // 2MB default body limit
   });
 
   await app.register(cors, {
-    origin: process.env.CORS_ORIGIN ?? true,
+    origin: process.env.CORS_ORIGIN ?? false, // default restrictive; set CORS_ORIGIN env var in production
     credentials: true,
   });
 
@@ -139,10 +153,28 @@ export async function buildApp() {
   await app.register(auditRoutes);
   await app.register(platformConfigRoutes);
   await app.register(integrationRoutes);
+  await app.register(pushRoutes);
+  await app.register(sseRoutes);
+  await app.register(webhookRoutes);
+  await app.register(budgetRoutes);
+  await app.register(contractRoutes);
+  await app.register(inventoryRoutes);
+  await app.register(galleryRoutes);
+  await app.register(checkinRoutes);
+  await app.register(inviteTrackingRoutes);
+  await app.register(exportRoutes);
+  await app.register(webhookReceiverRoutes);
+  await app.register(intelligenceRoutes);
+  await app.register(feedbackRoutes);
 
   // Serve front-end if built
   if (existsSync(CLIENT_DIST)) {
     await app.register(fastifyStatic, { root: CLIENT_DIST, prefix: '/' });
+    // Serve uploaded files (gallery images, etc.)
+    const UPLOADS_DIR = resolve(import.meta.dirname, "../../uploads");
+    if (existsSync(UPLOADS_DIR)) {
+      await app.register(fastifyStatic, { root: UPLOADS_DIR, prefix: "/uploads/", decorateReply: false });
+    }
     app.setNotFoundHandler((req, reply) => {
       if (req.url.startsWith('/api/')) return reply.code(404).send({ error: 'not-found' });
       return reply.sendFile('index.html');
