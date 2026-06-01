@@ -39,6 +39,7 @@ export const SYSTEM_DEFAULTS: PlatformConfig = {
         { id: 'kpi.revenue-per-event' },
         { id: 'kpi.rsvp-velocity' },
         { id: 'kpi.vacancy' },
+        { id: 'kpi.pipeline-forecast' },
       ],
     },
     'event.detail.intelligence': {

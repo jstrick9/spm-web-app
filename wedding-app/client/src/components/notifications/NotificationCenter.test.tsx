@@ -1,47 +1,83 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { render, screen, fireEvent, waitFor } from '@testing-library/react';
+import { render, screen, fireEvent, act } from '@testing-library/react';
 import { NotificationCenter } from './NotificationCenter';
+
+// Mock router
+vi.mock('../../lib/router', () => ({
+  useRouter: () => ({ navigate: vi.fn() }),
+}));
 
 describe('NotificationCenter', () => {
   beforeEach(() => {
-    vi.clearAllMocks();
+    localStorage.clear();
   });
 
-  it('opens and displays simulated alerts', async () => {
+  it('renders the bell icon button', () => {
     render(<NotificationCenter />);
-    
-    // Check bell badge initially visible
-    const bellBtn = screen.getByRole('button', { name: /Notifications/i });
-    expect(bellBtn).toBeInTheDocument();
-    
-    // Open panel
-    fireEvent.click(bellBtn);
-    
-    // Check titles map correctly
-    expect(screen.getByText('Notifications')).toBeInTheDocument();
-    expect(screen.getByText('RSVP Deadline Warning')).toBeInTheDocument();
-    expect(screen.getByText('Vendor COI Missing')).toBeInTheDocument();
-    expect(screen.getByText('Task Escalation')).toBeInTheDocument();
-    
-    // 2 new unread
-    expect(screen.getByText('2 New')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /Notifications/i })).toBeTruthy();
+  });
 
-    // Mark all read
-    const markReadBtn = screen.getByTitle('Mark all read');
-    fireEvent.click(markReadBtn);
-    
-    // Badge disappears
-    await waitFor(() => {
-       expect(screen.queryByText('2 New')).not.toBeInTheDocument();
+  it('opens dropdown on click', () => {
+    render(<NotificationCenter />);
+    fireEvent.click(screen.getByRole('button', { name: /Notifications/i }));
+    expect(screen.getByText('Notifications')).toBeTruthy();
+    expect(screen.getByText(/No notifications yet/)).toBeTruthy();
+  });
+
+  it('shows notification when SSE event fires', () => {
+    render(<NotificationCenter />);
+
+    // Open the dropdown first
+    fireEvent.click(screen.getByRole('button', { name: /Notifications/i }));
+
+    // Fire SSE event
+    act(() => {
+      window.dispatchEvent(new CustomEvent('wvi:sse-event', {
+        detail: {
+          id: 42,
+          type: 'guest.created',
+          payload: { name: 'Alice', eventId: 'e1' },
+          actorUserId: 'u1',
+          timestamp: new Date().toISOString(),
+        },
+      }));
     });
 
-    // Clear all
-    const clearBtn = screen.getByTitle('Clear all');
-    fireEvent.click(clearBtn);
+    expect(screen.getByText('New Guest Added')).toBeTruthy();
+    expect(screen.getByText(/Alice was added/)).toBeTruthy();
+  });
 
-    // List goes empty
-    await waitFor(() => {
-       expect(screen.queryByText('RSVP Deadline Warning')).not.toBeInTheDocument();
+  it('shows unread badge count', () => {
+    render(<NotificationCenter />);
+
+    // Fire events
+    act(() => {
+      window.dispatchEvent(new CustomEvent('wvi:sse-event', {
+        detail: { id: 1, type: 'event.created', payload: { title: 'Test' }, actorUserId: null, timestamp: new Date().toISOString() },
+      }));
+      window.dispatchEvent(new CustomEvent('wvi:sse-event', {
+        detail: { id: 2, type: 'rsvp.submitted', payload: { attending: true, eventId: 'e1' }, actorUserId: null, timestamp: new Date().toISOString() },
+      }));
     });
+
+    // Badge should show "2"
+    const badge = screen.getByText('2');
+    expect(badge).toBeTruthy();
+  });
+
+  it('mark all read clears unread badge', () => {
+    render(<NotificationCenter />);
+
+    act(() => {
+      window.dispatchEvent(new CustomEvent('wvi:sse-event', {
+        detail: { id: 10, type: 'event.created', payload: { title: 'W' }, actorUserId: null, timestamp: new Date().toISOString() },
+      }));
+    });
+
+    fireEvent.click(screen.getByRole('button', { name: /Notifications/i }));
+    fireEvent.click(screen.getByText('Mark all read'));
+
+    // Badge should be gone
+    expect(screen.queryByText('1')).toBeNull();
   });
 });

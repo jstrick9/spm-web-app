@@ -1,13 +1,24 @@
-import React, { useState, useEffect } from 'react';
-import { Bell, Check, Trash2, ShieldAlert, MailOpen, CalendarClock, Settings } from 'lucide-react';
+/**
+ * NotificationCenter — Phase 20: SSE-driven real-time notifications.
+ *
+ * Instead of hardcoded mock notifications, this now:
+ *   1. Listens to SSE events via useSSE
+ *   2. Accumulates recent events as notifications
+ *   3. Shows unread count badge
+ *   4. Click to navigate to relevant page
+ *   5. Persists read state in localStorage
+ */
+import { useState, useEffect, useCallback } from 'react';
+import { Bell, Check, X, ExternalLink } from 'lucide-react';
 import { Button } from '../../ui/Button';
 import { Badge } from '../../ui/Badge';
 import { cn } from '../../ui/lib/cn';
 import { useRouter } from '../../lib/router';
+import type { SSEEvent } from '../../sdk/sse';
 
 interface Notification {
   id: string;
-  type: 'system' | 'rsvp' | 'vendor' | 'task';
+  type: string;
   title: string;
   message: string;
   read: boolean;
@@ -15,146 +26,174 @@ interface Notification {
   linkUrl?: string;
 }
 
+const EVENT_META: Record<string, { title: string; message: (p: any) => string; linkUrl?: (p: any) => string }> = {
+  'guest.created':   { title: 'New Guest Added',        message: (p) => `${p.name || 'A guest'} was added.`,     linkUrl: (p) => `/events/${p.eventId}?tab=guests` },
+  'guest.updated':   { title: 'Guest Updated',          message: () => 'A guest record was updated.',            linkUrl: (p) => `/events/${p.eventId}?tab=guests` },
+  'rsvp.submitted':  { title: 'New RSVP',               message: (p) => `RSVP ${p.attending ? 'accepted' : 'declined'}.`, linkUrl: (p) => `/events/${p.eventId}?tab=guests` },
+  'event.created':   { title: 'New Event Created',       message: (p) => `"${p.title || 'New event'}" was created.`, linkUrl: (p) => `/events/${p.eventId}` },
+  'event.updated':   { title: 'Event Updated',           message: (p) => `"${p.title || 'An event'}" was modified.`, linkUrl: (p) => `/events/${p.eventId}` },
+  'budget.updated':  { title: 'Budget Changed',          message: () => 'A budget item was updated.',             linkUrl: (p) => `/events/${p.eventId}?tab=budget` },
+  'webhook.test':    { title: 'Webhook Test',            message: () => 'A test webhook was dispatched.',         linkUrl: () => '/system/integrations' },
+};
+
+const STORAGE_KEY = 'wvi_notifications_read';
+
+function getReadIds(): Set<string> {
+  try {
+    return new Set(JSON.parse(localStorage.getItem(STORAGE_KEY) || '[]'));
+  } catch { return new Set(); }
+}
+
+function saveReadIds(ids: Set<string>) {
+  // Keep last 100 to prevent unbounded growth
+  const arr = Array.from(ids).slice(-100);
+  localStorage.setItem(STORAGE_KEY, JSON.stringify(arr));
+}
+
 export function NotificationCenter() {
   const [open, setOpen] = useState(false);
   const [notifications, setNotifications] = useState<Notification[]>([]);
+  const [readIds, setReadIds] = useState<Set<string>>(getReadIds);
   const { navigate } = useRouter();
 
-  // Simulated Rule-Engine evaluation pulling system alerts
+  // Listen for SSE events from the useSSE hook in useRealtimeInvalidation
+  // We use a global event listener approach
+  const handleSSEEvent = useCallback((event: CustomEvent<SSEEvent>) => {
+    const e = event.detail;
+    const meta = EVENT_META[e.type];
+    if (!meta) return; // Ignore unknown event types
+
+    const notif: Notification = {
+      id: `sse-${e.id}`,
+      type: e.type,
+      title: meta.title,
+      message: meta.message(e.payload),
+      read: readIds.has(`sse-${e.id}`),
+      timestamp: e.timestamp,
+      linkUrl: meta.linkUrl?.(e.payload),
+    };
+
+    setNotifications(prev => {
+      const existing = prev.find(n => n.id === notif.id);
+      if (existing) return prev;
+      return [notif, ...prev].slice(0, 50); // Keep last 50
+    });
+  }, [readIds]);
+
   useEffect(() => {
-    // In a real implementation, this would poll an endpoint or use SSE
-    setNotifications([
-      {
-        id: 'n1',
-        type: 'rsvp',
-        title: 'RSVP Deadline Warning',
-        message: 'Smith Wedding is 30 days out and capacity is < 50%.',
-        read: false,
-        timestamp: new Date().toISOString(),
-        linkUrl: '/events/e1'
-      },
-      {
-        id: 'n2',
-        type: 'vendor',
-        title: 'Vendor COI Missing',
-        message: 'DJ Snake has not uploaded their insurance certificate.',
-        read: false,
-        timestamp: new Date(Date.now() - 3600000).toISOString(),
-      },
-      {
-        id: 'n3',
-        type: 'task',
-        title: 'Task Escalation',
-        message: 'Setup Archway has been blocked for > 4 hours.',
-        read: true,
-        timestamp: new Date(Date.now() - 86400000).toISOString(),
-      }
-    ]);
-  }, []);
+    window.addEventListener('wvi:sse-event', handleSSEEvent as EventListener);
+    return () => window.removeEventListener('wvi:sse-event', handleSSEEvent as EventListener);
+  }, [handleSSEEvent]);
 
-  const unreadCount = notifications.filter(n => !n.read).length;
+  const unreadCount = notifications.filter(n => !n.read && !readIds.has(n.id)).length;
 
-  const markAllRead = () => {
+  function markRead(id: string) {
+    const newIds = new Set(readIds);
+    newIds.add(id);
+    setReadIds(newIds);
+    saveReadIds(newIds);
+    setNotifications(prev => prev.map(n => n.id === id ? { ...n, read: true } : n));
+  }
+
+  function markAllRead() {
+    const newIds = new Set(readIds);
+    notifications.forEach(n => newIds.add(n.id));
+    setReadIds(newIds);
+    saveReadIds(newIds);
     setNotifications(prev => prev.map(n => ({ ...n, read: true })));
-  };
+  }
 
-  const clearAll = () => {
-    setNotifications([]);
-    setOpen(false);
-  };
-
-  const getIcon = (type: Notification['type']) => {
-    switch (type) {
-      case 'system': return <Settings className="w-4 h-4 text-fg-subtle" />;
-      case 'rsvp': return <MailOpen className="w-4 h-4 text-brand" />;
-      case 'vendor': return <ShieldAlert className="w-4 h-4 text-warning" />;
-      case 'task': return <CalendarClock className="w-4 h-4 text-danger" />;
+  function handleClick(notif: Notification) {
+    markRead(notif.id);
+    if (notif.linkUrl) {
+      navigate(notif.linkUrl);
+      setOpen(false);
     }
-  };
+  }
 
   return (
     <div className="relative">
-      <Button 
-        variant="ghost" 
-        size="icon" 
-        className="relative" 
-        onClick={() => setOpen(!open)}
-        aria-label="Notifications"
+      <Button
+        variant="ghost"
+        size="icon"
+        className="relative"
+        onClick={() => setOpen(o => !o)}
+        aria-label={`Notifications${unreadCount > 0 ? ` (${unreadCount} unread)` : ''}`}
       >
-        <Bell className="w-5 h-5 text-fg-muted hover:text-fg transition-colors" />
+        <Bell className="h-5 w-5" />
         {unreadCount > 0 && (
-          <span className="absolute top-1.5 right-1.5 w-2 h-2 rounded-full bg-danger animate-pulse" />
+          <span className="absolute -top-0.5 -right-0.5 flex h-4 w-4 items-center justify-center rounded-full bg-danger text-[10px] font-bold text-white" aria-live="polite" role="status">
+            {unreadCount > 9 ? '9+' : unreadCount}
+          </span>
         )}
       </Button>
 
       {open && (
         <>
+          {/* Backdrop */}
           <div className="fixed inset-0 z-40" onClick={() => setOpen(false)} />
-          <div className="absolute right-0 top-full mt-2 w-80 sm:w-96 bg-surface border border-border shadow-elev-2 rounded-xl z-50 overflow-hidden flex flex-col max-h-[80vh] animate-in fade-in slide-in-from-top-2">
-            
+
+          {/* Dropdown */}
+          <div className="absolute right-0 top-full mt-2 z-50 w-80 rounded-lg border border-border bg-surface shadow-elev-2 overflow-hidden">
             {/* Header */}
-            <div className="flex items-center justify-between p-4 border-b border-border bg-surface-2/30">
-               <h3 className="font-semibold text-fg flex items-center gap-2">
-                 Notifications 
-                 {unreadCount > 0 && <Badge variant="brand" className="text-[10px]">{unreadCount} New</Badge>}
-               </h3>
-               <div className="flex gap-2">
-                 <Button variant="ghost" size="icon" className="w-7 h-7 text-fg-muted hover:text-fg" onClick={markAllRead} title="Mark all read">
-                   <Check className="w-3.5 h-3.5" />
-                 </Button>
-                 <Button variant="ghost" size="icon" className="w-7 h-7 text-danger hover:bg-danger/10" onClick={clearAll} title="Clear all">
-                   <Trash2 className="w-3.5 h-3.5" />
-                 </Button>
-               </div>
+            <div className="flex items-center justify-between px-4 py-3 border-b border-border bg-surface-2/50">
+              <h3 className="text-sm font-semibold">Notifications</h3>
+              <div className="flex items-center gap-1">
+                {unreadCount > 0 && (
+                  <button
+                    onClick={markAllRead}
+                    className="text-[11px] text-brand hover:underline"
+                  >
+                    Mark all read
+                  </button>
+                )}
+                <Button variant="ghost" size="icon" className="h-6 w-6" onClick={() => setOpen(false)}>
+                  <X className="h-3.5 w-3.5" />
+                </Button>
+              </div>
             </div>
 
             {/* List */}
-            <div className="overflow-y-auto flex-1 bg-surface divide-y divide-border">
-               {notifications.length === 0 ? (
-                 <div className="p-8 text-center text-fg-muted">
-                    <Bell className="w-8 h-8 mx-auto mb-3 opacity-20" />
-                    <p className="text-sm">You're all caught up!</p>
-                 </div>
-               ) : (
-                 notifications.map(n => (
-                   <div 
-                     key={n.id} 
-                     className={cn(
-                       "p-4 hover:bg-surface-2 transition-colors cursor-pointer flex gap-3 relative",
-                       !n.read ? "bg-brand-soft/20" : "opacity-70"
-                     )}
-                     onClick={() => {
-                        // Mark read locally
-                        setNotifications(prev => prev.map(item => item.id === n.id ? { ...item, read: true } : item));
-                        if (n.linkUrl) {
-                           setOpen(false);
-                           navigate(n.linkUrl);
-                        }
-                     }}
-                   >
-                     {!n.read && <div className="absolute left-0 top-0 bottom-0 w-1 bg-brand" />}
-                     <div className="mt-1 shrink-0 bg-surface border border-border rounded-md p-1.5 shadow-sm">
-                       {getIcon(n.type)}
-                     </div>
-                     <div className="flex-1 min-w-0">
-                        <div className="flex justify-between items-start mb-1">
-                           <h4 className={cn("text-sm font-medium text-fg truncate", !n.read && "font-bold")}>{n.title}</h4>
-                           <span className="text-[10px] text-fg-subtle shrink-0 ml-2">
-                             {new Date(n.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-                           </span>
+            <div className="max-h-80 overflow-y-auto">
+              {notifications.length === 0 ? (
+                <div className="py-10 text-center text-sm text-fg-muted">
+                  <Bell className="h-6 w-6 mx-auto mb-2 text-fg-subtle" />
+                  No notifications yet.
+                  <p className="text-xs mt-1">Activity from your team will appear here in real time.</p>
+                </div>
+              ) : (
+                notifications.map(notif => {
+                  const isUnread = !notif.read && !readIds.has(notif.id);
+                  return (
+                    <button
+                      key={notif.id}
+                      onClick={() => handleClick(notif)}
+                      className={cn(
+                        "w-full text-left px-4 py-3 border-b border-border/50 hover:bg-surface-2/50 transition-colors",
+                        isUnread && "bg-brand/5"
+                      )}
+                    >
+                      <div className="flex items-start gap-2">
+                        {isUnread && (
+                          <span className="mt-1.5 h-2 w-2 rounded-full bg-brand shrink-0" />
+                        )}
+                        <div className="flex-1 min-w-0">
+                          <p className={cn("text-sm", isUnread ? "font-semibold" : "font-medium")}>
+                            {notif.title}
+                          </p>
+                          <p className="text-xs text-fg-muted mt-0.5 truncate">{notif.message}</p>
+                          <p className="text-[10px] text-fg-subtle mt-1">
+                            {new Date(notif.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                          </p>
                         </div>
-                        <p className="text-xs text-fg-muted line-clamp-2 leading-relaxed">{n.message}</p>
-                     </div>
-                   </div>
-                 ))
-               )}
-            </div>
-            
-            {/* Footer */}
-            <div className="p-2 border-t border-border bg-surface-2 text-center">
-               <button className="text-[10px] uppercase tracking-wider font-semibold text-fg-subtle hover:text-fg transition-colors" onClick={() => navigate('/system')}>
-                 Configure Alert Rules
-               </button>
+                        {notif.linkUrl && (
+                          <ExternalLink className="h-3 w-3 text-fg-subtle shrink-0 mt-1" />
+                        )}
+                      </div>
+                    </button>
+                  );
+                })
+              )}
             </div>
           </div>
         </>
