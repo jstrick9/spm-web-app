@@ -58,7 +58,7 @@ registerRoute(
 );
 
 registerRoute(
-  /\/api\/vendors\/.*\/checkin/i,
+  /\/api\/events\/.*\/checkins/i,
   new NetworkFirst({
     plugins: [bgSyncPlugin]
   }),

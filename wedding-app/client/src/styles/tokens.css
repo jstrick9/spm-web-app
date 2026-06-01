@@ -32,7 +32,7 @@
     /* ─── Text ─────────────────────────────────────── */
     --color-fg:            28 25 22;       /* near-black, warm */
     --color-fg-muted:      89 82 76;
-    --color-fg-subtle:     142 132 122;
+    --color-fg-subtle:     95 87 80; /* darkened for 5:1 WCAG AA contrast */
     --color-fg-inverse:    255 255 255;
 
     /* ─── Brand (aubergine + gold) ─────────────────── */
@@ -95,7 +95,7 @@
 
     --color-fg:            245 240 240;
     --color-fg-muted:      176 168 168;
-    --color-fg-subtle:     130 122 130;
+    --color-fg-subtle:     155 147 155; /* lightened for contrast on dark bg */
     --color-fg-inverse:    18 16 20;
 
     --color-brand:         167 92 156;    /* lighter for contrast on dark */

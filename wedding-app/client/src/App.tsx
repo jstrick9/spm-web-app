@@ -1,4 +1,8 @@
+import React, { Suspense } from "react";
 import { WelcomeModal } from './components/onboarding/WelcomeModal';
+import { useQuery, useQueryClient as useQC } from "@tanstack/react-query";
+import { Truck, Plus } from "lucide-react";
+import { BarChart } from "lucide-react";
 import { ErrorBoundary } from './ui/ErrorBoundary';
 /**
  * App root.
@@ -9,7 +13,7 @@ import { ErrorBoundary } from './ui/ErrorBoundary';
  *        /                 → Dashboard
  *        /events           → Events list (Day 1)
  *        /events/:id       → Event detail (Day 1)
- *        /guests           → Cross-event guest browser (placeholder; Day 2 builds)
+ *        /guests           → Cross-event guest browser (Phase 18)
  *        /system           → System (sync control panel)
  *        /system/platform  → Platform Studio (theme presets)
  *        /preview          → Design system styleguide (dev)
@@ -18,11 +22,13 @@ import { ErrorBoundary } from './ui/ErrorBoundary';
 import {
   Calendar, Cog, Home, LayoutDashboard, Palette, Users,
 } from 'lucide-react';
-import { useEffect, useState, type CSSProperties } from 'react';
+import { useEffect, useState } from 'react';
 import { ApiError, getToken, sdk, setToken } from './sdk';
 import type { SdkUser, SdkMembership } from './sdk/types';
 import { AppShell, PageBody, PageHeader } from './ui/AppShell';
 import { Button } from './ui/Button';
+import { Badge } from "./ui/Badge";
+import { Skeleton } from "./ui/Skeleton";
 import { Card, CardContent, CardHeader, CardTitle } from './ui/Card';
 import { CommandPalette, type CommandItem } from './ui/CommandPalette';
 import { EmptyState } from './ui/EmptyState';
@@ -31,37 +37,51 @@ import { Label } from './ui/Label';
 import { useToast } from './ui/Toast';
 import { ConfigProvider } from './config/ConfigProvider';
 import { ReloadPrompt } from './ReloadPrompt';
-import { UiPreview } from './ui/preview/UiPreview';
-import { ControlPanel } from './components/ControlPanel';
+const UiPreview = React.lazy(() => import('./ui/preview/UiPreview').then(m => ({ default: m.UiPreview })));
 import { AdminPanel } from './screens/system/admin/AdminPanel';
 import { WidgetSlot } from './config/widgets/WidgetSlot';
 import { PlatformStudio } from './screens/PlatformStudio';
 import { CatalogScreen } from './screens/catalog/CatalogScreen';
-import { VenueBuilder } from './screens/catalog/venue/VenueBuilder';
+const VenueBuilder = React.lazy(() => import('./screens/catalog/venue/VenueBuilder').then(m => ({ default: m.VenueBuilder })));
 import { IntegrationHub } from './screens/system/IntegrationHub';
 import { EventQuestionsStudio } from './screens/system/questions/EventQuestionsStudio';
 import { HelpCircle, Package } from 'lucide-react';
 import { InventoryManager } from './screens/system/inventory/InventoryManager';
-import { AnalyticsDashboard } from './screens/system/AnalyticsDashboard';
+const AnalyticsDashboard = React.lazy(() => import('./screens/system/AnalyticsDashboard').then(m => ({ default: m.AnalyticsDashboard })));
 import { Link2 } from 'lucide-react';
 import { GlobalCalendar } from './screens/calendar/GlobalCalendar';
-import { VendorCheckInApp } from './screens/checkin/VendorCheckInApp';
-import { MapPin } from 'lucide-react';
+const VendorCheckInApp = React.lazy(() => import('./screens/checkin/VendorCheckInApp').then(m => ({ default: m.VendorCheckInApp })));
 import { Layers } from 'lucide-react';
 import { EventsList } from './screens/events/EventsList';
 import { List } from 'lucide-react';
 import { EventDetail } from './screens/events/EventDetail';
+import { CreateEventDialog } from "./screens/events/CreateEventDialog";
 import { RunSheet } from './screens/events/runsheet/RunSheet';
 import { VendorPortal } from './screens/VendorPortal';
 import { PublicGuestPortal } from './screens/portal/PublicGuestPortal';
 import { matchPath, useRouter } from './lib/router';
 import type { PartialPlatformConfig } from './config/schema';
+// ── Phase 18 imports ─────────────────────────────────────────
+import { CrossEventGuestBrowser } from './screens/guests/CrossEventGuestBrowser';
+import { useRealtimeInvalidation } from './lib/useRealtimeInvalidation';
+// ── Phase 19 imports ─────────────────────────────────────────
+import { VendorDirectory } from "./screens/vendors/VendorDirectory";
+import { UserProfile } from "./screens/system/UserProfile";
+import { AuditLog } from "./screens/system/AuditLog";
+const IntelligenceDashboard = React.lazy(() => import("./screens/system/IntelligenceDashboard").then(m => ({ default: m.IntelligenceDashboard })));
+import { TodayView } from "./screens/dashboard/TodayView";
+import { KeyboardShortcutsDialog } from "./ui/KeyboardShortcutsDialog";
+import { DashboardScreen } from "./screens/dashboard/DashboardScreen";
+import { AuthScreen } from "./screens/auth/AuthScreen";
+import { NotFoundPage } from "./screens/NotFoundPage";
+import { useSessionGuard } from "./lib/useSessionGuard";
+import { setPermissionContext } from "./lib/usePermission";
 
 export default function App() {
   const { path } = useRouter();
 
   // Public surfaces (no auth)
-  if (path === '/preview') return <UiPreview />;
+  if (path === '/preview') return <Suspense fallback={<div className="p-12 text-center">Loading preview...</div>}><UiPreview /></Suspense>;
   const portal = matchPath('/portal/:eventId', path);
   if (portal) return <PublicGuestPortal eventId={portal.eventId} />;
   const vendorPortal = matchPath('/vendor/:vendorId', path);
@@ -75,6 +95,7 @@ function PlatformApp() {
   const [user, setUser] = useState<SdkUser | null>(null);
   const [memberships, setMemberships] = useState<SdkMembership[]>([]);
   const [bootstrapped, setBootstrapped] = useState(false);
+  const queryClient = useQC();
 
   useEffect(() => {
     (async () => {
@@ -96,6 +117,7 @@ function PlatformApp() {
 
   return <AuthenticatedApp user={user} memberships={memberships} onLogout={() => {
     void sdk.auth.logout();
+    queryClient.clear(); // Phase 37: clear all cached data on logout
     setUser(null);
   }} />;
 }
@@ -117,6 +139,20 @@ function AuthenticatedApp({ user, memberships, onLogout }: { user: SdkUser; memb
   const [userConfig, setUserConfig] = useState<PartialPlatformConfig | undefined>();
   const [orgId, setOrgId] = useState<string | null>(null);
   const [paletteOpen, setPaletteOpen] = useState(false);
+  const [createEventOpen, setCreateEventOpen] = useState(false);
+  const [shortcutsOpen, setShortcutsOpen] = useState(false);
+
+  // ── Phase 18: Real-time SSE → auto-invalidate React Query caches ──
+  useRealtimeInvalidation(orgId);
+
+  // ── Phase 30: Session expiry detection ──
+  const { toast: sessionToast } = useToast();
+  useSessionGuard(sessionToast as any, onLogout);
+
+  // ── Phase 19: Set RBAC context for usePermission hooks ──
+  useEffect(() => {
+    setPermissionContext(orgId, memberships as any);
+  }, [orgId, memberships]);
 
   useEffect(() => {
     sdk.orgs.list().then((r) => {
@@ -129,16 +165,29 @@ function AuthenticatedApp({ user, memberships, onLogout }: { user: SdkUser; memb
     sdk.platformConfig.getUserPreferences().then((r) => setUserConfig(r.config));
   }, []);
 
-  // ⌘K / Ctrl-K
+  // ⌘K / Ctrl-K / ⌘N / ⌘/
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
       if ((e.metaKey || e.ctrlKey) && e.key === 'k') {
         e.preventDefault();
         setPaletteOpen((o) => !o);
       }
+      if ((e.metaKey || e.ctrlKey) && e.key === 'n') {
+        e.preventDefault();
+        setCreateEventOpen(true);
+      }
+      if ((e.metaKey || e.ctrlKey) && e.key === '/') {
+        e.preventDefault();
+        setShortcutsOpen(true);
+      }
     };
+    const shortcutOpener = () => setShortcutsOpen(true);
     window.addEventListener('keydown', handler);
-    return () => window.removeEventListener('keydown', handler);
+    window.addEventListener('wvi:open-shortcuts', shortcutOpener);
+    return () => {
+      window.removeEventListener('keydown', handler);
+      window.removeEventListener('wvi:open-shortcuts', shortcutOpener);
+    };
   }, []);
 
   const commandItems: CommandItem[] = [
@@ -153,9 +202,49 @@ function AuthenticatedApp({ user, memberships, onLogout }: { user: SdkUser; memb
     { id: 'nav.catalog',   label: 'Catalog Studio',      hint: 'Settings',   icon: <Layers className="h-4 w-4" />,          onSelect: () => navigate('/system/catalog') },
     { id: 'nav.venue',     label: 'Venue Builder',       hint: 'Settings',   icon: <Home className="h-4 w-4" />,          onSelect: () => navigate('/system/venue') },
     { id: 'nav.studio',    label: 'Platform Studio',     hint: 'Settings',   icon: <Palette className="h-4 w-4" />,         onSelect: () => navigate('/system/platform') },
+    { id: 'nav.intelligence', label: 'Intelligence', hint: 'Analytics', icon: <BarChart className="h-4 w-4" />, onSelect: () => navigate('/intelligence') },
+    { id: 'nav.audit',     label: 'Audit Log',           hint: 'System',    icon: <Cog className="h-4 w-4" />,             onSelect: () => navigate('/system/audit') },
+    { id: 'nav.profile',   label: 'Account Settings',    hint: 'Account',   icon: <Users className="h-4 w-4" />,           onSelect: () => navigate('/settings/profile') },
+    { id: 'act.create-event', label: 'Create New Event', hint: 'Action', keywords: ['new', 'create', 'add', 'event', 'wedding'], icon: <Plus className="h-4 w-4" />, onSelect: () => setCreateEventOpen(true) },
     { id: 'act.logout',    label: 'Sign out',            hint: 'Account',                                                   onSelect: onLogout },
     { id: 'nav.preview',   label: 'Open Design Preview', hint: 'Developer',  keywords: ['styleguide'],                       onSelect: () => navigate('/preview') },
   ];
+
+  // ── Phase 31: Dynamic event search in command palette ──
+  const eventsQuery = useQuery({
+    queryKey: ["events", orgId],
+    queryFn: () => orgId ? sdk.events.list(orgId) : Promise.resolve({ events: [] as any[], counts: { lead: 0, hold: 0, booked: 0, planning: 0, completed: 0, cancelled: 0, lost: 0 } }),
+    enabled: !!orgId,
+    staleTime: 30_000,
+  });
+
+  const dynamicItems: CommandItem[] = (eventsQuery.data?.events ?? []).map((e: { id: string; title: string; status: string; start_date: string | null; slug: string }) => ({
+    id: `event.${e.id}`,
+    label: e.title,
+    hint: `${e.status} · ${e.start_date ?? "No date"}`,
+    keywords: [e.status, e.slug, "event", "wedding"],
+    icon: <Calendar className="h-4 w-4" />,
+    onSelect: () => navigate(`/events/${e.id}`),
+  }));
+
+  // Phase 35: Also search vendors
+  const vendorsQuery = useQuery({
+    queryKey: ['vendors-palette', orgId],
+    queryFn: () => orgId ? sdk.vendors.list(orgId) : Promise.resolve({ vendors: [] }),
+    enabled: !!orgId,
+    staleTime: 60_000,
+  });
+
+  const vendorItems: CommandItem[] = (vendorsQuery.data?.vendors ?? []).map((v: { id: string; name: string; category: string; contact_name: string | null }) => ({
+    id: `vendor.${v.id}`,
+    label: v.name,
+    hint: `${v.category} · Vendor`,
+    keywords: [v.category, 'vendor', v.contact_name ?? ''].filter(Boolean),
+    icon: <Truck className="h-4 w-4" />,
+    onSelect: () => navigate(`/vendors`),
+  }));
+
+  const allCommandItems = [...commandItems, ...dynamicItems, ...vendorItems];
 
   return (
     <ConfigProvider org={orgConfig} user={userConfig}>
@@ -172,9 +261,18 @@ function AuthenticatedApp({ user, memberships, onLogout }: { user: SdkUser; memb
       <CommandPalette
         open={paletteOpen}
         onOpenChange={setPaletteOpen}
-        items={commandItems}
+        items={allCommandItems}
       />
       <WelcomeModal memberships={memberships} onComplete={() => {}} />
+      <KeyboardShortcutsDialog open={shortcutsOpen} onOpenChange={setShortcutsOpen} />
+      {orgId && (
+        <CreateEventDialog
+          orgId={orgId}
+          open={createEventOpen}
+          onOpenChange={setCreateEventOpen}
+          onCreated={(event) => navigate(`/events/${event.id}`)}
+        />
+      )}
     </ConfigProvider>
   );
 }
@@ -197,7 +295,7 @@ function Routes({
   const checkin = matchPath('/events/:eventId/check-in', path);
   if (checkin) {
     if (!orgId) return <Loading />;
-    return <VendorCheckInApp eventId={checkin.eventId} organizationId={orgId} />;
+    return <Suspense fallback={<div className="p-12 text-center">Loading check-in...</div>}><VendorCheckInApp eventId={checkin.eventId} organizationId={orgId} /></Suspense>;
   }
 
   const detail = matchPath('/events/:eventId', path);
@@ -217,7 +315,7 @@ function Routes({
     return (
       <>
         <PageHeader title="Venue Builder" description="Draw your venue's structural floorplan boundaries." />
-        <PageBody><VenueBuilder orgId={orgId} /></PageBody>
+        <PageBody><Suspense fallback={<div className="p-12 text-center text-fg-muted">Loading venue builder...</div>}><VenueBuilder orgId={orgId} /></Suspense></PageBody>
       </>
     );
   }
@@ -231,7 +329,7 @@ function Routes({
   }
   if (path === '/reports') {
     if (!orgId) return <Loading />;
-    return <AnalyticsDashboard orgId={orgId} />;
+    return <Suspense fallback={<div className="p-12 text-center text-fg-muted">Loading analytics...</div>}><AnalyticsDashboard orgId={orgId} /></Suspense>;
   }
   if (path === '/system/inventory') {
     if (!orgId) return <Loading />;
@@ -250,28 +348,40 @@ function Routes({
     return <AdminPanel orgId={orgId} />;
   }
 
-  if (path === '/guests') {
-    return (
-      <>
-        <PageHeader title="Guests" description="Browse guests across every event in your organization." />
-        <PageBody>
-          <Card>
-            <CardContent className="py-10 text-center text-sm text-fg-muted">
-              <p>The cross-event guest browser arrives in Week 1 Day 2.</p>
-              <p className="mt-2">
-                For now, drill into a specific event from the
-                {' '}<a className="text-brand underline" href="#/events">Events list</a>{' '}
-                to manage its guests.
-              </p>
-            </CardContent>
-          </Card>
-        </PageBody>
-      </>
-    );
+  // ── Phase 19: Vendor directory ──
+  // ── Phase 27: User profile/settings ──
+  if (path === "/intelligence") {
+    if (!orgId) return <Loading />;
+    return <Suspense fallback={<div className="p-12 text-center">Loading intelligence...</div>}><IntelligenceDashboard orgId={orgId} /></Suspense>;
   }
 
-  // Default = dashboard
-  return <DashboardScreen user={user} orgId={orgId} />;
+  if (path === "/system/audit") {
+    if (!orgId) return <Loading />;
+    return <AuditLog orgId={orgId} />;
+  }
+
+  if (path === "/settings/profile") {
+    return <UserProfile user={user} />;
+  }
+
+  if (path === "/vendors") {
+    if (!orgId) return <Loading />;
+    return <VendorDirectory orgId={orgId} />;
+  }
+
+  // ── Phase 18: Cross-event guest browser (replaces placeholder) ──
+  if (path === '/guests') {
+    if (!orgId) return <Loading />;
+    return <CrossEventGuestBrowser orgId={orgId} />;
+  }
+
+  // Default = dashboard for root path, 404 for unknown paths
+  if (path === '/' || path === '') {
+    return <DashboardScreen user={user} orgId={orgId} />;
+  }
+
+  // Unknown route → 404
+  return <NotFoundPage />;
 }
 
 function Loading() {
@@ -283,127 +393,4 @@ function Loading() {
 }
 
 // ─── Dashboard ──────────────────────────────────────────────
-function DashboardScreen({ user, orgId }: { user: SdkUser; orgId: string | null }) {
-  return (
-    <>
-      <PageHeader
-        title={<>Welcome back, <span className="font-display">{user.fullName ?? user.email.split('@')[0]}</span></>}
-        description="A snapshot of your venue's performance."
-      />
-      <PageBody>
-        {orgId ? (
-          <WidgetSlot id="venue.dashboard.kpis" orgId={orgId} />
-        ) : (
-          <EmptyState
-            icon={<Home className="h-5 w-5" />}
-            title="No organization yet"
-            description="Sign in as a venue owner to see your dashboard."
-          />
-        )}
-
-        <div className="mt-8">
-          <Card>
-            <CardHeader>
-              <CardTitle>Getting started</CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-2 text-sm">
-              <p className="text-fg-muted">
-                Browse the <a className="text-brand underline" href="#/events">Events</a> tab — kanban + table views, search, filters, and a proper create flow.
-              </p>
-              <p className="text-fg-muted">
-                Open <a className="text-brand underline" href="#/system/platform">Platform Studio</a> to re-skin the entire app from a curated preset, or set up your layout inventory in the <a className="text-brand underline" href="#/system/catalog">Catalog Studio</a>.
-              </p>
-              <p className="text-fg-subtle">
-                Press <kbd className="rounded border border-border bg-surface-2 px-1 text-[10px]">⌘K</kbd> for quick navigation.
-              </p>
-            </CardContent>
-          </Card>
-        </div>
-      </PageBody>
-    </>
-  );
-}
-
-// ─── Login / Register ───────────────────────────────────────
-function AuthScreen({ onAuth }: { onAuth: (u: SdkUser, m?: SdkMembership[]) => void }) {
-  const { toast } = useToast();
-  const [mode, setMode] = useState<'login' | 'register'>('login');
-  const [email, setEmail] = useState('owner@demo.local');
-  const [password, setPassword] = useState('wedding123');
-  const [fullName, setFullName] = useState('');
-  const [orgName, setOrgName] = useState('');
-  const [busy, setBusy] = useState(false);
-
-  async function submit(e: React.FormEvent) {
-    e.preventDefault();
-    setBusy(true);
-    try {
-      const res = mode === 'login'
-        ? await sdk.auth.login(email, password)
-        : await sdk.auth.register({ email, password, fullName, orgName });
-      // In auth screen, we need to fetch memberships after login
-      const me = await sdk.auth.me();
-      onAuth(me.user, me.memberships);
-    } catch (err) {
-      const e = err as ApiError;
-      toast({
-        title: 'Sign-in failed',
-        description:
-          e.code === 'invalid-credentials' ? 'Email or password is incorrect.' :
-          e.code === 'email-already-registered' ? 'That email is already registered.' :
-          e.kind === 'offline' ? 'Server unreachable. Check your connection.' :
-          e.message,
-        variant: 'destructive',
-      });
-    } finally { setBusy(false); }
-  }
-
-  return (
-    <div className="min-h-screen bg-hero-editorial flex items-center justify-center p-4">
-      <Card className="w-full max-w-md">
-        <CardHeader>
-          <CardTitle className="font-display text-3xl">Wedding Venue Intelligence</CardTitle>
-          <p className="text-sm text-fg-muted">
-            Self-hosted backend. Configurable everything.
-          </p>
-        </CardHeader>
-        <CardContent>
-          <div className="flex gap-2 mb-4">
-            <Button variant={mode === 'login' ? 'default' : 'secondary'} onClick={() => setMode('login')}>Log in</Button>
-            <Button variant={mode === 'register' ? 'default' : 'secondary'} onClick={() => setMode('register')}>Create account</Button>
-          </div>
-          <form onSubmit={submit} className="space-y-3">
-            {mode === 'register' && (
-              <>
-                <div>
-                  <Label htmlFor="fn">Your name</Label>
-                  <Input id="fn" value={fullName} onChange={(e) => setFullName(e.target.value)} required className="mt-1.5" />
-                </div>
-                <div>
-                  <Label htmlFor="on">Venue / organization name</Label>
-                  <Input id="on" value={orgName} onChange={(e) => setOrgName(e.target.value)} required className="mt-1.5" />
-                </div>
-              </>
-            )}
-            <div>
-              <Label htmlFor="em">Email</Label>
-              <Input id="em" type="email" value={email} onChange={(e) => setEmail(e.target.value)} required className="mt-1.5" />
-            </div>
-            <div>
-              <Label htmlFor="pw">Password</Label>
-              <Input id="pw" type="password" value={password} onChange={(e) => setPassword(e.target.value)} required minLength={8} className="mt-1.5" />
-            </div>
-            <Button type="submit" className="w-full" isLoading={busy}>
-              {mode === 'login' ? 'Sign in' : 'Create account'}
-            </Button>
-          </form>
-          <p className="text-xs text-fg-subtle mt-4">
-            Demo seed: <code>owner@demo.local</code> / <code>wedding123</code>
-          </p>
-        </CardContent>
-      </Card>
-    </div>
-  );
-}
-
 

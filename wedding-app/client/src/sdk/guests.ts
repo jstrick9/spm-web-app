@@ -35,6 +35,24 @@ export const guestsSdk = {
     return api.get(`/api/events/${eventId}/guests`);
   },
 
+  listForOrg(orgId: string, filters: {
+    search?: string;
+    rsvpStatus?: string[];
+    eventId?: string;
+    limit?: number;
+    offset?: number;
+  } = {}): Promise<{ guests: (SdkGuest & { event_title: string })[]; total: number; counts: SdkGuestCounts }> {
+    const q = new URLSearchParams();
+    if (filters.search) q.set("search", filters.search);
+    if (filters.rsvpStatus?.length) q.set("rsvpStatus", filters.rsvpStatus.join(","));
+    if (filters.eventId) q.set("eventId", filters.eventId);
+    if (filters.limit !== undefined) q.set("limit", String(filters.limit));
+    if (filters.offset !== undefined) q.set("offset", String(filters.offset));
+    const qs = q.toString();
+    return api.get(`/api/orgs/${orgId}/guests${qs ? `?${qs}` : ""}`);
+  },
+
+
   create(eventId: string, input: GuestInput): Promise<{ guest: SdkGuest }> {
     return api.post(`/api/events/${eventId}/guests`, input);
   },

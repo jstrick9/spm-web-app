@@ -10,6 +10,9 @@ export interface CreateEventInput {
   guestCount?: number;
   budgetCents?: number;
   primaryContactUserId?: string;
+  leadSource?: string;
+  rsvpDeadline?: string;
+  venueId?: string;
 }
 
 export type UpdateEventInput = Partial<Omit<CreateEventInput, 'organizationId'>>;
@@ -56,6 +59,11 @@ export const eventsSdk = {
   delete(eventId: string): Promise<void> {
     return api.delete(`/api/events/${eventId}`);
   },
+
+  duplicate(eventId: string): Promise<{ event: SdkEvent }> {
+    return api.post(`/api/events/${eventId}/duplicate`);
+  },
+
 
   listSubEvents(eventId: string) {
     return api.get(`/api/events/${eventId}/sub-events`);

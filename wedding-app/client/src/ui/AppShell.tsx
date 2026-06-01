@@ -26,7 +26,7 @@
 import { useEffect, useState, type ReactNode } from 'react';
 import {
   Calendar, ChevronLeft, Command, Cog, FileBarChart,
-  Home, LayoutDashboard, LogOut, Menu, Search, Truck, UserCircle, Users, X,
+  Home, Keyboard, LayoutDashboard, LogOut, Menu, Search, Settings, Truck, UserCircle, Users, X,
 } from 'lucide-react';
 import {
   useBranding, useFeatureEnabled, useNavItems,
@@ -44,6 +44,7 @@ const NAV_ITEM_META: Record<string, { icon: typeof Home; label: string; href: st
   events:    { icon: Calendar,        label: 'Events',     href: '#/events' },
   guests:    { icon: Users,           label: 'Guests',     href: '#/guests' },
   vendors:   { icon: Truck,           label: 'Vendors',    href: '#/vendors' },
+  calendar:  { icon: Calendar,        label: 'Calendar',   href: '#/calendar' },
   reports:   { icon: FileBarChart,    label: 'Reports',    href: '#/reports', featureFlag: 'reports' },
   system:    { icon: Cog,             label: 'System',     href: '#/system' },
 };
@@ -67,6 +68,10 @@ export function AppShell({ user, currentPath = '', onLogout, onOpenCommandPalett
   return (
     <div className="min-h-screen bg-bg text-fg print:min-h-0 print:bg-white print:text-black">
       {/* TopBar */}
+      {/* Accessibility: skip to main content */}
+      <a href="#main-content" className="sr-only focus:not-sr-only focus:absolute focus:top-2 focus:left-2 focus:z-50 focus:bg-brand focus:text-on-brand focus:px-4 focus:py-2 focus:rounded-md focus:text-sm focus:font-medium">
+        Skip to content
+      </a>
       <header className="sticky top-0 z-30 border-b border-border bg-surface/95 backdrop-blur supports-[backdrop-filter]:bg-surface/80 print:hidden">
         <div className="flex h-14 items-center gap-3 px-4 sm:px-6">
           {/* Hamburger (mobile only) */}
@@ -110,16 +115,8 @@ export function AppShell({ user, currentPath = '', onLogout, onOpenCommandPalett
           <ThemeToggle />
           <NotificationCenter />
 
-          {/* User menu — simple version (no dropdown yet) */}
-          <div className="flex items-center gap-2 rounded-md px-2 py-1.5 hover:bg-surface-2">
-            <UserCircle className="h-6 w-6 text-fg-muted" aria-hidden="true" />
-            <span className="hidden sm:inline text-sm text-fg-muted max-w-[160px] truncate">
-              {user.email}
-            </span>
-            <Button variant="ghost" size="icon" onClick={onLogout} aria-label="Sign out">
-              <LogOut className="h-4 w-4" />
-            </Button>
-          </div>
+          {/* User menu with profile dropdown */}
+          <UserMenu user={user} onLogout={onLogout} />
         </div>
       </header>
 
@@ -160,7 +157,7 @@ export function AppShell({ user, currentPath = '', onLogout, onOpenCommandPalett
         )}
 
         {/* Main content */}
-        <main className="flex-1 min-w-0 print:m-0 print:p-0">
+        <main id="main-content" className="flex-1 min-w-0 print:m-0 print:p-0">
           {children}
         </main>
       </div>
@@ -278,6 +275,62 @@ export function PageBody({ children, className }: { children: ReactNode; classNa
   return (
     <div className={cn('mx-auto max-w-7xl px-4 sm:px-6 py-6 print:m-0 print:p-0 print:max-w-none', className)}>
       {children}
+    </div>
+  );
+}
+
+/** UserMenu — dropdown with profile link, role info, and sign-out. */
+function UserMenu({ user, onLogout }: { user: SdkUser; onLogout: () => void }) {
+  const [open, setOpen] = useState(false);
+
+  return (
+    <div className="relative">
+      <button
+        onClick={() => setOpen(o => !o)}
+        className="flex items-center gap-2 rounded-md px-2 py-1.5 hover:bg-surface-2 transition-colors"
+        aria-label="User menu"
+      >
+        <UserCircle className="h-6 w-6 text-fg-muted" />
+        <span className="hidden sm:inline text-sm text-fg-muted max-w-[160px] truncate">
+          {user.fullName || user.email.split('@')[0]}
+        </span>
+      </button>
+
+      {open && (
+        <>
+          <div className="fixed inset-0 z-40" onClick={() => setOpen(false)} />
+          <div className="absolute right-0 top-full mt-1 z-50 w-56 rounded-lg border border-border bg-surface shadow-elev-2 py-1 overflow-hidden">
+            {/* User info header */}
+            <div className="px-4 py-3 border-b border-border">
+              <p className="text-sm font-medium text-fg truncate">{user.fullName || user.email}</p>
+              <p className="text-xs text-fg-muted truncate">{user.email}</p>
+            </div>
+
+            {/* Menu items */}
+            <a
+              href="#/settings/profile"
+              onClick={() => setOpen(false)}
+              className="flex items-center gap-2 px-4 py-2.5 text-sm text-fg-muted hover:bg-surface-2 hover:text-fg transition-colors"
+            >
+              <Settings className="h-4 w-4" /> Account Settings
+            </a>
+            <a
+              href="#"
+              onClick={(e) => { e.preventDefault(); setOpen(false); window.dispatchEvent(new CustomEvent("wvi:open-shortcuts")); }}
+              className="flex items-center gap-2 px-4 py-2.5 text-sm text-fg-muted hover:bg-surface-2 hover:text-fg transition-colors"
+            >
+              <Keyboard className="h-4 w-4" /> Keyboard Shortcuts
+            </a>
+
+            <button
+              onClick={() => { setOpen(false); onLogout(); }}
+              className="w-full flex items-center gap-2 px-4 py-2.5 text-sm text-fg-muted hover:bg-surface-2 hover:text-danger transition-colors border-t border-border"
+            >
+              <LogOut className="h-4 w-4" /> Sign Out
+            </button>
+          </div>
+        </>
+      )}
     </div>
   );
 }

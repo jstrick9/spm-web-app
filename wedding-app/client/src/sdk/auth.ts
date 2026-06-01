@@ -30,3 +30,14 @@ export const authSdk = {
     setToken(null);
   },
 };
+
+// ── Phase 27: password change + profile update ──────────
+export const profileSdk = {
+  changePassword(currentPassword: string, newPassword: string): Promise<{ ok: boolean }> {
+    return api.post('/api/auth/change-password', { currentPassword, newPassword });
+  },
+
+  updateProfile(patch: { fullName?: string; phone?: string }): Promise<{ user: SdkUser }> {
+    return api.patch('/api/auth/profile', patch);
+  },
+};
