@@ -1,252 +1,176 @@
-# Wedding Venue POC — Self-Hosted Architecture
+# Wedding Venue Intelligence Platform
 
-> **👉 Trying this out for the first time?**
-> **Start with [TRIAL.md](./TRIAL.md)** — a 20-minute step-by-step walkthrough
-> with a decision checklist tied to your goals (cost, simplicity, control).
-> This README is the architectural reference; TRIAL.md is the user manual.
+A complete, self-hosted operating system for modern wedding venues. Built with **Fastify + SQLite + React** — deployable on a single $5/mo VPS.
 
 ---
 
-
-A proof-of-concept demonstrating the **Option B architecture** from the architectural analysis: a single $5/mo Linux VPS running a Fastify + SQLite + React stack, with automatic HTTPS via Caddy and nightly backups to your home PC.
-
-**What this POC proves:**
-1. The data model from the previous review (organizations → events → memberships → guests → RSVPs) works end-to-end.
-2. The RBAC system from the previous review is **enforced** at every endpoint — not decorative.
-3. The Guest Portal works **publicly** (no login required) while the venue dashboard is properly authenticated.
-4. The entire backend is a single SQLite file on disk that you fully control.
-5. Deploys to a fresh Linux VPS in under 10 minutes with two commands.
-
----
-
-## Quick start (local development)
-
-You need Node.js 20+.
+## Quick Start
 
 ```bash
-cd wedding-poc
-npm run install:all     # installs server + client deps
-npm run migrate         # creates ./server/data/wedding.db with the schema
-npm run seed            # creates a demo user, org, event, and 3 guests
+cd wedding-app
+npm run install:all     # install server + client deps
+npm run migrate         # apply all 7 database migrations
+npm run seed            # create demo data (4 events, 28 guests, 5 vendors, etc.)
 
-# In one terminal:
+# In two terminals:
 npm run dev:server      # Fastify on http://localhost:3000
-
-# In another terminal:
 npm run dev:client      # Vite dev server on http://localhost:5173
 ```
 
-Open <http://localhost:5173> and log in with:
-- Email: `owner@demo.local`
-- Password: `wedding123`
-
-Then click the seeded event → copy the public portal URL → open it in an incognito window → submit an RSVP. Watch it appear live in the dashboard.
+Login: `owner@demo.local` / `wedding123`
 
 ---
 
-## Production deployment (the $5/mo VPS)
+## What This Platform Does
 
-### 1. Provision a VPS
+### For Venue Owners
+- **Event Pipeline** — Kanban + table views, 7 status stages (lead → completed), search + filters
+- **Guest Management** — RSVP tracking, dietary/accessibility notes, table assignments, CSV import/export, cross-event browser
+- **Vendor Directory** — Contract tracking, payment ledgers, preferred vendor badges, QR check-in
+- **Budget Tracker** — Line items by category, planned vs actual vs paid, variance analysis
+- **Contract Manager** — Draft → sent → signed lifecycle, e-signature capture, PDF print
+- **Floor Plan Canvas** — Drag-and-drop tables/chairs/dance floors, guest seat assignment, venue boundary drawing
+- **Timeline (Run of Show)** — Day-of schedule, vendor coordination, printable run sheets
+- **Staff Operations** — Task management with phases (pre/during/post-event), Kanban drag-and-drop
+- **Invitation Builder** — WYSIWYG email designer (3 themes), send tracking, HTML export
+- **Analytics Dashboard** — Booking conversion, revenue per event, RSVP velocity, vendor compliance
+- **Photo Gallery** — Mood board with category filters, lightbox viewer
+- **Feedback & Polls** — Guest voting from the public portal
 
-Pick any of:
-- **Hetzner** CX22 — €4.59/mo, EU
-- **DigitalOcean** Basic Droplet — $6/mo, global
-- **Linode** Nanode — $5/mo, global
-- **Vultr** Cloud Compute — $5/mo, global
+### For Couples (Public Guest Portal)
+- **Themed portal** — automatically styled with the venue's brand (6 presets)
+- **Interactive venue map** — see your seat highlighted
+- **RSVP form** — meal preference, dietary notes, plus-one
+- **Live polls** — vote on centerpiece designs, song choices
 
-Choose **Ubuntu 24.04 LTS**. Note your VPS's public IPv4.
+### For Vendors
+- **Vendor Portal** — see your event timeline, upload COI, answer logistics questionnaires
+- **QR Check-In** — tablet-optimized check-in with offline sync via service worker
 
-### 2. Buy a domain (~$10/year)
-
-Cloudflare Registrar, Namecheap, or any other. Create an **A record** pointing your subdomain (e.g. `weddings.example.com`) at the VPS IP.
-
-### 3. SSH in and install Docker
-
-```bash
-ssh root@your-vps-ip
-apt update && apt upgrade -y
-curl -fsSL https://get.docker.com | sh
-```
-
-### 4. Clone this repo and configure
-
-```bash
-git clone <your-repo-url> /root/wedding-poc
-cd /root/wedding-poc
-
-# Generate a strong JWT secret
-echo "JWT_SECRET=$(openssl rand -hex 32)" > .env
-
-# Edit Caddyfile — replace 'yourwedding.example.com' with your actual domain
-nano deploy/Caddyfile
-```
-
-### 5. Launch
-
-```bash
-docker compose up -d
-```
-
-That's it. In ~30 seconds Caddy will obtain a Let's Encrypt cert and the app is live at `https://yourwedding.example.com`.
-
-Watch logs with: `docker compose logs -f`
-
-### 6. Set up nightly backup to your home PC
-
-On your **home machine** (not the VPS):
-
-```bash
-# One-time: set up passwordless SSH to the VPS
-ssh-keygen -t ed25519                       # if you don't already have a key
-ssh-copy-id root@yourwedding.example.com
-
-# Edit the backup script with your VPS hostname
-nano wedding-poc/scripts/backup-to-home.sh
-
-# Test it
-./wedding-poc/scripts/backup-to-home.sh
-
-# Add to your home machine's crontab (3 AM nightly)
-crontab -e
-# Add this line:
-0 3 * * * /full/path/to/wedding-poc/scripts/backup-to-home.sh >> ~/wedding-backups/backup.log 2>&1
-```
-
-You now have a fresh SQLite snapshot on your local hard drive every morning.
+### Platform Administration
+- **RBAC** — 71 permissions across 27 categories, 7 system roles (owner → guest)
+- **Team Management** — invite planners/staff by email, assign roles
+- **Theme Studio** — 6 curated presets, live preview, per-org branding
+- **Audit Log** — chronological record of all actions with user attribution
+- **Data Exports** — guests CSV, vendors CSV, financials JSON, full backup
+- **Outbound Webhooks** — HMAC-signed HTTP POST to Zapier/Make/custom URLs
+- **Push Notifications** — WebPush subscription management
+- **Real-Time Updates** — Server-Sent Events with automatic React Query invalidation
 
 ---
 
-## Architecture overview
+## Architecture
 
 ```
-                              Internet
-                                  │
-                          HTTPS (port 443)
-                                  │
-                                  ▼
-            ┌────────────────────────────────────────┐
-            │  Caddy (auto Let's Encrypt + reverse   │
-            │  proxy + compression + security headers)│
-            └───────────────────┬────────────────────┘
-                                │ HTTP (internal docker net)
-                                ▼
-            ┌────────────────────────────────────────┐
-            │  Fastify app                           │
-            │  ├─ /api/*  → JSON endpoints          │
-            │  └─ /*      → React static bundle     │
-            └───────────────────┬────────────────────┘
-                                │
-                                ▼
-            ┌────────────────────────────────────────┐
-            │  SQLite (one .db file in /data volume) │
-            └────────────────────────────────────────┘
-                                │
-                  nightly sqlite3 .backup + rsync
-                                │
-                                ▼
-            ┌────────────────────────────────────────┐
-            │  Your home PC — /wedding-backups/      │
-            └────────────────────────────────────────┘
+┌────────────────────────────────────────────────────┐
+│  React (Vite + TailwindCSS + Radix UI)             │
+│  ├── 86 test files, 406 component/unit tests       │
+│  ├── PWA with service worker (offline check-ins)   │
+│  └── 6 configurable theme presets                  │
+├────────────────────────────────────────────────────┤
+│  Fastify (Node.js 20+)                             │
+│  ├── 72+ RBAC-gated API endpoints                  │
+│  ├── 22 test files, 234 integration tests          │
+│  ├── SSE real-time event stream                    │
+│  ├── Outbound webhook dispatcher (HMAC-SHA256)     │
+│  └── Job queue + integration framework             │
+├────────────────────────────────────────────────────┤
+│  SQLite                                            │
+│  ├── 44 tables across 7 migrations                 │
+│  ├── Single-file database (full control)           │
+│  └── Encrypted integration credentials (AES-GCM)  │
+└────────────────────────────────────────────────────┘
 ```
 
-### Why each piece
+---
 
-| Layer | Choice | Why |
+## Database Schema (44 tables)
+
+| Domain | Tables |
+|---|---|
+| Identity | users, organizations, organization_memberships, event_memberships |
+| RBAC | roles, role_permissions |
+| Events | events, sub_events |
+| Guests | guests, rsvp_submissions, guest_portal_configs, guest_sub_event_invitations |
+| Vendors | vendors, vendor_payments, vendor_checkins |
+| Layouts | layouts, layout_versions, venues, catalog_items |
+| Decor | decor_items, decor_categories, decor_arrangements, decor_packages |
+| Operations | timeline_events, staff_tasks, staff_areas, staff_shifts |
+| Finance | budget_items, contracts |
+| Content | gallery_images, event_questions, event_answers, invite_tracking |
+| Messaging | direct_messages |
+| Integrations | integrations, integration_events, oauth_states, job_queue |
+| Webhooks | webhooks, webhook_deliveries |
+| Real-time | push_subscriptions, sse_events |
+| Inventory | inventory_items |
+| Audit | audit_logs, schema_version |
+
+---
+
+## Test Suite
+
+```
+Total: 640 automated tests (0 failures)
+
+Server:  234 tests across 22 test files
+Client:  406 tests across 86 test files
+
+Every screen component has test coverage.
+Every API endpoint is RBAC-gated and integration-tested.
+```
+
+---
+
+## Environment Variables
+
+| Variable | Default | Description |
 |---|---|---|
-| OS | Ubuntu 24.04 LTS | 5 years of security patches, ubiquitous |
-| Container | Single Docker image | One unit to deploy; no separate DB / cache / queue services to babysit |
-| Reverse proxy | **Caddy** | Single config file, auto-HTTPS in one line. The #1 thing that makes self-hosting hard for non-admins disappears. |
-| Web framework | **Fastify** | Faster than Express, built-in TypeScript, less ceremony |
-| Database | **SQLite (better-sqlite3)** | One file. No separate server. Fast enough for 100k+ daily users. The whole Stack Overflow data dump fits in SQLite. |
-| Front-end | **React + Vite** | Matches the existing app's stack; bundle served as static files |
-| Auth | **JWT (@fastify/jwt)** | Stateless, simple, supports the existing PBKDF2 hashes |
-| Backup | `sqlite3 .backup` + `rsync` | Consistent snapshots even with concurrent writes; runs from your home machine, no extra services |
-
-### What lives where
-
-| Concern | File / module |
-|---|---|
-| SQL schema | `server/src/db/schema.sql` |
-| DB connection | `server/src/db/database.ts` |
-| Repositories (one per domain) | `server/src/db/repos.ts` |
-| Password hashing | `server/src/lib/crypto.ts` |
-| **RBAC resolver** | `server/src/lib/rbac.ts` |
-| Auth middleware (JWT + membership loading) | `server/src/middleware/auth.ts` |
-| Auth routes (register, login, /me) | `server/src/routes/auth.ts` |
-| Event routes | `server/src/routes/events.ts` |
-| Guest + RSVP routes (incl. public portal) | `server/src/routes/guests.ts` |
-| Front-end | `client/src/App.tsx` |
-| Production deploy | `Dockerfile`, `docker-compose.yml`, `deploy/Caddyfile` |
-| Backup | `scripts/backup-to-home.sh` |
+| `PORT` | `3000` | Server port |
+| `HOST` | `0.0.0.0` | Server bind address |
+| `JWT_SECRET` | dev default | **Must set in production** |
+| `LOG_LEVEL` | `info` | Fastify log level |
+| `CORS_ORIGIN` | `true` (allow all) | CORS origin restriction |
+| `NODE_ENV` | — | Set to `production` for prod mode |
+| `VAPID_PUBLIC_KEY` | — | WebPush VAPID public key |
+| `WEDDING_SECRETS_KEY` | — | AES-256-GCM key for integration credentials |
 
 ---
 
-## What's intentionally NOT in the POC
-
-To keep the slice focused, these are deferred to the full migration:
-- **Rate limiting** on the public RSVP endpoint (use `@fastify/rate-limit` — 5 lines)
-- **CSRF tokens** (not strictly needed with bearer-token auth on a separate domain, but worth adding)
-- **Email sending** (use `nodemailer` or the existing Supabase Edge Function logic)
-- **File uploads** (use `@fastify/multipart` writing to `/data/uploads`)
-- **Real-time updates** (replace the 5-second polling with Server-Sent Events — `app.get('/api/events/:id/stream', { handler: sseHandler })`)
-- **Migration runner with version tracking** (the `schema_version` table exists; just needs a `migrate-v2.sql` convention)
-- **Per-guest portal tokens** (the column exists; the email-send flow is the only missing piece)
-- **The full existing front-end** (this POC has a stub UI; the next phase plugs the existing React components into this API)
-
----
-
-## Honest cost & operational summary
-
-| Item | Cost |
-|---|---|
-| VPS (Hetzner CX22, 2 vCPU / 4 GB RAM / 40 GB SSD) | **€4.59/mo** ≈ $5 |
-| Domain (.com via Cloudflare) | **$10/year** ≈ $0.83/mo |
-| Backup to your home PC | $0 |
-| Optional encrypted off-site backup (Backblaze B2, 10 GB) | $0.05/mo |
-| **Total** | **~$6/month, ~$72/year** |
-
-**Maintenance:** ~1 hour/quarter for OS updates (`apt upgrade && docker compose pull && docker compose up -d`). That's it.
-
-**What can go wrong:**
-- VPS dies → DNS change to a new VPS + restore latest backup = ~15 minutes downtime
-- Domain expires → ~1 hour to re-register + propagate (set auto-renew!)
-- SQLite file corrupts → restore last night's snapshot. Set up the backup BEFORE you need it.
-- You forget to renew the Let's Encrypt cert → impossible; Caddy renews automatically
-
----
-
-## Testing the POC
-
-After `npm run dev:server` + `npm run dev:client` + `npm run seed`:
+## Production Deployment
 
 ```bash
-# Login
-curl -sX POST http://localhost:3000/api/auth/login \
-  -H 'Content-Type: application/json' \
-  -d '{"email":"owner@demo.local","password":"wedding123"}'
+# Option A: Docker
+docker compose build
+docker compose up -d
 
-# List orgs (use token from previous response)
-TOKEN=...
-curl -sH "Authorization: Bearer $TOKEN" http://localhost:3000/api/orgs
+# Option B: Direct (any VPS with Node 20+)
+npm run build
+NODE_ENV=production JWT_SECRET=your-secret node server/dist/index.js
+```
 
-# Submit a public RSVP (no auth)
-curl -sX POST http://localhost:3000/api/portal/<eventId>/rsvp \
-  -H 'Content-Type: application/json' \
-  -d '{"attending":true,"mealChoice":"vegetarian","notes":"cant wait!"}'
+See [TRIAL.md](./TRIAL.md) for a detailed 20-minute deployment walkthrough.
 
-# Health check
-curl http://localhost:3000/api/health
+---
+
+## Development
+
+```bash
+npm run dev:server      # Fastify with hot reload
+npm run dev:client      # Vite with HMR
+npm run test            # Run all tests
+npm run typecheck       # TypeScript check (server + client)
+npm run build           # Production build
 ```
 
 ---
 
-## Migration from the existing app
+## 31 Phases of Development
 
-This POC implements the same data model as the production Supabase migration in the original repo (`supabase/migrations/0001_initial.sql`). To migrate the full app:
-
-1. **Replace `src/services/backend/supabaseClient.ts`** with a thin `apiClient.ts` that wraps fetch (already done in `client/src/lib/api.ts` here).
-2. **Replace each `localStorage` read in `useLayoutState.ts`, `useRBAC.ts`, `guestPortal.ts`, `auth.ts`** with the corresponding API call.
-3. **Drop in this server** unchanged.
-4. **Add the missing routes** (layouts, vendors, timeline, etc.) following the same pattern — each one is ~40 lines and mirrors a repo.
-
-Estimated effort: ~2 weeks for one engineer, since the front-end already has the right abstractions (`Repository` pattern just isn't wired yet).
+See the `docs/` directory for detailed documentation of every phase:
+- Phases 1–3: Foundation (RBAC, SDK, design system)
+- Phases 4–8: Core features (layouts, vendors, timeline, chat, budget, calendar)
+- Phases 9–13: Advanced features (portal, PWA, contracts, gallery, integrations)
+- Phases 14–17: Polish (decor, vendor timeline, notifications, service worker)
+- Phases 18–22: Production (real-time SSE, webhooks, themed portal, RBAC UI)
+- Phases 23–27: Completeness (check-ins, invites, exports, profile, tests)
+- Phases 28–31: Quality (navigation, AppShell, backup, command palette, 640 tests)
