@@ -6,8 +6,9 @@
  * while keeping the same interface.
  */
 import { writeFileSync, mkdirSync, existsSync, unlinkSync } from 'node:fs';
-import { resolve, join } from 'node:path';
+import { resolve, join, basename } from 'node:path';
 import { uuid } from './crypto.js';
+import { BadRequest } from './errors.js';
 
 const UPLOAD_DIR = resolve(import.meta.dirname, '../../uploads');
 
@@ -17,32 +18,65 @@ if (!existsSync(UPLOAD_DIR)) {
 }
 
 /**
- * Save a data URI to disk and return a URL path.
- * Returns the original string if it's not a data URI (already a URL).
+ * Strict allowlist of accepted image MIME types and their canonical file
+ * extensions. SVG is intentionally EXCLUDED: SVGs can embed <script> and are
+ * a stored-XSS vector when served from the same origin. Anything not in this
+ * map is rejected outright.
+ */
+const ALLOWED_IMAGE_TYPES: Record<string, string> = {
+  'image/jpeg': 'jpg',
+  'image/jpg': 'jpg',
+  'image/png': 'png',
+  'image/webp': 'webp',
+  'image/gif': 'gif',
+  'image/avif': 'avif',
+};
+
+// 8 MB hard cap on a single decoded upload (data URIs are ~33% larger encoded).
+const MAX_DECODED_BYTES = 8 * 1024 * 1024;
+
+/**
+ * Save a base64 image data URI to disk and return a URL path.
+ * Returns the original string if it's already a plain URL (not a data URI).
+ *
+ * Throws BadRequest for non-image / disallowed MIME types so a malicious
+ * authenticated user cannot smuggle an HTML/SVG/JS file into the publicly
+ * served /uploads/ directory.
  */
 export function saveDataUri(dataUri: string, prefix = 'img'): string {
-  // If it's not a data URI, return as-is
+  // If it's not a data URI, return as-is (assumed to already be a hosted URL).
   if (!dataUri.startsWith('data:')) return dataUri;
 
-  // Parse the data URI
   const match = dataUri.match(/^data:([^;]+);base64,(.+)$/);
-  if (!match) return dataUri;
+  if (!match) throw BadRequest('invalid-image', 'Expected a base64-encoded image data URI');
 
-  const [, mimeType, base64Data] = match;
-  const ext = mimeType.split('/')[1] ?? 'bin';
+  const [, rawMime, base64Data] = match;
+  const mimeType = rawMime.trim().toLowerCase();
+  const ext = ALLOWED_IMAGE_TYPES[mimeType];
+  if (!ext) {
+    throw BadRequest('unsupported-image-type', `Unsupported image type: ${mimeType}`);
+  }
+
+  const buffer = Buffer.from(base64Data, 'base64');
+  if (buffer.length === 0) throw BadRequest('invalid-image', 'Empty image payload');
+  if (buffer.length > MAX_DECODED_BYTES) {
+    throw BadRequest('image-too-large', 'Image exceeds the 8 MB limit');
+  }
+
+  // Filename is server-generated; extension comes only from the allowlist.
   const filename = `${prefix}_${uuid()}.${ext}`;
-  const filePath = join(UPLOAD_DIR, filename);
-
-  writeFileSync(filePath, Buffer.from(base64Data, 'base64'));
+  writeFileSync(join(UPLOAD_DIR, filename), buffer);
 
   return `/uploads/${filename}`;
 }
 
 /**
- * Delete a file from disk (if it's a local upload path).
+ * Delete a file from disk (if it's a local upload path). Uses basename() so a
+ * crafted path like "/uploads/../../etc/passwd" can never escape UPLOAD_DIR.
  */
 export function deleteFile(urlPath: string): void {
   if (!urlPath.startsWith('/uploads/')) return;
-  const filePath = join(UPLOAD_DIR, urlPath.replace('/uploads/', ''));
+  const safeName = basename(urlPath); // strips any directory traversal segments
+  const filePath = join(UPLOAD_DIR, safeName);
   try { unlinkSync(filePath); } catch { /* file may not exist */ }
 }

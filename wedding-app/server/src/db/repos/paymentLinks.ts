@@ -20,6 +20,23 @@ export const paymentLinksRepo = {
     return db.prepare(`SELECT * FROM payment_links WHERE id = ?`).get(id) as PaymentLinkRow | undefined;
   },
 
+  /** Reconcile an incoming webhook to its payment link via the provider's id. */
+  findByExternalId(provider: string, externalId: string): PaymentLinkRow | undefined {
+    return db.prepare(
+      `SELECT * FROM payment_links WHERE provider = ? AND external_id = ?`,
+    ).get(provider, externalId) as PaymentLinkRow | undefined;
+  },
+
+  /** Attach the provider's checkout id + hosted URL after creating a session. */
+  attachCheckout(id: string, externalId: string, paymentUrl: string): PaymentLinkRow | undefined {
+    db.prepare(
+      `UPDATE payment_links
+       SET external_id = ?, payment_url = ?, status = 'processing', updated_at = datetime('now')
+       WHERE id = ?`,
+    ).run(externalId, paymentUrl, id);
+    return this.findById(id);
+  },
+
   create(input: {
     organizationId: string; eventId?: string; contractId?: string;
     provider?: string; amountCents: number; paymentUrl?: string;

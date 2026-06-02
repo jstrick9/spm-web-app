@@ -18,6 +18,8 @@ import {
 import { budgetRepo } from './repos/budget.js';
 import { contractsRepo } from './repos/contracts.js';
 import { inventoryRepo } from './repos/inventory.js';
+import { emailTemplatesRepo } from './repos/emailTemplates.js';
+import { emailAutomationsRepo } from './repos/emailAutomations.js';
 
 rolesRepo.ensureSystemRoles();
 
@@ -184,6 +186,72 @@ if (events.length === 0) {
     guestsRepo.create(orgId, e4.id, { fullName: name, rsvpStatus: 'attending', tableAssignment: `Table ${Math.ceil(Math.random() * 5)}` });
   }
   console.log(`[seed] created event: Martinez Wedding (completed)`);
+
+  // ─── Event 5: At-risk near-term event (for risk alerts demo) ──
+  // Intentionally light on prep so the Event Health panel surfaces alerts.
+  const soon = new Date(); soon.setDate(soon.getDate() + 9);
+  const soonStr = soon.toISOString().slice(0, 10);
+  const e5 = eventsRepo.create({
+    organizationId: orgId, title: 'Patel Engagement Party',
+    startDate: soonStr, endDate: soonStr,
+    createdBy: user.id, status: 'booked', guestCount: 60, budgetCents: 1800000,
+  });
+  // Mostly-pending guest list with a near RSVP deadline.
+  const rsvpDeadline = new Date(); rsvpDeadline.setDate(rsvpDeadline.getDate() + 4);
+  eventsRepo.update(e5.id, { rsvp_deadline: rsvpDeadline.toISOString().slice(0, 10) } as never);
+  for (const name of ['Priya Patel', 'Raj Patel', 'Sam Cohen', 'Dana Wu', 'Leo Park']) {
+    guestsRepo.create(orgId, e5.id, { fullName: name, rsvpStatus: 'pending' });
+  }
+  // An unsigned contract + an overrun budget line; no vendors/timeline yet.
+  contractsRepo.create({ organizationId: orgId, eventId: e5.id, title: 'Venue Hold Agreement', recipientName: 'Priya Patel', amountCents: 800000, createdBy: user.id });
+  budgetRepo.create(orgId, e5.id, { category: 'Catering', title: 'Appetizers', plannedCents: 400000, actualCents: 560000, paidCents: 50000 }, user.id);
+  console.log(`[seed] created event: Patel Engagement Party (at-risk demo)`);
+
+  // ─── Lifecycle email templates + automations ──────────
+  const reminderTpl = emailTemplatesRepo.create(orgId, {
+    name: 'RSVP Reminder',
+    subject: 'Kind reminder: please RSVP for {{event_title}}',
+    bodyHtml: '<p>Hi {{guest_name}},</p><p>We can\u2019t wait to celebrate {{event_title}} on {{event_date}} at {{venue_name}}! ' +
+      'Please let us know if you can join us by visiting your guest portal:</p><p><a href="{{portal_link}}">RSVP now</a></p>',
+    bodyText: 'Hi {{guest_name}}, please RSVP for {{event_title}} on {{event_date}}: {{portal_link}}',
+    category: 'rsvp_reminder', createdBy: user.id,
+  });
+  const thankYouTpl = emailTemplatesRepo.create(orgId, {
+    name: 'Thank You',
+    subject: 'Thank you for celebrating {{event_title}} with us!',
+    bodyHtml: '<p>Dear {{guest_name}},</p><p>Thank you for joining us at {{venue_name}} for {{event_title}}. ' +
+      'It meant the world to have you there. With love and gratitude.</p>',
+    bodyText: 'Dear {{guest_name}}, thank you for celebrating {{event_title}} with us at {{venue_name}}.',
+    category: 'thank_you', createdBy: user.id,
+  });
+  emailAutomationsRepo.upsert({ organizationId: orgId, templateId: reminderTpl.id, triggerType: 'rsvp_reminder', offsetDays: 14, enabled: true, createdBy: user.id });
+  emailAutomationsRepo.upsert({ organizationId: orgId, templateId: thankYouTpl.id, triggerType: 'thank_you', enabled: true, createdBy: user.id });
+  console.log(`[seed] created 2 email templates + 2 lifecycle automations`);
+
+  // ─── Historical completed events (for forecasting) ────
+  // 18 months of past weddings with a gentle upward trend + summer seasonality,
+  // so the predictive Revenue Forecast has real signal to learn from.
+  const now = new Date();
+  const SEASON = [0.6, 0.6, 0.8, 1.0, 1.3, 1.6, 1.5, 1.4, 1.3, 1.1, 0.7, 0.5]; // Jan..Dec multipliers
+  for (let i = 18; i >= 1; i--) {
+    const d = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth() - i, 12));
+    const monthIdx = d.getUTCMonth();
+    const seasonal = SEASON[monthIdx];
+    const eventsThisMonth = Math.max(0, Math.round(seasonal * (1 + (18 - i) * 0.04))); // grows over time
+    for (let k = 0; k < eventsThisMonth; k++) {
+      const base = 2800000 + Math.round((18 - i) * 60000); // budgets drift up over time
+      eventsRepo.create({
+        organizationId: orgId,
+        title: `Past Wedding ${d.getUTCFullYear()}-${monthIdx + 1}-${k + 1}`,
+        status: 'completed',
+        startDate: `${d.getUTCFullYear()}-${String(monthIdx + 1).padStart(2, '0')}-${String(10 + k).padStart(2, '0')}`,
+        guestCount: 80 + Math.round(Math.random() * 80),
+        budgetCents: base + Math.round(Math.random() * 800000),
+        createdBy: user.id,
+      });
+    }
+  }
+  console.log(`[seed] created 18 months of historical events for forecasting`);
 
 } else {
   console.log(`[seed] events already exist — skipping seed data`);

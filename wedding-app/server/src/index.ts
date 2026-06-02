@@ -39,6 +39,8 @@ import { exportRoutes }          from "./routes/exports.js";
 import { webhookReceiverRoutes } from "./routes/webhookReceiver.js";
 import { intelligenceRoutes }   from "./routes/intelligence.js";
 import { feedbackRoutes }       from "./routes/feedback.js";
+import { lifecycleEmailRoutes } from "./routes/lifecycleEmails.js";
+import { paymentRoutes }        from "./routes/payments.js";
 
 import { db } from './db/database.js';
 import { rolesRepo } from './db/repos/index.js';
@@ -85,6 +87,34 @@ export async function buildApp() {
   await app.register(cors, {
     origin: process.env.CORS_ORIGIN ?? false, // default restrictive; set CORS_ORIGIN env var in production
     credentials: true,
+  });
+
+  // Baseline security headers on every response (incl. static files + uploads).
+  // Lightweight, dependency-free alternative to @fastify/helmet. CSP is
+  // permissive enough for the Vite-built SPA (inline styles via Tailwind) but
+  // blocks plugin/object embeds and frames. Tighten per deployment as needed.
+  app.addHook('onSend', async (_req, reply, payload) => {
+    reply.header('X-Content-Type-Options', 'nosniff');
+    reply.header('X-Frame-Options', 'DENY');
+    reply.header('Referrer-Policy', 'strict-origin-when-cross-origin');
+    reply.header('X-Permitted-Cross-Domain-Policies', 'none');
+    reply.header(
+      'Content-Security-Policy',
+      [
+        "default-src 'self'",
+        "img-src 'self' data: blob:",
+        "style-src 'self' 'unsafe-inline'",
+        "script-src 'self'",
+        "connect-src 'self'",
+        "frame-ancestors 'none'",
+        "object-src 'none'",
+        "base-uri 'self'",
+      ].join('; '),
+    );
+    if (process.env.NODE_ENV === 'production') {
+      reply.header('Strict-Transport-Security', 'max-age=31536000; includeSubDomains');
+    }
+    return payload;
   });
 
   await app.register(jwt, {
@@ -166,6 +196,10 @@ export async function buildApp() {
   await app.register(webhookReceiverRoutes);
   await app.register(intelligenceRoutes);
   await app.register(feedbackRoutes);
+  await app.register(lifecycleEmailRoutes);
+  // Payment routes register their own raw-body parser for webhook signature
+  // verification; encapsulated so it doesn't affect other routes' JSON parsing.
+  await app.register(paymentRoutes);
 
   // Serve front-end if built
   if (existsSync(CLIENT_DIST)) {

@@ -22,10 +22,14 @@
  */
 import type { IntegrationProvider } from './types.js';
 import { emailSmtpProvider } from './providers/email_smtp.js';
+import { stripeProvider } from './providers/stripe.js';
+import { squareProvider } from './providers/square.js';
 
 export const PROVIDERS: ReadonlyArray<IntegrationProvider> = [
   emailSmtpProvider,
-  // Calendly, Google Calendar, Outlook, Square, DocuSign, Twilio, Dropbox,
+  stripeProvider,
+  squareProvider,
+  // Calendly, Google Calendar, Outlook, DocuSign, Twilio, Dropbox,
   // generic webhook — added in their respective weeks (see roadmap).
 ];
 

@@ -14,10 +14,12 @@
  */
 import { jobsRepo, type JobRow } from '../db/repos/jobs.js';
 import { runAction } from '../integrations/runtime.js';
+import { scanRsvpReminders } from './lifecycleEmails.js';
 import { hostname } from 'node:os';
 
 const POLL_INTERVAL_MS = 1000;          // how often to look for new jobs
 const RECLAIM_INTERVAL_MS = 60_000;     // how often to reclaim stuck jobs
+const RSVP_SCAN_INTERVAL_MS = 6 * 60 * 60 * 1000; // lifecycle reminder scan (6h)
 const WORKER_ID = `${process.pid}@${hostname()}`;
 
 // Handler registry: kind → function
@@ -31,6 +33,7 @@ export function registerHandler(kind: string, fn: Handler): void {
 let stopped = false;
 let tickTimer: ReturnType<typeof setTimeout> | null = null;
 let reclaimTimer: ReturnType<typeof setInterval> | null = null;
+let rsvpScanTimer: ReturnType<typeof setInterval> | null = null;
 
 export function startWorker(): void {
   if (tickTimer || reclaimTimer) return;     // already running
@@ -40,6 +43,14 @@ export function startWorker(): void {
   reclaimTimer = setInterval(() => {
     try { jobsRepo.reclaimStuck(); } catch (e) { logErr('reclaim', e); }
   }, RECLAIM_INTERVAL_MS);
+  // Lifecycle email engine: scan for RSVP-deadline reminders. The daily marker
+  // inside scanRsvpReminders() dedupes, so running it a few times a day (and
+  // once at boot) is safe and ensures reminders go out promptly.
+  const runScan = () => {
+    try { scanRsvpReminders(); } catch (e) { logErr('rsvp-scan', e); }
+  };
+  rsvpScanTimer = setInterval(runScan, RSVP_SCAN_INTERVAL_MS);
+  setTimeout(runScan, 5_000); // initial scan shortly after boot
   scheduleNext();
 }
 
@@ -47,6 +58,7 @@ export function stopWorker(): void {
   stopped = true;
   if (tickTimer) { clearTimeout(tickTimer); tickTimer = null; }
   if (reclaimTimer) { clearInterval(reclaimTimer); reclaimTimer = null; }
+  if (rsvpScanTimer) { clearInterval(rsvpScanTimer); rsvpScanTimer = null; }
 }
 
 function scheduleNext(): void {
