@@ -27,6 +27,7 @@ export type PermissionId =
   | 'org.members.remove'
   | 'org.branding.manage'
   | 'org.settings.manage'
+  | 'platform.manage'
 
   // ─── Roles (the RBAC admin surface) ───────────────────
   | 'roles.view'
@@ -165,6 +166,7 @@ export const PERMISSION_CATALOG: ReadonlyArray<PermissionDefinition> = [
   { id: 'org.members.remove',    label: 'Remove members',         description: 'Remove users from the org', category: 'organization' },
   { id: 'org.branding.manage',   label: 'Manage branding',        description: 'Edit colors, logo, custom CSS', category: 'organization' },
   { id: 'org.settings.manage',   label: 'Manage settings',        description: 'Edit org-wide settings', category: 'organization' },
+  { id: 'platform.manage',       label: 'Manage platform',      description: 'Access system-level settings, audit log, integrations, and platform studio', category: 'organization' },
 
   // Roles
   { id: 'roles.view',            label: 'View roles',             description: 'See the list of roles', category: 'roles' },
