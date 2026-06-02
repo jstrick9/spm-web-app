@@ -27,9 +27,10 @@ import { budgetSdk } from './budget.js';
 import { contractsSdk } from './contracts.js';
 import { inventorySdk } from './inventory.js';
 import { gallerySdk } from './gallery.js';
-import { vendorRatingsSdk, emailTemplatesSdk, paymentLinksSdk, recommendationsSdk } from "./intelligence.js";
+import { vendorRatingsSdk, emailTemplatesSdk, paymentLinksSdk, recommendationsSdk, forecastSdk, vendorScoringSdk, riskSdk } from "./intelligence.js";
 import { checkinsSdk } from "./checkins.js";
 import { inviteTrackingSdk } from "./inviteTracking.js";
+import { lifecycleEmailsSdk } from "./lifecycleEmails.js";
 
 export const sdk = {
   auth:           authSdk,
@@ -59,9 +60,10 @@ export const sdk = {
   vendorRatings:  vendorRatingsSdk,
   emailTemplates: emailTemplatesSdk,
   paymentLinks:   paymentLinksSdk,
-  recommendations: recommendationsSdk, checkinsSdk, inviteTrackingSdk,
+  recommendations: recommendationsSdk, forecast: forecastSdk, vendorScoring: vendorScoringSdk, risk: riskSdk, checkinsSdk, inviteTrackingSdk,
   checkins:       checkinsSdk,
   inviteTracking: inviteTrackingSdk,
+  lifecycleEmails: lifecycleEmailsSdk,
 } as const;
 
 export {

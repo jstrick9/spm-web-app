@@ -18,6 +18,27 @@ export interface GuestInput {
   metadata?: Record<string, unknown>;
 }
 
+export type GuestMatchSignal = 'email' | 'phone' | 'name';
+
+export interface GuestDuplicateMember {
+  id: string;
+  eventId: string;
+  eventTitle: string;
+  fullName: string;
+  email: string | null;
+  phone: string | null;
+  rsvpStatus: string;
+  createdAt: string;
+}
+
+export interface GuestDuplicateCluster {
+  key: string;
+  signals: GuestMatchSignal[];
+  confidence: 'high' | 'medium';
+  members: GuestDuplicateMember[];
+  hasInEventDuplicate: boolean;
+}
+
 export interface RsvpInput {
   guestId?: string;
   attending: boolean;
@@ -50,6 +71,14 @@ export const guestsSdk = {
     if (filters.offset !== undefined) q.set("offset", String(filters.offset));
     const qs = q.toString();
     return api.get(`/api/orgs/${orgId}/guests${qs ? `?${qs}` : ""}`);
+  },
+
+  // ─── Guest identity resolution ────────────────────────
+  duplicates(orgId: string): Promise<{ clusters: GuestDuplicateCluster[] }> {
+    return api.get(`/api/orgs/${orgId}/guest-duplicates`);
+  },
+  merge(orgId: string, primaryId: string, duplicateIds: string[]): Promise<{ primary: SdkGuest; mergedCount: number }> {
+    return api.post(`/api/orgs/${orgId}/guests/merge`, { primaryId, duplicateIds });
   },
 
 

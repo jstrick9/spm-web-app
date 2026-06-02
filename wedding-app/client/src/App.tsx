@@ -37,7 +37,11 @@ import { Label } from './ui/Label';
 import { useToast } from './ui/Toast';
 import { ConfigProvider } from './config/ConfigProvider';
 import { ReloadPrompt } from './ReloadPrompt';
-const UiPreview = React.lazy(() => import('./ui/preview/UiPreview').then(m => ({ default: m.UiPreview })));
+// Dev-only component gallery. Wrapped so the dynamic import (and its ~385 KB
+// chunk) is only referenced in development and tree-shaken from prod builds.
+const UiPreview = import.meta.env.DEV
+  ? React.lazy(() => import('./ui/preview/UiPreview').then(m => ({ default: m.UiPreview })))
+  : null;
 import { AdminPanel } from './screens/system/admin/AdminPanel';
 import { WidgetSlot } from './config/widgets/WidgetSlot';
 import { PlatformStudio } from './screens/PlatformStudio';
@@ -81,7 +85,12 @@ export default function App() {
   const { path } = useRouter();
 
   // Public surfaces (no auth)
-  if (path === '/preview') return <Suspense fallback={<div className="p-12 text-center">Loading preview...</div>}><UiPreview /></Suspense>;
+  // The component gallery is a development-only aid. import.meta.env.DEV is a
+  // compile-time constant, so the lazy import + chunk are tree-shaken out of
+  // production builds (and the route is unreachable in prod).
+  if (import.meta.env.DEV && UiPreview && path === '/preview') {
+    return <Suspense fallback={<div className="p-12 text-center">Loading preview...</div>}><UiPreview /></Suspense>;
+  }
   const portal = matchPath('/portal/:eventId', path);
   if (portal) return <PublicGuestPortal eventId={portal.eventId} />;
   const vendorPortal = matchPath('/vendor/:vendorId', path);
