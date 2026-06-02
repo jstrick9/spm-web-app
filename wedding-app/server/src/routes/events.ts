@@ -7,6 +7,7 @@ import {
   auditRepo, eventsRepo, orgsRepo, subEventsRepo,
 } from '../db/repos/index.js';
 import { Forbidden, NotFound, BadRequest } from '../lib/errors.js';
+import { runTrigger } from '../jobs/lifecycleEmails.js';
 
 const isoDate = z.string().regex(/^\d{4}-\d{2}-\d{2}$/);
 
@@ -155,6 +156,13 @@ export async function eventRoutes(app: FastifyInstance) {
       targetType: 'event', targetId: eventId, ip: req.ip,
     });
     broadcastSSE(event.organization_id, "event.updated", { eventId, title: updated?.title }, req.auth!.userId);
+
+    // Lifecycle email: when an event transitions INTO 'completed', fire the
+    // thank-you automation (no-op if the org hasn't configured/enabled one or
+    // has no connected SMTP integration). Idempotent — only on the transition.
+    if (patch.status === 'completed' && event.status !== 'completed') {
+      try { runTrigger(eventId, 'thank_you'); } catch (e) { req.log.error(e); }
+    }
     return { event: updated };
   });
 

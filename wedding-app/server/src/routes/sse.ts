@@ -100,6 +100,11 @@ export async function sseRoutes(app: FastifyInstance) {
       return reply.code(403).send({ error: 'Forbidden' });
     }
 
+    // Take over the underlying socket. In Fastify 5, a handler that writes
+    // directly to `reply.raw` MUST call reply.hijack() so Fastify does not try
+    // to send its own response (which would warn and could close the stream).
+    reply.hijack();
+
     // Set SSE headers
     reply.raw.writeHead(200, {
       'Content-Type': 'text/event-stream',

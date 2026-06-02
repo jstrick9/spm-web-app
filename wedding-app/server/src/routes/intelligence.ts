@@ -6,11 +6,14 @@ import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
 import { requireAuth } from '../middleware/auth.js';
 import { can } from '../lib/rbac.js';
-import { eventsRepo, auditRepo } from '../db/repos/index.js';
+import { eventsRepo, auditRepo, vendorsRepo } from '../db/repos/index.js';
 import { vendorRatingsRepo } from '../db/repos/vendorRatings.js';
 import { emailTemplatesRepo } from '../db/repos/emailTemplates.js';
 import { paymentLinksRepo } from '../db/repos/paymentLinks.js';
 import { recommendationsRepo } from '../db/repos/recommendations.js';
+import { forecastRepo } from '../db/repos/forecast.js';
+import { vendorScoringRepo } from '../db/repos/vendorScoring.js';
+import { riskRepo } from '../db/repos/risk.js';
 import { BadRequest, Forbidden, NotFound } from '../lib/errors.js';
 
 export async function intelligenceRoutes(app: FastifyInstance) {
@@ -26,10 +29,15 @@ export async function intelligenceRoutes(app: FastifyInstance) {
       review: z.string().max(2000).optional(),
     }).safeParse(req.body);
     if (!parsed.success) throw BadRequest('invalid-input', parsed.error.issues);
-    if (!can(req.auth!.memberships, {}, 'vendors.manage')) throw Forbidden();
+    // Resolve the vendor's real org and scope the permission check to it.
+    // Using an empty scope ({}) previously allowed a user with vendors.manage
+    // in ANY org to rate vendors in OTHER orgs (horizontal privilege / IDOR).
+    const vendor = vendorsRepo.findById(vendorId);
+    if (!vendor) throw NotFound();
+    if (!can(req.auth!.memberships, { organizationId: vendor.organization_id }, 'vendors.manage')) throw Forbidden();
 
     const rating = vendorRatingsRepo.create({
-      organizationId: req.auth!.memberships[0]?.organizationId ?? '',
+      organizationId: vendor.organization_id,
       vendorId, ...parsed.data, ratedBy: req.auth!.userId,
     });
     return reply.code(201).send({ rating });
@@ -37,7 +45,9 @@ export async function intelligenceRoutes(app: FastifyInstance) {
 
   app.get('/api/vendors/:vendorId/ratings', { preHandler: requireAuth }, async (req) => {
     const { vendorId } = req.params as { vendorId: string };
-    if (!can(req.auth!.memberships, {}, 'vendors.view')) throw Forbidden();
+    const vendor = vendorsRepo.findById(vendorId);
+    if (!vendor) throw NotFound();
+    if (!can(req.auth!.memberships, { organizationId: vendor.organization_id }, 'vendors.view')) throw Forbidden();
     return {
       ratings: vendorRatingsRepo.listForVendor(vendorId),
       aggregate: vendorRatingsRepo.aggregate(vendorId),
@@ -80,6 +90,9 @@ export async function intelligenceRoutes(app: FastifyInstance) {
     const { id } = req.params as { id: string };
     const template = emailTemplatesRepo.findById(id);
     if (!template) throw NotFound();
+    // Scope the preview to the template's org so users can't render templates
+    // belonging to organizations they aren't a member of.
+    if (!can(req.auth!.memberships, { organizationId: template.organization_id }, 'invites.view')) throw Forbidden();
     const sampleData: Record<string, string> = {
       guest_name: 'Jane Smith', event_title: 'Smith Wedding',
       event_date: 'September 12, 2026', table_assignment: 'Table 3',
@@ -137,5 +150,56 @@ export async function intelligenceRoutes(app: FastifyInstance) {
     const { orgId } = req.params as { orgId: string };
     if (!can(req.auth!.memberships, { organizationId: orgId }, 'reports.view')) throw Forbidden();
     return { recommendations: recommendationsRepo.forOrg(orgId) };
+  });
+
+  // ═══ PREDICTIVE FORECAST ══════════════════════════════
+  app.get('/api/orgs/:orgId/forecast', { preHandler: requireAuth }, async (req) => {
+    const { orgId } = req.params as { orgId: string };
+    if (!can(req.auth!.memberships, { organizationId: orgId }, 'reports.view')) throw Forbidden();
+    const q = req.query as { history?: string; horizon?: string };
+    const history = Math.min(36, Math.max(6, Number(q.history) || 24));
+    const horizon = Math.min(12, Math.max(1, Number(q.horizon) || 6));
+    return { forecast: forecastRepo.forOrg(orgId, history, horizon) };
+  });
+
+  // ═══ VENDOR RELIABILITY SCORES ════════════════════════
+  app.get('/api/orgs/:orgId/vendor-scores', { preHandler: requireAuth }, async (req) => {
+    const { orgId } = req.params as { orgId: string };
+    if (!can(req.auth!.memberships, { organizationId: orgId }, 'vendors.view')) throw Forbidden();
+    return { scores: vendorScoringRepo.scoreAll(orgId) };
+  });
+
+  // ═══ SMART VENDOR MATCHING (per event) ════════════════
+  app.get('/api/events/:eventId/vendor-matches', { preHandler: requireAuth }, async (req) => {
+    const { eventId } = req.params as { eventId: string };
+    const event = eventsRepo.findById(eventId);
+    if (!event) throw NotFound();
+    const orgMap = eventsRepo.orgMapForUser(req.auth!.userId);
+    if (!can(req.auth!.memberships, { eventId }, 'vendors.view', orgMap)) throw Forbidden();
+    const q = req.query as { category?: string; limit?: string };
+    const matches = vendorScoringRepo.matchForEvent(event.organization_id, {
+      category: q.category,
+      budgetCents: event.budget_cents ?? undefined,
+      limit: q.limit ? Math.min(50, Math.max(1, Number(q.limit))) : 8,
+    });
+    return { matches };
+  });
+
+  // ═══ ANOMALY & RISK ALERTS ════════════════════════════
+  // Org-wide event health (riskiest events first).
+  app.get('/api/orgs/:orgId/risk-alerts', { preHandler: requireAuth }, async (req) => {
+    const { orgId } = req.params as { orgId: string };
+    if (!can(req.auth!.memberships, { organizationId: orgId }, 'reports.view')) throw Forbidden();
+    return { events: riskRepo.forOrg(orgId) };
+  });
+
+  // Single event's risk assessment.
+  app.get('/api/events/:eventId/risk-alerts', { preHandler: requireAuth }, async (req) => {
+    const { eventId } = req.params as { eventId: string };
+    const event = eventsRepo.findById(eventId);
+    if (!event) throw NotFound();
+    const orgMap = eventsRepo.orgMapForUser(req.auth!.userId);
+    if (!can(req.auth!.memberships, { eventId }, 'events.view', orgMap)) throw Forbidden();
+    return { risk: riskRepo.forEvent(eventId) };
   });
 }

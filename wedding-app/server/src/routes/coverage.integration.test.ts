@@ -131,11 +131,14 @@ describe('event questions + answers', () => {
 describe('direct messages', () => {
   it('send + list + mark read', async () => {
     const u = await register();
-    const send = await req(u.token, 'POST', '/api/messages/thread-xyz', { body: 'hello', senderRole: 'admin' });
+    // Chat threads are scoped to an event (threadId = `${eventId}:${category}`).
+    const evt = (await req(u.token, 'POST', '/api/events', { organizationId: u.orgId, title: 'Chat Event' })).json().event;
+    const thread = `${evt.id}:general`;
+    const send = await req(u.token, 'POST', `/api/messages/${thread}`, { body: 'hello', senderRole: 'admin' });
     expect(send.statusCode).toBe(201);
-    const list = await req(u.token, 'GET', '/api/messages/thread-xyz');
+    const list = await req(u.token, 'GET', `/api/messages/${thread}`);
     expect(list.json().messages).toHaveLength(1);
-    await req(u.token, 'POST', '/api/messages/thread-xyz/read');
+    await req(u.token, 'POST', `/api/messages/${thread}/read`);
   });
 });
 

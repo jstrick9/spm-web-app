@@ -11,6 +11,22 @@
 import { createHmac } from 'node:crypto';
 import { webhooksRepo } from '../db/repos/webhooks.js';
 
+/**
+ * Record a delivery attempt, swallowing any error. Webhook delivery runs
+ * fire-and-forget via setImmediate, so it can complete AFTER the request that
+ * triggered it — e.g. during graceful shutdown or (in tests) after the SQLite
+ * connection is closed. A throw here would surface as an unhandled promise
+ * rejection and, under Node's default policy, can crash the process. Logging a
+ * delivery must never be able to take the server down.
+ */
+function safeRecordDelivery(args: Parameters<typeof webhooksRepo.recordDelivery>[0]): void {
+  try {
+    webhooksRepo.recordDelivery(args);
+  } catch {
+    /* DB unavailable (shutdown / closed connection) — drop the delivery log. */
+  }
+}
+
 // Concurrency limiter — max 5 simultaneous webhook deliveries
 const MAX_CONCURRENT = 5;
 let activeDeliveries = 0;
@@ -98,7 +114,7 @@ async function deliverWebhook(
     const durationMs = Date.now() - startMs;
     const responseText = await res.text().catch(() => '');
 
-    webhooksRepo.recordDelivery({
+    safeRecordDelivery({
       webhookId,
       eventType,
       payload: data,
@@ -108,7 +124,7 @@ async function deliverWebhook(
     });
   } catch (err) {
     const durationMs = Date.now() - startMs;
-    webhooksRepo.recordDelivery({
+    safeRecordDelivery({
       webhookId,
       eventType,
       payload: data,

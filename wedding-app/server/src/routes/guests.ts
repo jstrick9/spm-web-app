@@ -3,7 +3,7 @@ import { broadcastSSE } from "./sse.js";
 import { z } from 'zod';
 import { requireAuth } from '../middleware/auth.js';
 import { can } from '../lib/rbac.js';
-import { auditRepo, eventsRepo, guestsRepo, rsvpRepo, portalConfigRepo, layoutsRepo, orgsRepo } from '../db/repos/index.js';
+import { auditRepo, eventsRepo, guestsRepo, rsvpRepo, portalConfigRepo, layoutsRepo, orgsRepo, guestIdentityRepo } from '../db/repos/index.js';
 import { BadRequest, Forbidden, NotFound } from '../lib/errors.js';
 import { hashPassword, verifyPassword } from '../lib/crypto.js';
 
@@ -97,6 +97,34 @@ export async function guestRoutes(app: FastifyInstance) {
     const counts = guestsRepo.countByStatusForOrg(orgId);
 
     return { guests: result.guests, total: result.total, counts };
+  });
+
+  // ─── Guest identity resolution: duplicate clusters across events ──
+  app.get("/api/orgs/:orgId/guest-duplicates", { preHandler: requireAuth }, async (req) => {
+    const { orgId } = req.params as { orgId: string };
+    if (!can(req.auth!.memberships, { organizationId: orgId }, "guests.view")) throw Forbidden();
+    return { clusters: guestIdentityRepo.findDuplicates(orgId) };
+  });
+
+  // ─── Merge duplicate guests into a primary (human-confirmed) ──
+  app.post("/api/orgs/:orgId/guests/merge", { preHandler: requireAuth }, async (req) => {
+    const { orgId } = req.params as { orgId: string };
+    if (!can(req.auth!.memberships, { organizationId: orgId }, "guests.manage")) throw Forbidden();
+    const parsed = z.object({
+      primaryId: z.string().min(1),
+      duplicateIds: z.array(z.string().min(1)).min(1).max(50),
+    }).safeParse(req.body);
+    if (!parsed.success) throw BadRequest("invalid-input", parsed.error.issues);
+
+    const result = guestIdentityRepo.merge(orgId, parsed.data.primaryId, parsed.data.duplicateIds);
+    if ("error" in result) throw BadRequest(result.error);
+
+    auditRepo.log({
+      organizationId: orgId, actorUserId: req.auth!.userId, actorLabel: req.auth!.email,
+      action: "guest.merge", targetType: "guest", targetId: parsed.data.primaryId,
+      details: { mergedCount: result.mergedCount, duplicateIds: parsed.data.duplicateIds }, ip: req.ip,
+    });
+    return { primary: result.primary, mergedCount: result.mergedCount };
   });
 
   

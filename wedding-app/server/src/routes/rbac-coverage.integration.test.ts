@@ -178,16 +178,20 @@ describe('Route-level RBAC enforcement: messages', () => {
   it('staff CAN read and send messages', async () => {
     const o = await registerOwner();
     const s = await createUserWithRole(o.token, o.orgId, 'staff');
-    const readRes = await req(s.token, 'GET', '/api/messages/thread-1');
+    // Chat threads are event-scoped. The owner creates an event in the org;
+    // the staff member (org-level messages.* via that org) can access it.
+    const evt = (await req(o.token, 'POST', '/api/events', { organizationId: o.orgId, title: 'Chat Event' })).json().event;
+    const thread = `${evt.id}:general`;
+    const readRes = await req(s.token, 'GET', `/api/messages/${thread}`);
     expect(readRes.statusCode).toBe(200);
-    const sendRes = await req(s.token, 'POST', '/api/messages/thread-1', {
+    const sendRes = await req(s.token, 'POST', `/api/messages/${thread}`, {
       body: 'Hello', senderRole: 'staff',
     });
     expect(sendRes.statusCode).toBe(201);
   });
 
   it('unauthenticated request gets 401 on messages', async () => {
-    const res = await app.inject({ method: 'GET', url: '/api/messages/thread-1' });
+    const res = await app.inject({ method: 'GET', url: '/api/messages/some-event:general' });
     expect(res.statusCode).toBe(401);
   });
 });

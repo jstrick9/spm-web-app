@@ -155,18 +155,31 @@ describe('Vendors: edge cases', () => {
 describe('Messages', () => {
   it('send → list → mark read flow', async () => {
     const s = await setup();
+    // Chat threads are event-scoped: threadId = `${eventId}:${category}`.
+    const thread = `${s.eventId}:general`;
     // Send
-    const sr = await req(s.token, 'POST', '/api/messages/thread-test', { body: 'Hello world', senderRole: 'planner' });
+    const sr = await req(s.token, 'POST', `/api/messages/${thread}`, { body: 'Hello world', senderRole: 'planner' });
     expect(sr.statusCode).toBe(201);
     expect(sr.json().message.body).toBe('Hello world');
 
     // List
-    const lr = await req(s.token, 'GET', '/api/messages/thread-test');
+    const lr = await req(s.token, 'GET', `/api/messages/${thread}`);
     expect(lr.json().messages).toHaveLength(1);
 
     // Mark read
-    const mr = await req(s.token, 'POST', '/api/messages/thread-test/read');
+    const mr = await req(s.token, 'POST', `/api/messages/${thread}/read`);
     expect(mr.json().ok).toBe(true);
+  });
+
+  it('blocks cross-org chat access (IDOR regression)', async () => {
+    const a = await setup();
+    const b = await setup();
+    // User A tries to read/post to Org B's event chat thread.
+    const bThread = `${b.eventId}:general`;
+    const read = await req(a.token, 'GET', `/api/messages/${bThread}`);
+    expect(read.statusCode).toBe(403);
+    const send = await req(a.token, 'POST', `/api/messages/${bThread}`, { body: 'x', senderRole: 'planner' });
+    expect(send.statusCode).toBe(403);
   });
 });
 
