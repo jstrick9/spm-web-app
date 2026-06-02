@@ -59,7 +59,7 @@ export function RunSheet({ eventId }: Props) {
       {/* Hide page header during print to save space */}
       <div className="print:hidden">
         <PageHeader
-          back={{ label: 'Back to Event', href: `#/events/${eventId}` }}
+          backHref={`#/events/${eventId}`}
           title="Day-Of Run Sheet"
           description="Printable packet for staff and coordination."
           actions={

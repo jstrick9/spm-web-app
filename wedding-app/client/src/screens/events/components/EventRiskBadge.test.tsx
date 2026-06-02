@@ -13,14 +13,14 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen } from '@testing-library/react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 
-vi.mock('../../../lib/usePermissions', () => ({ usePermissions: vi.fn() }));
+vi.mock('../../../lib/usePermission', () => ({ usePermission: vi.fn() }));
 vi.mock('../../../sdk', () => ({
   sdk: {
     risk: { forOrg: vi.fn() },
   },
 }));
 
-import { usePermissions } from '../../../lib/usePermissions';
+import { usePermission } from '../../../lib/usePermission';
 import { sdk } from '../../../sdk';
 import { EventRiskBadge } from './EventRiskBadge';
 
@@ -44,14 +44,14 @@ function renderBadge(props: { eventId?: string; orgId?: string; compact?: boolea
 
 describe('EventRiskBadge', () => {
   beforeEach(() => {
-    vi.mocked(usePermissions).mockReturnValue({
-      can: (p: string) => p === 'analytics.view',
-    } as ReturnType<typeof usePermissions>);
+    vi.mocked(usePermission).mockImplementation(
+      (p: string) => p === 'analytics.view'
+    );
     vi.mocked(sdk.risk.forOrg).mockResolvedValue(makeRiskData(50));
   });
 
   it('returns null when analytics.view is not permitted', () => {
-    vi.mocked(usePermissions).mockReturnValue({ can: () => false } as ReturnType<typeof usePermissions>);
+    vi.mocked(usePermission).mockReturnValue(false as ReturnType<typeof usePermission>);
     const { container } = renderBadge();
     expect(container.firstChild).toBeNull();
   });

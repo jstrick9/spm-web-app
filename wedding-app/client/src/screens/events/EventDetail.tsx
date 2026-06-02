@@ -164,7 +164,7 @@ export function EventDetail({ eventId, user }: Props & { user: any }) {
   return (
     <>
       <PageHeader
-        back={{ label: 'All events', href: '#/events' }}
+        backHref="#/events"
         title={
           <span className="flex items-center gap-3 flex-wrap">
             <span className="font-display">{event.title}</span>

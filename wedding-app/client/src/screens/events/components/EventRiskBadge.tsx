@@ -15,7 +15,7 @@ import { useQuery } from '@tanstack/react-query';
 import { AlertTriangle, CheckCircle2, Eye } from 'lucide-react';
 import { sdk } from '../../../sdk';
 import { Badge } from '../../../ui/Badge';
-import { usePermissions } from '../../../lib/usePermissions';
+import { usePermission } from '../../../lib/usePermission';
 
 type RiskLevel = 'high' | 'medium' | 'low';
 
@@ -53,10 +53,10 @@ const RISK_CONFIG: Record<RiskLevel, {
 };
 
 export function EventRiskBadge({ eventId, orgId, compact = false, className }: Props) {
-  const { can } = usePermissions();
+  const canViewAnalytics = usePermission('analytics.view');
 
   // Never render if user doesn't have analytics permission
-  if (!can('analytics.view')) return null;
+  if (!canViewAnalytics) return null;
 
   const { data } = useQuery({
     queryKey: ['risk-alerts', orgId],
