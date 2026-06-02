@@ -46,13 +46,63 @@ export default defineConfig({
     port: 5173,
     proxy: { '/api': 'http://localhost:3000' },
   },
-  build: { outDir: 'dist', sourcemap: true },
+  build: {
+    outDir: 'dist',
+    sourcemap: true,
+    // The only chunk above the default 500 kB is VendorCheckInApp (it bundles
+    // the html5-qrcode scanner) — and that chunk is route-level lazy-loaded, so
+    // it never blocks initial page load. Eager chunks (index + vendor splits)
+    // are all well under this after the manualChunks split below.
+    chunkSizeWarningLimit: 700,
+    rollupOptions: {
+      output: {
+        /**
+         * Split the large, stable vendor libraries out of the main bundle so:
+         *   - the React runtime + Radix primitives are cached independently of
+         *     app code (a deploy that only touches screens won't re-download them)
+         *   - the initial parse cost is spread across parallel-fetched chunks
+         *
+         * IMPORTANT: only split packages that are part of the EAGER `index`
+         * chunk. recharts / konva / html5-qrcode are already route-level
+         * lazy-loaded (Analytics, Canvas, Check-In) — deliberately NOT listed
+         * here so they stay in their own on-demand chunks rather than being
+         * pulled into an eagerly-loaded vendor bundle.
+         */
+        manualChunks(id) {
+          if (!id.includes('node_modules')) return undefined;
+          if (/[\\/]node_modules[\\/](react|react-dom|scheduler|react-is)[\\/]/.test(id)) {
+            return 'react-vendor';
+          }
+          if (/[\\/]node_modules[\\/](@radix-ui|cmdk|@floating-ui|aria-hidden|react-remove-scroll)/.test(id)) {
+            return 'radix-vendor';
+          }
+          if (/[\\/]node_modules[\\/]@tanstack[\\/]/.test(id)) {
+            return 'query-vendor';
+          }
+          if (/[\\/]node_modules[\\/]lucide-react[\\/]/.test(id)) {
+            return 'icons-vendor';
+          }
+          if (/[\\/]node_modules[\\/]date-fns[\\/]/.test(id)) {
+            return 'date-vendor';
+          }
+          if (/[\\/]node_modules[\\/](react-hook-form|@hookform|zod|clsx|class-variance-authority|tailwind-merge)[\\/]/.test(id)) {
+            return 'forms-vendor';
+          }
+          return undefined; // everything else stays with its importer (keeps lazy chunks intact)
+        },
+      },
+    },
+  },
 
   test: {
     environment: 'jsdom',
     globals: false,
     setupFiles: ['./src/test/setup.ts'],
     css: false,
+    // Vitest 4 broadened the default test glob; pin it to src so a built
+    // dist/ (or node_modules) can never be collected as a test source.
+    include: ['src/**/*.test.{ts,tsx}'],
+    exclude: ['dist/**', 'node_modules/**'],
     coverage: {
       provider: 'v8',
       reporter: ['text', 'lcov'],
