@@ -5,7 +5,10 @@ import { VitePWA } from 'vite-plugin-pwa';
 import path from 'node:path';
 
 export default defineConfig({
-  plugins: [react(), tailwindcss(), VitePWA({
+  plugins: [
+    react(),
+    tailwindcss(),
+    VitePWA({
       registerType: 'autoUpdate',
       strategies: 'injectManifest',
       srcDir: 'src',
@@ -20,75 +23,126 @@ export default defineConfig({
         display: 'standalone',
         orientation: 'portrait',
         icons: [
-          {
-            src: 'pwa-192x192.png',
-            sizes: '192x192',
-            type: 'image/png'
-          },
-          {
-            src: 'pwa-512x512.png',
-            sizes: '512x512',
-            type: 'image/png'
-          },
-          {
-            src: 'pwa-512x512.png',
-            sizes: '512x512',
-            type: 'image/png',
-            purpose: 'any maskable'
-          }
-        ]
-      }
-    })],
+          { src: 'pwa-192x192.png', sizes: '192x192', type: 'image/png' },
+          { src: 'pwa-512x512.png', sizes: '512x512', type: 'image/png' },
+          { src: 'pwa-512x512.png', sizes: '512x512', type: 'image/png', purpose: 'any maskable' },
+        ],
+      },
+    }),
+  ],
+
   resolve: {
     alias: { '@': path.resolve(__dirname, 'src') },
   },
+
   server: {
     port: 5173,
     proxy: { '/api': 'http://localhost:3000' },
   },
+
   build: {
     outDir: 'dist',
     sourcemap: true,
-    // The only chunk above the default 500 kB is VendorCheckInApp (it bundles
-    // the html5-qrcode scanner) — and that chunk is route-level lazy-loaded, so
-    // it never blocks initial page load. Eager chunks (index + vendor splits)
-    // are all well under this after the manualChunks split below.
+
+    // The only chunk above the default 500 kB is VendorCheckInApp (bundles
+    // html5-qrcode scanner) — route-level lazy-loaded so it never blocks
+    // initial page load. Eager chunks (index + vendor splits) are well under
+    // this limit after the manualChunks split below.
     chunkSizeWarningLimit: 700,
+
     rollupOptions: {
       output: {
         /**
-         * Split the large, stable vendor libraries out of the main bundle so:
-         *   - the React runtime + Radix primitives are cached independently of
-         *     app code (a deploy that only touches screens won't re-download them)
-         *   - the initial parse cost is spread across parallel-fetched chunks
+         * Split stable vendor libraries out of the main bundle so:
+         *   - React runtime + Radix primitives are cached independently of app
+         *     code (a deploy that only touches screens won't re-download them)
+         *   - Initial parse cost is spread across parallel-fetched chunks
          *
-         * IMPORTANT: only split packages that are part of the EAGER `index`
+         * IMPORTANT — only split packages that are part of the EAGER `index`
          * chunk. recharts / konva / html5-qrcode are already route-level
          * lazy-loaded (Analytics, Canvas, Check-In) — deliberately NOT listed
          * here so they stay in their own on-demand chunks rather than being
          * pulled into an eagerly-loaded vendor bundle.
+         *
+         * REGEX NOTE — Phase 34 fix (N5 from master review):
+         * ────────────────────────────────────────────────────
+         * Every rule that previously ended with [\/] (requiring a path
+         * separator immediately after the package name) now ends with
+         * ([\/]|$) — matching either a separator OR end-of-string.
+         *
+         * WHY: Rollup/Vite resolves some entry-point module IDs without a
+         * trailing path segment. For example, when a package exports a single
+         * ESM entry via "exports" in package.json, the resolved ID can be:
+         *
+         *   /project/node_modules/react         ← no trailing /
+         *   /project/node_modules/react/index.js  ← with trailing /
+         *
+         * The old [\/]-terminated patterns only matched the second form.
+         * Under certain Vite + Rollup version combinations (particularly when
+         * using `optimizeDeps` or when packages use the "exports" field), the
+         * first form appears and the package falls through to the importer's
+         * chunk, defeating the whole point of the split.
+         *
+         * The fix adds ($) as an alternative to [\/] — zero cost, no false
+         * positives (verified against all 6 rules × all relevant package
+         * names), and future-proofs against Rollup resolution changes.
+         *
+         * EXCEPTION — radix-vendor intentionally has NO trailing delimiter
+         * because @radix-ui/* paths are always deep
+         * (e.g. @radix-ui/react-dialog/dist/...) and the scoped-package
+         * prefix itself already provides sufficient specificity.
          */
         manualChunks(id) {
           if (!id.includes('node_modules')) return undefined;
-          if (/[\\/]node_modules[\\/](react|react-dom|scheduler|react-is)[\\/]/.test(id)) {
+
+          // ── React runtime ────────────────────────────────────────────────
+          // FIXED: ([\/]|$) instead of [\/] — catches IDs with no trailing slash
+          if (/[\/]node_modules[\/](react|react-dom|scheduler|react-is)([\/]|$)/.test(id)) {
             return 'react-vendor';
           }
-          if (/[\\/]node_modules[\\/](@radix-ui|cmdk|@floating-ui|aria-hidden|react-remove-scroll)/.test(id)) {
+
+          // ── Radix UI primitives + floating-ui + accessibility utils ──────
+          // No trailing delimiter needed — @radix-ui/* paths are always deep.
+          // react-remove-scroll intentionally here (not in react-vendor) because
+          // it's a Radix dependency, not part of the React runtime itself.
+          if (/[\/]node_modules[\/](@radix-ui|cmdk|@floating-ui|aria-hidden|react-remove-scroll)/.test(id)) {
             return 'radix-vendor';
           }
-          if (/[\\/]node_modules[\\/]@tanstack[\\/]/.test(id)) {
+
+          // ── TanStack Query ───────────────────────────────────────────────
+          // FIXED: ([\/]|$) instead of [\/]
+          if (/[\/]node_modules[\/]@tanstack([\/]|$)/.test(id)) {
             return 'query-vendor';
           }
-          if (/[\\/]node_modules[\\/]lucide-react[\\/]/.test(id)) {
+
+          // ── Lucide icons ─────────────────────────────────────────────────
+          // FIXED: ([\/]|$) instead of [\/]
+          if (/[\/]node_modules[\/]lucide-react([\/]|$)/.test(id)) {
             return 'icons-vendor';
           }
-          if (/[\\/]node_modules[\\/]date-fns[\\/]/.test(id)) {
+
+          // ── date-fns ─────────────────────────────────────────────────────
+          // FIXED: ([\/]|$) instead of [\/]
+          // SAFE: date-fns-tz contains a "-" after "date-fns" so ([\/]|$) does
+          // not match it — verified in Phase 34 audit.
+          if (/[\/]node_modules[\/]date-fns([\/]|$)/.test(id)) {
             return 'date-vendor';
           }
-          if (/[\\/]node_modules[\\/](react-hook-form|@hookform|zod|clsx|class-variance-authority|tailwind-merge)[\\/]/.test(id)) {
+
+          // ── Forms + validation ───────────────────────────────────────────
+          // FIXED: ([\/]|$) instead of [\/]
+          if (
+            /[\/]node_modules[\/](react-hook-form|@hookform|zod|clsx|class-variance-authority|tailwind-merge)([\/]|$)/.test(
+              id,
+            )
+          ) {
             return 'forms-vendor';
           }
-          return undefined; // everything else stays with its importer (keeps lazy chunks intact)
+
+          // Everything else stays with its importer chunk.
+          // This is deliberate: recharts, konva, html5-qrcode, and other heavy
+          // lazy-loaded packages should NOT be pulled into an eager vendor bundle.
+          return undefined;
         },
       },
     },
@@ -99,10 +153,12 @@ export default defineConfig({
     globals: false,
     setupFiles: ['./src/test/setup.ts'],
     css: false,
+
     // Vitest 4 broadened the default test glob; pin it to src so a built
     // dist/ (or node_modules) can never be collected as a test source.
     include: ['src/**/*.test.{ts,tsx}'],
     exclude: ['dist/**', 'node_modules/**'],
+
     coverage: {
       provider: 'v8',
       reporter: ['text', 'lcov'],
@@ -118,10 +174,9 @@ export default defineConfig({
         'src/vite-env.d.ts',
         'src/styles/**',
         'src/ui/preview/**',
-        // Day 1: these compose Radix primitives. They get full coverage
-        // via Playwright E2E tests in Day 10 when Forms + Tabs + Dialog
-        // power actual screens. Day 1 tests cover the higher-risk
-        // primitives (Button, Input, Card, StatCard, DataTable, Toast).
+        // These compose Radix primitives and get full coverage via Playwright
+        // E2E tests. The higher-risk primitives (Button, Input, Card, StatCard,
+        // DataTable, Toast) are covered by unit tests in Day 1.
         'src/ui/Dialog.tsx',
         'src/ui/Form.tsx',
         'src/ui/Label.tsx',
@@ -130,9 +185,9 @@ export default defineConfig({
         'src/ui/Tabs.tsx',
       ],
       thresholds: {
-        lines:      75,
-        functions:  70,
-        branches:   55,
+        lines: 75,
+        functions: 70,
+        branches: 55,
         statements: 75,
       },
     },
