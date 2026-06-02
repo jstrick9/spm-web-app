@@ -15,7 +15,7 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, waitFor, fireEvent } from '@testing-library/react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 
-vi.mock('../../lib/usePermissions', () => ({ usePermissions: vi.fn() }));
+vi.mock('../../lib/usePermission', () => ({ usePermission: vi.fn() }));
 vi.mock('../../sdk', () => ({
   sdk: {
     lifecycleEmails: {
@@ -30,7 +30,7 @@ vi.mock('../../sdk', () => ({
   },
 }));
 
-import { usePermissions } from '../../lib/usePermissions';
+import { usePermission } from '../../lib/usePermission';
 import { sdk } from '../../sdk';
 import { EmailAutomationStudio } from './EmailAutomationStudio';
 
@@ -64,9 +64,7 @@ function renderStudio(orgId = 'org-1') {
 
 describe('EmailAutomationStudio', () => {
   beforeEach(() => {
-    vi.mocked(usePermissions).mockReturnValue({
-      can: (p: string) => ['invites.view', 'invites.manage'].includes(p),
-    } as ReturnType<typeof usePermissions>);
+    vi.mocked(usePermission).mockReturnValue(true as ReturnType<typeof usePermission>);
     vi.mocked(sdk.lifecycleEmails.listAutomations).mockResolvedValue({ automations: AUTOMATIONS });
     vi.mocked(sdk.intelligence.listTemplates).mockResolvedValue({ templates: TEMPLATES });
     vi.mocked(sdk.lifecycleEmails.upsertAutomation).mockResolvedValue({ automation: AUTOMATIONS[0] });
@@ -74,7 +72,7 @@ describe('EmailAutomationStudio', () => {
   });
 
   it('renders AccessDenied when invites.view is not permitted', () => {
-    vi.mocked(usePermissions).mockReturnValue({ can: () => false } as ReturnType<typeof usePermissions>);
+    vi.mocked(usePermission).mockImplementation((p: string) => p !== 'invites.view');
     renderStudio();
     expect(screen.getByRole('alert')).toBeTruthy();
   });

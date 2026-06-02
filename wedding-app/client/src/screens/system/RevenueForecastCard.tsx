@@ -20,7 +20,7 @@ import type { RevenueForecast } from '../../sdk/intelligence';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '../../ui/Card';
 import { Badge } from '../../ui/Badge';
 import { StatCard } from '../../ui/StatCard';
-import { usePermissions } from '../../lib/usePermissions';
+import { usePermission } from '../../lib/usePermission';
 
 const money = (cents: number) =>
   `$${Math.round(cents / 100).toLocaleString(undefined, { maximumFractionDigits: 0 })}`;
@@ -37,8 +37,8 @@ interface Props {
 
 export function RevenueForecastCard({ forecast }: Props) {
   // N3 fix: respect analytics.view permission
-  const { can } = usePermissions();
-  if (!can('analytics.view')) return null;
+  const canViewAnalytics = usePermission('analytics.view');
+  if (!canViewAnalytics) return null;
 
   const { history, projection, trend, totals, pipeline, meta } = forecast;
 

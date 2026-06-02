@@ -15,8 +15,8 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 
 // ── Mocks ─────────────────────────────────────────────────────────────────
 
-vi.mock('../../lib/usePermissions', () => ({
-  usePermissions: vi.fn(),
+vi.mock('../../lib/usePermission', () => ({
+  usePermission: vi.fn(),
 }));
 
 vi.mock('../../sdk', () => ({
@@ -38,7 +38,7 @@ vi.mock('./RiskAlertsCard', () => ({
   ),
 }));
 
-import { usePermissions } from '../../lib/usePermissions';
+import { usePermission } from '../../lib/usePermission';
 import { sdk } from '../../sdk';
 import { IntelligenceDashboard } from './IntelligenceDashboard';
 
@@ -102,18 +102,16 @@ function renderDashboard(orgId = 'org-1') {
 
 describe('IntelligenceDashboard', () => {
   beforeEach(() => {
-    vi.mocked(usePermissions).mockReturnValue({
-      can: (p: string) => p === 'analytics.view',
-    } as ReturnType<typeof usePermissions>);
+    vi.mocked(usePermission).mockImplementation(
+      (p: string) => p === 'analytics.view'
+    );
     vi.mocked(sdk.recommendations.get).mockResolvedValue(FULL_REC);
     vi.mocked(sdk.forecast.get).mockResolvedValue(FORECAST);
   });
 
   // ── N3: RBAC gate ──────────────────────────────────────────────────────
   it('renders AccessDenied when analytics.view is not permitted', () => {
-    vi.mocked(usePermissions).mockReturnValue({
-      can: () => false,
-    } as ReturnType<typeof usePermissions>);
+    vi.mocked(usePermission).mockReturnValue(false as ReturnType<typeof usePermission>);
 
     renderDashboard();
     expect(screen.getByRole('alert')).toBeTruthy();

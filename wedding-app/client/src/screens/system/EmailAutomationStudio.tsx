@@ -33,7 +33,7 @@ import {
   AlertCircle,
 } from 'lucide-react';
 import { sdk } from '../../sdk';
-import { usePermissions } from '../../lib/usePermissions';
+import { usePermission } from '../../lib/usePermission';
 import { PageBody, PageHeader } from '../../ui/AppShell';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '../../ui/Card';
 import { Button } from '../../ui/Button';
@@ -82,7 +82,8 @@ interface Props {
 // ── Component ──────────────────────────────────────────────────────────────
 
 export function EmailAutomationStudio({ orgId }: Props) {
-  const { can } = usePermissions();
+  const canViewInvites = usePermission('invites.view');
+  const canManageInvites = usePermission('invites.manage');
   const { toast } = useToast();
   const qc = useQueryClient();
   const [expanded, setExpanded] = useState<TriggerType | null>(null);
@@ -90,7 +91,7 @@ export function EmailAutomationStudio({ orgId }: Props) {
   const [offsetDays, setOffsetDays] = useState<Partial<Record<TriggerType, number>>>({ rsvp_reminder: 7 });
 
   // ── Permission gate ──────────────────────────────────────────────────────
-  if (!can('invites.view')) {
+  if (!canViewInvites) {
     return (
       <>
         <PageHeader title="Email Automation" />
@@ -158,7 +159,7 @@ export function EmailAutomationStudio({ orgId }: Props) {
   }
 
   function handleConfigure(triggerType: TriggerType) {
-    if (!can('invites.manage')) return;
+    if (!canManageInvites) return;
     const templateId = selectedTemplates[triggerType];
     if (!templateId) {
       toast({ title: 'Select a template first', variant: 'error' });
@@ -184,7 +185,7 @@ export function EmailAutomationStudio({ orgId }: Props) {
         }
         description="Automate guest communications at key moments in the event lifecycle."
         actions={
-          can('invites.manage') ? (
+          canManageInvites ? (
             <Button
               size="sm"
               variant="outline"
@@ -210,7 +211,7 @@ export function EmailAutomationStudio({ orgId }: Props) {
             title="No Email Templates Yet"
             description="Create your first email template before configuring automations."
             action={
-              can('invites.manage') ? (
+              canManageInvites ? (
                 <Button
                   size="sm"
                   leftIcon={<Plus className="h-4 w-4" aria-hidden="true" />}
@@ -265,7 +266,7 @@ export function EmailAutomationStudio({ orgId }: Props) {
 
                     {/* Action buttons */}
                     <div className="flex items-center gap-1 shrink-0">
-                      {can('invites.manage') && automation && (
+                      {canManageInvites && automation && (
                         <>
                           {/* Toggle enabled/disabled */}
                           <button
@@ -364,7 +365,7 @@ export function EmailAutomationStudio({ orgId }: Props) {
                             [triggerType]: e.target.value,
                           }))
                         }
-                        disabled={!can('invites.manage')}
+                        disabled={!canManageInvites}
                         aria-describedby={`template-hint-${triggerType}`}
                       >
                         <option value="">— Choose a template —</option>
@@ -405,7 +406,7 @@ export function EmailAutomationStudio({ orgId }: Props) {
                               rsvp_reminder: Number(e.target.value),
                             }))
                           }
-                          disabled={!can('invites.manage')}
+                          disabled={!canManageInvites}
                           aria-describedby="offset-hint"
                         />
                         <p id="offset-hint" className="text-[11px] text-fg-subtle">
@@ -416,7 +417,7 @@ export function EmailAutomationStudio({ orgId }: Props) {
                     )}
 
                     {/* Save / Configure button */}
-                    {can('invites.manage') && (
+                    {canManageInvites && (
                       <div className="flex items-center gap-2 pt-1">
                         <Button
                           size="sm"
@@ -443,7 +444,7 @@ export function EmailAutomationStudio({ orgId }: Props) {
                     )}
 
                     {/* Not configured fallback */}
-                    {!automation && !can('invites.manage') && (
+                    {!automation && !canManageInvites && (
                       <div className="flex items-center gap-2 text-xs text-fg-muted">
                         <AlertCircle className="h-4 w-4" aria-hidden="true" />
                         Not configured. Ask an administrator to set up this automation.

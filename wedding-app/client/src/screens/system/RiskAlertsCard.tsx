@@ -18,7 +18,7 @@ import type { RiskSeverity } from '../../sdk/intelligence';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '../../ui/Card';
 import { Badge } from '../../ui/Badge';
 import { Skeleton } from '../../ui/Skeleton';
-import { usePermissions } from '../../lib/usePermissions';
+import { usePermission } from '../../lib/usePermission';
 
 interface Props {
   orgId: string;
@@ -40,8 +40,8 @@ function healthLabel(score: number): string {
 
 export function RiskAlertsCard({ orgId }: Props) {
   // N3 fix: respect analytics.view permission
-  const { can } = usePermissions();
-  if (!can('analytics.view')) return null;
+  const canViewAnalytics = usePermission('analytics.view');
+  if (!canViewAnalytics) return null;
 
   const { data, isLoading } = useQuery({
     queryKey: ['risk-alerts', orgId],

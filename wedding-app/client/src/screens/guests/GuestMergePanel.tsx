@@ -29,7 +29,7 @@ import {
   ExternalLink,
 } from 'lucide-react';
 import { sdk } from '../../sdk';
-import { usePermissions } from '../../lib/usePermissions';
+import { usePermission } from '../../lib/usePermission';
 import { Button } from '../../ui/Button';
 import { Badge } from '../../ui/Badge';
 import { Skeleton } from '../../ui/Skeleton';
@@ -244,7 +244,8 @@ interface Props {
 }
 
 export function GuestMergePanel({ orgId, onClose }: Props) {
-  const { can } = usePermissions();
+  const canViewGuests = usePermission('guests.view');
+  const canManageGuests = usePermission('guests.manage');
   const { toast } = useToast();
   const qc = useQueryClient();
   const [dismissed, setDismissed] = useState<Set<string>>(getDismissed);
@@ -255,7 +256,7 @@ export function GuestMergePanel({ orgId, onClose }: Props) {
     queryKey: ['guest-duplicates', orgId],
     queryFn: () => sdk.guests.getDuplicates(orgId),
     staleTime: 10 * 60_000, // expensive query — cache 10 min
-    enabled: can('guests.view'),
+    enabled: canViewGuests,
   });
 
   const mergeMutation = useMutation({
@@ -298,7 +299,7 @@ export function GuestMergePanel({ orgId, onClose }: Props) {
     [mergeMutation, toast],
   );
 
-  if (!can('guests.view')) return null;
+  if (!canViewGuests) return null;
 
   const visibleClusters = (data?.clusters ?? []).filter((c) => !dismissed.has(c.key));
   const highCount = visibleClusters.filter((c) => c.confidence === 'high').length;
@@ -378,7 +379,7 @@ export function GuestMergePanel({ orgId, onClose }: Props) {
               <ClusterCard
                 key={cluster.key}
                 cluster={cluster}
-                canManage={can('guests.manage')}
+                      canManage={canManageGuests}
                 onMerge={(primaryId, duplicateIds) =>
                   handleMerge(cluster.key, primaryId, duplicateIds)
                 }

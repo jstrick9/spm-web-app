@@ -16,7 +16,7 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, waitFor, fireEvent } from '@testing-library/react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 
-vi.mock('../../lib/usePermissions', () => ({ usePermissions: vi.fn() }));
+vi.mock('../../lib/usePermission', () => ({ usePermission: vi.fn() }));
 vi.mock('../../sdk', () => ({
   sdk: {
     guests: {
@@ -31,7 +31,7 @@ beforeEach(() => {
   localStorage.clear();
 });
 
-import { usePermissions } from '../../lib/usePermissions';
+import { usePermission } from '../../lib/usePermission';
 import { sdk } from '../../sdk';
 import { GuestMergePanel } from './GuestMergePanel';
 
@@ -68,9 +68,7 @@ function renderPanel(orgId = 'org-1') {
 
 describe('GuestMergePanel', () => {
   beforeEach(() => {
-    vi.mocked(usePermissions).mockReturnValue({
-      can: (p: string) => ['guests.view', 'guests.manage'].includes(p),
-    } as ReturnType<typeof usePermissions>);
+    vi.mocked(usePermission).mockReturnValue(true as ReturnType<typeof usePermission>);
     vi.mocked(sdk.guests.getDuplicates).mockResolvedValue({
       clusters: [HIGH_CLUSTER, MED_CLUSTER],
     });
@@ -81,7 +79,7 @@ describe('GuestMergePanel', () => {
   });
 
   it('returns null when guests.view is not permitted', () => {
-    vi.mocked(usePermissions).mockReturnValue({ can: () => false } as ReturnType<typeof usePermissions>);
+    vi.mocked(usePermission).mockImplementation((p: string) => p !== 'guests.view');
     const { container } = renderPanel();
     expect(container.firstChild).toBeNull();
   });
@@ -182,9 +180,9 @@ describe('GuestMergePanel', () => {
   });
 
   it('does not show Merge button for view-only users', async () => {
-    vi.mocked(usePermissions).mockReturnValue({
-      can: (p: string) => p === 'guests.view', // manage NOT granted
-    } as ReturnType<typeof usePermissions>);
+    vi.mocked(usePermission).mockImplementation(
+      (p: string) => p === 'guests.view' // manage NOT granted
+    );
 
     renderPanel();
     await waitFor(() => expect(screen.getByText(/Jane Smith/)).toBeTruthy());

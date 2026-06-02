@@ -32,8 +32,8 @@ import { EmptyState } from '../../ui/EmptyState';
 import { AccessDenied } from '../../ui/AccessDenied';
 import { RevenueForecastCard } from './RevenueForecastCard';
 import { RiskAlertsCard } from './RiskAlertsCard';
-// usePermissions hook — must exist in the project; guards this entire screen
-import { usePermissions } from '../../lib/usePermissions';
+// usePermission hook — guards this entire screen
+import { usePermission } from '../../lib/usePermission';
 
 interface Props {
   orgId: string;
@@ -44,9 +44,9 @@ const MIN_EVENTS_FOR_INTELLIGENCE = 5;
 
 export function IntelligenceDashboard({ orgId }: Props) {
   // ── RBAC gate (N3 fix) ──────────────────────────────────────────────────
-  const { can } = usePermissions();
+  const canViewAnalytics = usePermission('analytics.view');
 
-  if (!can('analytics.view')) {
+  if (!canViewAnalytics) {
     return (
       <>
         <PageHeader
@@ -345,7 +345,9 @@ export function IntelligenceDashboard({ orgId }: Props) {
                       </span>
                       <div className="flex items-center gap-2 shrink-0">
                         <Badge variant={v.avgRating >= 4 ? 'success' : v.avgRating >= 3 ? 'warning' : 'default'}>
-                          ★ {v.avgRating.toFixed(1)}
+                          <span aria-hidden="true">★</span>
+                          <span className="sr-only">Rating:</span>{' '}
+                          {v.avgRating.toFixed(1)}
                         </Badge>
                         <span className="text-xs text-fg-subtle tabular-nums">
                           {v.count} event{v.count !== 1 ? 's' : ''}
