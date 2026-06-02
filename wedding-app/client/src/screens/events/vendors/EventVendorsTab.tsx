@@ -14,6 +14,7 @@ import { VendorFormDialog } from './VendorFormDialog';
 import { VendorPaymentDialog } from './VendorPaymentDialog';
 import { VendorTimelineChart } from './VendorTimelineChart';
 import { VendorCommunicationsHub } from './hub/VendorCommunicationsHub';
+import { VendorMatchPanel } from './VendorMatchPanel';
 import { CreditCard } from 'lucide-react';
 
 interface Props {
@@ -176,6 +177,9 @@ export function EventVendorsTab({ eventId, organizationId }: Props) {
           />
         </Card>
       )}
+
+      {/* Smart vendor matching: reliability-ranked recommendations for this event */}
+      <VendorMatchPanel eventId={eventId} />
 
       {vendors.length > 0 && <VendorTimelineChart eventId={eventId} />}
         {vendors.length > 0 && <VendorCommunicationsHub eventId={eventId} organizationId={organizationId} />}

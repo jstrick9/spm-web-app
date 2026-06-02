@@ -22,10 +22,15 @@ vi.mock('../../../sdk', () => ({
       }),
       bulkSend: vi.fn().mockResolvedValue({ sent: 2 }),
     },
+    lifecycleEmails: {
+      log: vi.fn().mockResolvedValue({ emails: [], stats: { pending: 0, sent: 0, failed: 0, skipped: 0 } }),
+      send: vi.fn().mockResolvedValue({ result: { trigger: 'thank_you', eventId: 'e1', scheduled: 0, skipped: 0 } }),
+    },
   },
 }));
 
 vi.mock('../../../ui/Toast', () => ({ useToast: () => ({ toast: vi.fn() }) }));
+vi.mock('../../../lib/usePermission', () => ({ usePermission: () => true }));
 
 function wrap() {
   const qc = new QueryClient({ defaultOptions: { queries: { retry: false, gcTime: 0 } } });

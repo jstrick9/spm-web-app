@@ -16,6 +16,11 @@ vi.mock('../../../sdk', () => ({
       create: vi.fn().mockResolvedValue({ item: { id: 'b3' } }),
       delete: vi.fn().mockResolvedValue(undefined),
     },
+    paymentLinks: {
+      list: vi.fn().mockResolvedValue({ payments: [], totals: { total: 0, paid: 0, pending: 0 } }),
+      create: vi.fn().mockResolvedValue({ payment: { id: 'p1' } }),
+      checkout: vi.fn().mockResolvedValue({ checkoutUrl: 'https://checkout.stripe.com/x', payment: { id: 'p1' } }),
+    },
   },
 }));
 

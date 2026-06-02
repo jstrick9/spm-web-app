@@ -15,6 +15,10 @@ vi.mock('../../../sdk', () => ({
           { id: 'v2', name: 'Snap Pics', category: 'Photography', email: 'snap@pics.com' }
         ] 
       })
+    },
+    vendorScoring: {
+      matches: vi.fn().mockResolvedValue({ matches: [] }),
+      scores: vi.fn().mockResolvedValue({ scores: [] }),
     }
   }
 }));

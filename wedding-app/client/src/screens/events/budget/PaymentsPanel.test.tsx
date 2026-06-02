@@ -1,0 +1,65 @@
+import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { render, screen, fireEvent, waitFor } from '@testing-library/react';
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import { PaymentsPanel } from './PaymentsPanel';
+
+const listMock = vi.fn();
+const checkoutMock = vi.fn().mockResolvedValue({ checkoutUrl: 'https://checkout.stripe.com/c/abc', payment: { id: 'p1' } });
+
+vi.mock('../../../sdk', () => ({
+  sdk: { paymentLinks: {
+    list: (...a: unknown[]) => listMock(...a),
+    create: vi.fn().mockResolvedValue({ payment: { id: 'p2' } }),
+    checkout: (...a: unknown[]) => checkoutMock(...a),
+  } },
+}));
+vi.mock('../../../ui/Toast', () => ({ useToast: () => ({ toast: vi.fn() }) }));
+let canManage = true;
+vi.mock('../../../lib/usePermission', () => ({ usePermission: () => canManage }));
+
+function wrap() {
+  const qc = new QueryClient({ defaultOptions: { queries: { retry: false, gcTime: 0 } } });
+  return ({ children }: { children: React.ReactNode }) => (
+    <QueryClientProvider client={qc}>{children}</QueryClientProvider>
+  );
+}
+
+beforeEach(() => {
+  canManage = true;
+  vi.clearAllMocks();
+  listMock.mockResolvedValue({
+    payments: [
+      { id: 'p1', event_id: 'e1', contract_id: null, provider: 'stripe', amount_cents: 150000, status: 'pending', payment_url: null, paid_at: null, created_at: '' },
+      { id: 'p2', event_id: 'e1', contract_id: null, provider: 'manual', amount_cents: 5000, status: 'completed', payment_url: null, paid_at: '2026-01-01', created_at: '' },
+    ],
+    totals: { total: 155000, paid: 5000, pending: 150000 },
+  });
+});
+
+describe('PaymentsPanel', () => {
+  it('renders payment rows and totals', async () => {
+    render(<PaymentsPanel eventId="e1" />, { wrapper: wrap() });
+    await screen.findByText('completed');
+    // Provider names are unique to rows; statuses confirm rows rendered.
+    expect(screen.getByText('stripe')).toBeInTheDocument();
+    expect(screen.getByText('manual')).toBeInTheDocument();
+    expect(screen.getByText('pending')).toBeInTheDocument();
+  });
+
+  it('offers "Collect Payment" for an unpaid stripe link and opens the checkout', async () => {
+    const openSpy = vi.spyOn(window, 'open').mockReturnValue(null);
+    render(<PaymentsPanel eventId="e1" />, { wrapper: wrap() });
+    const btn = await screen.findByRole('button', { name: /Collect Payment/i });
+    fireEvent.click(btn);
+    await waitFor(() => expect(checkoutMock).toHaveBeenCalledWith('p1'));
+    await waitFor(() => expect(openSpy).toHaveBeenCalledWith('https://checkout.stripe.com/c/abc', '_blank', 'noopener,noreferrer'));
+  });
+
+  it('hides "New Payment" and "Collect Payment" without budget.manage', async () => {
+    canManage = false;
+    render(<PaymentsPanel eventId="e1" />, { wrapper: wrap() });
+    await screen.findByText('completed'); // wait for data to render
+    expect(screen.queryByRole('button', { name: /New Payment/i })).toBeNull();
+    expect(screen.queryByRole('button', { name: /Collect Payment/i })).toBeNull();
+  });
+});

@@ -8,6 +8,7 @@
  *   4. Background: periodically retry un-synced messages
  */
 import React, { useState, useEffect, useRef, useCallback } from 'react';
+// (mountedRef below guards async setState after unmount)
 import { Card, CardContent, CardHeader, CardTitle } from '../../../ui/Card';
 import { Input } from '../../../ui/Input';
 import { Button } from '../../../ui/Button';
@@ -33,12 +34,25 @@ export function ChatSystem({ eventId, currentUser }: Props) {
   const [showEmoji, setShowEmoji] = useState(false);
   const [serverOnline, setServerOnline] = useState(true);
   const scrollRef = useRef<HTMLDivElement>(null);
+  // True while the component is mounted. Async handlers (load + send) consult
+  // this before calling setState so a network/IndexedDB op that resolves after
+  // unmount can't trigger "setState on unmounted component" (which surfaces as
+  // "window is not defined" under jsdom teardown in the test suite).
+  const mountedRef = useRef(true);
+  useEffect(() => {
+    mountedRef.current = true;
+    return () => { mountedRef.current = false; };
+  }, []);
 
   // Build thread ID from event + category
   const threadId = `${eventId}:${activeCategory}`;
 
   // ─── Load messages: server-first, IndexedDB fallback ──
-  const loadMessages = useCallback(async () => {
+  // `isMounted` lets the caller (the effect below) cancel state updates after
+  // unmount. Without it, the async IndexedDB/network work can resolve after the
+  // component is gone — leaking a React "setState on unmounted component" and,
+  // under jsdom teardown, throwing "window is not defined".
+  const loadMessages = useCallback(async (isMounted: () => boolean = () => true) => {
     try {
       const token = getToken();
       if (!token) throw new Error('no token');
@@ -65,17 +79,19 @@ export function ChatSystem({ eventId, currentUser }: Props) {
         ...unsynced.filter(m => !serverIds.has(m.id)),
       ].sort((a, b) => a.createdAt.localeCompare(b.createdAt));
 
-      setMessages(merged);
-      setServerOnline(true);
-
-      // Persist server messages to IndexedDB for offline access
+      // Persist server messages to IndexedDB for offline access first, then
+      // commit state only if still mounted.
       for (const msg of serverMsgs) {
         await saveMessage(msg);
       }
+      if (!isMounted()) return;
+      setMessages(merged);
+      setServerOnline(true);
     } catch {
       // Offline: load from IndexedDB
-      setServerOnline(false);
       const localMsgs = await getMessages(eventId, activeCategory);
+      if (!isMounted()) return;
+      setServerOnline(false);
       if (localMsgs.length === 0) {
         const welcome: ChatMessage = {
           id: `welcome-${Date.now()}`,
@@ -89,6 +105,7 @@ export function ChatSystem({ eventId, currentUser }: Props) {
           synced: true,
         };
         await saveMessage(welcome);
+        if (!isMounted()) return;
         setMessages([welcome]);
       } else {
         setMessages(localMsgs);
@@ -96,7 +113,11 @@ export function ChatSystem({ eventId, currentUser }: Props) {
     }
   }, [eventId, activeCategory, threadId, currentUser.id]);
 
-  useEffect(() => { loadMessages(); }, [loadMessages]);
+  useEffect(() => {
+    let mounted = true;
+    loadMessages(() => mounted);
+    return () => { mounted = false; };
+  }, [loadMessages]);
 
   // Auto-scroll on new messages
   useEffect(() => {
@@ -139,6 +160,7 @@ export function ChatSystem({ eventId, currentUser }: Props) {
         synced: true,
       };
       await saveMessage(serverMsg);
+      if (!mountedRef.current) return;
       setMessages(prev =>
         prev.map(m => m.id === newMsg.id ? serverMsg : m)
       );
@@ -146,6 +168,7 @@ export function ChatSystem({ eventId, currentUser }: Props) {
     } catch {
       // Save locally — will sync later
       await saveMessage(newMsg);
+      if (!mountedRef.current) return;
       setServerOnline(false);
     }
   };

@@ -23,6 +23,7 @@ import { useToast } from '../../../ui/Toast';
 import {
   Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle, DialogTrigger,
 } from '../../../ui/Dialog';
+import { PaymentsPanel } from './PaymentsPanel';
 import { usePermission } from '../../../lib/usePermission';
 
 interface Props {
@@ -169,6 +170,9 @@ export function EventBudgetTab({ eventId, organizationId }: Props) {
           )}
         </CardContent>
       </Card>
+
+      {/* Real payment capture (Stripe / Square hosted checkout) */}
+      <PaymentsPanel eventId={eventId} />
     </div>
   );
 }

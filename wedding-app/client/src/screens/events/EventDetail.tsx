@@ -24,6 +24,7 @@ import { useToast } from '../../ui/Toast';
 import { StatCard } from '../../ui/StatCard';
 import { WidgetSlot } from '../../config/widgets/WidgetSlot';
 import { EventProgressCard } from './EventProgressCard';
+import { EventRiskCard } from './EventRiskCard';
 import { EventQuickSwitcher } from './EventQuickSwitcher';
 import { StatusBadge } from './statusMeta';
 import { EventGuestsTab } from './guests/EventGuestsTab';
@@ -320,6 +321,9 @@ function OverviewTab({
         />
       </div>
 
+
+      {/* Anomaly & risk alerts (event health) */}
+      <EventRiskCard eventId={eventId} />
 
       {/* Event readiness tracker */}
       <EventProgressCard eventId={eventId} />

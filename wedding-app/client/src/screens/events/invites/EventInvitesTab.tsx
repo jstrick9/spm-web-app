@@ -17,6 +17,7 @@ import { useToast } from '../../../ui/Toast';
 import { DataTable, type Column } from '../../../ui/DataTable';
 import { StatCard } from '../../../ui/StatCard';
 import { cn } from '../../../ui/lib/cn';
+import { LifecycleEmailsPanel } from './LifecycleEmailsPanel';
 
 interface Props { eventId: string }
 
@@ -226,6 +227,9 @@ export function EventInvitesTab({ eventId }: Props) {
           </Card>
         </div>
       )}
+
+      {/* Automated lifecycle emails (RSVP reminders, thank-yous, save-the-dates) */}
+      <LifecycleEmailsPanel eventId={eventId} />
     </div>
   );
 }

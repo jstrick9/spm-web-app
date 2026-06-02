@@ -48,6 +48,7 @@ vi.mock('../../sdk', () => ({
     },
     guests: { list: vi.fn().mockResolvedValue({ guests: [], counts: { pending: 30, attending: 60, declined: 10, maybe: 20 } }) },
     roles: { listRoles: vi.fn().mockResolvedValue({ roles: [] }) },
+    risk: { forEvent: vi.fn().mockResolvedValue({ risk: { eventId: 'e1', eventTitle: 'Smith Wedding', startDate: null, daysUntil: null, healthScore: 100, alerts: [] } }) },
   },
 }));
 
