@@ -1,17 +1,20 @@
 /**
- * Lifecycle email SDK — automation rules, manual sends, and the send log.
+ * Lifecycle emails SDK — automation rules + manual sends + send log.
+ *
+ * NEW SDK module wiring the lifecycleEmailRoutes endpoints.
  */
 import { api } from './client.js';
 
-export type LifecycleTrigger = 'rsvp_reminder' | 'thank_you' | 'save_the_date' | 'manual';
+export type TriggerType = 'rsvp_reminder' | 'thank_you' | 'save_the_date' | 'manual';
 
 export interface SdkEmailAutomation {
   id: string;
   organization_id: string;
   template_id: string;
-  trigger_type: LifecycleTrigger;
-  offset_days: number;
-  enabled: number;
+  template_name?: string; // joined from email_templates
+  trigger_type: TriggerType;
+  offset_days: number | null;
+  enabled: boolean;
   created_at: string;
   updated_at: string;
 }
@@ -20,48 +23,72 @@ export interface SdkScheduledEmail {
   id: string;
   event_id: string;
   guest_id: string | null;
-  trigger_type: string;
-  recipient_email: string;
+  template_id: string;
+  trigger_type: TriggerType;
+  to_email: string;
+  to_name: string;
   subject: string;
   status: 'pending' | 'sent' | 'failed' | 'skipped';
+  sent_at: string | null;
   error: string | null;
   created_at: string;
-  sent_at: string | null;
 }
 
-export interface SendResult {
-  trigger: LifecycleTrigger;
-  eventId: string;
+export interface SendStats {
+  total: number;
+  sent: number;
+  failed: number;
+  pending: number;
+  skipped: number;
+}
+
+export interface TriggerResult {
   scheduled: number;
   skipped: number;
   reason?: string;
 }
 
 export const lifecycleEmailsSdk = {
+  // ── Automation rules ───────────────────────────────────────────────────
+
   listAutomations(orgId: string): Promise<{ automations: SdkEmailAutomation[] }> {
     return api.get(`/api/orgs/${orgId}/email-automations`);
   },
 
-  upsertAutomation(orgId: string, input: {
-    templateId: string;
-    triggerType: LifecycleTrigger;
-    offsetDays?: number;
-    enabled?: boolean;
-  }): Promise<{ automation: SdkEmailAutomation }> {
+  upsertAutomation(
+    orgId: string,
+    input: {
+      triggerType: TriggerType;
+      templateId: string;
+      offsetDays?: number;
+      enabled?: boolean;
+    },
+  ): Promise<{ automation: SdkEmailAutomation }> {
     return api.put(`/api/orgs/${orgId}/email-automations`, input);
   },
 
-  deleteAutomation(id: string): Promise<void> {
-    return api.delete(`/api/email-automations/${id}`);
+  deleteAutomation(automationId: string): Promise<void> {
+    return api.delete(`/api/email-automations/${automationId}`);
   },
 
-  send(eventId: string, triggerType: LifecycleTrigger): Promise<{ result: SendResult }> {
+  // ── Manual trigger ("send now") ────────────────────────────────────────
+
+  /**
+   * Manually run a lifecycle email trigger for an event.
+   * Idempotency: server rejects with 409 if same trigger ran within 1h.
+   */
+  sendNow(
+    eventId: string,
+    triggerType: TriggerType,
+  ): Promise<{ result: TriggerResult }> {
     return api.post(`/api/events/${eventId}/lifecycle-emails/send`, { triggerType });
   },
 
-  log(eventId: string): Promise<{
+  // ── Send log ───────────────────────────────────────────────────────────
+
+  listForEvent(eventId: string): Promise<{
     emails: SdkScheduledEmail[];
-    stats: { pending: number; sent: number; failed: number; skipped: number };
+    stats: SendStats;
   }> {
     return api.get(`/api/events/${eventId}/lifecycle-emails`);
   },
