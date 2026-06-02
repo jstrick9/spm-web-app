@@ -1,49 +1,48 @@
 /**
- * Guests SDK — replaces/extends the existing sdk/guests.ts.
+ * guests.ts — Guest + portal SDK module.
  *
- * Adds:
- *   getDuplicates(orgId) — GET /api/orgs/:orgId/guest-duplicates
- *   merge(orgId, primaryId, duplicateIds) — POST /api/orgs/:orgId/guests/merge
- *
- * DuplicateCluster type mirrors server/src/db/repos/guestIdentity.ts
- * so the client has full type safety without any `any` cast.
+ * Phase 34b changes:
+ *   - portalSdk.info() now returns Promise<PortalInfoResponse> instead of
+ *     Promise<SdkPortalInfo>. PortalInfoResponse is a superset that adds
+ *     the `theme` field the server has always returned but SdkPortalInfo
+ *     never declared — forcing PublicGuestPortal to use `.then((r: any)`.
+ *   - All other methods, types, and exports are identical to the live file.
+ *   - SdkPortalInfo in types.ts is deliberately NOT removed — other
+ *     consumers (EventDetail, GuestPortalSettingsTab) still use it.
  */
 import { api } from './client.js';
+import type {
+  SdkGuest,
+  SdkGuestCounts,
+  SdkRsvp,
+  SdkPortalConfig,
+} from './types.js';
+import type { PortalInfoResponse, PortalRsvpInput } from './portalTypes.js';
 
-// ── Existing guest types (preserved) ─────────────────────────────────────
+// ── Guest input ───────────────────────────────────────────────────────────
 
-export interface SdkGuest {
-  id: string;
-  event_id: string;
-  organization_id: string;
-  full_name: string;
-  email: string | null;
-  phone: string | null;
-  party_name: string | null;
-  rsvp_status: 'pending' | 'attending' | 'declined' | 'maybe';
-  dietary_restrictions: string | null;
-  accessibility_notes: string | null;
-  table_assignment: string | null;
-  seat_assignment: string | null;
-  room_assignment: string | null;
-  plus_one_allowed: boolean;
-  allow_portal_access: boolean;
-  created_at: string;
+export interface GuestInput {
+  fullName: string;
+  email?: string;
+  phone?: string;
+  partyName?: string;
+  rsvpStatus?: SdkGuest['rsvp_status'];
+  dietaryRestrictions?: string;
+  accessibilityNotes?: string;
+  tableAssignment?: string;
+  roomAssignment?: string;
+  seatAssignment?: string;
+  plusOneAllowed?: boolean;
+  allowPortalAccess?: boolean;
+  allowLodgingAccess?: boolean;
+  metadata?: Record<string, unknown>;
 }
 
-export interface SdkRsvpCounts {
-  pending: number;
-  attending: number;
-  declined: number;
-  maybe: number;
-  total: number;
-}
+// ── Guest identity / dedup types ──────────────────────────────────────────
 
-// ── Guest identity types ──────────────────────────────────────────────────
+export type GuestMatchSignal = 'email' | 'phone' | 'name';
 
-export type MatchSignal = 'email' | 'phone' | 'name';
-
-export interface DuplicateMember {
+export interface GuestDuplicateMember {
   id: string;
   eventId: string;
   eventTitle: string;
@@ -54,111 +53,160 @@ export interface DuplicateMember {
   createdAt: string;
 }
 
-export interface DuplicateCluster {
+export interface GuestDuplicateCluster {
   key: string;
-  signals: MatchSignal[];
+  signals: GuestMatchSignal[];
   confidence: 'high' | 'medium';
-  members: DuplicateMember[];
+  members: GuestDuplicateMember[];
   hasInEventDuplicate: boolean;
 }
 
-export interface GuestDuplicatesResponse {
-  clusters: DuplicateCluster[];
+// ── RSVP input ────────────────────────────────────────────────────────────
+
+export interface RsvpInput {
+  guestId?: string;
+  attending: boolean;
+  attendingDays?: string[];
+  mealChoice?: string;
+  plusOneName?: string;
+  plusOneMealChoice?: string;
+  dietaryNotes?: string;
+  specialNeeds?: string;
+  notes?: string;
 }
 
-export interface GuestMergeResponse {
-  primary: SdkGuest;
-  mergedCount: number;
-}
-
-// ── SDK object ────────────────────────────────────────────────────────────
+// ── Guests SDK ────────────────────────────────────────────────────────────
 
 export const guestsSdk = {
-  // ── Existing methods (unchanged) ────────────────────────────────────────
-
-  listForEvent(eventId: string): Promise<{
-    guests: SdkGuest[];
-    counts: SdkRsvpCounts;
-    layout: unknown;
-  }> {
+  list(eventId: string): Promise<{ guests: SdkGuest[]; counts: SdkGuestCounts }> {
     return api.get(`/api/events/${eventId}/guests`);
   },
 
   listForOrg(
     orgId: string,
-    opts: {
+    filters: {
       search?: string;
-      rsvpStatus?: string;
+      rsvpStatus?: string[];
       eventId?: string;
       limit?: number;
       offset?: number;
     } = {},
-  ): Promise<{ guests: SdkGuest[]; total: number; counts: SdkRsvpCounts }> {
-    const qs = new URLSearchParams();
-    if (opts.search) qs.set('search', opts.search);
-    if (opts.rsvpStatus) qs.set('rsvpStatus', opts.rsvpStatus);
-    if (opts.eventId) qs.set('eventId', opts.eventId);
-    if (opts.limit != null) qs.set('limit', String(opts.limit));
-    if (opts.offset != null) qs.set('offset', String(opts.offset));
-    const q = qs.toString();
-    return api.get(`/api/orgs/${orgId}/guests${q ? `?${q}` : ''}`);
+  ): Promise<{ guests: (SdkGuest & { event_title: string })[]; total: number; counts: SdkGuestCounts }> {
+    const q = new URLSearchParams();
+    if (filters.search) q.set('search', filters.search);
+    if (filters.rsvpStatus?.length) q.set('rsvpStatus', filters.rsvpStatus.join(','));
+    if (filters.eventId) q.set('eventId', filters.eventId);
+    if (filters.limit !== undefined) q.set('limit', String(filters.limit));
+    if (filters.offset !== undefined) q.set('offset', String(filters.offset));
+    const qs = q.toString();
+    return api.get(`/api/orgs/${orgId}/guests${qs ? `?${qs}` : ''}`);
   },
 
-  create(
-    eventId: string,
-    input: Partial<Omit<SdkGuest, 'id' | 'event_id' | 'organization_id' | 'created_at'>>,
-  ): Promise<{ guest: SdkGuest }> {
+  // ── Guest identity resolution ──────────────────────────────────────────
+
+  duplicates(orgId: string): Promise<{ clusters: GuestDuplicateCluster[] }> {
+    return api.get(`/api/orgs/${orgId}/guest-duplicates`);
+  },
+
+  merge(
+    orgId: string,
+    primaryId: string,
+    duplicateIds: string[],
+  ): Promise<{ primary: SdkGuest; mergedCount: number }> {
+    return api.post(`/api/orgs/${orgId}/guests/merge`, { primaryId, duplicateIds });
+  },
+
+  // ── CRUD ──────────────────────────────────────────────────────────────
+
+  create(eventId: string, input: GuestInput): Promise<{ guest: SdkGuest }> {
     return api.post(`/api/events/${eventId}/guests`, input);
   },
 
-  update(
-    guestId: string,
-    input: Partial<Omit<SdkGuest, 'id' | 'event_id' | 'organization_id' | 'created_at'>>,
-  ): Promise<{ guest: SdkGuest }> {
-    return api.patch(`/api/guests/${guestId}`, input);
+  bulkCreate(
+    eventId: string,
+    mode: 'skip' | 'replace' | 'append',
+    guests: GuestInput[],
+  ): Promise<{ inserted: number; updated: number; skipped: number }> {
+    return api.post(`/api/events/${eventId}/guests/bulk`, { mode, guests });
+  },
+
+  update(guestId: string, patch: Partial<GuestInput>): Promise<{ guest: SdkGuest }> {
+    return api.patch(`/api/guests/${guestId}`, patch);
   },
 
   delete(guestId: string): Promise<void> {
     return api.delete(`/api/guests/${guestId}`);
   },
 
-  bulkCreate(
+  // ── Portal token management (authenticated) ───────────────────────────
+
+  rotatePortalToken(guestId: string): Promise<{ token: string }> {
+    return api.post(`/api/guests/${guestId}/portal-token`);
+  },
+
+  revokePortalToken(guestId: string): Promise<void> {
+    return api.delete(`/api/guests/${guestId}/portal-token`);
+  },
+
+  // ── Portal config (authenticated) ────────────────────────────────────
+
+  getPortalConfig(eventId: string): Promise<{ config: SdkPortalConfig | undefined }> {
+    return api.get(`/api/events/${eventId}/portal-config`);
+  },
+
+  updatePortalConfig(
     eventId: string,
-    guests: Array<Partial<Omit<SdkGuest, 'id' | 'event_id' | 'organization_id' | 'created_at'>>>,
-  ): Promise<{ created: number; failed: number; errors: string[] }> {
-    return api.post(`/api/events/${eventId}/guests/bulk`, { guests });
+    payload: {
+      enabled: boolean;
+      password?: string;
+      clearPassword?: boolean;
+      accessStartsAt?: string;
+      accessEndsAt?: string;
+      gracePeriodHours?: number;
+      config?: Record<string, unknown>;
+    },
+  ): Promise<{ config: SdkPortalConfig }> {
+    return api.put(`/api/events/${eventId}/portal-config`, payload);
+  },
+};
+
+// ── RSVPs SDK (authenticated) ─────────────────────────────────────────────
+
+export const rsvpSdk = {
+  list(eventId: string): Promise<{ rsvps: SdkRsvp[] }> {
+    return api.get(`/api/events/${eventId}/rsvps`);
+  },
+};
+
+// ── Public portal SDK (no auth required) ─────────────────────────────────
+
+export const portalSdk = {
+  /**
+   * Fetch all public information for a portal event.
+   *
+   * Phase 34b: return type changed from Promise<SdkPortalInfo> to
+   * Promise<PortalInfoResponse>. PortalInfoResponse is a superset that
+   * adds the `theme` field the server has always returned.
+   *
+   * The old `SdkPortalInfo` type is preserved in types.ts for other
+   * consumers; this method is the only one that needs the richer type.
+   */
+  info(eventId: string): Promise<PortalInfoResponse> {
+    return api.get(`/api/portal/${eventId}/info`, { auth: false });
   },
 
-  importCsv(eventId: string, rows: string[][]): Promise<{ created: number; errors: string[] }> {
-    return api.post(`/api/events/${eventId}/guests/import`, { rows });
+  verifyPassword(eventId: string, password: string): Promise<{ ok: boolean }> {
+    return api.post(`/api/portal/${eventId}/verify-password`, { password }, { auth: false });
   },
-
-  // ── Guest identity / merge (new) ────────────────────────────────────────
 
   /**
-   * Returns all duplicate guest clusters across an org's events.
-   * Clusters are grouped by the strongest shared signal.
-   * Cache at 10 min — union-find over all org guests is expensive.
+   * Submit an RSVP from the public portal.
+   * Uses PortalRsvpInput (typed) instead of the generic RsvpInput.
    */
-  getDuplicates(orgId: string): Promise<GuestDuplicatesResponse> {
-    return api.get(`/api/orgs/${orgId}/guest-duplicates`);
-  },
-
-  /**
-   * Merge duplicate guest records into a single primary.
-   * Human-confirmed — never called automatically.
-   *
-   * Server:
-   *  1. Validates all IDs belong to the org.
-   *  2. Backfills empty contact fields on primary from duplicates.
-   *  3. Soft-deletes duplicates (deleted_at set).
-   *  4. Writes audit log entry.
-   *
-   * @param orgId        - Org that owns the guests (RBAC scope)
-   * @param primaryId    - Guest record to keep
-   * @param duplicateIds - Records to merge into primary and soft-delete
-   */
-  merge(orgId: string, primaryId: string, duplicateIds: string[]): Promise<GuestMergeResponse> {
-    return api.post(`/api/orgs/${orgId}/guests/merge`, { primaryId, duplicateIds });
+  submitRsvp(
+    eventId: string,
+    input: PortalRsvpInput,
+  ): Promise<{ ok: boolean; rsvpId: string }> {
+    return api.post(`/api/portal/${eventId}/rsvp`, input, { auth: false });
   },
 };
