@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Dialog, DialogContent, DialogTitle, DialogDescription } from '../../ui/Dialog';
 import { Button } from '../../ui/Button';
+import { Checkbox } from '../../ui/Checkbox';
 import { ChevronRight, ChevronLeft, Map, Users, Settings, Truck, MessageSquare, Star, Check } from 'lucide-react';
 import { cn } from '../../ui/lib/cn';
 import type { SdkMembership } from '../../sdk/types';
@@ -143,14 +144,12 @@ export function WelcomeModal({ memberships, onComplete }: Props) {
            <div className="bg-surface-2/50 border-t border-border p-4 flex items-center justify-between">
               
               <div className="flex items-center gap-2">
-                 <input 
-                   type="checkbox" 
-                   id="dontShow" 
+                 <Checkbox
+                   id="dontShow"
                    checked={dontShow}
-                   onChange={e => setDontShow(e.target.checked)}
-                   className="rounded border-border text-brand focus:ring-brand"
+                   onCheckedChange={(v) => setDontShow(v === true)}
                  />
-                 <label htmlFor="dontShow" className="text-xs text-fg-subtle cursor-pointer select-none">
+                 <label htmlFor="dontShow" className="text-xs text-fg-muted cursor-pointer select-none">
                     Don't show this again
                  </label>
               </div>
