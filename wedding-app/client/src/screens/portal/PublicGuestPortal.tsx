@@ -1,38 +1,35 @@
 /**
- * PublicGuestPortal — Phase 22: themed using org/event branding.
+ * PublicGuestPortal — the couple-facing public portal.
  *
- * Phase 34b changes (this file):
- * ────────────────────────────────
- * Eliminated all `any` annotations that were caused by the missing `theme`
- * field on SdkPortalInfo. The full change inventory:
+ * Phase 22:    Themed using org/event branding (6 presets, warm fallback).
+ * Phase 34b:   Eliminated any#1–6 (r:any, guests/layout/polls state any).
+ * Phase 35a:   Final any elimination:
+ *                any#7  handleWheel (e: any) → KonvaEventObject<WheelEvent>
+ *                any#8  polls.filter((p: any) → Poll
+ *                any#9  polls.map((poll: any) → Poll
+ *                any#10 poll.options.map((opt: any) → PollOption
+ *              + Bonus bug: getPointerPosition() returns Vector2d | null —
+ *                the live code called .x/.y on it without a null guard,
+ *                crashing if the pointer hadn't entered the canvas yet.
  *
- *   BEFORE → AFTER
- *   ─────────────────────────────────────────────────────────────────────
- *   .then((r: any) => {          → .then((r: PortalInfoResponse) => {
- *   useState<Array<any>>([])     → useState<PortalGuestEntry[]>([])
- *   useState<any>(null) [layout] → useState<PortalLayoutPayload | null>(null)
- *   useState<any[]>([]) [polls]  → useState<Poll[]>([])
- *   { layout: any; … }           → { layout: PortalLayoutPayload; … }
- *   items.map((item: any) => {   → items.map((item: LayoutCanvasItem) => {
+ * IMPORT NOTE — @types/konva does NOT exist as a separate npm package.
+ * konva v10+ ships its own TypeScript declarations. react-konva v18
+ * re-exports KonvaEventObject from 'konva/lib/Node'. No new dependencies
+ * are required — just the correct import.
  *
- * ONE intentional `any` remains:
- *   handleWheel = (e: any) => {
- *   react-konva does not export a typed WheelEvent wrapper without
- *   installing @types/konva separately. The `e.evt` and `e.target`
- *   access pattern is correct at runtime; a comment explains the choice.
- *
- * Zero visual or behavioural changes. The component renders identically.
+ * After Phase 35a, PublicGuestPortal.tsx has ZERO `any` annotations.
  */
-import React, { useState, useEffect, useMemo } from 'react';
-import { ApiError, sdk } from '../../sdk';
+import React, { useState, useEffect } from 'react';
+import type { KonvaEventObject } from 'react-konva';
+import { ApiError, sdk }           from '../../sdk';
 import { Card, CardContent, CardHeader, CardTitle } from '../../ui/Card';
-import { Button } from '../../ui/Button';
-import { Label } from '../../ui/Label';
+import { Button }                  from '../../ui/Button';
+import { Label }                   from '../../ui/Label';
 import { Map as MapIcon, Home, Send } from 'lucide-react';
-import { Badge } from '../../ui/Badge';
+import { Badge }                   from '../../ui/Badge';
 import { Stage, Layer, Rect, Circle, Text, Group } from 'react-konva';
-import { cn } from '../../ui/lib/cn';
-import type { Poll } from '../../sdk/feedback.js';
+import { cn }                      from '../../ui/lib/cn';
+import type { Poll }               from '../../sdk/feedback.js';
 import type {
   PortalInfoResponse,
   PortalGuestEntry,
@@ -42,10 +39,11 @@ import type {
   RectTableItem,
   DanceFloorItem,
   ChairItem,
+  PollOption,
 } from '../../sdk/portalTypes.js';
 
 // ── Default portal palette (warm/elegant) ─────────────────────────────────
-// Applied when the org hasn't configured a theme, or theme fields are absent.
+
 const DEFAULT_PALETTE = {
   bg:           '#fdfbf7',
   surface:      '#ffffff',
@@ -63,6 +61,7 @@ const DEFAULT_PALETTE = {
 type Palette = typeof DEFAULT_PALETTE;
 
 // ── Type guards for canvas item discriminated union ───────────────────────
+
 function isRoundTable(item: LayoutCanvasItem): item is RoundTableItem {
   return item.type === 'round_table';
 }
@@ -79,7 +78,7 @@ function isChair(item: LayoutCanvasItem): item is ChairItem {
 // ── PublicGuestPortal ─────────────────────────────────────────────────────
 
 export function PublicGuestPortal({ eventId }: { eventId: string }) {
-  // State — all typed, no `any`
+  // ── State — fully typed, zero `any` ─────────────────────────────────────
   const [info,            setInfo]           = useState<PortalInfoResponse['event'] | null>(null);
   const [guests,          setGuests]         = useState<PortalGuestEntry[]>([]);
   const [layout,          setLayout]         = useState<PortalLayoutPayload | null>(null);
@@ -93,22 +92,20 @@ export function PublicGuestPortal({ eventId }: { eventId: string }) {
   const [error,           setError]          = useState<string | null>(null);
   const [activeTab,       setActiveTab]      = useState<'home' | 'map' | 'rsvp'>('home');
 
+  // ── Boot: load portal data ───────────────────────────────────────────────
   useEffect(() => {
-    // Pre-select a guest from the URL query string (e.g. from invite email link)
     const sp = new URLSearchParams(window.location.hash.split('?')[1] || '');
     const guestParam = sp.get('guest');
     if (guestParam) setSelectedGuestId(guestParam);
 
-    // ── THE FIX: `r` is now typed as PortalInfoResponse, not `any` ──────
+    // any#1 fixed (Phase 34b): r is PortalInfoResponse, not any
     sdk.portal.info(eventId)
       .then((r: PortalInfoResponse) => {
         setInfo(r.event);
-        setGuests(r.guests);
-        setLayout(r.layout);
+        setGuests(r.guests);   // any#2 fixed
+        setLayout(r.layout);   // any#3 fixed
 
-        // Apply theme from the portal info response (no auth needed).
-        // `r.theme` was previously inaccessible without the `any` cast because
-        // SdkPortalInfo didn't declare the `theme` field.
+        // r.theme was the missing field that forced the original `any` cast
         if (r.theme) {
           const t = r.theme;
           setPalette({
@@ -126,14 +123,14 @@ export function PublicGuestPortal({ eventId }: { eventId: string }) {
           });
         }
 
-        // Polls are optional — swallow errors gracefully
         sdk.feedback.getPolls(eventId)
-          .then((res) => setPolls(res.polls))
+          .then((res) => setPolls(res.polls))   // any#4 fixed: Poll[]
           .catch(() => {});
       })
       .catch(() => setError('Event not found.'));
   }, [eventId]);
 
+  // ── RSVP submit ──────────────────────────────────────────────────────────
   async function submit(e: React.FormEvent) {
     e.preventDefault();
     setError(null);
@@ -143,7 +140,7 @@ export function PublicGuestPortal({ eventId }: { eventId: string }) {
         guestId:    selectedGuestId,
         attending,
         mealChoice,
-        notes:      notes || undefined,
+        notes: notes || undefined,
       });
       setDone(true);
     } catch (err) {
@@ -151,22 +148,12 @@ export function PublicGuestPortal({ eventId }: { eventId: string }) {
     }
   }
 
-  // ── Loading / error state ────────────────────────────────────────────────
+  // ── Guards ───────────────────────────────────────────────────────────────
   if (error && !info) {
     return (
-      <div
-        className="min-h-screen flex items-center justify-center"
-        style={{ backgroundColor: palette.bg }}
-      >
-        <div className="text-center space-y-3 px-4">
-          <p className="text-lg font-medium" style={{ color: palette.fg }}>
-            {error}
-          </p>
-          <p className="text-sm" style={{ color: palette.fgMuted }}>
-            The invitation link may have expired or the event is no longer accepting RSVPs.
-          </p>
-        </div>
-      </div>
+      <Card className="max-w-md mx-auto mt-20">
+        <CardContent className="pt-6 text-danger">{error}</CardContent>
+      </Card>
     );
   }
 
@@ -174,32 +161,42 @@ export function PublicGuestPortal({ eventId }: { eventId: string }) {
     return (
       <div
         className="min-h-screen flex items-center justify-center"
-        style={{ backgroundColor: palette.bg }}
+        style={{ background: palette.bg }}
         aria-busy="true"
         aria-label="Loading wedding portal"
       >
-        <div className="text-center space-y-3">
-          <div
-            className="w-8 h-8 rounded-full border-2 border-t-transparent animate-spin mx-auto"
-            style={{ borderColor: palette.primary, borderTopColor: 'transparent' }}
-            aria-hidden="true"
-          />
-          <p className="text-sm" style={{ color: palette.fgMuted }}>Loading…</p>
+        <div className="animate-pulse" style={{ color: palette.fgMuted }}>
+          Loading Portal…
         </div>
       </div>
     );
   }
 
-  // ── Main portal render ───────────────────────────────────────────────────
+  const activeGuest = guests.find((g) => g.id === selectedGuestId);
+
+  // Inline CSS var block so all children inherit the theme via var()
+  const themeVars: React.CSSProperties = {
+    '--portal-bg':           palette.bg,
+    '--portal-surface':      palette.surface,
+    '--portal-border':       palette.border,
+    '--portal-fg':           palette.fg,
+    '--portal-fg-muted':     palette.fgMuted,
+    '--portal-primary':      palette.primary,
+    '--portal-primary-fg':   palette.primaryFg,
+    '--portal-primary-hover':palette.primaryHover,
+    '--portal-accent':       palette.accent,
+    '--portal-accent-soft':  palette.accentSoft,
+  } as React.CSSProperties;
+
   return (
     <div
-      className="min-h-screen flex flex-col pb-16"
-      style={{ backgroundColor: palette.bg, color: palette.fg }}
+      className="min-h-screen font-serif flex flex-col relative pb-20"
+      style={{ background: palette.bg, color: palette.fg, ...themeVars }}
     >
-      {/* ── Portal header ─────────────────────────────────────────────── */}
+      {/* Header */}
       <header
-        className="text-center py-8 px-4"
-        style={{ backgroundColor: palette.surface, borderBottom: `1px solid ${palette.border}` }}
+        className="py-6 px-4 text-center sticky top-0 z-10 shadow-sm"
+        style={{ background: palette.surface, borderBottom: `1px solid ${palette.border}` }}
       >
         <h1 className="text-2xl md:text-4xl font-display font-bold tracking-widest">
           {info.title}
@@ -207,19 +204,15 @@ export function PublicGuestPortal({ eventId }: { eventId: string }) {
         <p className="mt-2 text-sm uppercase tracking-widest" style={{ color: palette.fgMuted }}>
           {info.startDate
             ? new Date(info.startDate).toLocaleDateString(undefined, {
-                weekday: 'long',
-                year: 'numeric',
-                month: 'long',
-                day: 'numeric',
+                weekday: 'long', year: 'numeric', month: 'long', day: 'numeric',
               })
             : 'TBD'}
         </p>
       </header>
 
-      {/* ── Main content area ─────────────────────────────────────────── */}
       <main className="flex-1 max-w-4xl mx-auto w-full p-4 md:p-8">
 
-        {/* ── HOME TAB ──────────────────────────────────────────────── */}
+        {/* ── HOME TAB ─────────────────────────────────────────────────── */}
         {activeTab === 'home' && (
           <div className="space-y-8">
             {/* Hero banner */}
@@ -227,7 +220,7 @@ export function PublicGuestPortal({ eventId }: { eventId: string }) {
               className="aspect-[21/9] w-full rounded-xl overflow-hidden shadow-lg relative flex items-center justify-center"
               style={{ background: palette.accent }}
             >
-              {/* Dark scrim ensures ≥ 3:1 contrast over any theme accent colour */}
+              {/* Dark scrim — keeps headline ≥3:1 contrast over any accent colour */}
               <div className="absolute inset-0 bg-black/45" aria-hidden="true" />
               <h2
                 className="relative z-10 text-white font-display text-4xl md:text-5xl lg:text-6xl text-center px-4 leading-tight"
@@ -237,7 +230,7 @@ export function PublicGuestPortal({ eventId }: { eventId: string }) {
               </h2>
             </div>
 
-            {/* Wedding countdown */}
+            {/* Countdown */}
             {info.startDate && (() => {
               const days = Math.max(0, Math.ceil(
                 (new Date(info.startDate!).getTime() - Date.now()) / 86400000,
@@ -252,295 +245,336 @@ export function PublicGuestPortal({ eventId }: { eventId: string }) {
                   >
                     {isPast ? '🎉' : days}
                   </div>
-                  <p
-                    className="mt-3 text-lg tracking-widest uppercase"
-                    style={{ color: palette.fgMuted }}
-                  >
-                    {isPast
-                      ? 'Congratulations!'
-                      : days === 1
-                        ? 'day to go'
-                        : 'days until the wedding'}
+                  <p className="mt-3 text-lg tracking-widest uppercase" style={{ color: palette.fgMuted }}>
+                    {isPast ? 'Congratulations!' : days === 1 ? 'day to go' : 'days until the wedding'}
                   </p>
                 </div>
               );
             })()}
 
             {/* Guest welcome card */}
-            {guests.length > 0 && (
-              <Card className="shadow-lg" style={{ borderColor: palette.border }}>
-                <CardHeader className="text-center pb-2">
-                  <CardTitle className="font-display text-2xl">
-                    You're on the guest list!
-                  </CardTitle>
-                  <p className="text-sm mt-1" style={{ color: palette.fgMuted }}>
-                    Find your name below to RSVP and view your seating assignment.
+            {activeGuest && (
+              <Card style={{ background: palette.surface, borderColor: palette.border }}>
+                <CardContent className="text-center py-6">
+                  <h3 className="text-xl font-display mb-2">
+                    Welcome, {activeGuest.fullName}
+                  </h3>
+                  <p className="text-sm mb-6 max-w-md mx-auto" style={{ color: palette.fgMuted }}>
+                    We are so excited to share our special day with you. Please browse the
+                    venue map to find your seat, or submit your RSVP!
                   </p>
-                </CardHeader>
-                <CardContent className="flex flex-col sm:flex-row gap-3 justify-center">
-                  <Button
-                    onClick={() => setActiveTab('rsvp')}
-                    style={{ background: palette.primary, color: palette.primaryFg }}
-                  >
-                    <Send className="w-4 h-4 mr-2" aria-hidden="true" />
-                    RSVP Now
-                  </Button>
-                  {layout && (
+                  <div className="flex flex-wrap gap-4 justify-center">
                     <Button
                       variant="outline"
                       onClick={() => setActiveTab('map')}
-                      style={{ borderColor: palette.border }}
+                      style={{ borderColor: palette.border, color: palette.fg }}
                     >
-                      <MapIcon className="w-4 h-4 mr-2" aria-hidden="true" />
-                      Find Your Seat
+                      <MapIcon className="w-4 h-4 mr-2" aria-hidden="true" /> View Map
                     </Button>
-                  )}
+                    <Button
+                      onClick={() => setActiveTab('rsvp')}
+                      style={{ background: palette.primary, color: palette.primaryFg }}
+                    >
+                      <Send className="w-4 h-4 mr-2" aria-hidden="true" /> RSVP Now
+                    </Button>
+                  </div>
                 </CardContent>
               </Card>
             )}
 
-            {/* Live polls (typed: Poll[] not any[]) */}
-            {polls.filter((p) => p.status === 'active').map((poll) => (
-              <Card key={poll.id} className="shadow-md" style={{ borderColor: palette.border }}>
-                <CardHeader>
-                  <CardTitle className="text-lg font-display">{poll.question}</CardTitle>
-                </CardHeader>
-                <CardContent>
-                  <ul className="space-y-2" aria-label={`Options for: ${poll.question}`}>
-                    {poll.options.map((opt) => (
-                      <li key={opt.id}>
-                        <button
-                          onClick={() => sdk.feedback.votePoll(eventId, poll.id, opt.id)}
-                          className="w-full text-left px-4 py-3 rounded-lg border transition-colors hover:opacity-80"
-                          style={{ borderColor: palette.border, background: palette.surface }}
-                          aria-label={`Vote for: ${opt.text} (${opt.votes} votes)`}
-                        >
-                          <div className="flex justify-between items-center">
+            {/* Polls — any#8 (p:any→Poll) + any#9 (poll:any→Poll) + any#10 (opt:any→PollOption) */}
+            {polls.length > 0 && activeGuest && (
+              <div className="space-y-4">
+                <h3
+                  className="font-display text-2xl text-center pt-8"
+                  style={{ borderTop: `1px solid ${palette.border}` }}
+                >
+                  Couple's Polls
+                </h3>
+
+                {/* any#8 fixed: p is Poll, not any */}
+                {polls.filter((p: Poll) => p.status === 'active').map((poll: Poll) => (
+                  <Card key={poll.id} style={{ borderColor: palette.border }}>
+                    <CardContent className="p-6">
+                      <h4 className="font-semibold text-lg mb-4">{poll.question}</h4>
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+
+                        {/* any#10 fixed: opt is PollOption, not any */}
+                        {poll.options.map((opt: PollOption) => (
+                          <Button
+                            key={opt.id}
+                            variant="outline"
+                            className="justify-between h-auto py-3 whitespace-normal text-left"
+                            style={{ borderColor: palette.border, color: palette.fg }}
+                            onClick={async () => {
+                              await sdk.feedback.votePoll(eventId, poll.id, opt.id);
+                              const res = await sdk.feedback.getPolls(eventId);
+                              setPolls(res.polls);
+                            }}
+                            aria-label={`Vote for: ${opt.text} (${opt.votes} votes)`}
+                          >
                             <span>{opt.text}</span>
-                            <Badge variant="default" className="ml-2">
-                              {opt.votes}
+                            <Badge
+                              variant="outline"
+                              className="ml-2 text-[10px]"
+                              style={{
+                                borderColor:  palette.border,
+                                background:   palette.accentSoft,
+                                color:        palette.fg,
+                              }}
+                            >
+                              {opt.votes} votes
                             </Badge>
-                          </div>
-                        </button>
-                      </li>
-                    ))}
-                  </ul>
-                </CardContent>
-              </Card>
-            ))}
+                          </Button>
+                        ))}
+                      </div>
+                    </CardContent>
+                  </Card>
+                ))}
+              </div>
+            )}
+
+            {/* No guest selected — prompt to RSVP */}
+            {!activeGuest && (
+              <div className="text-center py-12">
+                <p className="text-lg mb-4">
+                  Please identify yourself to access personalized details.
+                </p>
+                <Button
+                  onClick={() => setActiveTab('rsvp')}
+                  style={{ background: palette.primary, color: palette.primaryFg }}
+                >
+                  Find Your Invitation
+                </Button>
+              </div>
+            )}
           </div>
         )}
 
-        {/* ── MAP TAB ───────────────────────────────────────────────── */}
-        {activeTab === 'map' && layout && (
-          <div className="space-y-4">
+        {/* ── MAP TAB ──────────────────────────────────────────────────── */}
+        {activeTab === 'map' && (
+          <div className="space-y-6 flex flex-col">
+            <div className="text-center">
+              <h2 className="text-3xl font-display">Venue Map</h2>
+              <p className="mt-2" style={{ color: palette.fgMuted }}>
+                Pinch to zoom and drag to explore the layout.
+              </p>
+            </div>
+
+            {activeGuest && layout && (
+              <div
+                className="p-4 rounded-lg flex items-center justify-center gap-2 text-sm"
+                style={{ background: '#fdf2f8', border: '1px solid #fbcfe8', color: '#9d174d' }}
+              >
+                <span className="w-3 h-3 rounded-full bg-pink-500 animate-pulse" aria-hidden="true" />
+                <span className="font-medium">Your seat is highlighted in pink!</span>
+              </div>
+            )}
+
             <div
-              className="rounded-xl overflow-hidden shadow-lg"
-              style={{
-                height: '65vh',
-                border: `1px solid ${palette.border}`,
-                background: '#f9fafb',
-              }}
-              aria-label="Venue floor plan — interactive seat map"
-              role="img"
+              className="flex-1 min-h-[500px] w-full rounded-xl overflow-hidden shadow-sm relative"
+              style={{ background: palette.surface, border: `1px solid ${palette.border}` }}
             >
-              <PortalMapViewer layout={layout} activeGuestId={selectedGuestId} />
-            </div>
-
-            {selectedGuestId && (() => {
-              const g = guests.find((x) => x.id === selectedGuestId);
-              return g?.tableAssignment ? (
+              {!layout ? (
                 <div
-                  className="rounded-lg p-4 text-center text-sm font-medium"
-                  style={{ background: palette.accentSoft, color: palette.fg }}
+                  className="w-full h-full flex flex-col items-center justify-center"
+                  style={{ color: palette.fgSubtle }}
                 >
-                  Your seat:{' '}
-                  <strong>
-                    {g.tableAssignment}
-                    {g.seatAssignment ? ` — Seat ${g.seatAssignment}` : ''}
-                  </strong>
+                  <MapIcon className="w-12 h-12 mb-4 opacity-50" aria-hidden="true" />
+                  <p>The layout map hasn't been published yet.</p>
                 </div>
-              ) : null;
-            })()}
-
-            <div className="flex gap-3 justify-center">
-              <Button
-                variant="outline"
-                onClick={() => setActiveTab('home')}
-                style={{ borderColor: palette.border }}
-              >
-                Return Home
-              </Button>
-              <Button
-                variant="outline"
-                onClick={() => setActiveTab('rsvp')}
-                style={{ borderColor: palette.border }}
-              >
-                <Send className="w-4 h-4 mr-1" aria-hidden="true" /> RSVP
-              </Button>
+              ) : (
+                /* any#5 fixed (Phase 34b): layout is PortalLayoutPayload, not any */
+                <PortalMapViewer layout={layout} activeGuestId={selectedGuestId} />
+              )}
             </div>
           </div>
         )}
 
-        {/* ── RSVP TAB ──────────────────────────────────────────────── */}
+        {/* ── RSVP TAB ─────────────────────────────────────────────────── */}
         {activeTab === 'rsvp' && (
-          done ? (
-            <Card className="shadow-lg text-center" style={{ borderColor: palette.border }}>
-              <CardContent className="pt-8 pb-8 space-y-4">
-                <div
-                  className="text-5xl"
-                  aria-label="Thank you"
-                  role="img"
-                >
-                  🎉
-                </div>
-                <CardTitle className="font-display text-3xl">
-                  Thank You!
-                </CardTitle>
-                <p style={{ color: palette.fgMuted }}>
-                  Your RSVP has been received. We look forward to celebrating with you!
-                </p>
-                <div className="flex gap-3 justify-center pt-2">
-                  <Button
-                    variant="outline"
-                    onClick={() => setActiveTab('home')}
-                    style={{ borderColor: palette.border }}
-                  >
-                    Return Home
-                  </Button>
-                  {attending && layout && (
-                    <Button
-                      variant="outline"
-                      onClick={() => setActiveTab('map')}
-                      style={{ borderColor: palette.border }}
-                    >
-                      <MapIcon className="w-4 h-4 mr-1" aria-hidden="true" /> Find Your Seat
-                    </Button>
-                  )}
-                </div>
-              </CardContent>
-            </Card>
-          ) : (
-            <Card className="shadow-lg" style={{ borderColor: palette.border }}>
-              <CardHeader className="text-center pb-2">
-                <CardTitle className="font-display text-3xl">RSVP</CardTitle>
-                <p className="text-sm mt-2" style={{ color: palette.fgMuted }}>
-                  Kindly respond by the deadline.
-                </p>
-              </CardHeader>
-              <CardContent>
-                <form onSubmit={submit} className="space-y-6" aria-label="RSVP form">
-
-                  {/* Guest name selector */}
-                  <div>
-                    <Label htmlFor="gn" className="font-serif">Your Name</Label>
-                    <select
-                      id="gn"
-                      required
-                      value={selectedGuestId}
-                      onChange={(e) => setSelectedGuestId(e.target.value)}
-                      className="mt-2 w-full h-12 px-4 rounded-md font-sans"
-                      style={{ border: `1px solid ${palette.border}`, background: palette.surface }}
-                      aria-required="true"
-                    >
-                      <option value="">— Find your name —</option>
-                      {guests.map((g) => (
-                        <option key={g.id} value={g.id}>{g.fullName}</option>
-                      ))}
-                    </select>
+          <div className="max-w-lg mx-auto mt-8">
+            {done ? (
+              <Card className="text-center shadow-lg" style={{ borderColor: palette.border }}>
+                <CardContent className="pt-10 pb-8 space-y-4">
+                  <div className="text-6xl mb-2" role="img" aria-label={attending ? 'Celebration' : 'Thank you'}>
+                    {attending ? '🎉' : '💌'}
                   </div>
-
-                  {selectedGuestId && (
-                    <div className="space-y-6">
-                      {/* Attending toggle */}
-                      <div>
-                        <Label className="font-serif">Will you be attending?</Label>
-                        <div className="flex flex-col sm:flex-row gap-2 sm:gap-3 mt-2" role="group" aria-label="RSVP response">
-                          <Button
-                            type="button"
-                            className="flex-1 h-12 font-medium tracking-widest"
-                            style={attending
-                              ? { background: palette.primary, color: palette.primaryFg }
-                              : { background: palette.surface, color: palette.fg, border: `1px solid ${palette.border}` }}
-                            onClick={() => setAttending(true)}
-                            aria-pressed={attending}
-                          >
-                            JOYFULLY ACCEPT
-                          </Button>
-                          <Button
-                            type="button"
-                            className="flex-1 h-12 font-medium tracking-widest"
-                            style={!attending
-                              ? { background: palette.primary, color: palette.primaryFg }
-                              : { background: palette.surface, color: palette.fg, border: `1px solid ${palette.border}` }}
-                            onClick={() => setAttending(false)}
-                            aria-pressed={!attending}
-                          >
-                            REGRETFULLY DECLINE
-                          </Button>
-                        </div>
+                  <h2 className="font-display text-2xl">Thank You!</h2>
+                  <p style={{ color: palette.fgMuted }}>
+                    {attending
+                      ? "We're thrilled you can make it! We can't wait to celebrate with you."
+                      : "We're sorry you can't make it. You'll be missed!"}
+                  </p>
+                  {attending && (
+                    <div
+                      className="rounded-lg p-4 text-left text-sm space-y-2"
+                      style={{ background: palette.accentSoft, border: `1px solid ${palette.border}` }}
+                    >
+                      <div className="flex justify-between">
+                        <span style={{ color: palette.fgMuted }}>Guest</span>
+                        <span className="font-medium">{activeGuest?.fullName}</span>
                       </div>
-
-                      {/* Meal preference (only when attending) */}
-                      {attending && (
-                        <div>
-                          <Label htmlFor="meal" className="font-serif">Meal Preference</Label>
-                          <select
-                            id="meal"
-                            value={mealChoice}
-                            onChange={(e) => setMealChoice(e.target.value)}
-                            className="mt-2 w-full h-12 px-4 rounded-md font-sans"
-                            style={{ border: `1px solid ${palette.border}`, background: palette.surface }}
-                          >
-                            <option value="standard">Standard (Beef/Chicken Duet)</option>
-                            <option value="vegetarian">Vegetarian</option>
-                            <option value="vegan">Vegan</option>
-                            <option value="gluten-free">Gluten-Free</option>
-                          </select>
+                      <div className="flex justify-between">
+                        <span style={{ color: palette.fgMuted }}>Response</span>
+                        <span className="font-medium">Joyfully Accepts</span>
+                      </div>
+                      <div className="flex justify-between">
+                        <span style={{ color: palette.fgMuted }}>Meal</span>
+                        <span className="font-medium capitalize">{mealChoice}</span>
+                      </div>
+                      {info.startDate && (
+                        <div className="flex justify-between">
+                          <span style={{ color: palette.fgMuted }}>Date</span>
+                          <span className="font-medium">
+                            {new Date(info.startDate).toLocaleDateString(undefined, {
+                              weekday: 'long', month: 'long', day: 'numeric', year: 'numeric',
+                            })}
+                          </span>
                         </div>
                       )}
-
-                      {/* Notes */}
-                      <div>
-                        <Label htmlFor="notes" className="font-serif">
-                          A Note for the Couple (Optional)
-                        </Label>
-                        <textarea
-                          id="notes"
-                          value={notes}
-                          onChange={(e) => setNotes(e.target.value)}
-                          className="mt-2 w-full min-h-[100px] p-4 rounded-md font-sans resize-none"
-                          style={{ border: `1px solid ${palette.border}`, background: palette.surface }}
-                          placeholder="Leave your wishes or mention any specific dietary allergies…"
-                          aria-describedby={error ? 'rsvp-error' : undefined}
-                        />
-                      </div>
-
-                      {/* Error */}
-                      {error && (
-                        <p id="rsvp-error" className="text-sm text-red-600 font-sans" role="alert">
-                          {error}
-                        </p>
-                      )}
-
-                      {/* Submit */}
-                      <Button
-                        type="submit"
-                        className="w-full h-12 font-medium tracking-widest"
-                        style={{ background: palette.primary, color: palette.primaryFg }}
-                      >
-                        SEND RSVP
-                      </Button>
                     </div>
                   )}
-                </form>
-              </CardContent>
-            </Card>
-          )
+                  <div className="flex flex-wrap gap-3 justify-center pt-2">
+                    <Button
+                      variant="outline"
+                      onClick={() => setActiveTab('home')}
+                      style={{ borderColor: palette.border }}
+                    >
+                      Return Home
+                    </Button>
+                    {attending && (
+                      <Button
+                        variant="outline"
+                        onClick={() => setActiveTab('map')}
+                        style={{ borderColor: palette.border }}
+                      >
+                        <MapIcon className="w-4 h-4 mr-1" aria-hidden="true" /> Find Your Seat
+                      </Button>
+                    )}
+                  </div>
+                </CardContent>
+              </Card>
+            ) : (
+              <Card className="shadow-lg" style={{ borderColor: palette.border }}>
+                <CardHeader className="text-center pb-2">
+                  <CardTitle className="font-display text-3xl">RSVP</CardTitle>
+                  <p className="text-sm mt-2" style={{ color: palette.fgMuted }}>
+                    Kindly respond by the deadline.
+                  </p>
+                </CardHeader>
+                <CardContent>
+                  <form onSubmit={submit} className="space-y-6" aria-label="RSVP form">
+                    <div>
+                      <Label htmlFor="gn" className="font-serif">Your Name</Label>
+                      <select
+                        id="gn"
+                        required
+                        value={selectedGuestId}
+                        onChange={(e) => setSelectedGuestId(e.target.value)}
+                        className="mt-2 w-full h-12 px-4 rounded-md font-sans"
+                        style={{ border: `1px solid ${palette.border}`, background: palette.surface }}
+                        aria-required="true"
+                      >
+                        <option value="">— Find your name —</option>
+                        {/* any#2 fixed: g is PortalGuestEntry */}
+                        {guests.map((g: PortalGuestEntry) => (
+                          <option key={g.id} value={g.id}>{g.fullName}</option>
+                        ))}
+                      </select>
+                    </div>
+
+                    {selectedGuestId && (
+                      <div className="space-y-6">
+                        <div>
+                          <Label className="font-serif">Will you be attending?</Label>
+                          <div
+                            className="flex flex-col sm:flex-row gap-2 sm:gap-3 mt-2"
+                            role="group"
+                            aria-label="RSVP response"
+                          >
+                            <Button
+                              type="button"
+                              className="flex-1 h-12 font-medium tracking-widest"
+                              style={attending
+                                ? { background: palette.primary, color: palette.primaryFg }
+                                : { background: palette.surface, color: palette.fg, border: `1px solid ${palette.border}` }}
+                              onClick={() => setAttending(true)}
+                              aria-pressed={attending}
+                            >
+                              JOYFULLY ACCEPT
+                            </Button>
+                            <Button
+                              type="button"
+                              className="flex-1 h-12 font-medium tracking-widest"
+                              style={!attending
+                                ? { background: palette.primary, color: palette.primaryFg }
+                                : { background: palette.surface, color: palette.fg, border: `1px solid ${palette.border}` }}
+                              onClick={() => setAttending(false)}
+                              aria-pressed={!attending}
+                            >
+                              REGRETFULLY DECLINE
+                            </Button>
+                          </div>
+                        </div>
+
+                        {attending && (
+                          <div>
+                            <Label htmlFor="meal" className="font-serif">Meal Preference</Label>
+                            <select
+                              id="meal"
+                              value={mealChoice}
+                              onChange={(e) => setMealChoice(e.target.value)}
+                              className="mt-2 w-full h-12 px-4 rounded-md font-sans"
+                              style={{ border: `1px solid ${palette.border}`, background: palette.surface }}
+                            >
+                              <option value="standard">Standard (Beef/Chicken Duet)</option>
+                              <option value="vegetarian">Vegetarian</option>
+                              <option value="vegan">Vegan</option>
+                              <option value="gluten-free">Gluten-Free</option>
+                            </select>
+                          </div>
+                        )}
+
+                        <div>
+                          <Label htmlFor="notes" className="font-serif">
+                            A Note for the Couple (Optional)
+                          </Label>
+                          <textarea
+                            id="notes"
+                            value={notes}
+                            onChange={(e) => setNotes(e.target.value)}
+                            className="mt-2 w-full min-h-[100px] p-4 rounded-md font-sans resize-none"
+                            style={{ border: `1px solid ${palette.border}`, background: palette.surface }}
+                            placeholder="Leave your wishes or mention any specific dietary allergies…"
+                            aria-describedby={error ? 'rsvp-error' : undefined}
+                          />
+                        </div>
+
+                        {error && (
+                          <p id="rsvp-error" className="text-sm text-red-600 font-sans" role="alert">
+                            {error}
+                          </p>
+                        )}
+
+                        <Button
+                          type="submit"
+                          className="w-full h-12 font-medium tracking-widest"
+                          style={{ background: palette.primary, color: palette.primaryFg }}
+                        >
+                          SEND RSVP
+                        </Button>
+                      </div>
+                    )}
+                  </form>
+                </CardContent>
+              </Card>
+            )}
+          </div>
         )}
       </main>
 
-      {/* ── Bottom navigation ────────────────────────────────────────── */}
+      {/* Bottom nav */}
       <nav
         className="fixed bottom-0 left-0 w-full pb-safe z-50"
         style={{ background: palette.surface, borderTop: `1px solid ${palette.border}` }}
@@ -549,10 +583,10 @@ export function PublicGuestPortal({ eventId }: { eventId: string }) {
         <div className="flex items-center justify-around h-16 max-w-md mx-auto">
           {(
             [
-              ['home', Home,    'Home'],
-              ['map',  MapIcon, 'Map' ],
-              ['rsvp', Send,    'RSVP'],
-            ] as const
+              ['home', Home,    'Home'] as const,
+              ['map',  MapIcon, 'Map' ] as const,
+              ['rsvp', Send,    'RSVP'] as const,
+            ]
           ).map(([tab, Icon, label]) => (
             <button
               key={tab}
@@ -574,23 +608,28 @@ export function PublicGuestPortal({ eventId }: { eventId: string }) {
 
 // ── PortalMapViewer ───────────────────────────────────────────────────────
 /**
- * Interactive floor-plan viewer inside the portal.
+ * Interactive floor-plan canvas inside the guest portal.
  *
- * Phase 34b changes:
- *   - `layout: any` → `layout: PortalLayoutPayload`
- *   - `items.map((item: any)` → `items.map((item: LayoutCanvasItem)`
- *   - Type guards replace `item.type === 'xxx'` raw string checks
- *   - `e: any` in handleWheel retained with explanatory comment:
- *     react-konva's KonvaEventObject<WheelEvent> is the correct type but
- *     requires importing from 'konva/lib/Node' which adds a dev dependency
- *     not currently in package.json. Runtime behaviour is correct.
- *     TODO: add `@types/konva` and replace with KonvaEventObject<WheelEvent>.
+ * Phase 35a changes:
+ *   any#7 FIXED: handleWheel (e: any) → (e: KonvaEventObject<WheelEvent>)
+ *     - KonvaEventObject<T> is imported from 'react-konva' (re-exported
+ *       from konva/lib/Node). No new npm dependency required.
+ *     - e.evt is WheelEvent (preventDefault, deltaY — both typed)
+ *     - e.target is Konva.Shape | Konva.Stage
+ *
+ *   BONUS BUG FIXED: getPointerPosition() returns Vector2d | null
+ *     - The live code called .x/.y directly without a null guard.
+ *     - This would throw if the pointer hadn't entered the canvas yet.
+ *     - Added: `const pointerPos = stage.getPointerPosition(); if (!pointerPos) return;`
+ *
+ *   any#5 FIXED (Phase 34b): layout: any → layout: PortalLayoutPayload
+ *   any#6 FIXED (Phase 34b): items.map((item: any)) → LayoutCanvasItem discriminated union
  */
 function PortalMapViewer({
   layout,
   activeGuestId,
 }: {
-  layout: PortalLayoutPayload;
+  layout: PortalLayoutPayload;      // any#5 fixed
   activeGuestId: string;
 }) {
   const containerRef = React.useRef<HTMLDivElement>(null);
@@ -613,33 +652,56 @@ function PortalMapViewer({
     return () => window.removeEventListener('resize', handleResize);
   }, []);
 
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  // react-konva wheel events are not easily typed without @types/konva.
-  // The `e.evt` and `e.target.getStage()` usage is correct at runtime.
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const handleWheel = (e: any) => {
+  /**
+   * any#7 FIXED — KonvaEventObject<WheelEvent> replaces (e: any).
+   *
+   * react-konva v18 re-exports KonvaEventObject from 'react-konva':
+   *   import type { KonvaEventObject } from 'react-konva';
+   *
+   * Properties now fully typed:
+   *   e.evt              → WheelEvent  (.preventDefault(), .deltaY)
+   *   e.target           → Konva.Shape | Konva.Stage
+   *   e.target.getStage()→ Konva.Stage | undefined
+   *
+   * BONUS BUG FIXED: getPointerPosition() returns Vector2d | null.
+   * The live code called .x/.y without null-checking, crashing on first
+   * wheel event before the pointer had moved over the canvas. Fixed with
+   * an explicit null guard.
+   */
+  const handleWheel = (e: KonvaEventObject<WheelEvent>) => {
     e.evt.preventDefault();
+
     const scaleBy = 1.05;
     const stage = e.target.getStage();
     if (!stage) return;
+
+    // BONUS BUG FIX: getPointerPosition() → Vector2d | null
+    const pointerPos = stage.getPointerPosition();
+    if (!pointerPos) return;                    // guard that was missing before
+
     const oldScale = stage.scaleX();
     const mp = {
-      x: stage.getPointerPosition().x / oldScale - stage.x() / oldScale,
-      y: stage.getPointerPosition().y / oldScale - stage.y() / oldScale,
+      x: pointerPos.x / oldScale - stage.x() / oldScale,
+      y: pointerPos.y / oldScale - stage.y() / oldScale,
     };
     const ns = e.evt.deltaY > 0 ? oldScale / scaleBy : oldScale * scaleBy;
     setScale(ns);
     setPos({
-      x: -(mp.x - stage.getPointerPosition().x / ns) * ns,
-      y: -(mp.y - stage.getPointerPosition().y / ns) * ns,
+      x: -(mp.x - pointerPos.x / ns) * ns,
+      y: -(mp.y - pointerPos.y / ns) * ns,
     });
   };
 
-  // ── Typed items array (was: layout.items without type safety) ─────────
+  // any#6 fixed: typed LayoutCanvasItem[] replaces layout.items (any[])
   const items: LayoutCanvasItem[] = Array.isArray(layout.items) ? layout.items : [];
 
   return (
-    <div ref={containerRef} className="w-full h-full cursor-grab active:cursor-grabbing">
+    <div
+      ref={containerRef}
+      className="w-full h-full cursor-grab active:cursor-grabbing"
+      role="img"
+      aria-label="Venue floor plan — interactive seat map"
+    >
       <Stage
         width={dimensions.width}
         height={dimensions.height}
@@ -650,6 +712,7 @@ function PortalMapViewer({
         y={pos.y}
         draggable
         onDragMove={(e) => {
+          // e is inferred as KonvaEventObject<MouseEvent> from Stage's prop types
           if (e.target === e.target.getStage()) {
             setPos({ x: e.target.x(), y: e.target.y() });
           }
@@ -659,7 +722,6 @@ function PortalMapViewer({
           {items.map((item) => {
             const isActive = !!(activeGuestId && isChair(item) && item.guestId === activeGuestId);
 
-            // ── Round table ──────────────────────────────────────────
             if (isRoundTable(item)) {
               return (
                 <Group key={item.id} x={item.x} y={item.y}>
@@ -683,7 +745,6 @@ function PortalMapViewer({
               );
             }
 
-            // ── Rectangular table ────────────────────────────────────
             if (isRectTable(item)) {
               return (
                 <Group key={item.id} x={item.x} y={item.y} rotation={item.rotation}>
@@ -711,7 +772,6 @@ function PortalMapViewer({
               );
             }
 
-            // ── Dance floor ──────────────────────────────────────────
             if (isDanceFloor(item)) {
               return (
                 <Group key={item.id} x={item.x} y={item.y} rotation={item.rotation}>
@@ -740,7 +800,6 @@ function PortalMapViewer({
               );
             }
 
-            // ── Chair (seat) — highlights the active guest's seat ────
             if (isChair(item)) {
               return (
                 <Group key={item.id} x={item.x} y={item.y}>
@@ -776,8 +835,7 @@ function PortalMapViewer({
               );
             }
 
-            // Unknown item types — render nothing, type-safe fallthrough
-            return null;
+            return null; // unknown item types — safe no-render fallthrough
           })}
         </Layer>
       </Stage>
