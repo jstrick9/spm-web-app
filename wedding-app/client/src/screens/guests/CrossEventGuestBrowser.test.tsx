@@ -33,6 +33,8 @@ vi.mock('../../sdk', () => ({
         counts: { pending: 1, attending: 1, declined: 0, maybe: 0 },
       }),
       update: vi.fn().mockResolvedValue({ guest: {} }),
+      duplicates: vi.fn().mockResolvedValue({ clusters: [] }),
+      merge: vi.fn().mockResolvedValue({ primary: {}, mergedCount: 0 }),
     },
     events: {
       list: vi.fn().mockResolvedValue({

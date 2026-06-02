@@ -25,6 +25,11 @@ vi.mock('../../sdk', () => ({
         ],
       }),
     },
+    vendorScoring: {
+      scores: vi.fn().mockResolvedValue({ scores: [
+        { vendorId: 'v1', tier: 'top_rated', reliabilityScore: 92 },
+      ] }),
+    },
   },
 }));
 

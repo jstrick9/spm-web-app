@@ -19,6 +19,7 @@ import { Card, CardContent } from '../../ui/Card';
 import { Input } from '../../ui/Input';
 import { Skeleton } from '../../ui/Skeleton';
 import { StatCard } from '../../ui/StatCard';
+import { ReliabilityBadge } from './ReliabilityBadge';
 import { useDebouncedValue } from '../../lib/useDebouncedValue';
 
 interface Props { orgId: string }
@@ -43,6 +44,17 @@ export function VendorDirectory({ orgId }: Props) {
     queryKey: ['vendors', orgId],
     queryFn: () => sdk.vendors.list(orgId),
   });
+
+  const scoresQuery = useQuery({
+    queryKey: ['vendor-scores', orgId],
+    queryFn: () => sdk.vendorScoring.scores(orgId),
+    staleTime: 60_000,
+  });
+  const scoreByVendor = useMemo(() => {
+    const m = new Map<string, { tier: import('../../sdk/intelligence').VendorTier; reliabilityScore: number }>();
+    for (const s of scoresQuery.data?.scores ?? []) m.set(s.vendorId, { tier: s.tier, reliabilityScore: s.reliabilityScore });
+    return m;
+  }, [scoresQuery.data]);
 
   const vendors = vendorsQuery.data?.vendors ?? [];
 
@@ -151,7 +163,7 @@ export function VendorDirectory({ orgId }: Props) {
           </Card>
         ) : (
           <div className="grid gap-3 sm:gap-4 sm:grid-cols-2 lg:grid-cols-3">
-            {filtered.map(v => <VendorCard key={v.id} vendor={v} />)}
+            {filtered.map(v => <VendorCard key={v.id} vendor={v} score={scoreByVendor.get(v.id)} />)}
           </div>
         )}
       </PageBody>
@@ -159,7 +171,7 @@ export function VendorDirectory({ orgId }: Props) {
   );
 }
 
-function VendorCard({ vendor: v }: { vendor: SdkVendor }) {
+function VendorCard({ vendor: v, score }: { vendor: SdkVendor; score?: { tier: import('../../sdk/intelligence').VendorTier; reliabilityScore: number } }) {
   const catColor = CATEGORY_COLORS[v.category] ?? CATEGORY_COLORS.other;
   const balance = (v.contract_amount_cents ?? 0) - v.amount_paid_cents;
   const paidPct = (v.contract_amount_cents ?? 0) > 0
@@ -180,6 +192,9 @@ function VendorCard({ vendor: v }: { vendor: SdkVendor }) {
             </div>
             {v.contact_name && (
               <p className="text-xs text-fg-muted mt-0.5">{v.contact_name}</p>
+            )}
+            {score && score.tier !== 'unrated' && (
+              <div className="mt-1.5"><ReliabilityBadge tier={score.tier} score={score.reliabilityScore} /></div>
             )}
           </div>
           <span className={`px-2 py-0.5 rounded-full text-[11px] font-medium ${catColor}`}>

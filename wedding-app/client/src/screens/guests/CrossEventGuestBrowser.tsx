@@ -19,6 +19,7 @@ import { useMemo, useState } from 'react';
 import { sdk } from '../../sdk';
 import type { SdkGuest, SdkGuestCounts } from '../../sdk/types';
 import { PageBody, PageHeader } from '../../ui/AppShell';
+import { GuestMergePanel } from './GuestMergePanel';
 import { Badge } from '../../ui/Badge';
 import { Button } from '../../ui/Button';
 import { Card, CardContent } from '../../ui/Card';
@@ -135,6 +136,9 @@ export function CrossEventGuestBrowser({ orgId }: Props) {
           <KPITile label="Pending" value={counts.pending} className="text-warning" />
           <KPITile label="Declined" value={counts.declined} className="text-danger" />
         </div>
+
+        {/* Duplicate guest detection + merge */}
+        <GuestMergePanel orgId={orgId} />
 
         {/* Filters toolbar */}
         <div className="flex flex-wrap items-center gap-3">

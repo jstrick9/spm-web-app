@@ -17,6 +17,8 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '../..
 import { Badge } from '../../ui/Badge';
 import { StatCard } from '../../ui/StatCard';
 import { Skeleton } from '../../ui/Skeleton';
+import { RevenueForecastCard } from './RevenueForecastCard';
+import { RiskAlertsCard } from './RiskAlertsCard';
 
 interface Props { orgId: string }
 
@@ -24,6 +26,12 @@ export function IntelligenceDashboard({ orgId }: Props) {
   const { data, isLoading } = useQuery({
     queryKey: ['recommendations', orgId],
     queryFn: () => sdk.recommendations.get(orgId),
+    staleTime: 5 * 60_000,
+  });
+
+  const { data: forecastData } = useQuery({
+    queryKey: ['forecast', orgId],
+    queryFn: () => sdk.forecast.get(orgId),
     staleTime: 5 * 60_000,
   });
 
@@ -48,6 +56,12 @@ export function IntelligenceDashboard({ orgId }: Props) {
           <StatCard label="Avg Timeline Items" value={rec.avgTimelineItems || '—'} description="per event" />
           <StatCard label="Events Analyzed" value={rec.budgetRange.count} description="with budget data" />
         </div>
+
+        {/* Predictive revenue & booking forecast */}
+        {/* Proactive risk alerts across active events */}
+        <RiskAlertsCard orgId={orgId} />
+
+        {forecastData?.forecast && <RevenueForecastCard forecast={forecastData.forecast} />}
 
         <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
           {/* Seasonal Demand Heatmap */}

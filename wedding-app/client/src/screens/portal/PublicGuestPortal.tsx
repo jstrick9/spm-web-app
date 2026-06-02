@@ -119,8 +119,14 @@ export function PublicGuestPortal({ eventId }: { eventId: string }) {
           <div className="space-y-8">
             {/* Hero banner */}
             <div className="aspect-[21/9] w-full rounded-xl overflow-hidden shadow-lg relative flex items-center justify-center" style={{ background: palette.accent }}>
-              <div className="absolute inset-0 bg-black/20" />
-              <h2 className="relative z-10 text-white font-display text-4xl md:text-5xl lg:text-6xl text-center px-4 leading-tight">
+              {/* Darker scrim + text shadow so the white headline keeps >=3:1
+                  contrast over ANY theme accent color (light accents like the
+                  default blush failed at 2.28:1 with the old bg-black/20). */}
+              <div className="absolute inset-0 bg-black/45" />
+              <h2
+                className="relative z-10 text-white font-display text-4xl md:text-5xl lg:text-6xl text-center px-4 leading-tight"
+                style={{ textShadow: '0 1px 4px rgba(0,0,0,0.6)' }}
+              >
                 We can't wait to <br /> celebrate with you.
               </h2>
             </div>
@@ -356,8 +362,11 @@ export function PublicGuestPortal({ eventId }: { eventId: string }) {
         <div className="flex items-center justify-around h-16 max-w-md mx-auto">
           {([['home', Home, 'Home'], ['map', MapIcon, 'Map'], ['rsvp', Send, 'RSVP']] as const).map(([tab, Icon, label]) => (
             <button key={tab} onClick={() => setActiveTab(tab)}
+              aria-current={activeTab === tab ? 'page' : undefined}
               className="flex flex-col items-center gap-1 w-20 transition-colors"
-              style={{ color: activeTab === tab ? palette.primary : palette.fgSubtle }}>
+              /* fgMuted (#6b7280, ~4.8:1 on white) meets WCAG AA for the small
+                 nav labels; fgSubtle (#9ca3af) failed at 2.53:1. */
+              style={{ color: activeTab === tab ? palette.primary : palette.fgMuted }}>
               <Icon className="w-5 h-5" />
               <span className="text-[10px] uppercase font-bold tracking-widest">{label}</span>
             </button>
