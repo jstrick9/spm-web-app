@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Dialog, DialogContent } from '../../ui/Dialog';
+import { Dialog, DialogContent, DialogTitle, DialogDescription } from '../../ui/Dialog';
 import { Button } from '../../ui/Button';
 import { ChevronRight, ChevronLeft, Map, Users, Settings, Truck, MessageSquare, Star, Check } from 'lucide-react';
 import { cn } from '../../ui/lib/cn';
@@ -121,7 +121,10 @@ export function WelcomeModal({ memberships, onComplete }: Props) {
 
   return (
     <Dialog open={open} onOpenChange={(v) => { if (!v) handleClose(); }}>
-      <DialogContent className="max-w-lg p-0 overflow-hidden bg-surface border-none shadow-2xl">
+      <DialogContent
+        className="max-w-lg p-0 overflow-hidden bg-surface border-none shadow-2xl"
+        aria-label="Welcome tour"
+      >
         <div className="relative">
            {/* Progress Bar */}
            <div className="absolute top-0 left-0 w-full h-1 bg-surface-2">
@@ -133,8 +136,8 @@ export function WelcomeModal({ memberships, onComplete }: Props) {
 
            <div className="p-10 text-center min-h-[340px] flex flex-col items-center justify-center animate-in fade-in zoom-in-95 duration-300" key={currentSlide.id}>
               {currentSlide.icon}
-              <h2 className="text-2xl font-display font-semibold mb-3">{currentSlide.title}</h2>
-              <p className="text-fg-muted leading-relaxed">{currentSlide.description}</p>
+              <DialogTitle className="text-2xl font-display font-semibold mb-3">{currentSlide.title}</DialogTitle>
+              <DialogDescription className="text-fg-muted leading-relaxed">{currentSlide.description}</DialogDescription>
            </div>
 
            <div className="bg-surface-2/50 border-t border-border p-4 flex items-center justify-between">
@@ -157,13 +160,16 @@ export function WelcomeModal({ memberships, onComplete }: Props) {
                     {slides.map((_, i) => (
                       <button 
                          key={i}
+                         type="button"
                          onClick={() => setSlide(i)}
-                         className={cn("w-2 h-2 rounded-full transition-all", i === slide ? "bg-brand w-4" : "bg-border hover:bg-brand/50")}
+                         aria-label={`Go to slide ${i + 1} of ${slides.length}`}
+                         aria-current={i === slide ? 'step' : undefined}
+                         className={cn("w-2 h-2 rounded-full transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand", i === slide ? "bg-brand w-4" : "bg-border hover:bg-brand/50")}
                       />
                     ))}
                  </div>
                  
-                 <Button variant="outline" size="icon" onClick={() => setSlide(s => s - 1)} disabled={slide === 0}>
+                 <Button variant="outline" size="icon" aria-label="Previous slide" onClick={() => setSlide(s => s - 1)} disabled={slide === 0}>
                    <ChevronLeft className="w-4 h-4" />
                  </Button>
                  
