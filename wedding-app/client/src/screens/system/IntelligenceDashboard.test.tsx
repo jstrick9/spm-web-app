@@ -80,10 +80,10 @@ const FORECAST = {
   forecast: {
     history: [],
     projection: [],
-    trend: { direction: 'up', monthlySlopeCents: 5000, growthPct: 12 },
+    trend: { direction: 'up' as 'up' | 'down' | 'flat', monthlySlopeCents: 5000, growthPct: 12 },
     totals: { trailingRevenueCents: 0, projectedRevenueCents: 120000000, trailingBookings: 0, projectedBookings: 4 },
     pipeline: { openEvents: 2, openRevenueCents: 60000000 },
-    meta: { monthsOfHistory: 12, horizonMonths: 6, confidence: 'high' },
+    meta: { monthsOfHistory: 12, horizonMonths: 6, confidence: 'high' as 'low' | 'medium' | 'high' },
   },
 };
 
@@ -212,7 +212,7 @@ describe('IntelligenceDashboard', () => {
   });
 
   it('does not render RevenueForecastCard when forecast query returns no data', async () => {
-    vi.mocked(sdk.forecast.get).mockResolvedValue({ forecast: null });
+    vi.mocked(sdk.forecast.get).mockResolvedValue({ forecast: null as any });
     renderDashboard();
     await waitFor(() => {
       // Stat cards loaded — forecast card should be absent

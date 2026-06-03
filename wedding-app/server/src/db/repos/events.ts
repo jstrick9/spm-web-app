@@ -16,6 +16,7 @@ export interface EventRow {
   guest_count: number;
   primary_contact_user_id: string | null;
   budget_cents: number | null;
+  rsvp_deadline: string | null;
   metadata: string;
   deleted_at: string | null;
   created_by: string | null;
@@ -35,6 +36,11 @@ export interface SubEventRow {
 }
 
 export const eventsRepo = {
+  listAllOrgIds(): string[] {
+    const rows = db.prepare(`SELECT DISTINCT organization_id FROM events WHERE deleted_at IS NULL`).all() as Array<{ organization_id: string }>;
+    return rows.map((r) => r.organization_id);
+  },
+
   findById(id: string): EventRow | undefined {
     return db.prepare(`SELECT * FROM events WHERE id = ? AND deleted_at IS NULL`).get(id) as EventRow | undefined;
   },

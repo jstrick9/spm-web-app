@@ -14,7 +14,7 @@
  */
 import { jobsRepo, type JobRow } from '../db/repos/jobs.js';
 import { runAction } from '../integrations/runtime.js';
-import { scanRsvpReminders } from './lifecycleEmails.js';
+import { scanUpcomingDeadlines } from './lifecycleEmails.js';
 import { hostname } from 'node:os';
 
 const POLL_INTERVAL_MS = 1000;          // how often to look for new jobs
@@ -44,10 +44,10 @@ export function startWorker(): void {
     try { jobsRepo.reclaimStuck(); } catch (e) { logErr('reclaim', e); }
   }, RECLAIM_INTERVAL_MS);
   // Lifecycle email engine: scan for RSVP-deadline reminders. The daily marker
-  // inside scanRsvpReminders() dedupes, so running it a few times a day (and
+  // inside scanUpcomingDeadlines() dedupes, so running it a few times a day (and
   // once at boot) is safe and ensures reminders go out promptly.
   const runScan = () => {
-    try { scanRsvpReminders(); } catch (e) { logErr('rsvp-scan', e); }
+    try { scanUpcomingDeadlines(); } catch (e) { logErr('rsvp-scan', e); }
   };
   rsvpScanTimer = setInterval(runScan, RSVP_SCAN_INTERVAL_MS);
   setTimeout(runScan, 5_000); // initial scan shortly after boot

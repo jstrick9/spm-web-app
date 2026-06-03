@@ -27,13 +27,13 @@ interface Props {
 }
 
 const RISK_CONFIG: Record<RiskLevel, {
-  variant: 'destructive' | 'warning' | 'success';
+  variant: 'danger' | 'warning' | 'success';
   label: string;
   dotColor: string;
   Icon: typeof CheckCircle2;
 }> = {
   high: {
-    variant: 'destructive',
+    variant: 'danger',
     label: 'At Risk',
     dotColor: 'bg-danger',
     Icon: AlertTriangle,

@@ -8,13 +8,13 @@ const sendMock = vi.fn().mockResolvedValue({
 });
 const logMock = vi.fn().mockResolvedValue({
   emails: [
-    { id: 's1', event_id: 'e1', guest_id: 'g1', trigger_type: 'thank_you', recipient_email: 'amy@x.com', subject: 'Thank you Amy!', status: 'sent', error: null, created_at: '', sent_at: '2026-06-01T00:00:00Z' },
+    { id: 's1', event_id: 'e1', guest_id: 'g1', trigger_type: 'thank_you', to_email: 'amy@x.com', subject: 'Thank you Amy!', status: 'sent', error: null, created_at: '', sent_at: '2026-06-01T00:00:00Z' },
   ],
   stats: { pending: 0, sent: 1, failed: 0, skipped: 0 },
 });
 
 vi.mock('../../../sdk', () => ({
-  sdk: { lifecycleEmails: { log: (...a: unknown[]) => logMock(...a), send: (...a: unknown[]) => sendMock(...a) } },
+  sdk: { lifecycleEmails: { listForEvent: (...a: unknown[]) => logMock(...a), sendNow: (...a: unknown[]) => sendMock(...a) } },
 }));
 vi.mock('../../../ui/Toast', () => ({ useToast: () => ({ toast: vi.fn() }) }));
 

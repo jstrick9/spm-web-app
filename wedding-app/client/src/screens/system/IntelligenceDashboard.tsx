@@ -32,6 +32,7 @@ import { EmptyState } from '../../ui/EmptyState';
 import { AccessDenied } from '../../ui/AccessDenied';
 import { RevenueForecastCard } from './RevenueForecastCard';
 import { RiskAlertsCard } from './RiskAlertsCard';
+import { NpsSurveyCard } from './NpsSurveyCard';
 // usePermission hook — guards this entire screen
 import { usePermission } from '../../lib/usePermission';
 
@@ -128,7 +129,7 @@ export function IntelligenceDashboard({ orgId }: Props) {
         />
         <PageBody>
           <EmptyState
-            icon={Sparkles}
+            icon={<Sparkles className="h-6 w-6" />}
             title="Building Your Intelligence"
             description={
               eventsCompleted === 0
@@ -191,6 +192,9 @@ export function IntelligenceDashboard({ orgId }: Props) {
 
         {/* ── Proactive risk alerts (server-computed) ───────────────────── */}
         <RiskAlertsCard orgId={orgId} />
+
+        {/* ── Net Promoter Score & Feedback widget ─────────────────────────── */}
+        <NpsSurveyCard orgId={orgId} />
 
         {/* ── Revenue forecast (shown when sufficient history exists) ────── */}
         {forecastData?.forecast && (

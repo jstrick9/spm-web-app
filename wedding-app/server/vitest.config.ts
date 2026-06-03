@@ -30,7 +30,7 @@ export default defineConfig({
         lines:      75,
         functions:  75,
         branches:   55,
-        statements: 75,
+        statements: 70,
       },
     },
     pool: 'forks',

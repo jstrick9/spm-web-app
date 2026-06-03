@@ -70,7 +70,7 @@ export function DashboardScreen({ user, orgId }: Props) {
             startsBefore: new Date(Date.now() + 7 * 86400000).toISOString().slice(0, 10),
             limit: 10,
           })
-        : Promise.resolve({ events: [] as any[], counts: {} }),
+        : Promise.resolve({ events: [] as any[], counts: {} as any }),
     enabled: !!orgId,
     staleTime: 30_000,
   });
@@ -78,7 +78,7 @@ export function DashboardScreen({ user, orgId }: Props) {
   // Pipeline counts
   const allEventsQuery = useQuery({
     queryKey: ['events', orgId, 'counts'],
-    queryFn: () => (orgId ? sdk.events.list(orgId) : Promise.resolve({ events: [], counts: {} })),
+    queryFn: () => (orgId ? sdk.events.list(orgId) : Promise.resolve({ events: [] as any[], counts: {} as any })),
     enabled: !!orgId,
     staleTime: 60_000,
   });
@@ -128,10 +128,9 @@ export function DashboardScreen({ user, orgId }: Props) {
           canCreateEvent ? (
             <Button
               size="sm"
-              leftIcon={<Plus className="h-4 w-4" aria-hidden="true" />}
               onClick={() => window.dispatchEvent(new KeyboardEvent('keydown', { key: 'n', metaKey: true, bubbles: true }))}
             >
-              New Event
+              <Plus className="h-4 w-4 mr-1" aria-hidden="true" /> New Event
             </Button>
           ) : undefined
         }
@@ -268,21 +267,20 @@ export function DashboardScreen({ user, orgId }: Props) {
         {/* ── Empty state — no events anywhere ─────────────────────────── */}
         {!isLoading && !totalActive && todaysEvents.length === 0 && upcomingEvents.length === 0 && (
           <EmptyState
-            icon={Calendar}
+            icon={<Calendar className="h-6 w-6" />}
             title="No events yet"
             description="Create your first event to start managing your wedding venue calendar."
             action={
               canCreateEvent ? (
                 <Button
                   size="sm"
-                  leftIcon={<Plus className="h-4 w-4" aria-hidden="true" />}
                   onClick={() =>
                     window.dispatchEvent(
                       new KeyboardEvent('keydown', { key: 'n', metaKey: true, bubbles: true }),
                     )
                   }
                 >
-                  Create First Event
+                  <Plus className="h-4 w-4 mr-1" aria-hidden="true" /> Create First Event
                 </Button>
               ) : undefined
             }

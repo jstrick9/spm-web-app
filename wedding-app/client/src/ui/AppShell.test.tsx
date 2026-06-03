@@ -240,6 +240,6 @@ describe('PageBody', () => {
 
   it('applies custom className', () => {
     const { container } = render(<PageBody className="space-y-8"><div /></PageBody>);
-    expect(container.firstChild?.className).toContain('space-y-8');
+    expect((container.firstChild as HTMLElement)?.className).toContain('space-y-8');
   });
 });

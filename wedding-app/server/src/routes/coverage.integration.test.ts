@@ -16,6 +16,7 @@
  * Pattern: mirrors the existing auth/core-crud integration test style.
  * Uses buildApp() + inject() — no external HTTP server.
  */
+import '../test/setup.js';
 import { describe, it, expect, beforeAll, afterAll } from 'vitest';
 import { buildApp } from '../index.js';
 import type { FastifyInstance } from 'fastify';
@@ -38,14 +39,13 @@ beforeAll(async () => {
     payload: {
       email: 'coverage33@example.com',
       password: 'Test1234!',
-      name: 'Coverage Tester',
-      organizationName: 'Coverage Venue',
+      fullName: 'Coverage Tester',
+      orgName: 'Coverage Venue',
     },
   });
   const body = reg.json();
   token = body.token;
-  orgId = body.user?.memberships?.[0]?.organizationId
-    ?? body.memberships?.[0]?.organizationId;
+  orgId = body.organizationId;
 
   // Create event
   const evRes = await app.inject({
@@ -233,16 +233,16 @@ describe('GET /api/orgs/:orgId/forecast', () => {
   });
 });
 
-describe('GET /api/orgs/:orgId/risk', () => {
+describe('GET /api/orgs/:orgId/risk-alerts', () => {
   it('returns 401 without auth', async () => {
-    const res = await app.inject({ method: 'GET', url: `/api/orgs/${orgId}/risk` });
+    const res = await app.inject({ method: 'GET', url: `/api/orgs/${orgId}/risk-alerts` });
     expect(res.statusCode).toBe(401);
   });
 
   it('returns risk events array', async () => {
     const res = await app.inject({
       method: 'GET',
-      url: `/api/orgs/${orgId}/risk`,
+      url: `/api/orgs/${orgId}/risk-alerts`,
       headers: authed(),
     });
     expect(res.statusCode).toBe(200);
@@ -252,7 +252,7 @@ describe('GET /api/orgs/:orgId/risk', () => {
   it('risk event shape contains required fields', async () => {
     const res = await app.inject({
       method: 'GET',
-      url: `/api/orgs/${orgId}/risk`,
+      url: `/api/orgs/${orgId}/risk-alerts`,
       headers: authed(),
     });
     const events = res.json().events as Array<Record<string, unknown>>;

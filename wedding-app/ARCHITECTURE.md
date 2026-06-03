@@ -41,7 +41,7 @@ wedding-app/
 │   │   │   ├── calendar/           # GlobalCalendar
 │   │   │   ├── catalog/            # CatalogScreen, VenueBuilder
 │   │   │   └── system/             # AdminPanel, AuditLog, Analytics, etc.
-│   │   └── ui/                     # 23 base components (Button, Card, etc.)
+│   │   └── ui/                     # 24 base components (Button, Card, etc.)
 │   └── vite.config.ts
 ├── server/
 │   ├── src/
@@ -50,7 +50,7 @@ wedding-app/
 │   │   │   ├── database.ts         # SQLite connection
 │   │   │   ├── migrate.ts          # Migration runner
 │   │   │   ├── seed.ts             # Demo data (4 events, 28 guests, etc.)
-│   │   │   ├── migrations/         # 7 SQL migration files (44 tables)
+│   │   │   ├── migrations/         # 10 SQL migration files (49 tables)
 │   │   │   └── repos/              # Data access layer (26 repos)
 │   │   ├── routes/                 # 28 route files + 26 test files
 │   │   ├── lib/                    # RBAC, crypto, errors, permissions
@@ -129,9 +129,9 @@ User Action → React Component → SDK method → HTTP fetch
 
 | Type | Count | Tool | Coverage |
 |---|---|---|---|
-| Server integration | 258 | Vitest + Fastify inject | Every CRUD lifecycle, auth, RBAC, portal flow, E2E journey |
-| Client component | 426 | Vitest + Testing Library | Every screen, dialog, form, toolbar, widget |
-| **Total** | **684** | | 0 failures, 0 untested components |
+| Server integration | 359 | Vitest + Fastify inject | Every CRUD lifecycle, auth, RBAC, portal flow, E2E journey |
+| Client component | 635 | Vitest + Testing Library | Every screen, dialog, form, toolbar, widget |
+| **Total** | **994** | | 0 failures, 0 untested components |
 
 ---
 

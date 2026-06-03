@@ -22,7 +22,7 @@ describe('AccessDenied', () => {
   it('renders feature-specific heading and message', () => {
     render(<AccessDenied feature="Budget" />);
     expect(screen.getByText(/Budget — Access Restricted/)).toBeTruthy();
-    expect(screen.getByText(/Budget/)).toBeTruthy();
+    expect(screen.getAllByText(/Budget/).length).toBeGreaterThan(0);
   });
 
   it('has role="alert" for screen reader announcement', () => {

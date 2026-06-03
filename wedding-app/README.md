@@ -9,7 +9,7 @@ A complete, self-hosted operating system for modern wedding venues. Built with *
 ```bash
 cd wedding-app
 npm run install:all     # install server + client deps
-npm run migrate         # apply all 7 database migrations
+npm run migrate         # apply all 10 database migrations
 npm run seed            # create demo data (4 events, 28 guests, 5 vendors, etc.)
 
 # In two terminals:
@@ -33,7 +33,8 @@ Login: `owner@demo.local` / `wedding123`
 - **Timeline (Run of Show)** — Day-of schedule, vendor coordination, printable run sheets
 - **Staff Operations** — Task management with phases (pre/during/post-event), Kanban drag-and-drop
 - **Invitation Builder** — WYSIWYG email designer (3 themes), send tracking, HTML export
-- **Analytics Dashboard** — Booking conversion, revenue per event, RSVP velocity, vendor compliance
+- **Analytics Dashboard** — Trailing revenue, 6-month seasonal demand forecast, proactive event health risk alerts, and lead-source ROI funnel charts
+- **NPS & Feedback** — Automated post-event Net Promoter Score (NPS) surveys with public landing pages and secure org stats reporting
 - **Photo Gallery** — Mood board with category filters, lightbox viewer
 - **Feedback & Polls** — Guest voting from the public portal
 
@@ -64,19 +65,19 @@ Login: `owner@demo.local` / `wedding123`
 ```
 ┌────────────────────────────────────────────────────┐
 │  React (Vite + TailwindCSS + Radix UI)             │
-│  ├── 86 test files, 406 component/unit tests       │
+│  ├── 105 test files, 635 component/unit tests      │
 │  ├── PWA with service worker (offline check-ins)   │
 │  └── 6 configurable theme presets                  │
 ├────────────────────────────────────────────────────┤
 │  Fastify (Node.js 20+)                             │
-│  ├── 72+ RBAC-gated API endpoints                  │
-│  ├── 22 test files, 234 integration tests          │
+│  ├── 92+ RBAC-gated API endpoints                  │
+│  ├── 35 test files, 359 integration tests          │
 │  ├── SSE real-time event stream                    │
 │  ├── Outbound webhook dispatcher (HMAC-SHA256)     │
 │  └── Job queue + integration framework             │
 ├────────────────────────────────────────────────────┤
 │  SQLite                                            │
-│  ├── 44 tables across 7 migrations                 │
+│  ├── 49 tables across 10 migrations                │
 │  ├── Single-file database (full control)           │
 │  └── Encrypted integration credentials (AES-GCM)  │
 └────────────────────────────────────────────────────┘
@@ -84,7 +85,7 @@ Login: `owner@demo.local` / `wedding123`
 
 ---
 
-## Database Schema (44 tables)
+## Database Schema (49 tables)
 
 | Domain | Tables |
 |---|---|
@@ -92,12 +93,12 @@ Login: `owner@demo.local` / `wedding123`
 | RBAC | roles, role_permissions |
 | Events | events, sub_events |
 | Guests | guests, rsvp_submissions, guest_portal_configs, guest_sub_event_invitations |
-| Vendors | vendors, vendor_payments, vendor_checkins |
+| Vendors | vendors, vendor_payments, vendor_checkins, vendor_ratings, vendor_scoring |
 | Layouts | layouts, layout_versions, venues, catalog_items |
 | Decor | decor_items, decor_categories, decor_arrangements, decor_packages |
 | Operations | timeline_events, staff_tasks, staff_areas, staff_shifts |
-| Finance | budget_items, contracts |
-| Content | gallery_images, event_questions, event_answers, invite_tracking |
+| Finance | budget_items, contracts, payment_links |
+| Content | gallery_images, event_questions, event_answers, invite_tracking, email_templates, email_automations, scheduled_emails |
 | Messaging | direct_messages |
 | Integrations | integrations, integration_events, oauth_states, job_queue |
 | Webhooks | webhooks, webhook_deliveries |
@@ -110,10 +111,10 @@ Login: `owner@demo.local` / `wedding123`
 ## Test Suite
 
 ```
-Total: 640 automated tests (0 failures)
+Total: 994 automated tests (0 failures)
 
-Server:  234 tests across 22 test files
-Client:  406 tests across 86 test files
+Server:  359 tests across 35 test files
+Client:  635 tests across 105 test files
 
 Every screen component has test coverage.
 Every API endpoint is RBAC-gated and integration-tested.
@@ -164,7 +165,7 @@ npm run build           # Production build
 
 ---
 
-## 31 Phases of Development
+## 52 Phases of Development
 
 See the `docs/` directory for detailed documentation of every phase:
 - Phases 1–3: Foundation (RBAC, SDK, design system)
@@ -174,3 +175,4 @@ See the `docs/` directory for detailed documentation of every phase:
 - Phases 18–22: Production (real-time SSE, webhooks, themed portal, RBAC UI)
 - Phases 23–27: Completeness (check-ins, invites, exports, profile, tests)
 - Phases 28–31: Quality (navigation, AppShell, backup, command palette, 640 tests)
+- Phases 48–52: Intelligence & Advanced Payments (real payment capture, linear-regression revenue forecasting, weighted vendor reliability scoring, guest identity resolution de-duplication, and proactive event-health risk alerts)

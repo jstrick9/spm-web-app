@@ -25,7 +25,7 @@ import { sdk } from '../../../sdk';
 import { EventRiskBadge } from './EventRiskBadge';
 
 const makeRiskData = (healthScore: number) => ({
-  events: [{ eventId: 'e-1', eventTitle: 'Test Wedding', healthScore, daysUntil: 30, alerts: [] }],
+  events: [{ eventId: 'e-1', eventTitle: 'Test Wedding', healthScore, startDate: '2026-06-01', daysUntil: 30, alerts: [] }],
 });
 
 function renderBadge(props: { eventId?: string; orgId?: string; compact?: boolean } = {}) {
@@ -73,7 +73,7 @@ describe('EventRiskBadge', () => {
       const dot = container.querySelector('[role="img"]');
       expect(dot).toBeTruthy();
       expect(dot!.className).toContain('bg-danger');
-      expect(dot!.getAttribute('aria-label')).toContain('high');
+      expect(dot!.getAttribute('aria-label')).toContain('At Risk');
     });
 
     it('renders a dot with medium risk color (score 60–84)', () => {

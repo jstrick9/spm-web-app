@@ -31,6 +31,7 @@ import { timelineSdk }                                           from './timelin
 import { staffSdk }                                              from './staff.js';
 import { questionsSdk }                                          from './questions.js';
 import { feedbackSdk }                                           from './feedback.js';
+import { decorSdk }                                              from './decor.js';
 import { platformConfigSdk }                                     from './platformConfig.js';
 import { pushSdk }                                               from './push.js';
 import { webhooksSdk }                                           from './webhooks.js';
@@ -84,6 +85,7 @@ export const sdk = {
   staff:           staffSdk,
   questions:       questionsSdk,
   feedback:        feedbackSdk,
+  decor:           decorSdk,
   checkins:        checkinsSdk,
 
   // Content

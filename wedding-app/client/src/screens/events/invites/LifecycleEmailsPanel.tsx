@@ -12,7 +12,7 @@ import React, { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { Send, MailCheck, RefreshCw } from 'lucide-react';
 import { sdk } from '../../../sdk';
-import type { LifecycleTrigger } from '../../../sdk/lifecycleEmails';
+import type { TriggerType } from '../../../sdk/lifecycleEmails';
 import { Button } from '../../../ui/Button';
 import { Card, CardContent, CardHeader, CardTitle } from '../../../ui/Card';
 import { Badge } from '../../../ui/Badge';
@@ -23,7 +23,7 @@ import { usePermission } from '../../../lib/usePermission';
 
 interface Props { eventId: string }
 
-const TRIGGERS: Array<{ id: LifecycleTrigger; label: string; help: string }> = [
+const TRIGGERS: Array<{ id: TriggerType; label: string; help: string }> = [
   { id: 'rsvp_reminder', label: 'RSVP Reminder', help: 'Guests who have not responded yet' },
   { id: 'thank_you',     label: 'Thank-You',     help: 'Guests marked attending' },
   { id: 'save_the_date', label: 'Save the Date', help: 'All guests with an email' },
@@ -37,17 +37,17 @@ export function LifecycleEmailsPanel({ eventId }: Props) {
   const { toast } = useToast();
   const qc = useQueryClient();
   const canSend = usePermission('invites.send');
-  const [busyTrigger, setBusyTrigger] = useState<LifecycleTrigger | null>(null);
+  const [busyTrigger, setBusyTrigger] = useState<TriggerType | null>(null);
 
   const { data, isLoading } = useQuery({
     queryKey: ['lifecycle-emails', eventId],
-    queryFn: () => sdk.lifecycleEmails.log(eventId),
+    queryFn: () => sdk.lifecycleEmails.listForEvent(eventId),
   });
   const emails = data?.emails ?? [];
-  const stats = data?.stats ?? { pending: 0, sent: 0, failed: 0, skipped: 0 };
+  const stats = data?.stats ?? { pending: 0, sent: 0, failed: 0, skipped: 0, total: 0 };
 
   const sendMutation = useMutation({
-    mutationFn: (trigger: LifecycleTrigger) => sdk.lifecycleEmails.send(eventId, trigger),
+    mutationFn: (trigger: TriggerType) => sdk.lifecycleEmails.sendNow(eventId, trigger),
     onMutate: (t) => setBusyTrigger(t),
     onSuccess: ({ result }) => {
       qc.invalidateQueries({ queryKey: ['lifecycle-emails', eventId] });
@@ -66,7 +66,7 @@ export function LifecycleEmailsPanel({ eventId }: Props) {
   });
 
   const columns: Column<typeof emails[number]>[] = [
-    { id: 'recipient_email', header: 'Recipient', cell: (r) => r.recipient_email },
+    { id: 'recipient_email', header: 'Recipient', cell: (r) => r.to_email },
     { id: 'subject', header: 'Subject', cell: (r) => r.subject },
     {
       id: 'trigger_type', header: 'Type',

@@ -30,5 +30,17 @@ export const feedbackSdk = {
   },
   submitFeedback(eventId: string, feedback: Omit<FeedbackRecord, 'id'>): Promise<{ feedback: FeedbackRecord }> {
     return api.post(`/api/events/${eventId}/feedback`, feedback);
+  },
+  submitNps(eventId: string, input: { score: number; comment?: string; submittedBy?: string }): Promise<{ nps: any }> {
+    return api.post(`/api/public/events/${eventId}/nps`, input);
+  },
+  getNpsStats(orgId: string): Promise<{
+    npsScore: number | null;
+    totalResponses: number;
+    promoters: number;
+    detractors: number;
+    responses: Array<{ id: string; eventId: string; eventTitle: string; score: number; comment: string; submittedBy: string; submittedAt: string }>;
+  }> {
+    return api.get(`/api/orgs/${orgId}/nps-stats`);
   }
 };

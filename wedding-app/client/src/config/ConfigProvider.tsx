@@ -171,7 +171,7 @@ export function useNavItems(): string[] {
   // Use config-provided list if available, otherwise fall back to defaults
   const items: string[] =
     configuredItems && configuredItems.length > 0
-      ? configuredItems
+      ? configuredItems.map((item: any) => typeof item === 'string' ? item : item.id)
       : [...DEFAULT_NAV_ITEMS];
 
   // Filter out items whose featureFlag is disabled

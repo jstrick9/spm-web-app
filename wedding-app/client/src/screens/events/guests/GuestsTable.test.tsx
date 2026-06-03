@@ -36,6 +36,14 @@ vi.mock('../../../sdk', () => ({
   },
 }));
 
+vi.mock('../../../ui/Toast', () => ({
+  useToast: () => ({
+    toast: vi.fn(),
+    dismiss: vi.fn(),
+    toasts: [],
+  }),
+}));
+
 vi.mock('./rsvpMeta', () => ({
   RSVP_META: {
     attending: { label: 'Attending', variant: 'success', dotColor: '#22c55e' },

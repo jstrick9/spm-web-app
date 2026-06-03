@@ -20,7 +20,7 @@
  * After Phase 35a, PublicGuestPortal.tsx has ZERO `any` annotations.
  */
 import React, { useState, useEffect } from 'react';
-import type { KonvaEventObject } from 'react-konva';
+import type { KonvaEventObject } from 'konva/lib/Node';
 import { ApiError, sdk }           from '../../sdk';
 import { Card, CardContent, CardHeader, CardTitle } from '../../ui/Card';
 import { Button }                  from '../../ui/Button';

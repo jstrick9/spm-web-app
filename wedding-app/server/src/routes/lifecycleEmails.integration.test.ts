@@ -10,6 +10,7 @@
  * Uses the standard buildApp() + in-memory SQLite test harness
  * already established in the codebase (mirrors auth.integration.test.ts pattern).
  */
+import '../test/setup.js';
 import { describe, it, expect, beforeAll, afterAll } from 'vitest';
 import { buildApp } from '../index.js';
 import type { FastifyInstance } from 'fastify';
@@ -33,13 +34,13 @@ beforeAll(async () => {
     payload: {
       email: 'lifecycle-test@example.com',
       password: 'Test1234!',
-      name: 'Lifecycle Tester',
-      organizationName: 'Lifecycle Venue',
+      fullName: 'Lifecycle Tester',
+      orgName: 'Lifecycle Venue',
     },
   });
   const regBody = reg.json();
   ownerToken = regBody.token;
-  orgId = regBody.user?.memberships?.[0]?.organizationId ?? regBody.memberships?.[0]?.organizationId;
+  orgId = regBody.organizationId;
 
   // Create an event
   const evResp = await app.inject({
@@ -127,7 +128,7 @@ describe('PUT /api/orgs/:orgId/email-automations', () => {
       payload: { triggerType: 'rsvp_reminder', templateId: 'nonexistent-template-id' },
     });
     expect(res.statusCode).toBe(400);
-    expect(res.json().code).toBe('template-not-in-org');
+    expect(res.json().error).toBe('template-not-in-org');
   });
 
   it('creates automation rule and returns it', async () => {

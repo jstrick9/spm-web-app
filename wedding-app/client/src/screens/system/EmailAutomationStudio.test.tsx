@@ -24,10 +24,20 @@ vi.mock('../../sdk', () => ({
       deleteAutomation: vi.fn(),
     },
     intelligence: {
-      listTemplates: vi.fn(),
-      previewTemplate: vi.fn(),
+      emailTemplates: {
+        list: vi.fn(),
+        preview: vi.fn(),
+      },
     },
   },
+}));
+
+vi.mock('../../ui/Toast', () => ({
+  useToast: () => ({
+    toast: vi.fn(),
+    dismiss: vi.fn(),
+    toasts: [],
+  }),
 }));
 
 import { usePermission } from '../../lib/usePermission';
@@ -66,7 +76,7 @@ describe('EmailAutomationStudio', () => {
   beforeEach(() => {
     vi.mocked(usePermission).mockReturnValue(true as ReturnType<typeof usePermission>);
     vi.mocked(sdk.lifecycleEmails.listAutomations).mockResolvedValue({ automations: AUTOMATIONS });
-    vi.mocked(sdk.intelligence.listTemplates).mockResolvedValue({ templates: TEMPLATES });
+    vi.mocked(sdk.intelligence.emailTemplates.list).mockResolvedValue({ templates: TEMPLATES });
     vi.mocked(sdk.lifecycleEmails.upsertAutomation).mockResolvedValue({ automation: AUTOMATIONS[0] });
     vi.mocked(sdk.lifecycleEmails.deleteAutomation).mockResolvedValue(undefined);
   });
@@ -102,7 +112,7 @@ describe('EmailAutomationStudio', () => {
   });
 
   it('renders empty state when no templates exist', async () => {
-    vi.mocked(sdk.intelligence.listTemplates).mockResolvedValue({ templates: [] });
+    vi.mocked(sdk.intelligence.emailTemplates.list).mockResolvedValue({ templates: [] });
     renderStudio();
     await waitFor(() => {
       expect(screen.getByText('No Email Templates Yet')).toBeTruthy();

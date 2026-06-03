@@ -55,6 +55,7 @@ import { CreateEventDialog }       from './screens/events/CreateEventDialog';
 import { RunSheet }                from './screens/events/runsheet/RunSheet';
 import { VendorPortal }            from './screens/VendorPortal';
 import { PublicGuestPortal }       from './screens/portal/PublicGuestPortal';
+import { PublicNpsSurvey }         from './screens/portal/PublicNpsSurvey';
 import { matchPath, useRouter }    from './lib/router';
 import type { PartialPlatformConfig } from './config/schema';
 import { CrossEventGuestBrowser }  from './screens/guests/CrossEventGuestBrowser';
@@ -96,6 +97,9 @@ export default function App() {
   // Public surfaces (no auth)
   const portal = matchPath('/portal/:eventId', path);
   if (portal) return <PublicGuestPortal eventId={portal.eventId} />;
+
+  const npsPortal = matchPath('/survey/:eventId', path);
+  if (npsPortal) return <PublicNpsSurvey eventId={npsPortal.eventId} />;
 
   const vendorPortal = matchPath('/vendor/:vendorId', path);
   if (vendorPortal) return <VendorPortal vendorId={vendorPortal.vendorId} />;

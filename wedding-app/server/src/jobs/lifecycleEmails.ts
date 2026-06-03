@@ -43,7 +43,7 @@ export interface TriggerResult {
 function hasSmtpIntegration(orgId: string): boolean {
   const integrations = integrationsRepo.listForOrg(orgId);
   return integrations.some(
-    (i) => i.provider === 'email_smtp' && i.status === 'active',
+    (i) => i.provider === 'email_smtp' && i.status === 'connected',
   );
 }
 
@@ -53,6 +53,7 @@ function hasSmtpIntegration(orgId: string): boolean {
 function buildMergeFields(
   guest: { full_name: string; email: string | null },
   event: {
+    id: string;
     title: string;
     start_date: string | null;
     rsvp_deadline: string | null;
@@ -77,6 +78,7 @@ function buildMergeFields(
         })
       : '',
     portal_link: `${process.env.BASE_URL ?? 'https://your-venue.com'}/#/portal/${event.organization_id}`,
+    survey_link: `${process.env.BASE_URL ?? 'https://your-venue.com'}/#/survey/${event.id}`,
   };
 }
 
@@ -114,7 +116,13 @@ export async function runTrigger(
   }
 
   // For guest-targeted triggers, iterate per guest
-  const guests = guestsRepo.listForEvent(eventId).filter((g) => !!g.email);
+  let guests = guestsRepo.listForEvent(eventId).filter((g) => !!g.email);
+  if (triggerType === 'thank_you') {
+    guests = guests.filter((g) => g.rsvp_status === 'attending');
+  } else if (triggerType === 'rsvp_reminder') {
+    guests = guests.filter((g) => g.rsvp_status === 'pending');
+  }
+
   if (guests.length === 0) {
     return { scheduled: 0, skipped: 0, reason: 'no-guests-with-email' };
   }
@@ -191,7 +199,7 @@ export async function scanUpcomingDeadlines(): Promise<{
     const targetDateStr = targetDate.toISOString().slice(0, 10);
 
     const events = eventsRepo.listForOrg(orgId, { status: ['booked', 'planning'] });
-    for (const event of events.events ?? events) {
+    for (const event of events) {
       if (!event.rsvp_deadline) continue;
       if (event.rsvp_deadline.slice(0, 10) !== targetDateStr) continue;
 

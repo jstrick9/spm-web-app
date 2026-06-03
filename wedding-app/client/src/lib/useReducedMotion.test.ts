@@ -49,17 +49,15 @@ function createMatchMediaMock(initialMatches: boolean) {
 
 describe('useReducedMotion', () => {
   let mockMql: ReturnType<typeof createMatchMediaMock>;
+  const originalMatchMedia = window.matchMedia;
 
   beforeEach(() => {
     mockMql = createMatchMediaMock(false);
-    vi.stubGlobal('window', {
-      ...window,
-      matchMedia: vi.fn().mockReturnValue(mockMql),
-    });
+    window.matchMedia = vi.fn().mockReturnValue(mockMql) as any;
   });
 
   afterEach(() => {
-    vi.unstubAllGlobals();
+    window.matchMedia = originalMatchMedia;
     vi.clearAllMocks();
   });
 
@@ -152,4 +150,12 @@ describe('useReducedMotion', () => {
   // ── Multiple renders ─────────────────────────────────────────────────────
   it('returns a stable value across multiple re-renders', () => {
     mockMql = createMatchMediaMock(false);
-    vi.mocked(window.matchMedia).mockReturnValue(mockMql as unknown as Media
+    vi.mocked(window.matchMedia).mockReturnValue(mockMql as unknown as MediaQueryList);
+
+    const { result, rerender } = renderHook(() => useReducedMotion());
+    expect(result.current).toBe(false);
+
+    rerender();
+    expect(result.current).toBe(false);
+  });
+});

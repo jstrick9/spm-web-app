@@ -1,7 +1,11 @@
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, vi } from 'vitest';
 import { render, screen } from '@testing-library/react';
 import { RevenueForecastCard } from './RevenueForecastCard';
 import type { RevenueForecast } from '../../sdk/intelligence';
+
+vi.mock('../../lib/usePermission', () => ({
+  usePermission: () => true,
+}));
 
 function makeForecast(over: Partial<RevenueForecast> = {}): RevenueForecast {
   const history = Array.from({ length: 24 }, (_, i) => ({

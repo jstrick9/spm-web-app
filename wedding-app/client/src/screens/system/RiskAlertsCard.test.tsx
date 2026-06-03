@@ -5,6 +5,9 @@ import { RiskAlertsCard } from './RiskAlertsCard';
 
 const forOrgMock = vi.fn();
 vi.mock('../../sdk', () => ({ sdk: { risk: { forOrg: (...a: unknown[]) => forOrgMock(...a) } } }));
+vi.mock('../../lib/usePermission', () => ({
+  usePermission: () => true,
+}));
 
 function wrap() {
   const qc = new QueryClient({ defaultOptions: { queries: { retry: false, gcTime: 0 } } });

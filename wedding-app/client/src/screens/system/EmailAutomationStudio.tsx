@@ -111,7 +111,7 @@ export function EmailAutomationStudio({ orgId }: Props) {
 
   const { data: tmplData, isLoading: tmplLoading } = useQuery({
     queryKey: ['email-templates', orgId],
-    queryFn: () => sdk.intelligence.listTemplates(orgId),
+    queryFn: () => sdk.intelligence.emailTemplates.list(orgId),
     staleTime: 5 * 60_000,
   });
 
@@ -124,7 +124,7 @@ export function EmailAutomationStudio({ orgId }: Props) {
       toast({ title: 'Automation saved', variant: 'success' });
     },
     onError: (err: Error) =>
-      toast({ title: `Failed to save: ${err.message}`, variant: 'error' }),
+      toast({ title: `Failed to save: ${err.message}`, variant: 'destructive' }),
   });
 
   const deleteMutation = useMutation({
@@ -133,7 +133,7 @@ export function EmailAutomationStudio({ orgId }: Props) {
       qc.invalidateQueries({ queryKey: ['email-automations', orgId] });
       toast({ title: 'Automation removed', variant: 'success' });
     },
-    onError: () => toast({ title: 'Failed to remove automation', variant: 'error' }),
+    onError: () => toast({ title: 'Failed to remove automation', variant: 'destructive' }),
   });
 
   const toggleMutation = useMutation({
@@ -146,7 +146,7 @@ export function EmailAutomationStudio({ orgId }: Props) {
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['email-automations', orgId] });
     },
-    onError: () => toast({ title: 'Failed to update automation', variant: 'error' }),
+    onError: () => toast({ title: 'Failed to update automation', variant: 'destructive' }),
   });
 
   // ── Helpers ──────────────────────────────────────────────────────────────
@@ -162,7 +162,7 @@ export function EmailAutomationStudio({ orgId }: Props) {
     if (!canManageInvites) return;
     const templateId = selectedTemplates[triggerType];
     if (!templateId) {
-      toast({ title: 'Select a template first', variant: 'error' });
+      toast({ title: 'Select a template first', variant: 'destructive' });
       return;
     }
     upsertMutation.mutate({
@@ -190,9 +190,8 @@ export function EmailAutomationStudio({ orgId }: Props) {
               size="sm"
               variant="outline"
               onClick={() => window.location.assign('#/system/email-templates')}
-              leftIcon={<Plus className="h-4 w-4" aria-hidden="true" />}
             >
-              New Template
+              <Plus className="h-4 w-4 mr-1" aria-hidden="true" /> New Template
             </Button>
           ) : undefined
         }
@@ -207,17 +206,16 @@ export function EmailAutomationStudio({ orgId }: Props) {
           </div>
         ) : templates.length === 0 ? (
           <EmptyState
-            icon={Mail}
+            icon={<Mail className="h-6 w-6" />}
             title="No Email Templates Yet"
             description="Create your first email template before configuring automations."
             action={
               canManageInvites ? (
                 <Button
                   size="sm"
-                  leftIcon={<Plus className="h-4 w-4" aria-hidden="true" />}
                   onClick={() => window.location.assign('#/system/email-templates')}
                 >
-                  Create Template
+                  <Plus className="h-4 w-4 mr-1" aria-hidden="true" /> Create Template
                 </Button>
               ) : undefined
             }
@@ -422,17 +420,16 @@ export function EmailAutomationStudio({ orgId }: Props) {
                         <Button
                           size="sm"
                           onClick={() => handleConfigure(triggerType)}
-                          loading={upsertMutation.isPending}
-                          leftIcon={<CheckCircle2 className="h-4 w-4" aria-hidden="true" />}
+                          isLoading={upsertMutation.isPending}
                         >
-                          {automation ? 'Update Automation' : 'Enable Automation'}
+                          <CheckCircle2 className="h-4 w-4 mr-1" aria-hidden="true" /> {automation ? 'Update Automation' : 'Enable Automation'}
                         </Button>
                         {automation && (
                           <Button
                             size="sm"
                             variant="outline"
                             onClick={() =>
-                              sdk.intelligence.previewTemplate(automation.template_id).then(() =>
+                              sdk.intelligence.emailTemplates.preview(automation.template_id).then(() =>
                                 toast({ title: 'Preview sent to your email', variant: 'success' }),
                               )
                             }

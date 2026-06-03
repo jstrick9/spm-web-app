@@ -20,10 +20,18 @@ vi.mock('../../lib/usePermission', () => ({ usePermission: vi.fn() }));
 vi.mock('../../sdk', () => ({
   sdk: {
     guests: {
-      getDuplicates: vi.fn(),
+      duplicates: vi.fn(),
       merge: vi.fn(),
     },
   },
+}));
+
+vi.mock('../../ui/Toast', () => ({
+  useToast: () => ({
+    toast: vi.fn(),
+    dismiss: vi.fn(),
+    toasts: [],
+  }),
 }));
 
 // Clear localStorage mock
@@ -37,8 +45,8 @@ import { GuestMergePanel } from './GuestMergePanel';
 
 const HIGH_CLUSTER = {
   key: 'jane@example.com',
-  signals: ['email'] as const,
-  confidence: 'high' as const,
+  signals: ['email'] as any,
+  confidence: 'high' as any,
   hasInEventDuplicate: false,
   members: [
     { id: 'g-1', eventId: 'e-1', eventTitle: 'Smith Wedding', fullName: 'Jane Smith', email: 'jane@example.com', phone: null, rsvpStatus: 'attending', createdAt: '2026-01-01' },
@@ -48,8 +56,8 @@ const HIGH_CLUSTER = {
 
 const MED_CLUSTER = {
   key: 'john doe',
-  signals: ['name'] as const,
-  confidence: 'medium' as const,
+  signals: ['name'] as any,
+  confidence: 'medium' as any,
   hasInEventDuplicate: false,
   members: [
     { id: 'g-3', eventId: 'e-1', eventTitle: 'Smith Wedding', fullName: 'John Doe', email: null, phone: null, rsvpStatus: 'pending', createdAt: '2026-01-01' },
@@ -69,7 +77,7 @@ function renderPanel(orgId = 'org-1') {
 describe('GuestMergePanel', () => {
   beforeEach(() => {
     vi.mocked(usePermission).mockReturnValue(true as ReturnType<typeof usePermission>);
-    vi.mocked(sdk.guests.getDuplicates).mockResolvedValue({
+    vi.mocked(sdk.guests.duplicates).mockResolvedValue({
       clusters: [HIGH_CLUSTER, MED_CLUSTER],
     });
     vi.mocked(sdk.guests.merge).mockResolvedValue({
@@ -92,7 +100,7 @@ describe('GuestMergePanel', () => {
   });
 
   it('renders empty state when no duplicates found', async () => {
-    vi.mocked(sdk.guests.getDuplicates).mockResolvedValue({ clusters: [] });
+    vi.mocked(sdk.guests.duplicates).mockResolvedValue({ clusters: [] });
     renderPanel();
     await waitFor(() => {
       expect(screen.getByText('All guests look unique')).toBeTruthy();

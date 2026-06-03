@@ -161,6 +161,6 @@ describe('StatCard', () => {
     const { container } = render(
       <StatCard label="X" value="Y" className="custom-class" />,
     );
-    expect(container.firstChild?.className).toContain('custom-class');
+    expect((container.firstChild as HTMLElement)?.className).toContain('custom-class');
   });
 });

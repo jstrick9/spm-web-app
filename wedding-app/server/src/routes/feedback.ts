@@ -101,4 +101,68 @@ export async function feedbackRoutes(app: FastifyInstance) {
     
     return { feedback: newFeedback };
   });
+
+  // ─── Public NPS / Feedback submission (no auth needed) ───
+  app.post('/api/public/events/:eventId/nps', async (req) => {
+    const { eventId } = req.params as { eventId: string };
+    const { score, comment, submittedBy } = req.body as { score: number; comment?: string; submittedBy?: string };
+
+    if (typeof score !== 'number' || score < 0 || score > 10) {
+      throw BadRequest('score-range-0-10');
+    }
+
+    const { ev, meta } = getEventMeta(eventId);
+    const npsResponse = {
+      id: uuid(),
+      score,
+      comment: comment || '',
+      submittedBy: submittedBy || 'Anonymous Couple',
+      submittedAt: new Date().toISOString()
+    };
+
+    meta.nps = [...(meta.nps || []), npsResponse];
+    saveEventMeta(eventId, meta);
+
+    return { nps: npsResponse };
+  });
+
+  // ─── Org-wide NPS stats (requires auth, reports.view) ───
+  app.get('/api/orgs/:orgId/nps-stats', { preHandler: requireAuth }, async (req) => {
+    const { orgId } = req.params as { orgId: string };
+    if (!can(req.auth!.memberships, { organizationId: orgId }, 'reports.view')) throw Forbidden();
+
+    // Find all completed events in this org
+    const events = eventsRepo.listForOrg(orgId, { status: 'completed' });
+
+    let total = 0;
+    let promoters = 0;
+    let detractors = 0;
+    const responses: Array<{ eventId: string; eventTitle: string; score: number; comment: string; submittedBy: string; submittedAt: string }> = [];
+
+    for (const ev of events) {
+      let meta: any = {};
+      try { meta = typeof ev.metadata === 'string' ? JSON.parse(ev.metadata) : ev.metadata; } catch {}
+      const npsList = meta?.nps || [];
+      for (const res of npsList) {
+        total++;
+        if (res.score >= 9) promoters++;
+        else if (res.score <= 6) detractors++;
+        responses.push({
+          eventId: ev.id,
+          eventTitle: ev.title,
+          ...res
+        });
+      }
+    }
+
+    const npsScore = total > 0 ? Math.round(((promoters - detractors) / total) * 100) : null;
+
+    return {
+      npsScore,
+      totalResponses: total,
+      promoters,
+      detractors,
+      responses: responses.sort((a, b) => b.submittedAt.localeCompare(a.submittedAt))
+    };
+  });
 }

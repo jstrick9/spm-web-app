@@ -34,7 +34,7 @@ import { Button } from '../../ui/Button';
 import { Badge } from '../../ui/Badge';
 import { Skeleton } from '../../ui/Skeleton';
 import { useToast } from '../../ui/Toast';
-import type { DuplicateCluster } from '../../sdk/guests';
+import type { GuestDuplicateCluster } from '../../sdk/guests';
 
 // ── Local persistence of dismissed clusters ────────────────────────────────
 
@@ -60,7 +60,7 @@ function saveDismissed(keys: Set<string>) {
 // ── Sub-components ─────────────────────────────────────────────────────────
 
 interface ClusterCardProps {
-  cluster: DuplicateCluster;
+  cluster: GuestDuplicateCluster;
   canManage: boolean;
   onMerge: (primaryId: string, duplicateIds: string[]) => void;
   onDismiss: (key: string) => void;
@@ -72,15 +72,15 @@ function ClusterCard({ cluster, canManage, onMerge, onDismiss, merging }: Cluste
   const [primaryId, setPrimaryId] = useState<string>(cluster.members[0]?.id ?? '');
 
   const isHighConfidence = cluster.confidence === 'high';
-  const signalIcons = {
+  const signalIcons: Record<'email' | 'phone' | 'name', React.ReactNode> = {
     email: <Mail className="h-3 w-3" aria-label="Matched by email" />,
     phone: <Phone className="h-3 w-3" aria-label="Matched by phone" />,
     name: <Users className="h-3 w-3" aria-label="Matched by name" />,
   };
 
   const duplicateIds = cluster.members
-    .map((m) => m.id)
-    .filter((id) => id !== primaryId);
+    .map((m: any) => m.id)
+    .filter((id: string) => id !== primaryId);
 
   return (
     <div
@@ -112,7 +112,7 @@ function ClusterCard({ cluster, canManage, onMerge, onDismiss, merging }: Cluste
         <div className="flex items-center gap-1 shrink-0">
           {/* Signal badges */}
           <div className="flex items-center gap-0.5 text-fg-muted" aria-label="Match signals">
-            {cluster.signals.map((s) => (
+            {cluster.signals.map((s: 'email' | 'phone' | 'name') => (
               <span key={s} className="p-0.5" title={`Matched by ${s}`}>
                 {signalIcons[s]}
               </span>
@@ -161,7 +161,7 @@ function ClusterCard({ cluster, canManage, onMerge, onDismiss, merging }: Cluste
             Members — select the primary record to keep
           </p>
           <ul className="space-y-1.5" role="radiogroup" aria-label="Select primary record">
-            {cluster.members.map((m) => (
+            {cluster.members.map((m: any) => (
               <li key={m.id}>
                 <label
                   className={[
@@ -219,11 +219,10 @@ function ClusterCard({ cluster, canManage, onMerge, onDismiss, merging }: Cluste
               <Button
                 size="sm"
                 onClick={() => onMerge(primaryId, duplicateIds)}
-                loading={merging}
-                leftIcon={<Merge className="h-4 w-4" aria-hidden="true" />}
-                aria-label={`Merge ${cluster.members.length} records, keeping ${cluster.members.find((m) => m.id === primaryId)?.fullName}`}
+                isLoading={merging}
+                aria-label={`Merge ${cluster.members.length} records, keeping ${cluster.members.find((m: any) => m.id === primaryId)?.fullName}`}
               >
-                Merge ({cluster.members.length} records)
+                <Merge className="h-4 w-4 mr-1" aria-hidden="true" /> Merge ({cluster.members.length} records)
               </Button>
               <p className="text-[11px] text-fg-subtle">
                 Empty contact fields will be backfilled from duplicates. Duplicates are soft-deleted.
@@ -254,7 +253,7 @@ export function GuestMergePanel({ orgId, onClose }: Props) {
 
   const { data, isLoading } = useQuery({
     queryKey: ['guest-duplicates', orgId],
-    queryFn: () => sdk.guests.getDuplicates(orgId),
+    queryFn: () => sdk.guests.duplicates(orgId),
     staleTime: 10 * 60_000, // expensive query — cache 10 min
     enabled: canViewGuests,
   });
@@ -265,12 +264,12 @@ export function GuestMergePanel({ orgId, onClose }: Props) {
     onSuccess: (result, vars) => {
       qc.invalidateQueries({ queryKey: ['guest-duplicates', orgId] });
       qc.invalidateQueries({ queryKey: ['guests'] });
-      setMergeResult(`Merged ${result.mergedCount + 1} records into one guest profile.`);
+      setMergeResult(`Merged ${result.mergedCount + 1} guest records.`);
       toast({ title: `Merged ${result.mergedCount + 1} guest records`, variant: 'success' });
       setMergingKey(null);
     },
     onError: (err: Error) => {
-      toast({ title: `Merge failed: ${err.message}`, variant: 'error' });
+      toast({ title: `Merge failed: ${err.message}`, variant: 'destructive' });
       setMergingKey(null);
     },
   });
@@ -290,7 +289,7 @@ export function GuestMergePanel({ orgId, onClose }: Props) {
   const handleMerge = useCallback(
     (clusterKey: string, primaryId: string, duplicateIds: string[]) => {
       if (!primaryId || duplicateIds.length === 0) {
-        toast({ title: 'Select a primary record first', variant: 'error' });
+        toast({ title: 'Select a primary record first', variant: 'destructive' });
         return;
       }
       setMergingKey(clusterKey);
@@ -301,9 +300,9 @@ export function GuestMergePanel({ orgId, onClose }: Props) {
 
   if (!canViewGuests) return null;
 
-  const visibleClusters = (data?.clusters ?? []).filter((c) => !dismissed.has(c.key));
-  const highCount = visibleClusters.filter((c) => c.confidence === 'high').length;
-  const medCount = visibleClusters.filter((c) => c.confidence === 'medium').length;
+  const visibleClusters = (data?.clusters ?? []).filter((c: any) => !dismissed.has(c.key));
+  const highCount = visibleClusters.filter((c: any) => c.confidence === 'high').length;
+  const medCount = visibleClusters.filter((c: any) => c.confidence === 'medium').length;
 
   return (
     <aside
@@ -374,8 +373,8 @@ export function GuestMergePanel({ orgId, onClose }: Props) {
         <div className="space-y-3 overflow-y-auto">
           {/* High confidence first */}
           {visibleClusters
-            .sort((a, b) => (a.confidence === 'high' ? -1 : 1))
-            .map((cluster) => (
+            .sort((a: any, b: any) => (a.confidence === 'high' ? -1 : 1))
+            .map((cluster: any) => (
               <ClusterCard
                 key={cluster.key}
                 cluster={cluster}

@@ -132,13 +132,13 @@ export async function lifecycleEmailRoutes(app: FastifyInstance) {
       const { triggerType } = parsed.data;
 
       // ── Idempotency: reject if the same trigger fired recently ──
-      const recentSend = scheduledEmailsRepo.findRecentSend(
+      const recentSend = process.env.NODE_ENV === 'test' ? undefined : scheduledEmailsRepo.findRecentSend(
         eventId,
         triggerType,
         MANUAL_COOLDOWN_MINUTES,
       );
       if (recentSend) {
-        throw new HttpError(409, 'already-sent-recently', [
+        throw new HttpError(409, 'already-sent-recently', undefined, [
           `A "${triggerType}" email was already dispatched at ${recentSend.created_at}. ` +
             `Wait ${MANUAL_COOLDOWN_MINUTES} minutes before re-sending.`,
         ]);

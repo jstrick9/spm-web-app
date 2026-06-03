@@ -45,9 +45,9 @@ CREATE INDEX IF NOT EXISTS idx_vendor_ratings_vendor
 
 -- ── Scheduled emails ─────────────────────────────────────────────────────────
 
--- Primary idempotency lookup (findByIdempotencyKey)
+-- Primary idempotency lookup
 CREATE INDEX IF NOT EXISTS idx_scheduled_emails_idempotency
-  ON scheduled_emails(idempotency_key);
+  ON scheduled_emails(event_id, guest_id, trigger_type);
 
 -- Used by scheduledEmailsRepo.findRecentSend (cooldown check)
 CREATE INDEX IF NOT EXISTS idx_scheduled_emails_event_trigger
@@ -67,5 +67,5 @@ CREATE INDEX IF NOT EXISTS idx_audit_logs_org_ts
 
 -- Used by webhooksRepo.matchingHooks (org + event_type filter)
 CREATE INDEX IF NOT EXISTS idx_webhooks_org_event_type
-  ON webhooks(organization_id, event_types, active)
-  WHERE active = 1;
+  ON webhooks(organization_id, event_types, is_active)
+  WHERE is_active = 1;
