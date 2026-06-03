@@ -1,0 +1,84 @@
+name: CI
+
+# Runs the full quality gate for the wedding-app on every push / PR that
+# touches it. Mirrors `npm run ci` but split into parallel jobs so a failure
+# is easy to locate. All jobs must pass for the workflow to go green.
+
+on:
+  push:
+    branches: [main]
+    paths: ['wedding-app/**', '.github/workflows/ci.yml']
+  pull_request:
+    paths: ['wedding-app/**', '.github/workflows/ci.yml']
+
+defaults:
+  run:
+    working-directory: wedding-app
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  # ── Security: fail on any high/critical advisory in production deps ──
+  audit:
+    name: npm audit (production, high+)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: 20 }
+      - run: npm run install:all
+      - name: Audit (production deps, high+)
+        run: npm run audit:prod
+
+  # ── Typecheck + unit/integration tests (server + client) + build ──
+  test:
+    name: Typecheck · Tests · Build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: 20 }
+      - run: npm run install:all
+      - name: Typecheck
+        run: npm run typecheck
+      - name: Server tests + coverage
+        run: npm run test:coverage
+      - name: Client tests
+        run: npm --prefix client test
+      - name: Build (client + server)
+        run: npm run build
+
+  # ── Backend smoke test (boots the server, hits every domain endpoint) ──
+  smoke:
+    name: Smoke test
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: 20 }
+      - run: npm run install:all
+      - name: Smoke
+        run: npm run smoke
+
+  # ── Accessibility: axe-core (Playwright) against public surfaces ──
+  a11y:
+    name: Accessibility (axe-core)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: 20 }
+      - run: npm run install:all
+      - name: Install Playwright browser + OS deps
+        run: npm --prefix client exec -- playwright install --with-deps chromium
+      - name: Accessibility gate
+        run: npm run a11y
+      - name: Upload Playwright report on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-a11y-report
+          path: wedding-app/client/playwright-report/
+          retention-days: 7
