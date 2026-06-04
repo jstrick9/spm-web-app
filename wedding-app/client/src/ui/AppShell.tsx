@@ -14,7 +14,7 @@
  *
  * No changes to layout, colours, spacing, or existing behaviour.
  */
-import { useEffect, useRef, useState, type ReactNode } from 'react';
+import { useEffect, useRef, useState, useMemo, type ReactNode } from 'react';
 import {
   Brain,
   Calendar,
@@ -33,7 +33,12 @@ import {
   UserCircle,
   Users,
   X,
+  Layers,
+  HelpCircle,
+  Link2,
+  Palette,
 } from 'lucide-react';
+import { usePermission } from '../lib/usePermission';
 import {
   useBranding,
   useFeatureEnabled,
@@ -59,6 +64,11 @@ const NAV_ITEM_META: Record<
   reports:      { icon: FileBarChart,    label: 'Reports',      href: '#/reports',      featureFlag: 'reports', permission: 'analytics.view' },
   intelligence: { icon: Brain,           label: 'Intelligence', href: '#/intelligence', featureFlag: 'intelligence',  permission: 'analytics.view' },
   system:       { icon: Cog,             label: 'System',       href: '#/system',       permission: 'platform.manage' },
+  catalog:      { icon: Layers,          label: 'Catalog Studio', href: '#/system/catalog', permission: 'platform.manage' },
+  questions:    { icon: HelpCircle,      label: 'Questions Studio', href: '#/system/questions', permission: 'platform.manage' },
+  venue:        { icon: Home,            label: 'Venue Builder',  href: '#/system/venue', permission: 'platform.manage' },
+  integrations: { icon: Link2,           label: 'Integration Hub', href: '#/system/integrations', permission: 'platform.manage' },
+  branding:     { icon: Palette,         label: 'Platform Studio', href: '#/system/platform', permission: 'platform.manage' },
 };
 
 // ── Types ──────────────────────────────────────────────────────────────────
@@ -81,7 +91,23 @@ export function AppShell({
   children,
 }: AppShellProps) {
   const branding = useBranding();
-  const navItems = useNavItems();
+  const rawNavItems = useNavItems();
+  const canManagePlatform = usePermission('platform.manage');
+
+  const navItems = useMemo(() => {
+    if (!canManagePlatform) {
+      return rawNavItems.filter(id => id !== 'system');
+    }
+    return [
+      ...rawNavItems,
+      'catalog',
+      'questions',
+      'venue',
+      'integrations',
+      'branding',
+    ];
+  }, [rawNavItems, canManagePlatform]);
+
   const [mobileOpen, setMobileOpen] = useState(false);
 
   // Close drawer when route changes
