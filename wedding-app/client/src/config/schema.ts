@@ -9,11 +9,6 @@
  *
  * Every level stores a PARTIAL of this shape; the resolver in
  * src/config/resolveConfig.ts merges them.
- *
- * Why zod-validated?
- *   - Catches bad admin input at write time (clear error message)
- *   - Generates the TypeScript type via z.infer
- *   - Lets the server validate the same shape on PUT /api/orgs/:id/config
  */
 import { z } from 'zod';
 
@@ -36,10 +31,10 @@ export const themeSchema = z.object({
   fg:            colorRgbTriplet,
   fgMuted:       colorRgbTriplet,
 
-  // Typography
-  fontDisplay:   z.enum(['Fraunces', 'Playfair Display', 'Cormorant Garamond', 'Lora', 'system-serif']),
-  fontBody:      z.enum(['Inter', 'IBM Plex Sans', 'Source Sans 3', 'system-sans']),
-  fontMono:      z.enum(['JetBrains Mono', 'Fira Code', 'IBM Plex Mono', 'system-mono']),
+  // Typography - loosened to general strings for complete Google Font dynamic loading support
+  fontDisplay:   z.string(),
+  fontBody:      z.string(),
+  fontMono:      z.string(),
 
   // Density (affects spacing scale + control heights)
   density:       z.enum(['compact', 'comfortable', 'spacious']),
@@ -57,14 +52,6 @@ export const themeSchema = z.object({
 export type ThemeConfig = z.infer<typeof themeSchema>;
 
 // ─── Widget config ────────────────────────────────────────
-/**
- * A "widget slot" is a named location in a dashboard (e.g.
- * 'venue.dashboard.kpis', 'event.detail.intelligence', 'couple.portal.hero').
- * The slot's content is determined by the resolved config: an ordered list
- * of widget IDs to render, plus per-widget threshold/visibility config.
- *
- * Widgets themselves live in src/config/widgets/registry.ts.
- */
 export const widgetSlotSchema = z.object({
   widgets: z.array(z.object({
     id: z.string(),                         // widget id like 'kpi.booking-conversion'
@@ -98,8 +85,12 @@ export const brandingConfigSchema = z.object({
   logoUrl:      z.string().url().optional().or(z.literal('')),
   favicon:      z.string().url().optional().or(z.literal('')),
   supportEmail: z.string().email().optional().or(z.literal('')),
-  /** Used in the editorial portal: a tagline under the platform name. */
   tagline:      z.string().max(140).optional(),
+  
+  // Custom Dynamic Google Branding parameters
+  brandColor:   z.string().optional(),
+  headingFont:  z.string().optional(),
+  bodyFont:     z.string().optional(),
 });
 export type BrandingConfig = z.infer<typeof brandingConfigSchema>;
 

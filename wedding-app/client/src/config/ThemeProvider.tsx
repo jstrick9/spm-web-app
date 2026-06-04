@@ -15,9 +15,28 @@
 import { useEffect } from 'react';
 import type { ThemeConfig } from './schema.js';
 
+function loadGoogleFont(font: string) {
+  if (typeof document === 'undefined') return;
+  // Ignore standard system fonts
+  const systemFonts = ['Inter', 'system-ui', 'sans-serif', 'serif', 'Georgia', 'system-sans', 'system-mono', 'system-serif'];
+  if (systemFonts.includes(font)) return;
+  const id = `gfont-${font.toLowerCase().replace(/\s+/g, '-')}`;
+  if (document.getElementById(id)) return;
+
+  const link = document.createElement('link');
+  link.id = id;
+  link.rel = 'stylesheet';
+  link.href = `https://fonts.googleapis.com/css2?family=${encodeURIComponent(font)}:wght@300;400;500;600;700;800&display=swap`;
+  document.head.appendChild(link);
+}
+
 /** Apply theme variables to a root element (default <html>). */
 export function applyTheme(theme: ThemeConfig, root: HTMLElement = document.documentElement): void {
   const setVar = (name: string, value: string) => root.style.setProperty(name, value);
+
+  // Dynamic Google Font Injection
+  if (theme.fontDisplay) loadGoogleFont(theme.fontDisplay);
+  if (theme.fontBody) loadGoogleFont(theme.fontBody);
 
   // Colors
   setVar('--color-brand',         theme.brand);

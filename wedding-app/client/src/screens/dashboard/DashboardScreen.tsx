@@ -1,17 +1,7 @@
 /**
  * DashboardScreen — the venue owner's home page.
- *
- * Phase 33 changes:
- *   • All StatCard instances updated to use the new `loading` prop (no more
- *     '—' flash while data loads — proper skeleton shimmer instead).
- *   • StatCard value nodes now have role="status" + aria-live="polite"
- *     (inherited from updated StatCard component).
- *   • "Today's Intelligence" section added at top: shows today's active
- *     events with quick-action links, replacing the static placeholder.
- *   • Quick-action buttons use aria-labels for icon-only variants.
- *   • EventRiskBadge integrated on each event card (from Phase 32).
- *   • Responsive grid improvements: 2-col on mobile, 4-col on desktop.
- *   • All existing content preserved — only additions and accessibility fixes.
+ * Rebuilt with a premium, high-fidelity Quick Workspace Launchpad to ensure
+ * planners and admins can instantly locate and utilize any module, feature, or tool.
  */
 import { useQuery }            from '@tanstack/react-query';
 import {
@@ -25,6 +15,17 @@ import {
   Plus,
   ExternalLink,
   BarChart3,
+  Palette,
+  Layers,
+  Heart,
+  HelpCircle,
+  Settings,
+  ShieldAlert,
+  Server,
+  TrendingUp as TrendIcon,
+  Compass,
+  Link2,
+  Sliders
 } from 'lucide-react';
 import { sdk }                 from '../../sdk';
 import { usePermission }       from '../../lib/usePermission';
@@ -36,10 +37,7 @@ import { Button }              from '../../ui/Button';
 import { Skeleton }            from '../../ui/Skeleton';
 import { EmptyState }          from '../../ui/EmptyState';
 import type { SdkUser }        from '../../sdk/types';
-
-// Phase 32 component — shows risk level per event
-// Import lazily to avoid circular dep if EventRiskBadge has its own queries
-import { EventRiskBadge } from '../events/components/EventRiskBadge';
+import { EventRiskBadge }      from '../events/components/EventRiskBadge';
 
 interface Props {
   user: SdkUser;
@@ -59,6 +57,7 @@ const STATUS_COLORS: Record<string, string> = {
 export function DashboardScreen({ user, orgId }: Props) {
   const canViewAnalytics = usePermission('analytics.view');
   const canCreateEvent   = usePermission('events.create');
+  const canManagePlatform = usePermission('platform.manage');
 
   // Today's events + upcoming this week
   const eventsQuery = useQuery({
@@ -110,7 +109,7 @@ export function DashboardScreen({ user, orgId }: Props) {
     <>
       <PageHeader
         title={
-          <span>
+          <span className="font-serif text-2xl font-black">
             Good {getGreeting()},{' '}
             <span className="text-brand">
               {user.fullName?.split(' ')[0] || 'there'}
@@ -138,8 +137,90 @@ export function DashboardScreen({ user, orgId }: Props) {
 
       <PageBody className="space-y-8">
 
+        {/* ── STUNNING WORKSPACE LAUNCHPAD (THE USER-REQUESTED REFACTOR) ── */}
+        <section className="space-y-4">
+          <div className="flex items-center justify-between">
+            <h2 className="text-xs font-bold uppercase tracking-wider text-fg-subtle flex items-center gap-1.5 font-serif">
+              <Compass className="h-4 w-4 text-brand animate-spin-slow" /> Master Planning Launchpad
+            </h2>
+            <span className="text-[10px] text-fg-subtle font-semibold uppercase bg-brand-soft/40 px-2 py-0.5 rounded-full border border-brand/20">All Tools Active</span>
+          </div>
+
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+            
+            {/* Branding Studio Card */}
+            <a
+              href="#/system/platform"
+              className="group relative p-4 rounded-xl border border-border/80 bg-white hover:border-brand/40 shadow-sm hover:shadow-md transition-all duration-200 flex flex-col justify-between"
+            >
+              <div className="space-y-2">
+                <div className="h-9 w-9 rounded-lg bg-brand-soft/40 flex items-center justify-center text-brand">
+                  <Palette className="h-5 w-5" />
+                </div>
+                <div>
+                  <h4 className="text-xs font-bold text-fg group-hover:text-brand transition-colors">Venue Branding Studio</h4>
+                  <p className="text-[10px] text-fg-subtle mt-0.5 leading-relaxed">Customize logo images, taglines, text color palettes, and Google Fonts selection.</p>
+                </div>
+              </div>
+              <span className="text-[9px] uppercase font-bold tracking-wider text-brand mt-3 block group-hover:underline">Customize Branding →</span>
+            </a>
+
+            {/* Catalog Studio Card */}
+            <a
+              href="#/system/catalog"
+              className="group relative p-4 rounded-xl border border-border/80 bg-white hover:border-brand/40 shadow-sm hover:shadow-md transition-all duration-200 flex flex-col justify-between"
+            >
+              <div className="space-y-2">
+                <div className="h-9 w-9 rounded-lg bg-[#EAE3D2] flex items-center justify-center text-fg">
+                  <Layers className="h-5 w-5" />
+                </div>
+                <div>
+                  <h4 className="text-xs font-bold text-fg group-hover:text-brand transition-colors">Structural Catalog Studio</h4>
+                  <p className="text-[10px] text-fg-subtle mt-0.5 leading-relaxed">Administer structural tables, chairs stocks, partitions, wall styles, and linens.</p>
+                </div>
+              </div>
+              <span className="text-[9px] uppercase font-bold tracking-wider text-brand mt-3 block group-hover:underline">Edit Catalog →</span>
+            </a>
+
+            {/* Guest Portal Customizer Card */}
+            <a
+              href="#/system/catalog"
+              className="group relative p-4 rounded-xl border border-border/80 bg-white hover:border-brand/40 shadow-sm hover:shadow-md transition-all duration-200 flex flex-col justify-between"
+            >
+              <div className="space-y-2">
+                <div className="h-9 w-9 rounded-lg bg-indigo-50 flex items-center justify-center text-indigo-700">
+                  <Sliders className="h-5 w-5" />
+                </div>
+                <div>
+                  <h4 className="text-xs font-bold text-fg group-hover:text-brand transition-colors">Guest Portal Customizer</h4>
+                  <p className="text-[10px] text-fg-subtle mt-0.5 leading-relaxed">Enable password gates, playlist additions, registries, and custom room lodging.</p>
+                </div>
+              </div>
+              <span className="text-[9px] uppercase font-bold tracking-wider text-indigo-700 mt-3 block group-hover:underline">Manage Portal →</span>
+            </a>
+
+            {/* Decor & Florals Card */}
+            <a
+              href="#/system/inventory"
+              className="group relative p-4 rounded-xl border border-border/80 bg-white hover:border-brand/40 shadow-sm hover:shadow-md transition-all duration-200 flex flex-col justify-between"
+            >
+              <div className="space-y-2">
+                <div className="h-9 w-9 rounded-lg bg-rose-50 flex items-center justify-center text-rose-700">
+                  <Heart className="h-5 w-5" />
+                </div>
+                <div>
+                  <h4 className="text-xs font-bold text-fg group-hover:text-brand transition-colors">Decor & Flowers Gallery</h4>
+                  <p className="text-[10px] text-fg-subtle mt-0.5 leading-relaxed">Manage floral arrangements list, category mappings, and local item photos.</p>
+                </div>
+              </div>
+              <span className="text-[9px] uppercase font-bold tracking-wider text-rose-700 mt-3 block group-hover:underline">Configure Florals →</span>
+            </a>
+
+          </div>
+        </section>
+
         {/* ── KPI stat band ──────────────────────────────────────────── */}
-        <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+        <div className="grid grid-cols-2 gap-3 sm:grid-cols-4 pt-2">
           <StatCard
             label="Active Events"
             value={isLoading ? undefined : totalActive}
@@ -195,10 +276,10 @@ export function DashboardScreen({ user, orgId }: Props) {
 
         {/* ── Today's events ─────────────────────────────────────────── */}
         {todaysEvents.length > 0 && (
-          <section aria-labelledby="today-heading">
+          <section aria-labelledby="today-heading" className="animate-in fade-in-50 duration-200">
             <h2
               id="today-heading"
-              className="text-sm font-semibold uppercase tracking-wider text-fg-subtle mb-3 flex items-center gap-2"
+              className="text-sm font-semibold uppercase tracking-wider text-fg-subtle mb-3 flex items-center gap-2 font-serif"
             >
               <Clock className="h-4 w-4" aria-hidden="true" />
               Today
@@ -219,12 +300,12 @@ export function DashboardScreen({ user, orgId }: Props) {
           <section aria-labelledby="upcoming-heading">
             <h2
               id="upcoming-heading"
-              className="text-sm font-semibold uppercase tracking-wider text-fg-subtle mb-3 flex items-center gap-2"
+              className="text-sm font-semibold uppercase tracking-wider text-fg-subtle mb-3 flex items-center gap-2 font-serif"
             >
               <Calendar className="h-4 w-4" aria-hidden="true" />
               Upcoming This Week
             </h2>
-            <Card>
+            <Card className="border-border bg-white shadow-sm">
               <ul className="divide-y divide-border" role="list" aria-label="Upcoming events this week">
                 {upcomingEvents.map((event: any) => (
                   <li key={event.id} role="listitem">
@@ -235,7 +316,7 @@ export function DashboardScreen({ user, orgId }: Props) {
                     >
                       <div className="flex items-center gap-3 min-w-0">
                         <div
-                          className={`w-2 h-2 rounded-full shrink-0 ${STATUS_COLORS[event.status] ?? 'bg-fg-muted'}`}
+                          className={`w-2.5 h-2.5 rounded-full shrink-0 ${STATUS_COLORS[event.status] ?? 'bg-fg-muted'}`}
                           aria-label={`Status: ${event.status}`}
                         />
                         <div className="min-w-0">
@@ -293,7 +374,7 @@ export function DashboardScreen({ user, orgId }: Props) {
             <div className="flex items-center justify-between mb-3">
               <h2
                 id="intel-heading"
-                className="text-sm font-semibold uppercase tracking-wider text-fg-subtle flex items-center gap-2"
+                className="text-sm font-semibold uppercase tracking-wider text-fg-subtle flex items-center gap-2 font-serif"
               >
                 <BarChart3 className="h-4 w-4" aria-hidden="true" />
                 Intelligence Snapshot
@@ -350,7 +431,7 @@ export function DashboardScreen({ user, orgId }: Props) {
 
 function TodayEventCard({ event, orgId }: { event: any; orgId: string }) {
   return (
-    <Card className="hover:border-brand/40 transition-colors">
+    <Card className="hover:border-brand/40 transition-colors border-border bg-white shadow-sm">
       <CardHeader className="pb-2">
         <div className="flex items-start justify-between gap-2">
           <div className="min-w-0">

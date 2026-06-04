@@ -2,46 +2,46 @@
 
 /*
  * Tailwind v4 inline theme.
- * We bind our brand tokens (defined in tokens.css) as Tailwind utilities
- * so you can write `bg-brand text-fg-muted` instead of `bg-[rgb(var(--color-brand))]`.
+ * We bind our brand tokens (defined in tokens.css) as Tailwind utilities.
+ * Tailwind v4 natively handles alpha channel on space-separated rgb values.
  */
 @theme {
-  --color-bg:            rgb(var(--color-bg)         / <alpha-value>);
-  --color-surface:       rgb(var(--color-surface)    / <alpha-value>);
-  --color-surface-2:     rgb(var(--color-surface-2)  / <alpha-value>);
-  --color-border:        rgb(var(--color-border)     / <alpha-value>);
-  --color-border-strong: rgb(var(--color-border-strong) / <alpha-value>);
+  --color-bg:            rgb(var(--color-bg));
+  --color-surface:       rgb(var(--color-surface));
+  --color-surface-2:     rgb(var(--color-surface-2));
+  --color-border:        rgb(var(--color-border));
+  --color-border-strong: rgb(var(--color-border-strong));
 
-  --color-fg:         rgb(var(--color-fg)        / <alpha-value>);
-  --color-fg-muted:   rgb(var(--color-fg-muted)  / <alpha-value>);
-  --color-fg-subtle:  rgb(var(--color-fg-subtle) / <alpha-value>);
-  --color-fg-inverse: rgb(var(--color-fg-inverse) / <alpha-value>);
+  --color-fg:         rgb(var(--color-fg));
+  --color-fg-muted:   rgb(var(--color-fg-muted));
+  --color-fg-subtle:  rgb(var(--color-fg-subtle));
+  --color-fg-inverse: rgb(var(--color-fg-inverse));
 
-  --color-brand:        rgb(var(--color-brand)        / <alpha-value>);
-  --color-brand-fg:     rgb(var(--color-brand-fg)     / <alpha-value>);
-  --color-brand-soft:   rgb(var(--color-brand-soft)   / <alpha-value>);
-  --color-brand-strong: rgb(var(--color-brand-strong) / <alpha-value>);
-  --color-accent:       rgb(var(--color-accent)       / <alpha-value>);
-  --color-accent-soft:  rgb(var(--color-accent-soft)  / <alpha-value>);
+  --color-brand:        rgb(var(--color-brand));
+  --color-brand-fg:     rgb(var(--color-brand-fg));
+  --color-brand-soft:   rgb(var(--color-brand-soft));
+  --color-brand-strong: rgb(var(--color-brand-strong));
+  --color-accent:       rgb(var(--color-accent));
+  --color-accent-soft:  rgb(var(--color-accent-soft));
 
-  --color-success:      rgb(var(--color-success)      / <alpha-value>);
-  --color-success-soft: rgb(var(--color-success-soft) / <alpha-value>);
-  --color-warning:      rgb(var(--color-warning)      / <alpha-value>);
-  --color-warning-soft: rgb(var(--color-warning-soft) / <alpha-value>);
-  --color-danger:       rgb(var(--color-danger)       / <alpha-value>);
-  --color-danger-soft:  rgb(var(--color-danger-soft)  / <alpha-value>);
-  --color-info:         rgb(var(--color-info)         / <alpha-value>);
-  --color-info-soft:    rgb(var(--color-info-soft)    / <alpha-value>);
+  --color-success:      rgb(var(--color-success));
+  --color-success-soft: rgb(var(--color-success-soft));
+  --color-warning:      rgb(var(--color-warning));
+  --color-warning-soft: rgb(var(--color-warning-soft));
+  --color-danger:       rgb(var(--color-danger));
+  --color-danger-soft:  rgb(var(--color-danger-soft));
+  --color-info:         rgb(var(--color-info));
+  --color-info-soft:    rgb(var(--color-info-soft));
 
   /* Chart palette */
-  --color-chart-1: rgb(var(--chart-1) / <alpha-value>);
-  --color-chart-2: rgb(var(--chart-2) / <alpha-value>);
-  --color-chart-3: rgb(var(--chart-3) / <alpha-value>);
-  --color-chart-4: rgb(var(--chart-4) / <alpha-value>);
-  --color-chart-5: rgb(var(--chart-5) / <alpha-value>);
-  --color-chart-6: rgb(var(--chart-6) / <alpha-value>);
-  --color-chart-7: rgb(var(--chart-7) / <alpha-value>);
-  --color-chart-8: rgb(var(--chart-8) / <alpha-value>);
+  --color-chart-1: rgb(var(--chart-1));
+  --color-chart-2: rgb(var(--chart-2));
+  --color-chart-3: rgb(var(--chart-3));
+  --color-chart-4: rgb(var(--chart-4));
+  --color-chart-5: rgb(var(--chart-5));
+  --color-chart-6: rgb(var(--chart-6));
+  --color-chart-7: rgb(var(--chart-7));
+  --color-chart-8: rgb(var(--chart-8));
 
   --radius-card: 12px;
   --radius-pill: 9999px;
