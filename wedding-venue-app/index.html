@@ -1,0 +1,92 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <link rel="icon" type="image/svg+xml" href="/vite.svg" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=5.0, user-scalable=yes" />
+    <title>Seven Paths Manor | Wedding Layout Planner</title>
+    <meta name="description" content="Design your wedding reception layout at Seven Paths Manor in Spring Hope, NC. Interactive floor plan tool for tables, seating charts, and event layouts." />
+    
+    <!-- Cross-browser compatibility meta tags -->
+    <meta http-equiv="X-UA-Compatible" content="IE=edge" />
+    <meta name="format-detection" content="telephone=no" />
+    <meta name="theme-color" content="#4A1942" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+    <meta name="mobile-web-app-capable" content="yes" />
+    
+    <!-- Prevent caching issues -->
+    <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate" />
+    <meta http-equiv="Pragma" content="no-cache" />
+    <meta http-equiv="Expires" content="0" />
+    
+    <!-- Preconnect to Google Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    
+    <!-- Google Fonts - Cursive & Script Fonts for Weddings -->
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Playfair+Display:wght@400;700&display=swap" rel="stylesheet">
+    
+    <!-- Open Graph / Social Media -->
+    <meta property="og:title" content="Seven Paths Manor | Wedding Layout Planner" />
+    <meta property="og:description" content="Design your wedding reception layout with our interactive floor plan tool." />
+    <meta property="og:type" content="website" />
+    
+    <style>
+      /* Critical CSS for initial load */
+      body {
+        margin: 0;
+        font-family: 'Inter', system-ui, sans-serif;
+        background: #f3f4f6;
+      }
+      #root {
+        min-height: 100vh;
+      }
+      /* Loading state */
+      .spm-loading {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        min-height: 100vh;
+        background: linear-gradient(135deg, #2d1033 0%, #4a1942 100%);
+        color: white;
+        font-family: Georgia, serif;
+      }
+      .spm-loading-content {
+        text-align: center;
+      }
+      .spm-loading h1 {
+        font-size: 1.5rem;
+        margin-bottom: 0.5rem;
+      }
+      .spm-loading p {
+        opacity: 0.7;
+        font-size: 0.875rem;
+      }
+      .spm-spinner {
+        width: 40px;
+        height: 40px;
+        border: 3px solid rgba(255,255,255,0.3);
+        border-top-color: white;
+        border-radius: 50%;
+        animation: spin 1s linear infinite;
+        margin: 0 auto 1rem;
+      }
+      @keyframes spin {
+        to { transform: rotate(360deg); }
+      }
+    </style>
+  </head>
+  <body>
+    <div id="root">
+      <div class="spm-loading">
+        <div class="spm-loading-content">
+          <div class="spm-spinner"></div>
+          <h1>Seven Paths Manor</h1>
+          <p>Loading Layout Planner...</p>
+        </div>
+      </div>
+    </div>
+    <script type="module" src="/src/main.tsx"></script>
+  </body>
+</html>
