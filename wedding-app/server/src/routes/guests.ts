@@ -34,6 +34,7 @@ const rsvpSchema = z.object({
   dietaryNotes:      z.string().max(2000).optional(),
   specialNeeds:      z.string().max(2000).optional(),
   notes:             z.string().max(2000).optional(),
+  subEventRSVPs:     z.record(z.boolean()).optional(),
 });
 
 const portalConfigSchema = z.object({
@@ -272,9 +273,23 @@ export async function guestRoutes(app: FastifyInstance) {
     const requiresPassword = !!cfg?.password_hash;
     // Security: return 404 if portal is explicitly disabled
     if (cfg && !cfg.enabled) throw NotFound("portal-disabled");
+    const { db } = await import('../db/database.js');
     const guestList = guestsRepo.listForEvent(eventId)
       .filter((g) => g.allow_portal_access)
-      .map((g) => ({ id: g.id, fullName: g.full_name, tableAssignment: g.table_assignment, seatAssignment: g.seat_assignment }));
+      .map((g) => {
+         const subEventInvites = db.prepare(
+            `SELECT sub_event_id FROM guest_sub_event_invitations WHERE guest_id = ?`
+         ).all(g.id) as Array<{ sub_event_id: string }>;
+         return {
+            id: g.id, 
+            fullName: g.full_name, 
+            tableAssignment: g.table_assignment, 
+            seatAssignment: g.seat_assignment,
+            roomAssignment: g.room_assignment,
+            allowLodgingAccess: g.allow_lodging_access === 1,
+            subEventInvites: subEventInvites.map(r => r.sub_event_id)
+         };
+      });
     // Include org theme for portal styling
     const org = orgsRepo.findById(event.organization_id);
     let themeConfig = null;
@@ -287,6 +302,11 @@ export async function guestRoutes(app: FastifyInstance) {
     // Include layout for the map viewer
     const layouts = layoutsRepo.listForOrg(event.organization_id, { eventId });
     const layoutPayload = layouts.length > 0 ? (typeof layouts[0].payload === "string" ? JSON.parse(layouts[0].payload) : layouts[0].payload) : null;
+    
+    const { subEventsRepo, timelineRepo } = await import('../db/repos/index.js');
+    const subEvents = subEventsRepo.listForEvent(eventId);
+    const timeline = timelineRepo.listForEvent(eventId);
+
     return {
       event: {
         id: event.id, title: event.title,
@@ -297,6 +317,8 @@ export async function guestRoutes(app: FastifyInstance) {
       guests: guestList,
       layout: layoutPayload,
       theme: themeConfig,
+      subEvents,
+      timeline,
     };
   });
 
@@ -338,6 +360,18 @@ export async function guestRoutes(app: FastifyInstance) {
       notes: parsed.data.notes,
       ip: req.ip, userAgent: req.headers['user-agent'],
     });
+
+    if (parsed.data.subEventRSVPs && parsed.data.guestId) {
+      const { db } = await import('../db/database.js');
+      for (const [subId, attends] of Object.entries(parsed.data.subEventRSVPs)) {
+         db.prepare(
+            `UPDATE guest_sub_event_invitations 
+             SET rsvp_status = ? 
+             WHERE guest_id = ? AND sub_event_id = ?`
+         ).run(attends ? 'accepted' : 'declined', parsed.data.guestId, subId);
+      }
+    }
+
     auditRepo.log({
       organizationId: event.organization_id, action: 'rsvp.submit',
       targetType: 'rsvp', targetId: rsvpId, ip: req.ip, userAgent: req.headers['user-agent'],

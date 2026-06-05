@@ -6,6 +6,7 @@ import {
   staffTasksRepo, staffAreasRepo, staffShiftsRepo,
 } from '../db/repos/index.js';
 import { BadRequest, Forbidden, NotFound } from '../lib/errors.js';
+import { broadcastSSE } from './sse.js';
 
 const taskSchema = z.object({
   title:            z.string().min(1).max(200),
@@ -60,9 +61,9 @@ export async function staffRoutes(app: FastifyInstance) {
     if (!can(req.auth!.memberships, { organizationId: orgId }, 'staff.manage')) throw Forbidden();
     const parsed = taskSchema.safeParse(req.body);
     if (!parsed.success) throw BadRequest('invalid-input', parsed.error.issues);
-    return reply.code(201).send({
-      task: staffTasksRepo.create(orgId, req.auth!.userId, parsed.data),
-    });
+    const task = staffTasksRepo.create(orgId, req.auth!.userId, parsed.data);
+    broadcastSSE(orgId, 'staff.task_created', { taskId: task.id, title: task.title }, req.auth!.userId);
+    return reply.code(201).send({ task });
   });
 
   app.patch('/api/staff/tasks/:id', { preHandler: requireAuth }, async (req) => {
@@ -72,7 +73,9 @@ export async function staffRoutes(app: FastifyInstance) {
     if (!can(req.auth!.memberships, { organizationId: task.organization_id }, 'staff.manage')) throw Forbidden();
     const parsed = taskSchema.partial().safeParse(req.body);
     if (!parsed.success) throw BadRequest('invalid-input', parsed.error.issues);
-    return { task: staffTasksRepo.update(id, parsed.data) };
+    const updated = staffTasksRepo.update(id, parsed.data);
+    broadcastSSE(task.organization_id, 'staff.task_updated', { taskId: id, title: updated?.title || task.title, status: updated?.status || task.status, phase: updated?.phase || task.phase }, req.auth!.userId);
+    return { task: updated };
   });
 
   app.delete('/api/staff/tasks/:id', { preHandler: requireAuth }, async (req, reply) => {
@@ -81,6 +84,7 @@ export async function staffRoutes(app: FastifyInstance) {
     if (!task) throw NotFound();
     if (!can(req.auth!.memberships, { organizationId: task.organization_id }, 'staff.manage')) throw Forbidden();
     staffTasksRepo.delete(id);
+    broadcastSSE(task.organization_id, 'staff.task_deleted', { taskId: id, title: task.title }, req.auth!.userId);
     return reply.code(204).send();
   });
 
@@ -117,13 +121,42 @@ export async function staffRoutes(app: FastifyInstance) {
     if (!can(req.auth!.memberships, { organizationId: orgId }, 'staff.manage')) throw Forbidden();
     const parsed = shiftSchema.safeParse(req.body);
     if (!parsed.success) throw BadRequest('invalid-input', parsed.error.issues);
-    return reply.code(201).send({ shift: staffShiftsRepo.create(orgId, parsed.data) });
+    const shift = staffShiftsRepo.create(orgId, parsed.data);
+    broadcastSSE(orgId, 'staff.shift_created', { shiftId: shift.id, staffId: shift.staff_id, role: shift.role }, req.auth!.userId);
+    return reply.code(201).send({ shift });
   });
 
   app.delete('/api/staff/shifts/:id', { preHandler: requireAuth }, async (req, reply) => {
     const shift = staffShiftsRepo.findById((req.params as { id: string }).id);
     if (shift && !can(req.auth!.memberships, { organizationId: shift.organization_id }, "staff.manage")) throw Forbidden();
     staffShiftsRepo.delete((req.params as { id: string }).id);
+    if (shift) {
+      broadcastSSE(shift.organization_id, 'staff.shift_deleted', { shiftId: (req.params as { id: string }).id }, req.auth!.userId);
+    }
     return reply.code(204).send();
+  });
+
+  app.post('/api/staff/shifts/:id/clock-in', { preHandler: requireAuth }, async (req) => {
+    const { id } = req.params as { id: string };
+    const shift = staffShiftsRepo.findById(id);
+    if (!shift) throw NotFound();
+    const isOwner = shift.staff_id === req.auth!.userId;
+    const isManager = can(req.auth!.memberships, { organizationId: shift.organization_id }, 'staff.manage');
+    if (!isOwner && !isManager) throw Forbidden();
+    const updated = staffShiftsRepo.clockIn(id);
+    broadcastSSE(shift.organization_id, 'staff.clock_in', { shiftId: id, staffId: shift.staff_id, role: shift.role }, req.auth!.userId);
+    return { shift: updated };
+  });
+
+  app.post('/api/staff/shifts/:id/clock-out', { preHandler: requireAuth }, async (req) => {
+    const { id } = req.params as { id: string };
+    const shift = staffShiftsRepo.findById(id);
+    if (!shift) throw NotFound();
+    const isOwner = shift.staff_id === req.auth!.userId;
+    const isManager = can(req.auth!.memberships, { organizationId: shift.organization_id }, 'staff.manage');
+    if (!isOwner && !isManager) throw Forbidden();
+    const updated = staffShiftsRepo.clockOut(id);
+    broadcastSSE(shift.organization_id, 'staff.clock_out', { shiftId: id, staffId: shift.staff_id, role: shift.role }, req.auth!.userId);
+    return { shift: updated };
   });
 }

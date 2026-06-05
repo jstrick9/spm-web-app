@@ -25,7 +25,9 @@ const createEventSchema = z.object({
   venueId: z.string().optional(),
 });
 
-const updateEventSchema = createEventSchema.partial().omit({ organizationId: true });
+const updateEventSchema = createEventSchema.extend({
+  metadata: z.record(z.any()).optional(),
+}).partial().omit({ organizationId: true });
 
 const subEventSchema = z.object({
   title:       z.string().min(1).max(200),
@@ -149,6 +151,9 @@ export async function eventRoutes(app: FastifyInstance) {
     for (const [k, col] of Object.entries(keyMap)) {
       if (k in dataIn && dataIn[k] !== undefined) patch[col] = dataIn[k];
     }
+    if ('metadata' in dataIn && dataIn.metadata !== undefined) {
+      patch.metadata = dataIn.metadata as Record<string, unknown>;
+    }
     const updated = eventsRepo.update(eventId, patch as never);
     auditRepo.log({
       organizationId: event.organization_id, actorUserId: req.auth!.userId,
@@ -175,6 +180,14 @@ export async function eventRoutes(app: FastifyInstance) {
     const orgMap = eventsRepo.orgMapForUser(req.auth!.userId);
     if (!can(req.auth!.memberships, { organizationId: source.organization_id }, "events.create", orgMap)) throw Forbidden();
 
+    const sourceMetadata = source.metadata ? (typeof source.metadata === 'string' ? JSON.parse(source.metadata) : source.metadata) : {};
+    const metadata = {
+      ...sourceMetadata,
+      contract_status: "draft",
+      rsvp_deadline: null,
+      portal_enabled: 0,
+    };
+
     const event = eventsRepo.create({
       organizationId: source.organization_id,
       title: `${source.title} (Copy)`,
@@ -183,6 +196,7 @@ export async function eventRoutes(app: FastifyInstance) {
       endDate: source.end_date ?? undefined,
       guestCount: source.guest_count,
       budgetCents: source.budget_cents ?? undefined,
+      metadata,
       createdBy: req.auth!.userId,
     });
 

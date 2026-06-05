@@ -68,4 +68,36 @@ describe('Staff RBAC Integration', () => {
     expect(staffData.tasks).toHaveLength(1);
     expect(staffData.tasks[0].title).toBe('Staff Task');
   });
+
+  it('allows staff to clock in and out of their assigned shifts', async () => {
+    const { staffShiftsRepo } = await import('../db/repos/index.js');
+    const shift = staffShiftsRepo.create(orgId, {
+      staffId: staffId,
+      startsAt: '2026-06-05T10:00:00Z',
+      endsAt: '2026-06-05T18:00:00Z',
+      role: 'setup',
+    });
+
+    // Staff clocks in
+    const clockInRes = await app.inject({
+      method: 'POST',
+      url: `/api/staff/shifts/${shift.id}/clock-in`,
+      headers: { authorization: `Bearer ${staffToken}` }
+    });
+    expect(clockInRes.statusCode).toBe(200);
+    const clockInData = JSON.parse(clockInRes.payload);
+    expect(clockInData.shift.clocked_in_at).toBeTruthy();
+    expect(clockInData.shift.clocked_out_at).toBeNull();
+
+    // Staff clocks out
+    const clockOutRes = await app.inject({
+      method: 'POST',
+      url: `/api/staff/shifts/${shift.id}/clock-out`,
+      headers: { authorization: `Bearer ${staffToken}` }
+    });
+    expect(clockOutRes.statusCode).toBe(200);
+    const clockOutData = JSON.parse(clockOutRes.payload);
+    expect(clockOutData.shift.clocked_in_at).toBeTruthy();
+    expect(clockOutData.shift.clocked_out_at).toBeTruthy();
+  });
 });

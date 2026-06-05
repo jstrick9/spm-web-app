@@ -125,6 +125,7 @@ export async function intelligenceRoutes(app: FastifyInstance) {
       amountCents: z.number().int().min(1),
       paymentUrl: z.string().url().optional(),
       externalId: z.string().optional(),
+      metadata: z.record(z.any()).optional(),
     }).safeParse(req.body);
     if (!parsed.success) throw BadRequest('invalid-input', parsed.error.issues);
     const payment = paymentLinksRepo.create({

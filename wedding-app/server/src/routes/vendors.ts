@@ -36,17 +36,22 @@ export async function vendorRoutes(app: FastifyInstance) {
     // We need the event and timeline
     let event = null;
     let timeline: any[] = [];
+    let layouts: any[] = [];
     
     if (v.event_id) {
-       const { eventsRepo, timelineRepo } = await import('../db/repos/index.js');
+       const { eventsRepo, timelineRepo, layoutsRepo } = await import('../db/repos/index.js');
        event = eventsRepo.findById(v.event_id);
-       timeline = timelineRepo.listForEvent(v.event_id);
+       if (event) {
+         timeline = timelineRepo.listForEvent(v.event_id);
+         layouts = layoutsRepo.listForOrg(event.organization_id, { eventId: v.event_id });
+       }
     }
     
     return {
       vendor: v,
       event,
       timeline,
+      layouts,
     };
   });
 
@@ -130,5 +135,41 @@ export async function vendorRoutes(app: FastifyInstance) {
 
     const updated = vendorsRepo.update(id, { metadata: meta });
     return { ok: true, vendor: updated };
+  });
+
+  app.get('/api/portal/vendors/:id/messages', async (req) => {
+    const { id } = req.params as { id: string };
+    const v = vendorsRepo.findById(id);
+    if (!v) throw NotFound();
+    if (!v.event_id) return { messages: [] };
+
+    const { messagesRepo } = await import('../db/repos/index.js');
+    const threadId = `${v.event_id}:vendor-${v.id}`;
+    return {
+      messages: messagesRepo.listForThread(threadId)
+    };
+  });
+
+  app.post('/api/portal/vendors/:id/messages', async (req, reply) => {
+    const { id } = req.params as { id: string };
+    const v = vendorsRepo.findById(id);
+    if (!v) throw NotFound();
+    if (!v.event_id) throw BadRequest('Vendor is not linked to any event.');
+
+    const parsed = z.object({
+      body: z.string().min(1).max(10000),
+    }).safeParse(req.body);
+    if (!parsed.success) throw BadRequest('invalid-input', parsed.error.issues);
+
+    const { messagesRepo } = await import('../db/repos/index.js');
+    const threadId = `${v.event_id}:vendor-${v.id}`;
+    const message = messagesRepo.send({
+      threadId,
+      senderId: v.id,
+      senderRole: 'vendor',
+      body: parsed.data.body
+    });
+
+    return reply.code(201).send({ message });
   });
 }
