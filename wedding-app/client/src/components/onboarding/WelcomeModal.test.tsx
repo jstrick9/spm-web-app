@@ -27,4 +27,15 @@ describe('WelcomeModal', () => {
     // Vendors should not see the "Interactive Floor Plans" screen
     expect(screen.queryByText('Interactive Floor Plans')).not.toBeInTheDocument();
   });
+
+  it('renders custom couple onboarding slides for couple role', () => {
+    render(<WelcomeModal memberships={[{ roleKey: 'couple' } as any]} onComplete={vi.fn()} />);
+
+    expect(screen.getByText('Your Wedding Planning Hub!')).toBeInTheDocument();
+
+    const nextBtn = screen.getByRole('button', { name: /Next/i });
+    fireEvent.click(nextBtn);
+
+    expect(screen.getByText('Design Your Floor Plan')).toBeInTheDocument();
+  });
 });

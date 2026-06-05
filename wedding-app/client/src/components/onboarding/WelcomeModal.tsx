@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { Dialog, DialogContent, DialogTitle, DialogDescription } from '../../ui/Dialog';
 import { Button } from '../../ui/Button';
 import { Checkbox } from '../../ui/Checkbox';
-import { ChevronRight, ChevronLeft, Map, Users, Settings, Truck, MessageSquare, Star, Check } from 'lucide-react';
+import { ChevronRight, ChevronLeft, Map, Users, Settings, Truck, MessageSquare, Star, Check, Heart, Layers } from 'lucide-react';
 import { cn } from '../../ui/lib/cn';
 import type { SdkMembership } from '../../sdk/types';
 
@@ -39,10 +39,46 @@ export function WelcomeModal({ memberships, onComplete }: Props) {
   if (roleKeys.includes('owner')) highestRole = 'owner';
   else if (roleKeys.includes('admin')) highestRole = 'admin';
   else if (roleKeys.includes('planner')) highestRole = 'planner';
+  else if (roleKeys.includes('couple')) highestRole = 'couple';
   else if (roleKeys.includes('vendor')) highestRole = 'vendor';
   else if (roleKeys.includes('staff')) highestRole = 'staff';
 
   const allSlides = [
+    {
+      id: 'welcome_couple',
+      roles: ['couple'],
+      title: 'Your Wedding Planning Hub!',
+      description: 'Congratulations on booking Seven Paths Manor! We have designed this portal to make your day-of coordination stress-free and seamless.',
+      icon: <Heart className="w-16 h-16 text-brand mx-auto mb-6" />
+    },
+    {
+      id: 'canvas_couple',
+      roles: ['couple'],
+      title: 'Design Your Floor Plan',
+      description: 'Lay out round or rectangular tables, arrange seats, and place your wedding party exactly where they belong on our interactive designer canvas.',
+      icon: <Map className="w-16 h-16 text-brand mx-auto mb-6" />
+    },
+    {
+      id: 'guests_couple',
+      roles: ['couple'],
+      title: 'RSVPs & Guest List',
+      description: 'Import your guest lists via CSV, monitor dietary restrictions, and track real-time RSVP status directly on your mobile device.',
+      icon: <Users className="w-16 h-16 text-brand mx-auto mb-6" />
+    },
+    {
+      id: 'lodging_couple',
+      roles: ['couple'],
+      title: 'Cabin & Lodging assignments',
+      description: 'Assign your family and bridal party to onsite cabins using our visual estate layout. Keep your loved ones close by.',
+      icon: <Layers className="w-16 h-16 text-brand mx-auto mb-6" />
+    },
+    {
+      id: 'chat_couple',
+      roles: ['couple'],
+      title: 'Direct Coordinator Collaboration',
+      description: 'Chat directly with your on-site Venue Director, log vendor payments, and coordinate runsheet milestones in real-time.',
+      icon: <MessageSquare className="w-16 h-16 text-brand mx-auto mb-6" />
+    },
     {
       id: 'welcome',
       roles: ['owner', 'admin', 'planner', 'vendor', 'staff', 'guest'],
