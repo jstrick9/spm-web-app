@@ -18,7 +18,8 @@ vi.mock('../../../sdk', () => ({
           { id: 'q2', group_name: 'Catering', question: 'Any dietary restrictions?', answer_type: 'multiselect', required: 0, sort_order: 1, options: '["None", "Vegan", "Gluten-Free"]' }
         ] 
       }),
-      delete: vi.fn()
+      delete: vi.fn(),
+      create: vi.fn().mockResolvedValue({ question: {} })
     }
   }
 }));
@@ -26,6 +27,7 @@ vi.mock('../../../sdk', () => ({
 describe('EventQuestionsStudio', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    queryClient.clear();
   });
 
   const TestWrapper = ({ children }: any) => (
@@ -39,9 +41,9 @@ describe('EventQuestionsStudio', () => {
   it('renders question groupings', async () => {
     render(<EventQuestionsStudio orgId="org-1" />, { wrapper: TestWrapper });
     
-    // Check Groups Rendered
-    expect(await screen.findByText('Logistics')).toBeInTheDocument();
-    expect(screen.getByText('Catering')).toBeInTheDocument();
+    // Check Groups Rendered as Headings
+    expect(await screen.findByRole('heading', { level: 3, name: /Logistics/i })).toBeInTheDocument();
+    expect(screen.getByRole('heading', { level: 3, name: /Catering/i })).toBeInTheDocument();
     
     // Check questions rendered
     expect(screen.getByText('Do you need early load-in?')).toBeInTheDocument();
@@ -50,5 +52,30 @@ describe('EventQuestionsStudio', () => {
     // Check badges
     expect(screen.getByText('boolean')).toBeInTheDocument();
     expect(screen.getByText('multiselect')).toBeInTheDocument();
+  });
+
+  it('supports defaults loading and quick adding of event questions', async () => {
+    render(<EventQuestionsStudio orgId="org-1" />, { wrapper: TestWrapper });
+
+    // Verify quick adding Logistics & Access preset
+    const quickAddLogisticsBtn = await screen.findByRole('button', { name: /📦 Logistics & Access/i });
+    fireEvent.click(quickAddLogisticsBtn);
+    expect(sdk.questions.create).toHaveBeenCalledWith('org-1', expect.objectContaining({
+       question: 'Do you require overnight storage of decor?',
+       groupName: 'Logistics & Access'
+    }));
+
+    // Verify quick adding Music preset
+    const quickAddMusicBtn = screen.getByRole('button', { name: /🎵 Music & First Dance/i });
+    fireEvent.click(quickAddMusicBtn);
+    expect(sdk.questions.create).toHaveBeenCalledWith('org-1', expect.objectContaining({
+       question: 'What is your primary song choice for the first dance?',
+       groupName: 'Music & Entertainment'
+    }));
+
+    // Verify loading Defaults
+    const loadDefaultsBtn = screen.getByRole('button', { name: /💾 Load Question Defaults/i });
+    fireEvent.click(loadDefaultsBtn);
+    expect(sdk.questions.create).toHaveBeenCalled();
   });
 });

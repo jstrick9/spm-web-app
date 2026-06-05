@@ -14,6 +14,8 @@ vi.mock('../sdk', () => ({
     vendors: {
       portalInfo: vi.fn(),
       submitQuestionnaire: vi.fn(),
+      portalGetMessages: vi.fn().mockResolvedValue({ messages: [] }),
+      portalSendMessage: vi.fn().mockResolvedValue({ message: {} }),
     }
   }
 }));
@@ -21,6 +23,7 @@ vi.mock('../sdk', () => ({
 describe('VendorPortal', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    queryClient.clear();
   });
 
   const TestWrapper = ({ children }: any) => (
@@ -74,6 +77,39 @@ describe('VendorPortal', () => {
       // expect(sdk.vendors.submitQuestionnaire).toHaveBeenCalledWith('v1', expect.objectContaining({
       // teamSize: '3'
       // }));
+    });
+  });
+
+  it('renders and supports sending collaborative chat messages', async () => {
+    (sdk.vendors.portalInfo as any).mockResolvedValue({
+      vendor: { id: 'v1', name: 'DJ Snake', category: 'Entertainment' },
+      event: { title: 'Smith Wedding', status: 'booked' },
+      timeline: []
+    });
+
+    (sdk.vendors.portalGetMessages as any).mockResolvedValue({
+      messages: [
+        { id: 'm1', body: 'Are you ready?', sender_id: 'p1', sender_role: 'planner', created_at: new Date().toISOString() }
+      ]
+    });
+
+    (sdk.vendors.portalSendMessage as any).mockResolvedValue({ message: { id: 'm2' } });
+
+    render(<VendorPortal vendorId="v1" />, { wrapper: TestWrapper });
+
+    // Verify chat header and message feed
+    expect(await screen.findByText('Direct Coordinator Live Chat')).toBeInTheDocument();
+    expect(await screen.findByText('Are you ready?')).toBeInTheDocument();
+
+    // Type and send a message
+    const chatInput = screen.getByPlaceholderText('Type message to venue crew...');
+    fireEvent.change(chatInput, { target: { value: 'Setting up gear now' } });
+
+    const sendBtn = screen.getByRole('button', { name: /Send/i });
+    fireEvent.click(sendBtn);
+
+    await waitFor(() => {
+      expect(sdk.vendors.portalSendMessage).toHaveBeenCalledWith('v1', 'Setting up gear now');
     });
   });
 });

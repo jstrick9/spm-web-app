@@ -48,8 +48,8 @@ describe('TeamMembers', () => {
   it('shows member roles', async () => {
     render(<TeamMembers orgId="org1" />, { wrapper: wrap() });
     await waitFor(() => {
-      expect(screen.getByText('Owner')).toBeTruthy();
-      expect(screen.getByText('Planner')).toBeTruthy();
+      expect(screen.getAllByText('Owner')[0]).toBeTruthy();
+      expect(screen.getAllByText('Planner')[0]).toBeTruthy();
     });
   });
 

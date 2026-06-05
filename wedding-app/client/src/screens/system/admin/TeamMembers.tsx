@@ -44,10 +44,23 @@ export function TeamMembers({ orgId }: Props) {
     onError: () => toast({ title: 'Cannot remove this member', variant: 'destructive' }),
   });
 
+  const updateMemberRoleMutation = useMutation({
+    mutationFn: ({ userId, targetRoleId }: { userId: string; targetRoleId: string }) =>
+      sdk.roles.updateMemberRole(orgId, userId, targetRoleId),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['members', orgId] });
+      toast({ title: 'Role updated successfully', variant: 'success' });
+    },
+    onError: (e: any) => {
+      toast({ title: 'Could not update role', description: e?.message || 'Error occurred', variant: 'destructive' });
+    }
+  });
+
   interface OrgMember {
     userId: string; user_id?: string; email: string;
     fullName?: string; full_name?: string;
     roleName?: string; role_name?: string; roleKey?: string;
+    roleId?: string; role_id?: string;
   }
   const members: OrgMember[] = (membersQuery.data as { members?: OrgMember[] })?.members ?? [];
   const roles = rolesQuery.data?.roles ?? [];
@@ -78,9 +91,20 @@ export function TeamMembers({ orgId }: Props) {
                   <div className="font-medium text-fg">{m.fullName ?? m.full_name ?? m.email}</div>
                   <div className="text-sm text-fg-muted">{m.email}</div>
                 </div>
-                <Badge variant="default" className="text-[10px] shrink-0">
-                  {m.roleName ?? m.role_name ?? m.roleKey ?? 'member'}
-                </Badge>
+                <div className="flex flex-col gap-1 shrink-0">
+                  <Badge variant="default" className="text-[10px] self-end">
+                    {m.roleName ?? m.role_name ?? m.roleKey ?? 'member'}
+                  </Badge>
+                  <select
+                    className="h-7 rounded border border-border bg-surface-2 px-1 text-[10px] font-semibold text-fg cursor-pointer max-w-[130px] mt-1"
+                    value={(m.roleId ?? m.role_id ?? roles.find(r => r.name === m.roleName)?.id) || ''}
+                    onChange={(e) => updateMemberRoleMutation.mutate({ userId: m.userId ?? m.user_id ?? '', targetRoleId: e.target.value })}
+                  >
+                    {roles.map((r: any) => (
+                      <option key={r.id} value={r.id}>{r.name}</option>
+                    ))}
+                  </select>
+                </div>
                 <button
                   onClick={() => {
                     if (confirm(`Remove ${m.fullName ?? m.email} from the organization?`)) {

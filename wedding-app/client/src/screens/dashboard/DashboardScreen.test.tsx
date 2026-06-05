@@ -14,7 +14,7 @@
  *   • All heading levels correct (h1 in PageHeader, h2 for sections)
  */
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { render, screen, waitFor } from '@testing-library/react';
+import { render, screen, waitFor, fireEvent } from '@testing-library/react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 
 vi.mock('../../lib/usePermission', () => ({
@@ -237,5 +237,35 @@ describe('DashboardScreen', () => {
     await waitFor(() => {
       expect(screen.queryByRole('button', { name: /new event/i })).toBeNull();
     });
+  });
+
+  it('renders the Live Operations Ticker with mock events and filter buttons', async () => {
+    renderDashboard();
+    await waitFor(() => {
+      expect(screen.getByText(/Live Operations Ticker/i)).toBeInTheDocument();
+      expect(screen.getByText(/Lead Coordinator Jane logged shift clock-in/i)).toBeInTheDocument();
+      expect(screen.getByRole('button', { name: /all/i })).toBeInTheDocument();
+      expect(screen.getByRole('button', { name: /staff/i })).toBeInTheDocument();
+      expect(screen.getByRole('button', { name: /guests/i })).toBeInTheDocument();
+      expect(screen.getByRole('button', { name: /financials/i })).toBeInTheDocument();
+    });
+  });
+
+  it('toggles Guided Tutorial mode and displays contextual help cards', async () => {
+    renderDashboard();
+    
+    // Check toggle is present
+    const toggleBtn = await screen.findByRole('button', { name: /Enable Guided Tutorial/i });
+    expect(toggleBtn).toBeInTheDocument();
+
+    // Contextual guide should not be visible initially
+    expect(screen.queryByText(/💡 Tutorial: Customize your guest-facing welcome sheets/i)).not.toBeInTheDocument();
+
+    // Click to enable tutorial
+    fireEvent.click(toggleBtn);
+
+    // Verify button text changes and guides appear
+    expect(screen.getByRole('button', { name: /Disable Tutorial Mode/i })).toBeInTheDocument();
+    expect(screen.getByText(/💡 Tutorial: Customize your guest-facing welcome sheets/i)).toBeInTheDocument();
   });
 });

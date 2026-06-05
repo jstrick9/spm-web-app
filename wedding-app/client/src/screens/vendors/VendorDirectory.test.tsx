@@ -20,7 +20,9 @@ vi.mock('../../sdk', () => ({
             name: 'Flash Photo', category: 'Photography', contact_name: null,
             email: 'info@flash.com', phone: null, website_url: null,
             contract_amount_cents: 300000, amount_paid_cents: 300000,
-            is_preferred: 0, notes: null, metadata: '{}', created_at: '2026-02-01',
+            is_preferred: 0, notes: null,
+            metadata: JSON.stringify({ questionnaire: { coiLink: 'https://flash.com/coi.pdf', coiExpiration: '2026-05-01' } }),
+            created_at: '2026-02-01',
           },
         ],
       }),
@@ -109,6 +111,18 @@ describe('VendorDirectory', () => {
       // Acme: $2,000 paid of $5,000
       expect(screen.getByText('$2,000 paid')).toBeTruthy();
       expect(screen.getByText('$3,000 remaining')).toBeTruthy();
+    });
+  });
+
+  it('displays COI status indicators and expired booking blocker alerts', async () => {
+    renderWithProviders(<VendorDirectory orgId="org1" />);
+    await waitFor(() => {
+      // Acme Catering has no COI -> displays "COI Missing"
+      expect(screen.getByText('⚠️ COI Missing')).toBeInTheDocument();
+
+      // Flash Photo has expired COI -> displays "COI EXPIRED"
+      expect(screen.getByText('🚨 COI EXPIRED')).toBeInTheDocument();
+      expect(screen.getByText(/Contract bookings are suspended/i)).toBeInTheDocument();
     });
   });
 });

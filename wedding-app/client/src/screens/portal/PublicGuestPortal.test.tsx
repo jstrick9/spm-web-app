@@ -351,6 +351,18 @@ describe('PublicGuestPortal — Phase 34b regression suite', () => {
     await waitFor(() => expect(screen.getByTestId('konva-stage')).toBeTruthy());
   });
 
+  it('map tab renders high-contrast seating list fallback when guest is selected', async () => {
+    window.location.hash = '#/portal/e-1?guest=g-1';
+    renderPortal();
+    await waitFor(() => expect(screen.getByText('Smith Wedding')).toBeTruthy());
+    fireEvent.click(screen.getByRole('button', { name: 'Map' }));
+    
+    // Verify high-contrast seating card renders
+    expect(await screen.findByText('📋 High-Contrast Seating Assignment')).toBeInTheDocument();
+    expect(screen.getByText('Jane Smith')).toBeInTheDocument();
+    expect(screen.getByText('Table 3')).toBeInTheDocument();
+  });
+
   it('RSVP submit calls portal.submitRsvp with typed input', async () => {
     renderPortal();
     await waitFor(() => expect(screen.getByText('Smith Wedding')).toBeTruthy());
@@ -381,5 +393,118 @@ describe('PublicGuestPortal — Phase 34b regression suite', () => {
       const sel = screen.getByLabelText('Your Name') as HTMLSelectElement;
       expect(sel.value).toBe('g-2');
     });
+  });
+
+  it('renders precision countdown, weather monitor, and schedule switcher on Home tab', async () => {
+    window.location.hash = '#/portal/e-1?guest=g-1';
+    vi.mocked(sdk.portal.info).mockResolvedValue({
+      ...BASE_INFO,
+      guests: [
+        { id: 'g-1', fullName: 'Jane Smith',  tableAssignment: 'Table 3', seatAssignment: '3A', subEventInvites: ['s-1'] }
+      ],
+      subEvents: [
+        { id: 's-1', title: 'Rehearsal Dinner', starts_at: '2026-05-26T18:00:00Z', invite_only: true }
+      ],
+      timeline: [
+        { id: 't-1', title: 'Ceremony Starts', starts_at: '2026-05-27T16:00:00Z', category: 'ceremony' }
+      ]
+    } as any);
+
+    renderPortal();
+    
+    // Check precision countdown displays
+    expect(await screen.findByText('Wedding Day Countdown')).toBeInTheDocument();
+    
+    // Check Weather Station displays
+    expect(screen.getByText('Seven Paths Manor Live Weather Station')).toBeInTheDocument();
+    
+    // Check schedule section and tab switches
+    expect(screen.getByText('Event Schedule & Timelines')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /Ceremony Run of Show/i })).toBeInTheDocument();
+    
+    const subeventsBtn = screen.getByRole('button', { name: /Weekend Sub-Events/i });
+    expect(subeventsBtn).toBeInTheDocument();
+    
+    fireEvent.click(subeventsBtn);
+    expect(screen.getByText('Rehearsal Dinner')).toBeInTheDocument();
+  });
+
+  it('supports name type-ahead search filters and draft discard warning prompts on navigation', async () => {
+    vi.mocked(sdk.portal.info).mockResolvedValue(BASE_INFO as never);
+    renderPortal();
+
+    // Switch to RSVP tab
+    const rsvpBtn = await screen.findByRole('button', { name: 'RSVP' });
+    fireEvent.click(rsvpBtn);
+
+    // Verify Search Input exists
+    const searchInput = screen.getByPlaceholderText('Type your name to filter...');
+    expect(searchInput).toBeInTheDocument();
+
+    // Type query to filter
+    fireEvent.change(searchInput, { target: { value: 'Jane' } });
+    expect((searchInput as HTMLInputElement).value).toBe('Jane');
+
+    // Trigger draft warning prompt by selecting a name and trying to go back to Home tab
+    const nameSelect = screen.getByLabelText('Your Name');
+    fireEvent.change(nameSelect, { target: { value: 'g-1' } });
+
+    // Mock confirm warning
+    const confirmSpy = vi.spyOn(window, 'confirm').mockReturnValue(true);
+
+    const homeBtn = screen.getByRole('button', { name: 'Home' });
+    fireEvent.click(homeBtn);
+
+    expect(confirmSpy).toHaveBeenCalledWith(expect.stringContaining('unsaved RSVP responses'));
+  });
+
+  it('supports the Find My Seat smart search overlay and auto-panning selection', async () => {
+    vi.mocked(sdk.portal.info).mockResolvedValue(BASE_INFO as never);
+    renderPortal();
+
+    // Switch to Map tab
+    const mapBtn = await screen.findByRole('button', { name: 'Map' });
+    fireEvent.click(mapBtn);
+
+    // Verify Map Search Input exists
+    const mapSearchInput = screen.getByPlaceholderText('Enter your name to locate your seat...');
+    expect(mapSearchInput).toBeInTheDocument();
+
+    // Type query to search seat
+    fireEvent.change(mapSearchInput, { target: { value: 'Jane' } });
+    expect((mapSearchInput as HTMLInputElement).value).toBe('Jane');
+
+    // Click on suggestion button
+    const findSeatBtn = await screen.findByRole('button', { name: /Jane Smith/i });
+    expect(findSeatBtn).toBeInTheDocument();
+    fireEvent.click(findSeatBtn);
+
+    // Verify search input is cleared
+    expect((mapSearchInput as HTMLInputElement).value).toBe('');
+  });
+
+  it('supports the interactive lodging & cabin maps and roommate lists', async () => {
+    vi.mocked(sdk.portal.info).mockResolvedValue({
+      ...BASE_INFO,
+      guests: [
+        { id: 'g-1', fullName: 'Jane Smith',  tableAssignment: 'Table 3', seatAssignment: '3A', roomAssignment: 'Maple Cabin', allowLodgingAccess: true },
+        { id: 'g-2', fullName: 'Bob Johnson', tableAssignment: null,      seatAssignment: null, roomAssignment: 'Maple Cabin', allowLodgingAccess: true }
+      ]
+    } as any);
+
+    window.location.hash = '#/portal/e-1?guest=g-1';
+    renderPortal();
+
+    // Switch to Map tab
+    const mapBtn = await screen.findByRole('button', { name: 'Map' });
+    fireEvent.click(mapBtn);
+
+    // Verify On-Site Estate Lodging Map renders
+    expect(await screen.findByText(/On-Site Estate Lodging Map/i)).toBeInTheDocument();
+    expect(screen.getAllByText('Maple Cabin').length).toBeGreaterThanOrEqual(1);
+
+    // Verify Roommates dashboard lists Bob Johnson as roommate
+    expect(screen.getByText(/My Roommates \/ Suite Group/i)).toBeInTheDocument();
+    expect(screen.getByText('Bob Johnson')).toBeInTheDocument();
   });
 });

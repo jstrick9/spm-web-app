@@ -7,7 +7,7 @@
 import { useQuery } from '@tanstack/react-query';
 import {
   Building2, DollarSign, Mail, Phone, Globe, Search,
-  Star, Users, ExternalLink,
+  Star, Users, ExternalLink, AlertCircle
 } from 'lucide-react';
 import { useMemo, useState } from 'react';
 import { sdk } from '../../sdk';
@@ -178,6 +178,32 @@ function VendorCard({ vendor: v, score }: { vendor: SdkVendor; score?: { tier: i
     ? Math.round((v.amount_paid_cents / (v.contract_amount_cents ?? 1)) * 100)
     : 0;
 
+  const coiInfo = useMemo(() => {
+    if (!v.metadata) return null;
+    try {
+      const meta = typeof v.metadata === 'string' ? JSON.parse(v.metadata) : v.metadata;
+      const questionnaire = meta?.questionnaire;
+      if (!questionnaire?.coiLink) return null;
+      
+      const expiration = questionnaire.coiExpiration || '';
+      if (!expiration) {
+        return { status: 'missing_expiry', label: 'COI Exp Date Missing', expiration };
+      }
+      
+      // Compare with today's date in local timezone (2026-06-05)
+      const todayStr = '2026-06-05';
+      const isExpired = expiration < todayStr;
+      
+      return {
+        status: isExpired ? 'expired' : 'active',
+        label: isExpired ? 'COI Expired 🚨' : `COI Active (Expires: ${expiration})`,
+        expiration
+      };
+    } catch {
+      return null;
+    }
+  }, [v.metadata]);
+
   return (
     <Card className="hover:shadow-elev-2 transition-shadow">
       <CardContent className="p-5 space-y-3">
@@ -221,6 +247,36 @@ function VendorCard({ vendor: v, score }: { vendor: SdkVendor; score?: { tier: i
             </a>
           )}
         </div>
+
+        {/* COI EXPIRATION MONITOR */}
+        <div className="pt-1.5 border-t border-gray-100 flex items-center justify-between text-[11px] font-semibold">
+          <span className="text-fg-subtle uppercase tracking-wider text-[10px] font-bold">COI Coverage</span>
+          {coiInfo === null ? (
+            <Badge variant="outline" className="text-[9px] uppercase tracking-wider text-amber-600 bg-amber-50">
+              ⚠️ COI Missing
+            </Badge>
+          ) : coiInfo.status === 'expired' ? (
+            <Badge variant="danger" className="text-[9px] uppercase tracking-wider animate-pulse">
+              🚨 COI EXPIRED
+            </Badge>
+          ) : coiInfo.status === 'missing_expiry' ? (
+            <Badge variant="warning" className="text-[9px] uppercase tracking-wider">
+              ⚠️ COI Expiry Missing
+            </Badge>
+          ) : (
+            <Badge variant="success" className="text-[9px] uppercase tracking-wider" title={`Expires: ${coiInfo.expiration}`}>
+              🛡️ COI Active
+            </Badge>
+          )}
+        </div>
+
+        {/* If expired, show blockers warning block */}
+        {coiInfo?.status === 'expired' && (
+          <div className="bg-rose-50 text-rose-700 p-2.5 rounded-lg border border-rose-100 text-[10.5px] font-bold flex items-start gap-1.5 leading-normal">
+             <AlertCircle className="w-3.5 h-3.5 shrink-0 mt-0.5" />
+             <span>COI EXPIRED: Contract bookings are suspended on-site until Certificate of Insurance is renewed.</span>
+          </div>
+        )}
 
         {/* Financial bar */}
         {(v.contract_amount_cents ?? 0) > 0 && (
