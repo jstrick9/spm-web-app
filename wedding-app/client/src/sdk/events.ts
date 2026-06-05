@@ -15,7 +15,9 @@ export interface CreateEventInput {
   venueId?: string;
 }
 
-export type UpdateEventInput = Partial<Omit<CreateEventInput, 'organizationId'>>;
+export type UpdateEventInput = Partial<Omit<CreateEventInput, 'organizationId'>> & {
+  metadata?: Record<string, any>;
+};
 
 export interface EventListFilters {
   status?: Array<SdkEvent['status']>;

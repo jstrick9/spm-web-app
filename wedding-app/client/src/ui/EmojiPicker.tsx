@@ -1,6 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Search, X } from 'lucide-react';
-import { Input } from './Input';
+import { Search } from 'lucide-react';
 import { cn } from './lib/cn';
 
 interface Emoji {
@@ -15,12 +14,22 @@ const EMOJI_DB: Emoji[] = [
   { emoji: '😂', name: 'face with tears of joy', category: 'Smileys' },
   { emoji: '🥰', name: 'smiling face with hearts', category: 'Smileys' },
   { emoji: '😎', name: 'smiling face with sunglasses', category: 'Smileys' },
-  { emoji: '🤔', name: 'smiling face with sunglasses', category: 'Smileys' },
+  { emoji: '🤔', name: 'thinking face', category: 'Smileys' },
   { emoji: '😭', name: 'loudly crying face', category: 'Smileys' },
   { emoji: '👍', name: 'thumbs up', category: 'Smileys' },
   { emoji: '🙏', name: 'folded hands', category: 'Smileys' },
   { emoji: '🎉', name: 'party popper', category: 'Smileys' },
   { emoji: '✨', name: 'sparkles', category: 'Smileys' },
+  { emoji: '😍', name: 'smiling face with heart-eyes', category: 'Smileys' },
+  { emoji: '🤩', name: 'star-struck', category: 'Smileys' },
+  { emoji: '😊', name: 'smiling face with smiling eyes', category: 'Smileys' },
+  { emoji: '👏', name: 'clapping hands', category: 'Smileys' },
+  { emoji: '🙌', name: 'raising hands', category: 'Smileys' },
+  { emoji: '💖', name: 'sparkling heart', category: 'Smileys' },
+  { emoji: '❤️', name: 'red heart', category: 'Smileys' },
+  { emoji: '💕', name: 'two hearts', category: 'Smileys' },
+  { emoji: '🌟', name: 'glowing star', category: 'Smileys' },
+  { emoji: '💫', name: 'dizzy symbol', category: 'Smileys' },
   
   // Wedding Specific
   { emoji: '👰', name: 'bride with veil', category: 'Wedding' },
@@ -29,17 +38,27 @@ const EMOJI_DB: Emoji[] = [
   { emoji: '💐', name: 'bouquet', category: 'Wedding' },
   { emoji: '💒', name: 'wedding', category: 'Wedding' },
   { emoji: '🥂', name: 'clinking glasses', category: 'Wedding' },
-  { emoji: '🍾', name: 'clinking glasses', category: 'Wedding' },
+  { emoji: '🍾', name: 'bottle with popping cork', category: 'Wedding' },
   { emoji: '💌', name: 'love letter', category: 'Wedding' },
   { emoji: '📸', name: 'camera', category: 'Wedding' },
   { emoji: '🕊️', name: 'dove', category: 'Wedding' },
+  { emoji: '👑', name: 'crown', category: 'Wedding' },
+  { emoji: '💎', name: 'gem stone', category: 'Wedding' },
+  { emoji: '🎀', name: 'ribbon', category: 'Wedding' },
+  { emoji: '💝', name: 'heart with ribbon', category: 'Wedding' },
+  { emoji: '🎈', name: 'balloon', category: 'Wedding' },
 
   // Food & Drink
   { emoji: '🎂', name: 'birthday cake', category: 'Food' },
+  { emoji: '🍰', name: 'shortcake', category: 'Food' },
   { emoji: '🍷', name: 'wine glass', category: 'Food' },
   { emoji: '🍽️', name: 'fork and knife with plate', category: 'Food' },
   { emoji: '🥗', name: 'green salad', category: 'Food' },
   { emoji: '🥩', name: 'cut of meat', category: 'Food' },
+  { emoji: '🥖', name: 'baguette bread', category: 'Food' },
+  { emoji: '🍲', name: 'pot of food', category: 'Food' },
+  { emoji: '🍹', name: 'tropical drink', category: 'Food' },
+  { emoji: '🍺', name: 'beer mug', category: 'Food' },
 
   // Activities & Music
   { emoji: '🎵', name: 'musical note', category: 'Music' },
@@ -47,6 +66,9 @@ const EMOJI_DB: Emoji[] = [
   { emoji: '🕺', name: 'man dancing', category: 'Music' },
   { emoji: '🎤', name: 'microphone', category: 'Music' },
   { emoji: '🎧', name: 'headphone', category: 'Music' },
+  { emoji: '🎶', name: 'musical notes', category: 'Music' },
+  { emoji: '🎸', name: 'guitar', category: 'Music' },
+  { emoji: '🎹', name: 'musical keyboard', category: 'Music' },
 
   // Logistics
   { emoji: '📅', name: 'calendar', category: 'Logistics' },
@@ -54,12 +76,28 @@ const EMOJI_DB: Emoji[] = [
   { emoji: '📍', name: 'round pushpin', category: 'Logistics' },
   { emoji: '🚗', name: 'automobile', category: 'Logistics' },
   { emoji: '🚚', name: 'delivery truck', category: 'Logistics' },
+  { emoji: '🗺️', name: 'world map', category: 'Logistics' },
+  { emoji: '📋', name: 'clipboard', category: 'Logistics' },
+  { emoji: '🚒', name: 'fire engine', category: 'Logistics' },
+  { emoji: '📐', name: 'triangular ruler', category: 'Logistics' },
+  { emoji: '🏛️', name: 'classical building', category: 'Logistics' },
   
-  // Decor
+  // Decor & Seating
+  { emoji: '🪑', name: 'chair style', category: 'Decor' },
+  { emoji: '🛋️', name: 'couch and lamp', category: 'Decor' },
   { emoji: '🕯️', name: 'candle', category: 'Decor' },
-  { emoji: '🎀', name: 'ribbon', category: 'Decor' },
   { emoji: '💡', name: 'light bulb', category: 'Decor' },
-  { emoji: '🌿', name: 'herb', category: 'Decor' },
+  { emoji: '🌿', name: 'herb foliage', category: 'Decor' },
+  { emoji: '🌸', name: 'cherry blossom', category: 'Decor' },
+  { emoji: '🌹', name: 'rose', category: 'Decor' },
+  { emoji: '🥀', name: 'wilted flower', category: 'Decor' },
+  { emoji: '🌺', name: 'hibiscus', category: 'Decor' },
+  { emoji: '🌻', name: 'sunflower', category: 'Decor' },
+  { emoji: '🌼', name: 'blossom', category: 'Decor' },
+  { emoji: '🌲', name: 'evergreen tree', category: 'Decor' },
+  { emoji: '🪵', name: 'wood timber', category: 'Decor' },
+  { emoji: '🚪', name: 'door', category: 'Decor' },
+  { emoji: '📦', name: 'package stage', category: 'Decor' },
   
   // Symbols
   { emoji: '✅', name: 'check mark button', category: 'Symbols' },
@@ -67,6 +105,9 @@ const EMOJI_DB: Emoji[] = [
   { emoji: '⚠️', name: 'warning', category: 'Symbols' },
   { emoji: '❓', name: 'question mark', category: 'Symbols' },
   { emoji: '❗', name: 'exclamation mark', category: 'Symbols' },
+  { emoji: '🚨', name: 'police car light', category: 'Symbols' },
+  { emoji: '🛑', name: 'stop sign', category: 'Symbols' },
+  { emoji: '♿', name: 'wheelchair symbol', category: 'Symbols' },
 ];
 
 const CATEGORIES = ['Smileys', 'Wedding', 'Food', 'Music', 'Logistics', 'Decor', 'Symbols'];

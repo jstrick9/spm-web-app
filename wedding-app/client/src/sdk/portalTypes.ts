@@ -38,6 +38,9 @@ export interface PortalGuestEntry {
   fullName: string;
   tableAssignment: string | null;
   seatAssignment: string | null;
+  roomAssignment: string | null;
+  allowLodgingAccess?: boolean;
+  subEventInvites?: string[];
 }
 
 // ── Canvas layout items (discriminated union) ─────────────────────────────
@@ -115,6 +118,7 @@ export interface PortalRsvpInput {
   attending: boolean;
   mealChoice?: string;
   notes?: string;
+  subEventRSVPs?: Record<string, boolean>;
 }
 
 // ── Poll option (Phase 35a) ───────────────────────────────────────────────

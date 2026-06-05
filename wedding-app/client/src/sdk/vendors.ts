@@ -22,6 +22,12 @@ export const vendorsSdk = {
   submitQuestionnaire(vendorId: string, payload: Record<string, any>) {
     return api.post(`/api/portal/vendors/${vendorId}/questionnaire`, payload, { auth: false });
   },
+  portalGetMessages(vendorId: string): Promise<{ messages: any[] }> {
+    return api.get(`/api/portal/vendors/${vendorId}/messages`, { auth: false });
+  },
+  portalSendMessage(vendorId: string, body: string): Promise<{ message: any }> {
+    return api.post(`/api/portal/vendors/${vendorId}/messages`, { body }, { auth: false });
+  },
   list(orgId: string, opts: { eventId?: string } = {}): Promise<{ vendors: SdkVendor[] }> {
     const qs = opts.eventId ? `?eventId=${encodeURIComponent(opts.eventId)}` : '';
     return api.get(`/api/orgs/${orgId}/vendors${qs}`);

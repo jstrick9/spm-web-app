@@ -31,6 +31,7 @@ vi.mock('../components/notifications/NotificationCenter', () => ({
 }));
 
 import { AppShell, PageHeader, PageBody } from './AppShell';
+import { ToastProvider } from './Toast';
 
 const MOCK_USER = {
   id: 'u-1',
@@ -43,14 +44,16 @@ function renderShell(currentPath = '#/') {
   const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   return render(
     <QueryClientProvider client={qc}>
-      <AppShell
-        user={MOCK_USER as any}
-        currentPath={currentPath}
-        onLogout={vi.fn()}
-        onOpenCommandPalette={vi.fn()}
-      >
-        <div data-testid="content">Page content</div>
-      </AppShell>
+      <ToastProvider>
+        <AppShell
+          user={MOCK_USER as any}
+          currentPath={currentPath}
+          onLogout={vi.fn()}
+          onOpenCommandPalette={vi.fn()}
+        >
+          <div data-testid="content">Page content</div>
+        </AppShell>
+      </ToastProvider>
     </QueryClientProvider>,
   );
 }

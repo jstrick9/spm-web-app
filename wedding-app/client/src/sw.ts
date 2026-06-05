@@ -65,6 +65,22 @@ registerRoute(
   'POST'
 );
 
+registerRoute(
+  /\/api\/portal\/vendors\/.*\/questionnaire/i,
+  new NetworkFirst({
+    plugins: [bgSyncPlugin]
+  }),
+  'POST'
+);
+
+registerRoute(
+  /\/api\/portal\/vendors\/.*\/messages/i,
+  new NetworkFirst({
+    plugins: [bgSyncPlugin]
+  }),
+  'POST'
+);
+
 
 // 4. PUSH NOTIFICATIONS API
 self.addEventListener('push', (event: any) => {

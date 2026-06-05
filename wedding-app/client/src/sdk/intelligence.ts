@@ -61,6 +61,7 @@ export interface SdkPaymentLink {
   provider: string; amount_cents: number;
   status: 'pending' | 'processing' | 'completed' | 'failed' | 'refunded';
   payment_url: string | null; paid_at: string | null; created_at: string;
+  metadata?: any;
 }
 
 export const paymentLinksSdk = {
@@ -70,6 +71,7 @@ export const paymentLinksSdk = {
   create(eventId: string, input: {
     contractId?: string; provider?: string;
     amountCents: number; paymentUrl?: string;
+    metadata?: Record<string, any>;
   }): Promise<{ payment: SdkPaymentLink }> {
     return api.post(`/api/events/${eventId}/payments`, input);
   },

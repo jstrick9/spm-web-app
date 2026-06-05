@@ -33,5 +33,21 @@ export const staffSdk = {
   },
   deleteTask(taskId: string): Promise<void> {
     return api.delete(`/api/staff/tasks/${taskId}`);
+  },
+  listShifts(orgId: string, opts: { eventId?: string } = {}): Promise<{ shifts: any[] }> {
+    const qs = opts.eventId ? `?eventId=${encodeURIComponent(opts.eventId)}` : '';
+    return api.get(`/api/orgs/${orgId}/staff/shifts${qs}`);
+  },
+  createShift(orgId: string, input: { staffId: string; areaId?: string; role?: string; startsAt: string; endsAt: string; notes?: string; eventId?: string }): Promise<{ shift: any }> {
+    return api.post(`/api/orgs/${orgId}/staff/shifts`, input);
+  },
+  deleteShift(shiftId: string): Promise<void> {
+    return api.delete(`/api/staff/shifts/${shiftId}`);
+  },
+  clockInShift(shiftId: string): Promise<{ shift: any }> {
+    return api.post(`/api/staff/shifts/${shiftId}/clock-in`, {});
+  },
+  clockOutShift(shiftId: string): Promise<{ shift: any }> {
+    return api.post(`/api/staff/shifts/${shiftId}/clock-out`, {});
   }
 };
