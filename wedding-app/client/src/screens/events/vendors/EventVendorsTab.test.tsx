@@ -70,11 +70,31 @@ describe('EventVendorsTab', () => {
     render(<EventVendorsTab eventId="evt-1" organizationId="org-1" />, { wrapper: makeWrapper() });
     await screen.findAllByText('Acme Catering');
     
-    const paymentBtns = screen.getAllByRole('button', { name: /Log Payment/i });
+    const paymentBtns = screen.getAllByRole('button', { name: /Log Pay/i });
     fireEvent.click(paymentBtns[0]);
     
     await waitFor(() => {
       expect(screen.getByText(/Log Payment for/i)).toBeInTheDocument();
     });
+  });
+
+  it('renders a Remind button for non-compliant vendors and copies portal link on click', async () => {
+    // Mock navigator.clipboard
+    const writeTextMock = vi.fn().mockResolvedValue(undefined);
+    Object.assign(navigator, {
+      clipboard: {
+        writeText: writeTextMock
+      }
+    });
+
+    render(<EventVendorsTab eventId="evt-1" organizationId="org-1" />, { wrapper: makeWrapper() });
+    
+    // Find Remind button and click
+    const remindBtns = await screen.findAllByRole('button', { name: /Remind/i });
+    expect(remindBtns.length).toBeGreaterThanOrEqual(1);
+    
+    fireEvent.click(remindBtns[0]);
+
+    expect(writeTextMock).toHaveBeenCalled();
   });
 });

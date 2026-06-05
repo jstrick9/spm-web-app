@@ -20,7 +20,7 @@ describe('ChatSystem', () => {
   it('renders chat interface and categories', () => {
     render(<ChatSystem eventId="evt-1" currentUser={mockUser} />);
     
-    expect(screen.getByText('Event Communications')).toBeInTheDocument();
+    expect(screen.getByText(/Event Communications/i)).toBeInTheDocument();
     
     // Check categories
     expect(screen.getByRole('button', { name: /general/i })).toBeInTheDocument();

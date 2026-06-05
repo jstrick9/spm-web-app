@@ -51,10 +51,22 @@ export function ImportGuestsDialog({ eventId, open, onOpenChange, onImported }: 
       setRows(parsed);
       
       const newMapping: Record<number, GuestField> = {};
+      let savedMappings: Record<string, string> = {};
+      try {
+        savedMappings = JSON.parse(localStorage.getItem('wvi_csv_mappings') || '{}');
+      } catch (e) {
+        // ignore
+      }
+
       parsed[0].forEach((col, idx) => {
-        const guess = guessMapping(col);
-        if (guess.field && guess.confidence > 0.5) {
-          newMapping[idx] = guess.field;
+        const colClean = col.trim().toLowerCase();
+        if (savedMappings[colClean]) {
+          newMapping[idx] = savedMappings[colClean] as GuestField;
+        } else {
+          const guess = guessMapping(col);
+          if (guess.field && guess.confidence > 0.5) {
+            newMapping[idx] = guess.field;
+          }
         }
       });
       setMapping(newMapping);
@@ -279,10 +291,22 @@ function MapStep({ rows, hasHeaders, setHasHeaders, mapping, setMapping, onNext,
               <Select 
                 value={mapping[idx] || ''}
                 onValueChange={(val: string) => {
-                  setMapping((prev: any) => ({
-                    ...prev,
-                    [idx]: val || undefined
-                  }));
+                  setMapping((prev: any) => {
+                    const next = {
+                      ...prev,
+                      [idx]: val || undefined
+                    };
+                    if (hasHeaders && col) {
+                      try {
+                        const saved = JSON.parse(localStorage.getItem('wvi_csv_mappings') || '{}');
+                        saved[col.trim().toLowerCase()] = val || undefined;
+                        localStorage.setItem('wvi_csv_mappings', JSON.stringify(saved));
+                      } catch (e) {
+                        // ignore
+                      }
+                    }
+                    return next;
+                  });
                 }}
                 data-testid={`map-select-${idx}`}
               >

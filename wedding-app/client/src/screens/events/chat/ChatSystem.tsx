@@ -119,6 +119,51 @@ export function ChatSystem({ eventId, currentUser }: Props) {
     return () => { mounted = false; };
   }, [loadMessages]);
 
+  // ─── Background Sync Loop for Unsynced Messages (N12 fix) ───
+  useEffect(() => {
+    let active = true;
+    
+    const syncUnsyncedMessages = async () => {
+      try {
+        const localMsgs = await getMessages(eventId, activeCategory);
+        const unsynced = localMsgs.filter(m => !m.synced);
+        if (unsynced.length === 0) return;
+
+        for (const msg of unsynced) {
+          try {
+            const res: any = await api.post(`/api/messages/${encodeURIComponent(eventId + ':' + msg.threadId)}`, {
+              body: msg.body,
+              senderRole: 'planner',
+            });
+            const syncedMsg = {
+              ...msg,
+              id: res.message?.id ?? msg.id,
+              synced: true,
+            };
+            await saveMessage(syncedMsg);
+            
+            if (active) {
+              setMessages(prev => prev.map(m => m.id === msg.id ? syncedMsg : m));
+            }
+          } catch {
+            // Keep as unsynced, retry next interval
+          }
+        }
+      } catch {}
+    };
+
+    const interval = setInterval(() => {
+      if (serverOnline) {
+        syncUnsyncedMessages();
+      }
+    }, 15000); // retry every 15s
+
+    return () => {
+      active = false;
+      clearInterval(interval);
+    };
+  }, [eventId, activeCategory, serverOnline]);
+
   // Auto-scroll on new messages
   useEffect(() => {
     if (scrollRef.current) {
@@ -177,27 +222,27 @@ export function ChatSystem({ eventId, currentUser }: Props) {
   const threadMessages = messages.filter(m => m.threadId === activeCategory);
 
   return (
-    <Card className="flex flex-col h-[400px] sm:h-[600px]">
-      <CardHeader className="py-3 px-4 border-b border-border flex flex-row items-center justify-between space-y-0">
-        <CardTitle className="text-base flex items-center gap-2">
+    <Card className="flex flex-col h-[400px] sm:h-[600px] border border-[#e1d5c9] bg-[#FDFBF7] shadow-lg">
+      <CardHeader className="py-3.5 px-5 border-b border-[#e1d5c9] bg-[#FDFBF7] flex flex-row items-center justify-between space-y-0">
+        <CardTitle className="text-sm font-serif font-bold text-fg flex items-center gap-2">
           <MessageSquare className="w-4 h-4 text-brand" />
-          Event Communications
+          Event Communications &amp; Direct Messaging
           {serverOnline ? (
-            <Wifi className="w-3 h-3 text-success" />
+            <Wifi className="w-3.5 h-3.5 text-success animate-pulse" />
           ) : (
-            <WifiOff className="w-3 h-3 text-warning" />
+            <WifiOff className="w-3.5 h-3.5 text-warning animate-bounce" />
           )}
         </CardTitle>
-        <div className="flex gap-1 bg-surface-2 p-1 rounded-md">
+        <div className="flex gap-1.5 bg-[#FDFBF7] p-1 rounded-xl border border-[#e1d5c9] shadow-xs">
           {CATEGORIES.map(c => (
             <button
               key={c}
               onClick={() => setActiveCategory(c)}
               className={cn(
-                "px-3 py-1 text-xs font-medium rounded capitalize transition-colors",
+                "px-3 py-1 text-xs font-semibold rounded-lg capitalize transition-all duration-150",
                 activeCategory === c
-                  ? (c === 'urgent' ? 'bg-danger text-danger-fg' : 'bg-surface text-fg shadow-sm')
-                  : 'text-fg-muted hover:text-fg'
+                  ? (c === 'urgent' ? 'bg-danger text-danger-fg font-bold' : 'bg-brand text-brand-fg font-bold shadow-sm')
+                  : 'text-fg-subtle hover:text-fg hover:bg-brand-soft/20'
               )}
             >
               {c}
@@ -206,32 +251,32 @@ export function ChatSystem({ eventId, currentUser }: Props) {
         </div>
       </CardHeader>
 
-      <CardContent className="flex-1 p-0 flex flex-col min-h-0 bg-surface-2/30">
+      <CardContent className="flex-1 p-0 flex flex-col min-h-0 bg-[#FDFBF7]/30">
         <div ref={scrollRef} className="flex-1 overflow-y-auto p-4 space-y-4">
           {threadMessages.map(msg => (
             <div key={msg.id} className={cn("flex flex-col max-w-[80%]", msg.isOwn ? "ml-auto items-end" : "mr-auto items-start")}>
-              <div className="text-[10px] text-fg-muted mb-1 px-1">
+              <div className="text-[10px] text-fg-subtle mb-1 px-1 font-bold">
                 {msg.senderName} • {new Date(msg.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
                 {!msg.synced && <span className="ml-1 text-warning" title="Pending sync">●</span>}
               </div>
               <div className={cn(
-                "px-4 py-2 rounded-2xl text-sm",
+                "px-4 py-2 rounded-2xl text-xs sm:text-sm font-semibold shadow-xs",
                 msg.isOwn
-                  ? "bg-brand text-brand-fg rounded-br-sm"
-                  : "bg-surface border border-border text-fg rounded-bl-sm"
+                  ? "bg-brand text-brand-fg rounded-br-sm font-bold"
+                  : "bg-white border border-[#e1d5c9] text-fg rounded-bl-sm"
               )}>
                 {msg.body}
               </div>
             </div>
           ))}
           {threadMessages.length === 0 && (
-            <div className="h-full flex items-center justify-center text-sm text-fg-muted italic">
+            <div className="h-full flex items-center justify-center text-xs text-fg-subtle italic font-serif">
               No messages in #{activeCategory} yet.
             </div>
           )}
         </div>
 
-        <div className="p-3 border-t border-border bg-surface relative">
+        <div className="p-3 border-t border-[#e1d5c9] bg-[#FDFBF7] relative">
           {showEmoji && (
             <EmojiPicker
               onSelect={(emoji) => setInput(prev => prev + emoji)}
@@ -242,18 +287,18 @@ export function ChatSystem({ eventId, currentUser }: Props) {
           <form onSubmit={handleSend} className="flex gap-2 items-center">
             <button
               type="button"
-              className="p-2 text-fg-muted hover:text-fg rounded-full hover:bg-surface-2 transition-colors"
+              className="p-2 text-fg-muted hover:text-fg rounded-full hover:bg-brand-soft/20 transition-all duration-150"
               onClick={() => setShowEmoji(!showEmoji)}
             >
-              <Smile className="w-5 h-5" />
+              <Smile className="w-5 h-5 text-brand" />
             </button>
             <Input
               value={input}
               onChange={e => setInput(e.target.value)}
               placeholder={`Message #${activeCategory}...`}
-              className="flex-1 rounded-full bg-surface-2"
+              className="flex-1 rounded-full bg-white border border-[#e1d5c9] h-9 text-xs"
             />
-            <Button type="submit" size="icon" className="rounded-full shrink-0" disabled={!input.trim()}>
+            <Button type="submit" size="icon" className="rounded-full shrink-0 h-9 w-9" disabled={!input.trim()}>
               <Send className="w-4 h-4" />
             </Button>
           </form>

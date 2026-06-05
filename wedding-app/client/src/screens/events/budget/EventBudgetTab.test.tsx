@@ -81,4 +81,19 @@ describe('EventBudgetTab', () => {
       expect(screen.getByText('Totals')).toBeTruthy();
     });
   });
+
+  it('renders circular progress ring and fee calculator', async () => {
+    render(<EventBudgetTab eventId="evt1" organizationId="org1" />, { wrapper: makeWrapper() });
+    await waitFor(() => {
+      expect(screen.getByText(/Budget Allocation Goal/i)).toBeInTheDocument();
+      expect(screen.getByText(/Pending Balances/i)).toBeInTheDocument();
+      expect(screen.getByText(/37%/i)).toBeInTheDocument(); // 7000/19000 ~ 37%
+
+      expect(screen.getByText(/Fees & Catering Calculator/i)).toBeInTheDocument();
+      expect(screen.getByText(/Catering \/ Guest/i)).toBeInTheDocument();
+      expect(screen.getByText(/Tax Rate/i)).toBeInTheDocument();
+      expect(screen.getByText(/Gratuity \/ Service/i)).toBeInTheDocument();
+      expect(screen.getByText(/Total Projected Cost/i)).toBeInTheDocument();
+    });
+  });
 });

@@ -115,4 +115,27 @@ describe('ImportGuestsDialog', () => {
       expect(screen.getByText('Import Complete')).toBeInTheDocument();
     });
   });
+
+  it('remembers previous column mappings in localStorage', async () => {
+    localStorage.setItem('wvi_csv_mappings', JSON.stringify({ 'custom_header': 'fullName' }));
+    
+    renderDialog();
+    const file = createCsvFile('custom_header,email\nJohn Doe,john@doe.com');
+    const input = screen.getByTestId('csv-file-input');
+    await userEvent.upload(input, file);
+
+    await waitFor(() => {
+      expect(screen.getByText('Map Columns')).toBeInTheDocument();
+    });
+
+    // Since custom_header is auto-mapped to fullName, the Continue button should be enabled!
+    const continueBtn = screen.getByRole('button', { name: /Continue/i });
+    expect(continueBtn).not.toBeDisabled();
+
+    // Click continue to verify we can land on the preview step
+    fireEvent.click(continueBtn);
+    await waitFor(() => {
+      expect(screen.getByText('Preview & Resolve')).toBeInTheDocument();
+    });
+  });
 });

@@ -19,6 +19,13 @@ const paymentSchema = z.object({
 
 type FormValues = z.infer<typeof paymentSchema>;
 
+const formatCurrency = (val: string) => {
+  const digits = val.replace(/\D/g, '');
+  if (!digits) return '';
+  const num = parseInt(digits, 10) / 100;
+  return `$${num.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+};
+
 interface Props {
   open: boolean;
   onOpenChange: (open: boolean) => void;
@@ -82,7 +89,17 @@ export function VendorPaymentDialog({ open, onOpenChange, vendorId, vendorName, 
                 render={({ field }) => (
                   <FormItem>
                     <FormLabel>Amount *</FormLabel>
-                    <FormControl><Input placeholder="$0.00" {...field} autoFocus /></FormControl>
+                    <FormControl>
+                      <Input 
+                        placeholder="$0.00" 
+                        {...field} 
+                        onChange={(e) => {
+                          const formatted = formatCurrency(e.target.value);
+                          field.onChange(formatted);
+                        }}
+                        autoFocus 
+                      />
+                    </FormControl>
                     <FormMessage />
                   </FormItem>
                 )}

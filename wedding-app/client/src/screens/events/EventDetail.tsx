@@ -28,11 +28,12 @@ import { EventRiskCard } from './EventRiskCard';
 import { EventQuickSwitcher } from './EventQuickSwitcher';
 import { StatusBadge } from './statusMeta';
 import { EventGuestsTab } from './guests/EventGuestsTab';
+import { EventEmergencyTab } from './emergency/EventEmergencyTab';
 const CanvasPage = React.lazy(() => import('./layouts/CanvasPage').then(m => ({ default: m.CanvasPage })));
 import { GuestPortalSettingsTab } from './portal/GuestPortalSettingsTab';
 import { EventInvitesTab } from './invites/EventInvitesTab';
 import { EventFeedbackTab } from './feedback/EventFeedbackTab';
-import { BarChart, Mail, DollarSign, Printer, FileSignature, ImageIcon, ScanLine, ClipboardCheck, CalendarPlus } from 'lucide-react';
+import { BarChart, Mail, DollarSign, Printer, FileSignature, ImageIcon, ScanLine, ClipboardCheck, CalendarPlus, ShieldAlert } from 'lucide-react';
 import { EventVendorsTab } from './vendors/EventVendorsTab';
 import { EventTimelineTab } from './timeline/EventTimelineTab';
 import { EventStaffTab } from './staff/EventStaffTab';
@@ -46,7 +47,7 @@ import { useEffect, useState, useMemo, type ReactNode } from 'react';
 
 interface Props { eventId: string }
 
-type TabId = 'overview' | 'guests' | 'timeline' | 'vendors' | 'budget' | 'contracts' | 'gallery' | 'staff' | 'layout' | 'invites' | 'feedback' | 'chat' | 'portal' | 'settings';
+type TabId = 'overview' | 'guests' | 'timeline' | 'vendors' | 'budget' | 'contracts' | 'gallery' | 'staff' | 'layout' | 'invites' | 'feedback' | 'chat' | 'portal' | 'settings' | 'emergency';
 
 // ─── Tab definitions with RBAC mapping ──────────────────
 interface TabDef {
@@ -71,6 +72,7 @@ const TAB_DEFS: TabDef[] = [
   { id: 'chat',      label: 'Chat',               icon: <MessageCircle className="h-3.5 w-3.5 mr-1" />, permission: 'messages.view' },
   { id: 'layout',    label: 'Layout',             icon: <MapPin className="h-3.5 w-3.5 mr-1" />,        permission: 'layouts.view' },
   { id: 'portal',    label: 'Portal',             icon: <LinkIcon className="h-3.5 w-3.5 mr-1" />,      permission: 'portal.config.manage' },
+  { id: 'emergency', label: 'Emergency',          icon: <ShieldAlert className="h-3.5 w-3.5 mr-1" />,   permission: null },
   { id: 'settings',  label: 'Settings',           icon: <Cog className="h-3.5 w-3.5 mr-1" />,           permission: 'events.edit' },
 ];
 
@@ -250,7 +252,7 @@ export function EventDetail({ eventId, user }: Props & { user: any }) {
             <EventFeedbackTab eventId={eventId} />
           </TabsContent>
           <TabsContent value="timeline">
-            <EventTimelineTab eventId={eventId} />
+            <EventTimelineTab eventId={eventId} organizationId={event.organization_id} />
           </TabsContent>
           <TabsContent value="vendors">
             <EventVendorsTab eventId={eventId} organizationId={event.organization_id} />
@@ -275,6 +277,9 @@ export function EventDetail({ eventId, user }: Props & { user: any }) {
           </TabsContent>
           <TabsContent value="portal">
             <GuestPortalSettingsTab eventId={eventId} />
+          </TabsContent>
+          <TabsContent value="emergency">
+            <EventEmergencyTab eventId={eventId} />
           </TabsContent>
           <TabsContent value="settings">
             <EventSettingsForm eventId={eventId} />

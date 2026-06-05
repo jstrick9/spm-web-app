@@ -3,6 +3,7 @@ import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import { RunSheet } from './RunSheet';
 import { sdk } from '../../../sdk';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import { ToastProvider } from '../../../ui/Toast';
 
 const queryClient = new QueryClient({
   defaultOptions: { queries: { retry: false } }
@@ -21,6 +22,9 @@ vi.mock('../../../sdk', () => ({
     },
     staff: {
       listTasks: vi.fn()
+    },
+    layouts: {
+      list: vi.fn().mockResolvedValue({ layouts: [] })
     }
   }
 }));
@@ -32,7 +36,9 @@ describe('RunSheet', () => {
 
   const TestWrapper = ({ children }: any) => (
     <QueryClientProvider client={queryClient}>
-      {children}
+      <ToastProvider>
+        {children}
+      </ToastProvider>
     </QueryClientProvider>
   );
 
@@ -66,13 +72,13 @@ describe('RunSheet', () => {
     expect(screen.getByText(/150 Guests Expected/i)).toBeInTheDocument();
     
     // Check Timeline compiled
-    expect(screen.getByText('Run of Show')).toBeInTheDocument();
+    expect(screen.getByText(/Run of Show/i)).toBeInTheDocument();
     expect(screen.getByText('Arrival')).toBeInTheDocument();
     
     // Check Vendors compiled
     expect(screen.getByText('Vendor Directory')).toBeInTheDocument();
     expect(screen.getByText('DJ Snake')).toBeInTheDocument();
-    expect(screen.getByText('555-1234')).toBeInTheDocument();
+    expect(screen.getByText(/555-1234/i)).toBeInTheDocument();
     
     // Check Staff compiled
     expect(screen.getByText('Staff Operations')).toBeInTheDocument();

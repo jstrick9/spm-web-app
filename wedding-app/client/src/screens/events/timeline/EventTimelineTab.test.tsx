@@ -44,17 +44,17 @@ describe('EventTimelineTab', () => {
   );
 
   it('renders timeline items sorted by time', async () => {
-    render(<EventTimelineTab eventId="evt-1" />, { wrapper: TestWrapper });
+    render(<EventTimelineTab eventId="evt-1" organizationId="org-1" />, { wrapper: TestWrapper });
     
     expect(await screen.findByText('Arrival')).toBeInTheDocument();
     expect(screen.getByText('Ceremony')).toBeInTheDocument();
     
-    expect(screen.getByText('30 mins')).toBeInTheDocument();
+    expect(screen.getByText(/30 min/i)).toBeInTheDocument();
     // expect(screen.getByText('vendor arrival')).toBeInTheDocument(); // category badge
   });
   
   it('opens create dialog', async () => {
-    render(<EventTimelineTab eventId="evt-1" />, { wrapper: TestWrapper });
+    render(<EventTimelineTab eventId="evt-1" organizationId="org-1" />, { wrapper: TestWrapper });
     
     expect(await screen.findByText('Arrival')).toBeInTheDocument();
     

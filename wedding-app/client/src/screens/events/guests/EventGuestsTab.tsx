@@ -1,11 +1,8 @@
 /**
  * EventGuestsTab — the "Guests" tab inside EventDetail.
- *
- * Composes the toolbar + table + drawer + create dialog. Owns search /
- * filter / sort / selection state so the toolbar's bulk-actions bar can
- * see the selected ids.
+ * Composes toolbar + table + drawer + create dialog + Lodging & Cabin Builder.
  */
-import { keepPreviousData, useQuery } from '@tanstack/react-query';
+import { keepPreviousData, useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useMemo, useState } from 'react';
 import { useDebouncedValue } from '../../../lib/useDebouncedValue';
 import { sdk } from '../../../sdk';
@@ -18,6 +15,8 @@ import { GuestDetailDrawer } from './GuestDetailDrawer';
 import { SeatingReport } from './SeatingReport';
 import { GuestsTable, type GuestSortKey } from './GuestsTable';
 import { GuestsToolbar, type GuestStatusFilter } from './GuestsToolbar';
+import { LodgingBuilder, type LodgingFloor } from './LodgingBuilder';
+import { useToast } from '../../../ui/Toast';
 
 interface Props { eventId: string }
 
@@ -31,6 +30,8 @@ function sortValue(g: any, key: string): string {
 }
 
 export function EventGuestsTab({ eventId }: Props) {
+  const { toast } = useToast();
+  const qc = useQueryClient();
   const [search, setSearch] = useState('');
   const debouncedSearch = useDebouncedValue(search, 250);
   const [statusFilter, setStatusFilter] = useState<GuestStatusFilter>('all');
@@ -41,6 +42,7 @@ export function EventGuestsTab({ eventId }: Props) {
   const [createOpen, setCreateOpen] = useState(false);
   const [importOpen, setImportOpen] = useState(false);
   const [seatingOpen, setSeatingOpen] = useState(false);
+  const [lodgingOpen, setLodgingOpen] = useState(false);
   const [detailGuest, setDetailGuest] = useState<SdkGuest | null>(null);
   const [detailOpen, setDetailOpen] = useState(false);
 
@@ -51,6 +53,16 @@ export function EventGuestsTab({ eventId }: Props) {
   });
   const eventTitle = eventQuery.data?.event?.title ?? "Event";
   const eventDate = eventQuery.data?.event?.start_date ?? null;
+  const orgId = eventQuery.data?.event?.organization_id;
+
+  // Fetch Venues for Lodging Settings
+  const { data: venueData } = useQuery({
+    queryKey: ['venues', orgId],
+    queryFn: () => orgId ? sdk.venues.list(orgId) : Promise.resolve({ venues: [] }),
+    enabled: !!orgId,
+  });
+  const venues = venueData?.venues || [];
+  const firstVenue = venues[0];
 
   const query = useQuery({
     queryKey: ['guests', eventId],
@@ -61,8 +73,6 @@ export function EventGuestsTab({ eventId }: Props) {
   const allGuests = query.data?.guests ?? [];
   const counts    = query.data?.counts;
 
-  // Client-side filter + sort. (Server-side will arrive when we have
-  // events with > 500 guests; for now this gives instant UX.)
   const visibleGuests = useMemo(() => {
     const q = debouncedSearch.trim().toLowerCase();
     let out = allGuests;
@@ -106,6 +116,29 @@ export function EventGuestsTab({ eventId }: Props) {
     setSearch('');
     setStatusFilter('all');
   }
+
+  // Update lodging mutation - typed as Promise<void>
+  const saveLodgingMutation = useMutation<void, Error, LodgingFloor[]>({
+    mutationFn: async (floors: LodgingFloor[]) => {
+      if (firstVenue) {
+        const metadata = typeof (firstVenue as any).metadata === 'string' ? JSON.parse((firstVenue as any).metadata) : ((firstVenue as any).metadata || {});
+        await sdk.venues.update(firstVenue.id, {
+          metadata: { ...metadata, floors }
+        });
+      }
+    },
+    onSuccess: () => {
+      toast({ title: 'Lodging layouts updated successfully', variant: 'success' });
+      setLodgingOpen(false);
+      if (orgId) qc.invalidateQueries({ queryKey: ['venues', orgId] });
+    },
+  });
+
+  const parsedFloors = useMemo(() => {
+    if (!firstVenue) return [];
+    const metadata = typeof (firstVenue as any).metadata === 'string' ? JSON.parse((firstVenue as any).metadata) : ((firstVenue as any).metadata || {});
+    return metadata.floors || [];
+  }, [firstVenue]);
 
   return (
     <div className="space-y-4">
@@ -163,7 +196,6 @@ export function EventGuestsTab({ eventId }: Props) {
         onOpenChange={setCreateOpen}
       />
 
-
       <GuestDetailDrawer
         guest={detailGuest}
         open={detailOpen}
@@ -177,11 +209,17 @@ export function EventGuestsTab({ eventId }: Props) {
         }}
       />
 
-      {/* Seating & Dietary Report */}
-      <div className="flex justify-end mt-2 print:hidden">
+      {/* Seating & Dietary & Lodging Actions */}
+      <div className="flex justify-end gap-6 mt-2 print:hidden text-xs">
+        <button
+          onClick={() => setLodgingOpen(true)}
+          className="text-fg-muted hover:text-brand underline flex items-center gap-1 font-bold"
+        >
+          🏨 Open Lodging &amp; Cabin Builder
+        </button>
         <button
           onClick={() => setSeatingOpen(true)}
-          className="text-xs text-fg-muted hover:text-brand underline"
+          className="text-fg-muted hover:text-brand underline font-bold"
         >
           Print Seating &amp; Dietary Report
         </button>
@@ -193,6 +231,19 @@ export function EventGuestsTab({ eventId }: Props) {
           eventDate={eventDate}
           guests={visibleGuests}
           onClose={() => setSeatingOpen(false)}
+        />
+      )}
+
+      {lodgingOpen && (
+        <LodgingBuilder
+          eventId={eventId}
+          venueId={firstVenue?.id || 'demo-venue'}
+          venueName={firstVenue?.name || 'Grand Manor Suites'}
+          venueWidth={firstVenue?.width || 60}
+          venueHeight={firstVenue?.height || 40}
+          initialFloors={parsedFloors}
+          onSave={(floors) => saveLodgingMutation.mutate(floors)}
+          onClose={() => setLodgingOpen(false)}
         />
       )}
     </div>

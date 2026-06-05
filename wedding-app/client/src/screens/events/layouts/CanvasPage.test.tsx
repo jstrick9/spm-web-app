@@ -119,4 +119,97 @@ describe('CanvasPage', () => {
        expect(layoutsSdk.save).toHaveBeenCalledWith('l1', expect.anything(), { approvalStatus: 'approved' });
     });
   });
+
+  it('toggles the interactive canvas help guide and show spacing rings checkbox', async () => {
+    (layoutsSdk.list as any).mockResolvedValue({
+      layouts: [{ id: 'l1', revision: 3, updated_at: new Date().toISOString(), payload: JSON.stringify({ items: [] }), approval_status: 'pending' }]
+    });
+
+    render(<CanvasPage event={{ id: "test-event", organization_id: "org-1", title: "Test Event", guest_count: 150 } as any} />, { wrapper: TestWrapper });
+
+    // Check Spacing Safety Rings checkbox is present
+    const ringsCheckbox = screen.getByRole('checkbox', { name: /Spacing Safety Rings/i });
+    expect(ringsCheckbox).toBeInTheDocument();
+    expect(ringsCheckbox).toBeChecked();
+
+    // Toggle spacing rings
+    fireEvent.click(ringsCheckbox);
+    expect(ringsCheckbox).not.toBeChecked();
+
+    // Check Help Guide is not visible initially
+    expect(screen.queryByText(/📖 Interactive Canvas User Guide/i)).not.toBeInTheDocument();
+
+    // Find Help Guide Button and click
+    const helpBtn = screen.getByRole('button', { name: /Help Guide/i });
+    fireEvent.click(helpBtn);
+
+    // Verify Help Guide displays
+    expect(screen.getByText(/📖 Interactive Canvas User Guide/i)).toBeInTheDocument();
+  });
+
+  it('opens the AI Smart Seating Auto-Arranger dialog', async () => {
+    (layoutsSdk.list as any).mockResolvedValue({
+      layouts: [{ id: 'l1', revision: 3, updated_at: new Date().toISOString(), payload: JSON.stringify({ items: [] }), approval_status: 'pending' }]
+    });
+
+    render(<CanvasPage event={{ id: "test-event", organization_id: "org-1", title: "Test Event", guest_count: 150 } as any} />, { wrapper: TestWrapper });
+
+    // Verify dialog is not open initially
+    expect(screen.queryByText(/AI Smart Seating Auto-Arranger/i)).not.toBeInTheDocument();
+
+    // Click AI Smart Seating button
+    const smartSeatingBtn = screen.getByRole('button', { name: /AI Smart Seating/i });
+    fireEvent.click(smartSeatingBtn);
+
+    // Verify dialog displays
+    expect(screen.getByText(/AI Smart Seating Auto-Arranger/i)).toBeInTheDocument();
+    expect(screen.getByText(/Seating Affinity Rule/i)).toBeInTheDocument();
+  });
+
+  it('allows dropping a sticky note pin onto the canvas', async () => {
+    (layoutsSdk.list as any).mockResolvedValue({
+      layouts: [{ id: 'l1', revision: 3, updated_at: new Date().toISOString(), payload: JSON.stringify({ items: [] }), approval_status: 'pending' }]
+    });
+
+    render(<CanvasPage event={{ id: "test-event", organization_id: "org-1", title: "Test Event", guest_count: 150 } as any} />, { wrapper: TestWrapper });
+
+    // Click Drop Sticky Note Pin button
+    const dropPinBtn = screen.getByRole('button', { name: /Drop Sticky Note Pin/i });
+    fireEvent.click(dropPinBtn);
+
+    // Verify Sticky Note properties are displayed in sidebar
+    expect(screen.getByText(/Sticky Note Comment/i)).toBeInTheDocument();
+    expect(screen.getByText(/Author \/ Signer/i)).toBeInTheDocument();
+    expect(screen.getByText(/Note Comment Text/i)).toBeInTheDocument();
+  });
+
+  it('supports quick adding pre-cooked vendor zones and placing power outlet pins', async () => {
+    (layoutsSdk.list as any).mockResolvedValue({
+      layouts: [{ id: 'l1', revision: 3, updated_at: new Date().toISOString(), payload: JSON.stringify({ items: [] }), approval_status: 'pending' }]
+    });
+
+    render(<CanvasPage event={{ id: "test-event", organization_id: "org-1", title: "Test Event", guest_count: 150 } as any} />, { wrapper: TestWrapper });
+
+    // Switch to Vendors tab
+    const vendorsBtn = await screen.findByRole('button', { name: /Vendors/i });
+    fireEvent.click(vendorsBtn);
+
+    // Verify Quick Vendor Setup Blocks section is visible
+    expect(screen.getByText('Quick Vendor Setup Blocks')).toBeInTheDocument();
+
+    // Click "🔨 Catering Zone" quick-add button
+    const cateringBtn = screen.getByRole('button', { name: /🔨 Catering Zone/i });
+    fireEvent.click(cateringBtn);
+
+    // Switch to Items (Catalog) tab to verify Power Outlet items are present
+    const catalogBtn = screen.getByRole('button', { name: /Items/i });
+    fireEvent.click(catalogBtn);
+
+    expect(screen.getByText('⚡ 120V Power Outlet')).toBeInTheDocument();
+    expect(screen.getByText('🔌 High-Voltage Source')).toBeInTheDocument();
+    
+    // Click "⚡ 120V Power Outlet" catalog add button
+    const addOutletBtn = screen.getByText('⚡ 120V Power Outlet');
+    fireEvent.click(addOutletBtn);
+  });
 });

@@ -47,12 +47,42 @@ export function EventBudgetTab({ eventId, organizationId }: Props) {
     queryFn: () => sdk.budget.list(eventId),
   });
 
+  const { data: eventData } = useQuery({
+    queryKey: ['event', eventId],
+    queryFn: () => sdk.events.get(eventId),
+  });
+
+  // Custom Budget Goal & Fee Projections States (Phase 6)
+  const [taxRate, setTaxRate] = useState(8.25);
+  const [serviceCharge, setServiceCharge] = useState(20);
+  const [cateringCostPerGuest, setCateringCostPerGuest] = useState(75);
+
   const items = data?.items ?? [];
   const totals = data?.totals ?? { planned: 0, actual: 0, paid: 0 };
   const remaining = totals.actual - totals.paid;
   const variancePct = totals.planned > 0
     ? Math.round(((totals.actual - totals.planned) / totals.planned) * 100)
     : 0;
+
+  const guestCount = eventData?.event?.guest_count || 100;
+
+  const projections = useMemo(() => {
+    const baseBudget = totals.actual / 100;
+    const variableCatering = guestCount * cateringCostPerGuest;
+    const subtotal = baseBudget + variableCatering;
+    const taxes = subtotal * (taxRate / 100);
+    const serviceFees = subtotal * (serviceCharge / 100);
+    const projectedTotal = subtotal + taxes + serviceFees;
+
+    return {
+      baseBudget,
+      variableCatering,
+      subtotal,
+      taxes,
+      serviceFees,
+      projectedTotal
+    };
+  }, [totals.actual, guestCount, cateringCostPerGuest, taxRate, serviceCharge]);
 
   const deleteMutation = useMutation({
     mutationFn: (id: string) => sdk.budget.delete(id),
@@ -84,6 +114,141 @@ export function EventBudgetTab({ eventId, organizationId }: Props) {
           value={fmt(remaining)}
           description={remaining > 0 ? 'still due' : remaining === 0 ? 'fully paid' : undefined}
         />
+      </div>
+
+      {/* Brand New: Budget Goal Tracker & Payment Calculator Panel */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+         
+         {/* Left Card: Circular Progress Ring & Goal Tracking */}
+         <Card className="border-[#e1d5c9] bg-[#FDFBF7] shadow-sm flex flex-col sm:flex-row items-center justify-between p-6 gap-6 rounded-2xl relative overflow-hidden">
+            <div className="space-y-2 flex-1 z-10">
+               <h3 className="font-serif font-black text-sm text-brand flex items-center gap-1.5">
+                  🎨 Budget Allocation Goal
+               </h3>
+               <p className="text-xs text-fg-subtle font-semibold">
+                  Visual progress of payments paid against actual vendor contract totals.
+               </p>
+               
+               <div className="pt-2 grid grid-cols-2 gap-2 text-xs font-semibold text-fg-subtle leading-normal">
+                  <div className="bg-white p-2.5 rounded-xl border border-[#e1d5c9] shadow-xs">
+                     <span className="text-[10px] block uppercase font-bold">Actual Total</span>
+                     <span className="text-sm font-black text-fg font-serif">{fmt(totals.actual)}</span>
+                  </div>
+                  <div className="bg-white p-2.5 rounded-xl border border-[#e1d5c9] shadow-xs">
+                     <span className="text-[10px] block uppercase font-bold text-success">Paid Balance</span>
+                     <span className="text-sm font-black text-success font-serif">{fmt(totals.paid)}</span>
+                  </div>
+                  <div className="bg-white p-2.5 rounded-xl border border-[#e1d5c9] shadow-xs col-span-2">
+                     <span className="text-[10px] block uppercase font-bold text-brand">Pending Balances</span>
+                     <span className="text-sm font-black text-brand font-serif">{fmt(remaining)}</span>
+                  </div>
+               </div>
+            </div>
+
+            {/* Circular Progress Ring */}
+            <div className="relative flex items-center justify-center shrink-0 z-10">
+               {(() => {
+                  const paidPct = totals.actual > 0 ? Math.round((totals.paid / totals.actual) * 100) : 0;
+                  const strokeDashoffset = 251.2 - (251.2 * Math.min(paidPct, 100)) / 100;
+                  
+                  return (
+                     <>
+                        <svg className="w-32 h-32 transform -rotate-90">
+                           <circle 
+                             cx="64" cy="64" r="40" 
+                             stroke="#e1d5c9" strokeWidth="8" 
+                             fill="transparent" 
+                           />
+                           <circle 
+                             cx="64" cy="64" r="40" 
+                             stroke="#be185d" strokeWidth="8" 
+                             fill="transparent"
+                             strokeDasharray="251.2"
+                             strokeDashoffset={strokeDashoffset}
+                             strokeLinecap="round"
+                             className="transition-all duration-500 ease-in-out"
+                           />
+                        </svg>
+                        <div className="absolute inset-0 flex flex-col items-center justify-center">
+                           <span className="text-lg font-black text-brand font-serif">{paidPct}%</span>
+                           <span className="text-[8px] uppercase tracking-wider text-fg-subtle font-bold">Paid</span>
+                        </div>
+                     </>
+                  );
+               })()}
+            </div>
+         </Card>
+
+         {/* Right Card: Taxes, Gratuity & Variable Guest Calculator */}
+         <Card className="border-[#e1d5c9] bg-[#FDFBF7] shadow-sm p-6 rounded-2xl space-y-4">
+            <div className="pb-2 border-b border-[#e1d5c9]/50 flex justify-between items-center">
+               <div>
+                  <h3 className="font-serif font-black text-sm text-brand">
+                     📈 Fees &amp; Catering Calculator
+                  </h3>
+                  <p className="text-[10px] text-fg-subtle">Project taxes, gratuity charges, and guest-count-dependent catering budgets.</p>
+               </div>
+               <Badge variant="outline" className="bg-[#FDFBF7] text-brand border-[#e1d5c9] font-black text-[10px] py-0.5 px-2">
+                  {guestCount} Guests
+               </Badge>
+            </div>
+
+            <div className="grid grid-cols-3 gap-2.5 text-xs font-semibold text-fg">
+               <div>
+                  <Label className="text-[9px] uppercase font-bold text-fg-subtle">Catering / Guest ($)</Label>
+                  <Input 
+                     type="number" 
+                     value={cateringCostPerGuest} 
+                     onChange={(e) => setCateringCostPerGuest(parseFloat(e.target.value) || 0)} 
+                     className="mt-1 bg-white border-[#e1d5c9] text-xs h-8"
+                  />
+               </div>
+               <div>
+                  <Label className="text-[9px] uppercase font-bold text-fg-subtle">Tax Rate (%)</Label>
+                  <Input 
+                     type="number" 
+                     step={0.01} 
+                     value={taxRate} 
+                     onChange={(e) => setTaxRate(parseFloat(e.target.value) || 0)} 
+                     className="mt-1 bg-white border-[#e1d5c9] text-xs h-8"
+                  />
+               </div>
+               <div>
+                  <Label className="text-[9px] uppercase font-bold text-fg-subtle">Gratuity / Service (%)</Label>
+                  <Input 
+                     type="number" 
+                     value={serviceCharge} 
+                     onChange={(e) => setServiceCharge(parseFloat(e.target.value) || 0)} 
+                     className="mt-1 bg-white border-[#e1d5c9] text-xs h-8"
+                  />
+               </div>
+            </div>
+
+            {/* Calculations Output */}
+            <div className="bg-white p-3 rounded-xl border border-[#e1d5c9] text-xs font-semibold text-fg-subtle leading-normal space-y-1">
+               <div className="flex justify-between">
+                  <span>Base Contracts Subtotal:</span>
+                  <span className="font-bold text-fg">${projections.baseBudget.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
+               </div>
+               <div className="flex justify-between text-brand">
+                  <span>Variable Catering (Est):</span>
+                  <span className="font-bold">${projections.variableCatering.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
+               </div>
+               <div className="flex justify-between">
+                  <span>Estimated Taxes ({taxRate}%):</span>
+                  <span className="font-bold text-fg">${projections.taxes.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
+               </div>
+               <div className="flex justify-between">
+                  <span>Gratuity &amp; Service Fee ({serviceCharge}%):</span>
+                  <span className="font-bold text-fg">${projections.serviceFees.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
+               </div>
+               <div className="flex justify-between text-sm font-black pt-2 border-t text-brand font-serif">
+                  <span>Total Projected Cost:</span>
+                  <span>${projections.projectedTotal.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
+               </div>
+            </div>
+         </Card>
+
       </div>
 
       {/* Actions */}
