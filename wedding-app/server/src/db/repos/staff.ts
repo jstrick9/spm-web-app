@@ -172,11 +172,13 @@ export interface StaffShiftRow {
   starts_at: string;
   ends_at: string;
   notes: string | null;
+  clocked_in_at: string | null;
+  clocked_out_at: string | null;
 }
 
 export const staffShiftsRepo = {
-  findById(id: string) {
-    return db.prepare("SELECT * FROM staff_shifts WHERE id = ?").get(id) as { id: string; organization_id: string } | undefined;
+  findById(id: string): StaffShiftRow | undefined {
+    return db.prepare("SELECT * FROM staff_shifts WHERE id = ?").get(id) as StaffShiftRow | undefined;
   },
 
   listForOrg(orgId: string, opts: { eventId?: string } = {}): StaffShiftRow[] {
@@ -193,14 +195,24 @@ export const staffShiftsRepo = {
   }): StaffShiftRow {
     const id = uuid();
     db.prepare(
-      `INSERT INTO staff_shifts (id, organization_id, event_id, staff_id, area_id, role, starts_at, ends_at, notes)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`
+      `INSERT INTO staff_shifts (id, organization_id, event_id, staff_id, area_id, role, starts_at, ends_at, notes, clocked_in_at, clocked_out_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, NULL, NULL)`
     ).run(id, orgId, input.eventId ?? null, input.staffId, input.areaId ?? null,
           input.role ?? 'other', input.startsAt, input.endsAt, input.notes ?? null);
-    return db.prepare(`SELECT * FROM staff_shifts WHERE id = ?`).get(id) as StaffShiftRow;
+    return this.findById(id)!;
+  },
+
+  clockIn(id: string): StaffShiftRow {
+    db.prepare(`UPDATE staff_shifts SET clocked_in_at = datetime('now'), clocked_out_at = NULL WHERE id = ?`).run(id);
+    return this.findById(id)!;
+  },
+
+  clockOut(id: string): StaffShiftRow {
+    db.prepare(`UPDATE staff_shifts SET clocked_out_at = datetime('now') WHERE id = ?`).run(id);
+    return this.findById(id)!;
   },
 
   delete(id: string): boolean {
-    return db.prepare(`DELETE FROM staff_shifts WHERE id = ?`).run(id).changes > 0;
+    return db.prepare("DELETE FROM staff_shifts WHERE id = ?").run(id).changes > 0;
   },
 };

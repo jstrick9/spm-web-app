@@ -455,6 +455,8 @@ CREATE TABLE IF NOT EXISTS staff_shifts (
   starts_at       TEXT NOT NULL,
   ends_at         TEXT NOT NULL,
   notes           TEXT,
+  clocked_in_at   TEXT,
+  clocked_out_at  TEXT,
   created_at      TEXT NOT NULL DEFAULT (datetime('now'))
 );
 

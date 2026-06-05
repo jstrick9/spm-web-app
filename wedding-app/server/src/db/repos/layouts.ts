@@ -55,7 +55,7 @@ export const layoutsRepo = {
     venueId?: string;
     name: string;
     visibility?: LayoutRow['visibility'];
-  approvalStatus?: LayoutRow['approval_status'];
+    approvalStatus?: LayoutRow['approval_status'];
     payload: Record<string, unknown>;
     isTemplate?: boolean;
     createdBy: string;
@@ -108,13 +108,19 @@ export const layoutsRepo = {
         throw err;
       }
       const newRev = current.revision + 1;
-      // Snapshot the NEW state at the NEW revision number.
-      // (Revision 1 was already snapshotted by create().)
+      
+      // FIX: Persistent approval status updates mapped correctly inside SQLite!
       db.prepare(
         `UPDATE layouts
-           SET payload = ?, revision = ?, updated_by = ?, updated_at = datetime('now')
+           SET payload = ?, revision = ?, approval_status = ?, updated_by = ?, updated_at = datetime('now')
          WHERE id = ?`
-      ).run(stringifyJson(input.payload), newRev, input.updatedBy, input.layoutId);
+      ).run(
+        stringifyJson(input.payload),
+        newRev,
+        input.approvalStatus ?? current.approval_status,
+        input.updatedBy,
+        input.layoutId
+      );
       this._snapshot(input.layoutId, newRev, input.payload, input.updatedBy, input.changeDescription ?? null);
     });
     tx();
