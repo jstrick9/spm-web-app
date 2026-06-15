@@ -147,11 +147,11 @@ if (events.length === 0) {
   console.log(`[seed] seeded 2 contracts`);
 
   // Staff tasks
-  staffTasksRepo.create(orgId, user.id, { title: 'Set up ceremony chairs (120)', priority: 'high', phase: 'pre-event', estimatedMinutes: 90 });
-  staffTasksRepo.create(orgId, user.id, { title: 'Arrange centerpieces on tables', priority: 'medium', phase: 'pre-event', estimatedMinutes: 60 });
-  staffTasksRepo.create(orgId, user.id, { title: 'Sound check with DJ', priority: 'high', phase: 'pre-event', estimatedMinutes: 30 });
-  staffTasksRepo.create(orgId, user.id, { title: 'Welcome guests and direct parking', priority: 'medium', phase: 'during-event' });
-  staffTasksRepo.create(orgId, user.id, { title: 'Break down tables and clean', priority: 'low', phase: 'post-event', estimatedMinutes: 120 });
+  staffTasksRepo.create(orgId, user.id, { title: 'Set up ceremony chairs (120)', priority: 'high', phase: 'pre-event', estimatedMinutes: 90, assigneeName: 'Setup Lead', assigneePhone: '555-210-1001' });
+  staffTasksRepo.create(orgId, user.id, { title: 'Arrange centerpieces on tables', priority: 'medium', phase: 'pre-event', estimatedMinutes: 60, assigneeName: 'Decor Captain', assigneePhone: '555-210-1002' });
+  staffTasksRepo.create(orgId, user.id, { title: 'Sound check with DJ', priority: 'high', phase: 'pre-event', estimatedMinutes: 30, assigneeName: 'AV Lead', assigneePhone: '555-210-1003' });
+  staffTasksRepo.create(orgId, user.id, { title: 'Welcome guests and direct parking', priority: 'medium', phase: 'during-event', assigneeName: 'Parking Lead', assigneePhone: '555-210-1004' });
+  staffTasksRepo.create(orgId, user.id, { title: 'Break down tables and clean', priority: 'low', phase: 'post-event', estimatedMinutes: 120, assigneeName: 'Cleanup Lead', assigneePhone: '555-210-1005' });
   console.log(`[seed] seeded 5 staff tasks`);
 
   // ─── Event 2: Planning stage ──────────────────────────

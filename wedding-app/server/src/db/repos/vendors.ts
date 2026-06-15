@@ -1,5 +1,5 @@
 import { db } from '../database.js';
-import { uuid } from '../../lib/crypto.js';
+import { generateOpaqueToken, hashToken, uuid, verifyToken } from '../../lib/crypto.js';
 import { stringifyJson } from '../../lib/json.js';
 
 export interface VendorRow {
@@ -28,6 +28,28 @@ export interface VendorPaymentRow {
   paid_at: string;
   method: string | null;
   notes: string | null;
+}
+
+export interface VendorPortalTokenRow {
+  id: string;
+  vendor_id: string;
+  token_hash: string;
+  token_salt: string;
+  expires_at: string;
+  revoked_at: string | null;
+  last_used_at: string | null;
+  created_by: string | null;
+  created_at: string;
+}
+
+export interface VendorPortalTokenSummary {
+  id: string;
+  vendor_id: string;
+  expires_at: string;
+  revoked_at: string | null;
+  last_used_at: string | null;
+  created_at: string;
+  is_active: number;
 }
 
 export interface VendorInput {
@@ -115,6 +137,62 @@ export const vendorsRepo = {
     return db.prepare(
       `UPDATE vendors SET deleted_at = datetime('now') WHERE id = ? AND deleted_at IS NULL`
     ).run(id).changes > 0;
+  },
+
+  // ─── Public portal tokens ───────────────────────────────
+  createPortalToken(vendorId: string, opts: { expiresAt: string; createdBy?: string | null }): { token: string; row: VendorPortalTokenRow } {
+    const id = uuid();
+    const token = generateOpaqueToken(32);
+    const { hash, salt } = hashToken(token);
+    db.prepare(
+      `INSERT INTO vendor_portal_tokens
+        (id, vendor_id, token_hash, token_salt, expires_at, created_by)
+       VALUES (?, ?, ?, ?, ?, ?)`
+    ).run(id, vendorId, hash, salt, opts.expiresAt, opts.createdBy ?? null);
+    return {
+      token,
+      row: db.prepare(`SELECT * FROM vendor_portal_tokens WHERE id = ?`).get(id) as VendorPortalTokenRow,
+    };
+  },
+
+  revokePortalTokens(vendorId: string): number {
+    return db.prepare(
+      `UPDATE vendor_portal_tokens
+          SET revoked_at = datetime('now')
+        WHERE vendor_id = ? AND revoked_at IS NULL`
+    ).run(vendorId).changes;
+  },
+
+  listPortalTokenSummariesForOrg(orgId: string): VendorPortalTokenSummary[] {
+    return db.prepare(
+      `SELECT t.id, t.vendor_id, t.expires_at, t.revoked_at, t.last_used_at, t.created_at,
+              CASE
+                WHEN t.revoked_at IS NULL AND julianday(t.expires_at) > julianday('now') THEN 1
+                ELSE 0
+              END AS is_active
+         FROM vendor_portal_tokens t
+         JOIN vendors v ON v.id = t.vendor_id
+        WHERE v.organization_id = ? AND v.deleted_at IS NULL
+        ORDER BY t.created_at DESC`
+    ).all(orgId) as VendorPortalTokenSummary[];
+  },
+
+  verifyPortalToken(vendorId: string, token: string): VendorPortalTokenRow | undefined {
+    const rows = db.prepare(
+      `SELECT * FROM vendor_portal_tokens
+        WHERE vendor_id = ?
+          AND revoked_at IS NULL
+          AND julianday(expires_at) > julianday('now')
+        ORDER BY created_at DESC`
+    ).all(vendorId) as VendorPortalTokenRow[];
+
+    for (const row of rows) {
+      if (verifyToken(token, { hash: row.token_hash, salt: row.token_salt })) {
+        db.prepare(`UPDATE vendor_portal_tokens SET last_used_at = datetime('now') WHERE id = ?`).run(row.id);
+        return { ...row, last_used_at: new Date().toISOString() };
+      }
+    }
+    return undefined;
   },
 
   // ─── Payments ───────────────────────────────────────────

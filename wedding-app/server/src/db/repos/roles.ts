@@ -52,7 +52,7 @@ function rowWithPermissions(row: RoleRow): RoleWithPermissions {
 
 export const rolesRepo = {
   /**
-   * Idempotently seed the 7 system roles. Called once on app boot.
+   * Idempotently seed the system roles. Called once on app boot.
    * Safe to re-run: re-syncs the permission grants if the code-side
    * SYSTEM_ROLE_DEFINITIONS changes.
    */

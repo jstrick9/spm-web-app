@@ -52,9 +52,12 @@ export const paymentLinksRepo = {
     return this.findById(id)!;
   },
 
-  updateStatus(id: string, status: PaymentLinkRow['status'], paidAt?: string): PaymentLinkRow | undefined {
-    db.prepare(`UPDATE payment_links SET status = ?, paid_at = ?, updated_at = datetime('now') WHERE id = ?`)
-      .run(status, paidAt ?? null, id);
+  updateStatus(id: string, status: PaymentLinkRow['status'], paidAt?: string, metadataPatch?: Record<string, unknown>): PaymentLinkRow | undefined {
+    const current = this.findById(id);
+    const currentMeta = current ? (() => { try { return JSON.parse(current.metadata || '{}'); } catch { return {}; } })() : {};
+    const metadata = metadataPatch ? stringifyJson({ ...currentMeta, ...metadataPatch }) : current?.metadata ?? '{}';
+    db.prepare(`UPDATE payment_links SET status = ?, paid_at = ?, metadata = ?, updated_at = datetime('now') WHERE id = ?`)
+      .run(status, paidAt ?? null, metadata, id);
     return this.findById(id);
   },
 

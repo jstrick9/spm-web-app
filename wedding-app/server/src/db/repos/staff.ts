@@ -15,6 +15,9 @@ export interface StaffTaskRow {
   estimated_minutes: number | null;
   completed_at: string | null;
   completed_by: string | null;
+  assignee_name: string | null;
+  assignee_phone: string | null;
+  assignee_email: string | null;
   assigned_staff: string;   // JSON array
   assigned_areas: string;   // JSON array
   tags: string;             // JSON array
@@ -32,6 +35,9 @@ export interface StaffTaskInput {
   priority?: StaffTaskRow['priority'];
   dueAt?: string;
   estimatedMinutes?: number;
+  assigneeName?: string;
+  assigneePhone?: string;
+  assigneeEmail?: string;
   assignedStaff?: string[];
   assignedAreas?: string[];
   tags?: string[];
@@ -65,8 +71,9 @@ export const staffTasksRepo = {
     db.prepare(
       `INSERT INTO staff_tasks
          (id, organization_id, event_id, title, description, phase, status, priority,
-          due_at, estimated_minutes, assigned_staff, assigned_areas, tags, checklist, notes, created_by)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+          due_at, estimated_minutes, assignee_name, assignee_phone, assignee_email,
+          assigned_staff, assigned_areas, tags, checklist, notes, created_by)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
     ).run(
       id, orgId,
       input.eventId ?? null,
@@ -77,6 +84,9 @@ export const staffTasksRepo = {
       input.priority ?? 'medium',
       input.dueAt ?? null,
       input.estimatedMinutes ?? null,
+      input.assigneeName ?? null,
+      input.assigneePhone ?? null,
+      input.assigneeEmail ?? null,
       stringifyJson(input.assignedStaff ?? []),
       stringifyJson(input.assignedAreas ?? []),
       stringifyJson(input.tags ?? []),
@@ -93,6 +103,7 @@ export const staffTasksRepo = {
     const scalar: Record<string, string> = {
       title: 'title', description: 'description', phase: 'phase', status: 'status',
       priority: 'priority', dueAt: 'due_at', estimatedMinutes: 'estimated_minutes',
+      assigneeName: 'assignee_name', assigneePhone: 'assignee_phone', assigneeEmail: 'assignee_email',
       notes: 'notes', eventId: 'event_id',
     };
     for (const [k, col] of Object.entries(scalar)) {
@@ -172,6 +183,11 @@ export interface StaffShiftRow {
   starts_at: string;
   ends_at: string;
   notes: string | null;
+  contact_name: string | null;
+  contact_phone: string | null;
+  contact_email: string | null;
+  radio_channel: string | null;
+  handoff_notes: string | null;
   clocked_in_at: string | null;
   clocked_out_at: string | null;
 }
@@ -192,14 +208,37 @@ export const staffShiftsRepo = {
   create(orgId: string, input: {
     staffId: string; areaId?: string; role?: StaffShiftRow['role'];
     startsAt: string; endsAt: string; notes?: string; eventId?: string;
+    contactName?: string; contactPhone?: string; contactEmail?: string;
+    radioChannel?: string; handoffNotes?: string;
   }): StaffShiftRow {
     const id = uuid();
     db.prepare(
-      `INSERT INTO staff_shifts (id, organization_id, event_id, staff_id, area_id, role, starts_at, ends_at, notes, clocked_in_at, clocked_out_at)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, NULL, NULL)`
+      `INSERT INTO staff_shifts (id, organization_id, event_id, staff_id, area_id, role, starts_at, ends_at, notes, contact_name, contact_phone, contact_email, radio_channel, handoff_notes, clocked_in_at, clocked_out_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NULL, NULL)`
     ).run(id, orgId, input.eventId ?? null, input.staffId, input.areaId ?? null,
-          input.role ?? 'other', input.startsAt, input.endsAt, input.notes ?? null);
+          input.role ?? 'other', input.startsAt, input.endsAt, input.notes ?? null,
+          input.contactName ?? null, input.contactPhone ?? null, input.contactEmail ?? null,
+          input.radioChannel ?? null, input.handoffNotes ?? null);
     return this.findById(id)!;
+  },
+
+  update(id: string, patch: Partial<{
+    contactName: string; contactPhone: string; contactEmail: string;
+    radioChannel: string; handoffNotes: string; notes: string;
+  }>): StaffShiftRow | undefined {
+    const map: Record<string, string> = {
+      contactName: 'contact_name', contactPhone: 'contact_phone', contactEmail: 'contact_email',
+      radioChannel: 'radio_channel', handoffNotes: 'handoff_notes', notes: 'notes',
+    };
+    const fields: string[] = [];
+    const values: unknown[] = [];
+    for (const [key, col] of Object.entries(map)) {
+      if (key in patch) { fields.push(`${col} = ?`); values.push((patch as Record<string, unknown>)[key] ?? null); }
+    }
+    if (!fields.length) return this.findById(id);
+    values.push(id);
+    db.prepare(`UPDATE staff_shifts SET ${fields.join(', ')}, updated_at = datetime('now') WHERE id = ?`).run(...values);
+    return this.findById(id);
   },
 
   clockIn(id: string): StaffShiftRow {

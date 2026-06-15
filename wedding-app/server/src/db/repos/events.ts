@@ -17,6 +17,8 @@ export interface EventRow {
   primary_contact_user_id: string | null;
   budget_cents: number | null;
   rsvp_deadline: string | null;
+  lead_source?: string | null;
+  venue_id?: string | null;
   metadata: string;
   deleted_at: string | null;
   created_by: string | null;
@@ -54,6 +56,9 @@ export const eventsRepo = {
     guestCount?: number;
     budgetCents?: number;
     primaryContactUserId?: string;
+    leadSource?: string;
+    rsvpDeadline?: string;
+    venueId?: string;
     metadata?: Record<string, unknown>;
     createdBy: string;
   }): EventRow {
@@ -61,8 +66,8 @@ export const eventsRepo = {
     db.prepare(
       `INSERT INTO events
          (id, organization_id, title, slug, status, start_date, end_date,
-          guest_count, primary_contact_user_id, budget_cents, metadata, created_by)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+          guest_count, primary_contact_user_id, budget_cents, lead_source, rsvp_deadline, venue_id, metadata, created_by)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
     ).run(
       id,
       input.organizationId,
@@ -74,6 +79,9 @@ export const eventsRepo = {
       input.guestCount ?? 0,
       input.primaryContactUserId ?? null,
       input.budgetCents ?? null,
+      input.leadSource ?? null,
+      input.rsvpDeadline ?? null,
+      input.venueId ?? null,
       stringifyJson(input.metadata ?? {}),
       input.createdBy,
     );
@@ -83,7 +91,7 @@ export const eventsRepo = {
   update(id: string, patch: Partial<Omit<EventRow, 'id' | 'organization_id' | 'created_at' | 'created_by' | 'metadata'>> & { metadata?: Record<string, unknown> }): EventRow | undefined {
     const fields: string[] = [];
     const values: unknown[] = [];
-    for (const key of ['title','status','start_date','end_date','guest_count','primary_contact_user_id','budget_cents'] as const) {
+    for (const key of ['title','status','start_date','end_date','guest_count','primary_contact_user_id','budget_cents','lead_source','rsvp_deadline','venue_id'] as const) {
       if (key in patch) {
         fields.push(`${key} = ?`);
         values.push((patch as Record<string, unknown>)[key]);
@@ -224,6 +232,21 @@ export const subEventsRepo = {
     return db.prepare(
       `SELECT * FROM sub_events WHERE event_id = ? ORDER BY starts_at`
     ).all(eventId) as SubEventRow[];
+  },
+
+  update(id: string, patch: Partial<{ title: string; startsAt: string; endsAt: string | null; venueId: string | null; inviteOnly: boolean; metadata: Record<string, unknown> }>): SubEventRow | undefined {
+    const fields: string[] = [];
+    const values: unknown[] = [];
+    const map: Record<string, string> = { title: 'title', startsAt: 'starts_at', endsAt: 'ends_at', venueId: 'venue_id' };
+    for (const [key, col] of Object.entries(map)) {
+      if (key in patch) { fields.push(`${col} = ?`); values.push((patch as any)[key] ?? null); }
+    }
+    if ('inviteOnly' in patch) { fields.push('invite_only = ?'); values.push(patch.inviteOnly ? 1 : 0); }
+    if ('metadata' in patch) { fields.push('metadata = ?'); values.push(stringifyJson(patch.metadata ?? {})); }
+    if (!fields.length) return db.prepare(`SELECT * FROM sub_events WHERE id = ?`).get(id) as SubEventRow | undefined;
+    values.push(id);
+    db.prepare(`UPDATE sub_events SET ${fields.join(', ')} WHERE id = ?`).run(...values);
+    return db.prepare(`SELECT * FROM sub_events WHERE id = ?`).get(id) as SubEventRow | undefined;
   },
 
   delete(id: string): boolean {
