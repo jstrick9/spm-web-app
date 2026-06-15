@@ -128,9 +128,6 @@ describe('ConfigProvider', () => {
 
   it('throws when hooks used outside provider', () => {
     function Naked() { useTheme(); return null; }
-    const orig = console.error;
-    console.error = () => {};
     expect(() => render(<Naked />)).toThrow(/ConfigProvider/);
-    console.error = orig;
   });
 });

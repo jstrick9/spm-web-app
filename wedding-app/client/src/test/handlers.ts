@@ -21,6 +21,7 @@ interface Store {
   tokens:   Map<string, string>;  // token -> userId
   layouts:  Map<string, { id: string; organization_id: string; event_id: string | null; name: string; revision: number; payload: string; is_template: 0|1; visibility: string; venue_id: string | null; created_at: string; updated_at: string }>;
   vendors:  Map<string, { id: string; organization_id: string; event_id: string | null; name: string; category: string; contract_amount_cents: number | null; amount_paid_cents: number; is_preferred: 0|1; owner_user_id: string | null; contact_name: string | null; email: string | null; phone: string | null; website_url: string | null; notes: string | null; metadata: string; created_at: string }>;
+  messages: Map<string, Array<{ id: string; thread_id: string; body: string; sender_id: string | null; sender_role: string; created_at: string; read_at: string | null }>>;
 }
 
 export const store: Store = {
@@ -34,6 +35,7 @@ export const store: Store = {
   tokens:  new Map(),
   layouts: new Map(),
   vendors: new Map(),
+  messages: new Map(),
 };
 
 export function resetStore(): void {
@@ -48,6 +50,7 @@ export function seedSystemRoles(): void {
   const sysRoles: Array<{ id: string; key: string; name: string; perms: string[] }> = [
     { id: 'sys_owner',   key: 'owner',   name: 'Owner',   perms: ['*'] },
     { id: 'sys_admin',   key: 'admin',   name: 'Admin',   perms: ['*'] },
+    { id: 'sys_manager', key: 'manager', name: 'Venue Manager', perms: ['events.view', 'staff.view', 'vendors.view', 'guests.view'] },
     { id: 'sys_planner', key: 'planner', name: 'Planner', perms: ['events.view'] },
     { id: 'sys_couple',  key: 'couple',  name: 'Couple',  perms: ['events.view'] },
     { id: 'sys_staff',   key: 'staff',   name: 'Staff',   perms: ['events.view'] },
@@ -83,7 +86,7 @@ function unauthorized() {
 export const defaultHandlers = [
   // Auth
   http.post('/api/auth/register', async ({ request }) => {
-    const body = await request.json() as { email: string; password: string; fullName: string; orgName: string };
+    const body = await request.json() as { email: string; password: string; fullName: string; orgName?: string; accountRole?: string; inviteToken?: string };
     if (Array.from(store.users.values()).some(u => u.email === body.email)) {
       return HttpResponse.json({ error: 'email-already-registered' }, { status: 409 });
     }
@@ -91,8 +94,9 @@ export const defaultHandlers = [
     const user = { id: userId, email: body.email, fullName: body.fullName, password: body.password };
     store.users.set(userId, user);
     const orgId = uid();
+    const orgName = body.orgName || 'Invited Workspace';
     store.orgs.set(orgId, {
-      id: orgId, name: body.orgName, slug: body.orgName.toLowerCase().replace(/\s+/g, '-'),
+      id: orgId, name: orgName, slug: orgName.toLowerCase().replace(/\s+/g, '-'),
       owner_id: userId, branding: '{}', settings: '{}', created_at: new Date().toISOString(),
     });
     store.members.set(userId, [
@@ -119,6 +123,17 @@ export const defaultHandlers = [
       token,
       user: { id: user.id, email: user.email, fullName: user.fullName },
     });
+  }),
+
+  http.post('/api/auth/password-reset/request', async () => {
+    return HttpResponse.json({
+      ok: true,
+      message: 'If an account exists for that email, a password reset link will be sent.',
+    });
+  }),
+
+  http.post('/api/auth/password-reset/complete', async () => {
+    return HttpResponse.json({ ok: true });
   }),
 
   http.get('/api/auth/me', ({ request }) => {
@@ -148,6 +163,41 @@ export const defaultHandlers = [
       .map(m => store.orgs.get(m.organizationId!))
       .filter(Boolean);
     return HttpResponse.json({ organizations: orgs });
+  }),
+
+  http.get('/api/orgs/:orgId/roles', () => {
+    return HttpResponse.json({ roles: Array.from(store.roles.values()) });
+  }),
+
+  http.get('/api/auth/invitations/:token', () => {
+    return HttpResponse.json({ invitation: { email: 'manager@example.com', organizationId: 'org-1', organizationName: 'Demo Venue', roleId: 'sys_manager', roleKey: 'manager', roleName: 'Venue Manager', roleDescription: 'Runs venue operations and escalations.', expiresAt: new Date(Date.now() + 86400000).toISOString() } });
+  }),
+
+  http.post('/api/orgs/:orgId/team-invitations', async ({ params, request }) => {
+    const body = await request.json() as { email: string; roleId: string };
+    const existing = Array.from(store.users.values()).find(u => u.email === body.email);
+    if (existing) {
+      const prev = store.members.get(existing.id) ?? [];
+      store.members.set(existing.id, [...prev, { organizationId: params.orgId as string, roleId: body.roleId, roleKey: 'staff', roleName: 'Staff' }]);
+      return HttpResponse.json({ ok: true, status: 'added_existing_user' }, { status: 201 });
+    }
+    return HttpResponse.json({ ok: true, status: 'invitation_sent', invitation: { id: uid(), email: body.email, role_id: body.roleId, expires_at: new Date(Date.now() + 86400000).toISOString() } }, { status: 201 });
+  }),
+
+  http.get('/api/orgs/:orgId/config', () => {
+    return HttpResponse.json({ config: { setup: { ownerSetup: { status: 'not_started', completedSteps: [] } } } });
+  }),
+
+  http.put('/api/orgs/:orgId/config', async ({ request }) => {
+    return HttpResponse.json({ config: await request.json() });
+  }),
+
+  http.get('/api/users/me/preferences', () => {
+    return HttpResponse.json({ config: {} });
+  }),
+
+  http.put('/api/users/me/preferences', async ({ request }) => {
+    return HttpResponse.json({ config: await request.json() });
   }),
 
   // Events
@@ -292,6 +342,37 @@ export const defaultHandlers = [
     });
     if (guest) guest.rsvp_status = body.attending ? 'attending' : 'declined';
     return HttpResponse.json({ ok: true, rsvpId: id }, { status: 201 });
+  }),
+
+  // Messages
+  http.get('/api/messages/:threadId', ({ request, params }) => {
+    if (!authedUserId(request)) return unauthorized();
+    const threadId = decodeURIComponent(params.threadId as string);
+    return HttpResponse.json({ messages: store.messages.get(threadId) ?? [] });
+  }),
+
+  http.post('/api/messages/:threadId', async ({ request, params }) => {
+    if (!authedUserId(request)) return unauthorized();
+    const threadId = decodeURIComponent(params.threadId as string);
+    const body = await request.json() as { body: string; senderRole?: string };
+    const msg = {
+      id: uid(), thread_id: threadId, body: body.body,
+      sender_id: null, sender_role: body.senderRole ?? 'planner',
+      created_at: new Date().toISOString(), read_at: null,
+    };
+    const arr = store.messages.get(threadId) ?? [];
+    arr.push(msg);
+    store.messages.set(threadId, arr);
+    return HttpResponse.json({ message: msg }, { status: 201 });
+  }),
+
+  http.post('/api/messages/:threadId/read', ({ request, params }) => {
+    if (!authedUserId(request)) return unauthorized();
+    const threadId = decodeURIComponent(params.threadId as string);
+    const arr = store.messages.get(threadId) ?? [];
+    const now = new Date().toISOString();
+    arr.forEach((m) => { m.read_at = now; });
+    return HttpResponse.json({ ok: true });
   }),
 
   // Roles

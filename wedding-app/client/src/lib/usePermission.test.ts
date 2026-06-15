@@ -2,7 +2,7 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { renderHook } from '@testing-library/react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import React from 'react';
-import { usePermission, usePermissions, setPermissionContext } from './usePermission';
+import { usePermission, usePermissionGate, usePermissions, setPermissionContext } from './usePermission';
 
 // Mock SDK to return role definitions
 vi.mock('../sdk', () => ({
@@ -70,5 +70,17 @@ describe('usePermission', () => {
     await new Promise(r => setTimeout(r, 100));
     rerender();
     expect(result.current).toBe(false);
+  });
+
+  it('usePermissionGate exposes loading and allowed states for route guards', async () => {
+    setPermissionContext('org1', [{ organizationId: 'org1', roleId: 'sys_owner', roleKey: 'owner', roleName: 'Owner' }]);
+
+    const { result, rerender } = renderHook(() => usePermissionGate('reports.view'), { wrapper });
+    expect(result.current.isLoading).toBe(true);
+
+    await new Promise(r => setTimeout(r, 100));
+    rerender();
+    expect(result.current.isLoading).toBe(false);
+    expect(result.current.allowed).toBe(true);
   });
 });

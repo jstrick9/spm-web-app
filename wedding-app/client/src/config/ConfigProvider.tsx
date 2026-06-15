@@ -114,6 +114,16 @@ function mergePartial(
         }
       : undefined,
     widgets: { ...(a?.widgets ?? {}), ...(b?.widgets ?? {}) },
+    setup: (a as any)?.setup || (b as any)?.setup
+      ? {
+          ...((a as any)?.setup ?? {}),
+          ...((b as any)?.setup ?? {}),
+          ownerSetup: {
+            ...((a as any)?.setup?.ownerSetup ?? {}),
+            ...((b as any)?.setup?.ownerSetup ?? {}),
+          },
+        } as any
+      : undefined,
   };
 }
 

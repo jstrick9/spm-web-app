@@ -30,6 +30,11 @@ vi.mock('../components/notifications/NotificationCenter', () => ({
   NotificationCenter: () => <div data-testid="notifications" />,
 }));
 
+vi.mock('../lib/usePermission', () => ({
+  usePermission: () => true,
+  usePermissions: <T extends string>(permissions: readonly T[]) => Object.fromEntries(permissions.map((p) => [p, true])),
+}));
+
 import { AppShell, PageHeader, PageBody } from './AppShell';
 import { ToastProvider } from './Toast';
 
@@ -59,7 +64,23 @@ function renderShell(currentPath = '#/') {
 }
 
 describe('AppShell', () => {
+  beforeEach(() => { localStorage.clear(); });
   // ── Structure ────────────────────────────────────────────────────────────
+  it('renders manager day-of mobile app shell with quick action dock for event paths', () => {
+    localStorage.setItem('wvi_registration_role', 'venue_manager');
+    renderShell('#/events/evt-1?tab=staff');
+    expect(screen.getByLabelText('Manager event-day mobile app shell')).toBeTruthy();
+    expect(screen.getByText('Manager Day-of Mode')).toBeTruthy();
+    expect(screen.getByText('Run sheet')).toBeTruthy();
+    expect(screen.getAllByText('Guests').length).toBeGreaterThan(0);
+    expect(screen.getByText('Check-in')).toBeTruthy();
+    expect(screen.getByText('Emergency')).toBeTruthy();
+    expect(screen.getByText('Voice')).toBeTruthy();
+    expect(screen.getByText('Photo')).toBeTruthy();
+    expect(screen.getByText('Lock contacts')).toBeTruthy();
+    expect(screen.getByText(/Last synced/i)).toBeTruthy();
+  });
+
   it('renders children in main content area', () => {
     renderShell();
     expect(screen.getByTestId('content')).toBeTruthy();
@@ -108,6 +129,18 @@ describe('AppShell', () => {
   it('renders Intelligence nav item when in navItems', () => {
     renderShell();
     expect(screen.getByRole('link', { name: 'Intelligence' })).toBeTruthy();
+  });
+
+  it('opens persistent Help Center from the top bar', async () => {
+    renderShell();
+    fireEvent.click(screen.getByRole('button', { name: /open help center/i }));
+    await waitFor(() => {
+      expect(screen.getByRole('dialog')).toBeTruthy();
+      expect(screen.getByText('Help Center')).toBeTruthy();
+      expect(screen.getAllByText('Events').length).toBeGreaterThan(0);
+      expect(screen.getByText('Lead')).toBeTruthy();
+      expect(screen.getAllByText(/Recommended next step/i).length).toBeGreaterThan(0);
+    });
   });
 
   // ── Hamburger button ─────────────────────────────────────────────────────

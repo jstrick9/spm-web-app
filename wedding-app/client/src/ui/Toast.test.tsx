@@ -26,10 +26,6 @@ describe('Toast', () => {
 
   it('throws when useToast is called outside provider', () => {
     function Naked() { useToast(); return null; }
-    // Suppress React's auto error log
-    const orig = console.error;
-    console.error = () => {};
     expect(() => render(<Naked />)).toThrow(/inside <ToastProvider>/);
-    console.error = orig;
   });
 });

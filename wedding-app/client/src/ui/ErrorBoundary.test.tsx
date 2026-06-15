@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { describe, it, expect, beforeEach } from 'vitest';
 import { render, screen, fireEvent } from '@testing-library/react';
 import { ErrorBoundary } from './ErrorBoundary';
 
@@ -9,10 +9,7 @@ function BuggyComponent() {
 
 describe('ErrorBoundary', () => {
   beforeEach(() => {
-    vi.clearAllMocks();
     localStorage.clear();
-    // Prevent vitest from failing the test suite due to intended console.error output from React boundary capture
-    vi.spyOn(console, 'error').mockImplementation(() => {});
   });
 
   it('renders children if no error', () => {

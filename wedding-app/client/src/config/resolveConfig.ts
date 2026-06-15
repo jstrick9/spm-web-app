@@ -70,6 +70,16 @@ export function resolveConfig(layers: ConfigLayers = {}): PlatformConfig {
         if (slot) out.widgets[slotId] = slot;
       }
     }
+    if ((layer as any).setup) {
+      out.setup = {
+        ...out.setup,
+        ...(layer as any).setup,
+        ownerSetup: {
+          ...out.setup.ownerSetup,
+          ...((layer as any).setup.ownerSetup ?? {}),
+        },
+      };
+    }
   }
 
   // ─── Real-Time Dynamic Branding to Theme mapping ───

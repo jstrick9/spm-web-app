@@ -57,6 +57,9 @@ export const DialogContent = forwardRef<
       )}
       {...props}
     >
+      <DialogPrimitive.Description className="sr-only">
+        Dialog content
+      </DialogPrimitive.Description>
       {children}
       {showClose && (
         <DialogPrimitive.Close

@@ -6,6 +6,7 @@ export interface EmptyStateProps {
   title: ReactNode;
   description?: ReactNode;
   action?: ReactNode;
+  recommendedNextStep?: ReactNode;
   className?: string;
 }
 
@@ -13,7 +14,7 @@ export interface EmptyStateProps {
  * EmptyState — used wherever a list has nothing in it. Drives the
  * "first guest", "first event", "first vendor" prompts.
  */
-export function EmptyState({ icon, title, description, action, className }: EmptyStateProps) {
+export function EmptyState({ icon, title, description, action, recommendedNextStep, className }: EmptyStateProps) {
   return (
     <div className={cn('flex flex-col items-center justify-center gap-3 px-6 py-12 text-center', className)}>
       {icon && (
@@ -25,6 +26,11 @@ export function EmptyState({ icon, title, description, action, className }: Empt
         <h3 className="text-base font-semibold text-fg">{title}</h3>
         {description && <p className="mt-1 text-sm text-fg-muted">{description}</p>}
       </div>
+      {recommendedNextStep && (
+        <div className="mt-1 max-w-md rounded-lg border border-brand/20 bg-brand-soft/20 px-3 py-2 text-xs text-brand">
+          <strong>Recommended next step:</strong> {recommendedNextStep}
+        </div>
+      )}
       {action && <div className="mt-2">{action}</div>}
     </div>
   );

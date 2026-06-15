@@ -65,6 +65,10 @@ function manualChunks(id: string): string | undefined {
     return 'forms-vendor';
   }
 
+  if (/[\/]node_modules[\/]html5-qrcode([\/]|$)/.test(id)) {
+    return 'qr-scanner-vendor';
+  }
+
   return undefined;
 }
 
@@ -220,7 +224,6 @@ describe('manualChunks — lazy / no-split packages', () => {
     'recharts',           // Analytics screen
     'konva',              // Floor plan canvas
     'react-konva',        // Floor plan canvas
-    'html5-qrcode',       // Vendor check-in
     'some-app-utility',   // Hypothetical app-level package
   ];
 
@@ -229,6 +232,16 @@ describe('manualChunks — lazy / no-split packages', () => {
       expect(manualChunks(withSlash(pkg))).toBeUndefined();
     });
   }
+});
+
+describe('manualChunks — QR scanner async vendor', () => {
+  it('assigns html5-qrcode to qr-scanner-vendor for the on-demand scanner chunk', () => {
+    expect(manualChunks(withSlash('html5-qrcode'))).toBe('qr-scanner-vendor');
+  });
+
+  it('assigns html5-qrcode root resolution to qr-scanner-vendor', () => {
+    expect(manualChunks(withoutSlash('html5-qrcode'))).toBe('qr-scanner-vendor');
+  });
 });
 
 describe('manualChunks — non-node_modules paths', () => {

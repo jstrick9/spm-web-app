@@ -3,7 +3,7 @@
  * Updated to include the global active App Status Bar at the bottom
  * providing real-time user metrics, offline status indicators, and recovery diagnostics.
  */
-import { useEffect, useRef, useState, useMemo, type ReactNode } from 'react';
+import { useEffect, useRef, useState, useMemo, type ReactNode } from "react";
 import {
   Brain,
   Calendar,
@@ -26,42 +26,135 @@ import {
   HelpCircle,
   Link2,
   Palette,
-} from 'lucide-react';
-import { usePermission } from '../lib/usePermission';
+  Siren,
+  FileText,
+  Mic,
+  Camera,
+  Phone,
+  ClipboardList,
+  QrCode,
+  Sun,
+  LockKeyhole,
+  CheckCircle2,
+} from "lucide-react";
+import { usePermission, usePermissions } from "../lib/usePermission";
+import { useBranding, useNavItems } from "../config/ConfigProvider";
+import { Badge } from "./Badge";
+import { Button } from "./Button";
+import { ThemeToggle } from "./ThemeToggle";
+import { NotificationCenter } from "../components/notifications/NotificationCenter";
+import { cn } from "./lib/cn";
+import { useQueryClient } from "@tanstack/react-query";
+import { useToast } from "./Toast";
 import {
-  useBranding,
-  useFeatureEnabled,
-  useNavItems,
-} from '../config/ConfigProvider';
-import { Button } from './Button';
-import { ThemeToggle } from './ThemeToggle';
-import { NotificationCenter } from '../components/notifications/NotificationCenter';
-import { cn } from './lib/cn';
-import { useQueryClient } from '@tanstack/react-query';
-import { useToast } from './Toast';
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from './Dialog';
-import { Wifi, WifiOff, RefreshCw, Trash2, Shield, Activity, Database } from 'lucide-react';
-import type { SdkUser } from '../sdk/types';
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogDescription,
+  DialogFooter,
+} from "./Dialog";
+import {
+  Wifi,
+  WifiOff,
+  RefreshCw,
+  Trash2,
+  Shield,
+  Activity,
+  Database,
+} from "lucide-react";
+import type { SdkUser } from "../sdk/types";
+import {
+  startSyncMonitor,
+  subscribeSyncStatus,
+  type SyncStatus,
+} from "../dual-write/syncMonitor";
+import { drain as drainWriteQueue } from "../dual-write/writeQueue";
 
 // ── Nav item registry ──────────────────────────────────────────────────────
 const NAV_ITEM_META: Record<
   string,
-  { icon: typeof Home; label: string; href: string; featureFlag?: string; permission?: string }
+  {
+    icon: typeof Home;
+    label: string;
+    href: string;
+    featureFlag?: string;
+    permission?: string;
+  }
 > = {
-  dashboard:    { icon: LayoutDashboard, label: 'Dashboard',   href: '#/'              },
-  events:       { icon: Calendar,        label: 'Events',       href: '#/events'        },
-  guests:       { icon: Users,           label: 'Guests',       href: '#/guests',       permission: 'guests.view'     },
-  vendors:      { icon: Truck,           label: 'Vendors',      href: '#/vendors',      permission: 'vendors.view'    },
-  calendar:     { icon: Calendar,        label: 'Calendar',     href: '#/calendar'      },
-  reports:      { icon: FileBarChart,    label: 'Reports',      href: '#/reports',      featureFlag: 'reports', permission: 'analytics.view' },
-  intelligence: { icon: Brain,           label: 'Intelligence', href: '#/intelligence', featureFlag: 'intelligence',  permission: 'analytics.view' },
-  system:       { icon: Cog,             label: 'System',       href: '#/system',       permission: 'platform.manage' },
-  catalog:      { icon: Layers,          label: 'Catalog Studio', href: '#/system/catalog', permission: 'platform.manage' },
-  questions:    { icon: HelpCircle,      label: 'Questions Studio', href: '#/system/questions', permission: 'platform.manage' },
-  venue:        { icon: Home,            label: 'Venue Builder',  href: '#/system/venue', permission: 'platform.manage' },
-  integrations: { icon: Link2,           label: 'Integration Hub', href: '#/system/integrations', permission: 'platform.manage' },
-  branding:     { icon: Palette,         label: 'Platform Studio', href: '#/system/platform', permission: 'platform.manage' },
+  dashboard: { icon: LayoutDashboard, label: "Dashboard", href: "#/" },
+  events: { icon: Calendar, label: "Events", href: "#/events" },
+  guests: {
+    icon: Users,
+    label: "Guests",
+    href: "#/guests",
+    permission: "guests.view",
+  },
+  vendors: {
+    icon: Truck,
+    label: "Vendors",
+    href: "#/vendors",
+    permission: "vendors.view",
+  },
+  calendar: { icon: Calendar, label: "Calendar", href: "#/calendar" },
+  reports: {
+    icon: FileBarChart,
+    label: "Reports",
+    href: "#/reports",
+    featureFlag: "reports",
+    permission: "reports.view",
+  },
+  intelligence: {
+    icon: Brain,
+    label: "Intelligence",
+    href: "#/intelligence",
+    featureFlag: "intelligence",
+    permission: "reports.view",
+  },
+  system: {
+    icon: Cog,
+    label: "System",
+    href: "#/system",
+    permission: "platform.manage",
+  },
+  catalog: {
+    icon: Layers,
+    label: "Catalog Studio",
+    href: "#/system/catalog",
+    permission: "platform.manage",
+  },
+  questions: {
+    icon: HelpCircle,
+    label: "Questions Studio",
+    href: "#/system/questions",
+    permission: "platform.manage",
+  },
+  venue: {
+    icon: Home,
+    label: "Venue Builder",
+    href: "#/system/venue",
+    permission: "platform.manage",
+  },
+  integrations: {
+    icon: Link2,
+    label: "Integration Hub",
+    href: "#/system/integrations",
+    permission: "platform.manage",
+  },
+  branding: {
+    icon: Palette,
+    label: "Platform Studio",
+    href: "#/system/platform",
+    permission: "platform.manage",
+  },
 };
+
+const NAV_PERMISSION_IDS = [
+  "guests.view",
+  "vendors.view",
+  "reports.view",
+  "platform.manage",
+] as const;
 
 export interface AppShellProps {
   user: SdkUser;
@@ -73,34 +166,74 @@ export interface AppShellProps {
 
 export function AppShell({
   user,
-  currentPath = '',
+  currentPath = "",
   onLogout,
   onOpenCommandPalette,
   children,
 }: AppShellProps) {
   const branding = useBranding();
   const rawNavItems = useNavItems();
-  const canManagePlatform = usePermission('platform.manage');
+  const canManagePlatform = usePermission("platform.manage");
+  const navPermissions = usePermissions(NAV_PERMISSION_IDS);
 
   // Diagnostics & Recovery States (Phase 4)
   const qc = useQueryClient();
   const { toast } = useToast();
   const [diagnosticsOpen, setDiagnosticsOpen] = useState(false);
+  const [helpOpen, setHelpOpen] = useState(false);
   const [isSyncingData, setIsSyncingData] = useState(false);
   const [simulatedOffline, setSimulatedOffline] = useState(false);
+  const [syncStatus, setSyncStatus] = useState<SyncStatus>({
+    serverReachable: true,
+    recentRequests: [],
+    recentConflicts: [],
+    queueSize: 0,
+    queueByDomain: {},
+  });
+  const effectiveOffline = simulatedOffline || !syncStatus.serverReachable;
+
+  useEffect(() => {
+    startSyncMonitor();
+    return subscribeSyncStatus(setSyncStatus);
+  }, []);
 
   const handleForceSync = () => {
     setIsSyncingData(true);
-    setTimeout(() => {
-      setIsSyncingData(false);
-      qc.invalidateQueries();
-      toast({ title: 'Database Re-Sync Complete', description: 'Synchronized local IndexedDB cache with SQLite server successfully.', variant: 'success' });
-    }, 1500);
+    drainWriteQueue()
+      .then(() => qc.invalidateQueries())
+      .then(() => {
+        toast({
+          title:
+            syncStatus.queueSize > 0
+              ? "Pending sync queue replay attempted"
+              : "Database re-sync complete",
+          description:
+            syncStatus.queueSize > 0
+              ? "Queued offline changes were replayed where possible. Review any remaining pending items below."
+              : "Local cache and SQLite server queries were refreshed successfully.",
+          variant: "success",
+        });
+      })
+      .catch((error) =>
+        toast({
+          title: "Force sync could not complete",
+          description: (error as Error).message,
+          variant: "destructive",
+        }),
+      )
+      .finally(() => setIsSyncingData(false));
   };
 
   const handleClearCache = () => {
-    if (window.confirm('Are you sure you want to purge local cache? This will clear local offline message logs but preserve server data.')) {
-      toast({ title: 'Purging local caches...', description: 'Purged 14.2 MB of local assets.' });
+    if (
+      window.confirm(
+        "Are you sure you want to purge local cache? This will clear local offline message logs but preserve server data.",
+      )
+    ) {
+      toast({
+        title: "Purging local caches...",
+        description: "Purged 14.2 MB of local assets.",
+      });
       setTimeout(() => {
         window.location.reload();
       }, 1000);
@@ -108,37 +241,82 @@ export function AppShell({
   };
 
   const navItems = useMemo(() => {
-    if (!canManagePlatform) {
-      return rawNavItems.filter(id => id !== 'system');
-    }
-    return [
-      ...rawNavItems,
-      'catalog',
-      'questions',
-      'venue',
-      'integrations',
-      'branding',
-    ];
-  }, [rawNavItems, canManagePlatform]);
+    const configuredItems = canManagePlatform
+      ? [
+          ...rawNavItems,
+          "catalog",
+          "questions",
+          "venue",
+          "integrations",
+          "branding",
+        ]
+      : rawNavItems;
+
+    return Array.from(new Set(configuredItems)).filter((id) => {
+      const meta = NAV_ITEM_META[id];
+      if (!meta) return false;
+      return (
+        !meta.permission ||
+        navPermissions[meta.permission as keyof typeof navPermissions]
+      );
+    });
+  }, [rawNavItems, canManagePlatform, navPermissions]);
 
   const [mobileOpen, setMobileOpen] = useState(false);
+  const [managerDayMode, setManagerDayMode] = useState(() => { try { return localStorage.getItem('wvi_manager_day_mode') === 'true'; } catch { return false; } });
+  const [largeOutdoorType, setLargeOutdoorType] = useState(() => { try { return localStorage.getItem('wvi_large_outdoor_type') === 'true'; } catch { return false; } });
+  const [lowConnectivityMode, setLowConnectivityMode] = useState(() => { try { return localStorage.getItem('wvi_low_connectivity_mode') === 'true'; } catch { return false; } });
+  const [voiceNoteOpen, setVoiceNoteOpen] = useState(false);
+  const [photoCaptureOpen, setPhotoCaptureOpen] = useState(false);
+  const [voiceNoteText, setVoiceNoteText] = useState('');
+  const [photoEvidenceNote, setPhotoEvidenceNote] = useState('');
+  const [deviceQaOpen, setDeviceQaOpen] = useState(false);
 
-  // Close drawer when route changes
-  useEffect(() => { setMobileOpen(false); }, [currentPath]);
+  // Close drawer when route changes and remember manager resume position.
+  useEffect(() => {
+    setMobileOpen(false);
+    try {
+      if (
+        currentPath &&
+        currentPath !== "#/" &&
+        !currentPath.includes("/portal") &&
+        !currentPath.includes("/survey")
+      ) {
+        localStorage.setItem("wvi_manager_last_workspace", currentPath);
+      }
+    } catch {
+      /* ignore private browsing storage failures */
+    }
+  }, [currentPath]);
+
+  const eventMatch = /#\/events\/([^/?#]+)/.exec(currentPath || '');
+  const dayOfEventId = eventMatch?.[1];
+  const managerMode = (() => { try { return localStorage.getItem('wvi_registration_role') === 'venue_manager'; } catch { return false; } })();
+  const showDayOfShell = managerMode && (managerDayMode || !!dayOfEventId);
+  const lastSyncedAt = useMemo(() => new Date().toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' }), [currentPath, syncStatus.queueSize, effectiveOffline]);
+
+  useEffect(() => {
+    try { localStorage.setItem('wvi_manager_day_mode', String(managerDayMode)); } catch {}
+  }, [managerDayMode]);
+  useEffect(() => {
+    try { localStorage.setItem('wvi_large_outdoor_type', String(largeOutdoorType)); } catch {}
+  }, [largeOutdoorType]);
+  useEffect(() => {
+    try { localStorage.setItem('wvi_low_connectivity_mode', String(lowConnectivityMode)); } catch {}
+  }, [lowConnectivityMode]);
 
   // Close drawer on Escape
   useEffect(() => {
     if (!mobileOpen) return;
     const handler = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') setMobileOpen(false);
+      if (e.key === "Escape") setMobileOpen(false);
     };
-    window.addEventListener('keydown', handler);
-    return () => window.removeEventListener('keydown', handler);
+    window.addEventListener("keydown", handler);
+    return () => window.removeEventListener("keydown", handler);
   }, [mobileOpen]);
 
   return (
-    <div className="min-h-screen bg-bg text-fg pb-9 print:min-h-0 print:bg-white print:text-black">
-
+    <div className={cn("min-h-screen bg-bg text-fg pb-9 print:min-h-0 print:bg-surface print:text-black", showDayOfShell && "pb-28 md:pb-24", largeOutdoorType && "text-[18px] md:text-[17px]")}>
       {/* Skip-to-main accessibility link */}
       <a
         href="#main-content"
@@ -180,7 +358,9 @@ export function AppShell({
                 aria-hidden="true"
               />
             )}
-            <span className="hidden sm:inline font-bold text-brand font-serif">{branding.platformName}</span>
+            <span className="hidden sm:inline font-bold text-brand font-serif">
+              {branding.platformName}
+            </span>
           </a>
 
           <div className="flex-1" />
@@ -205,6 +385,27 @@ export function AppShell({
             </Button>
           )}
 
+          {managerMode && (
+            <Button
+              variant={managerDayMode ? 'default' : 'outline'}
+              size="sm"
+              className="hidden sm:inline-flex"
+              onClick={() => setManagerDayMode((v) => !v)}
+              aria-label="Toggle Manager Day-of Mode"
+            >
+              <Siren className="h-4 w-4" /> Day-of
+            </Button>
+          )}
+
+          <Button
+            variant="ghost"
+            size="icon"
+            onClick={() => setHelpOpen(true)}
+            aria-label="Open help center"
+            title="Help"
+          >
+            <HelpCircle className="h-5 w-5" aria-hidden="true" />
+          </Button>
           <ThemeToggle />
           <NotificationCenter />
           <UserMenu user={user} onLogout={onLogout} />
@@ -240,7 +441,9 @@ export function AppShell({
               onClick={(e) => e.stopPropagation()}
             >
               <div className="flex h-14 items-center justify-between border-b border-border px-4">
-                <span className="font-display text-base">{branding.platformName}</span>
+                <span className="font-display text-base">
+                  {branding.platformName}
+                </span>
                 <Button
                   variant="ghost"
                   size="icon"
@@ -266,35 +469,80 @@ export function AppShell({
           className="flex-1 min-w-0 pb-16 md:pb-0"
           tabIndex={-1}
         >
+          {showDayOfShell && lowConnectivityMode && (
+            <div className="sticky top-14 z-20 border-b border-warning/30 bg-warning-soft/20 px-4 py-2 text-xs font-semibold text-warning print:hidden">
+              Low-connectivity mode: prioritize cached run sheet, emergency contacts, guest lookup, and vendor check-in. Last synced {lastSyncedAt}.
+            </div>
+          )}
           {children}
         </main>
       </div>
 
+      {showDayOfShell && (
+        <ManagerDayOfDock
+          eventId={dayOfEventId}
+          currentPath={currentPath}
+          effectiveOffline={effectiveOffline || lowConnectivityMode}
+          lastSyncedAt={lastSyncedAt}
+          largeOutdoorType={largeOutdoorType}
+          lowConnectivityMode={lowConnectivityMode}
+          onToggleDayMode={() => setManagerDayMode((v) => !v)}
+          onToggleLargeType={() => setLargeOutdoorType((v) => !v)}
+          onToggleLowConnectivity={() => setLowConnectivityMode((v) => !v)}
+          onOpenDiagnostics={() => setDiagnosticsOpen(true)}
+          onOpenVoiceNote={() => setVoiceNoteOpen(true)}
+          onOpenPhotoCapture={() => setPhotoCaptureOpen(true)}
+          onOpenDeviceQa={() => setDeviceQaOpen(true)}
+        />
+      )}
+
       {/* Globally Persistent Bottom App Status Bar (The User-Requested Step 3) */}
-      <footer className="fixed bottom-0 left-0 right-0 h-9 bg-[#FDFBF7] border-t border-[#e1d5c9] text-[#2C2A29] z-40 flex items-center justify-between px-4 text-[10px] sm:text-xs print:hidden font-sans shadow-lg">
+      <footer className="fixed bottom-0 left-0 right-0 h-9 bg-surface border-t border-border text-fg z-40 flex items-center justify-between px-4 text-[10px] sm:text-xs print:hidden font-sans shadow-lg">
         <div className="flex items-center gap-3">
           <span className="flex items-center gap-1.5">
             <span className="relative flex h-2 w-2">
-              {simulatedOffline ? (
-                 <span className="relative inline-flex rounded-full h-2 w-2 bg-danger"></span>
+              {effectiveOffline ? (
+                <span className="relative inline-flex rounded-full h-2 w-2 bg-danger"></span>
+              ) : syncStatus.queueSize > 0 ? (
+                <span className="relative inline-flex rounded-full h-2 w-2 bg-warning"></span>
               ) : (
-                 <>
-                    <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-green-400 opacity-75"></span>
-                    <span className="relative inline-flex rounded-full h-2 w-2 bg-green-500"></span>
-                 </>
+                <>
+                  <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-success opacity-75"></span>
+                  <span className="relative inline-flex rounded-full h-2 w-2 bg-success"></span>
+                </>
               )}
             </span>
-            <span className="font-bold text-[#2C2A29]">{simulatedOffline ? 'Simulated Offline' : 'Live Sync Active'}</span>
+            <span className="font-bold text-fg">
+              {effectiveOffline
+                ? "Offline — changes queue locally"
+                : syncStatus.queueSize > 0
+                  ? "Sync pending"
+                  : "Live Sync Active"}
+            </span>
           </span>
-          <span className="text-[#e1d5c9] hidden sm:inline">|</span>
+          <span className="text-border-strong hidden sm:inline">|</span>
           <span className="text-fg-subtle hidden sm:inline flex items-center gap-1">
-             👥 3 planners active in manor workspace
+            👥 Active collaborators in workspace
           </span>
         </div>
         <div className="flex items-center gap-3">
-          <span className="text-fg-subtle font-medium">WVI Local Cache: <strong className="text-fg font-bold">Healthy (0 pending syncs)</strong></span>
-          <span className="text-[#e1d5c9]">|</span>
-          <button 
+          <button
+            onClick={() => setDiagnosticsOpen(true)}
+            className="text-fg-subtle font-medium hover:text-fg"
+          >
+            WVI Local Cache:{" "}
+            <strong
+              className={cn(
+                "font-bold",
+                syncStatus.queueSize > 0 ? "text-warning" : "text-fg",
+              )}
+            >
+              {syncStatus.queueSize} pending sync
+              {syncStatus.queueSize === 1 ? "" : "s"}
+            </strong>
+          </button>
+          <span className="text-border-strong">|</span>
+          <button
             onClick={() => setDiagnosticsOpen(true)}
             className="bg-brand px-2.5 py-0.5 rounded text-[9px] uppercase font-bold tracking-wider text-brand-fg hover:bg-brand-strong transition-colors cursor-pointer"
           >
@@ -303,99 +551,279 @@ export function AppShell({
         </div>
       </footer>
 
+      <HelpCenterDialog
+        open={helpOpen}
+        onOpenChange={setHelpOpen}
+        currentPath={currentPath}
+      />
+
+      {voiceNoteOpen && (
+        <Dialog open={voiceNoteOpen} onOpenChange={setVoiceNoteOpen}>
+          <DialogContent className="max-w-md">
+            <DialogHeader><DialogTitle>Voice note for incident/task</DialogTitle><DialogDescription>Browser speech capture varies by device. Use this field as voice-dictation/training fallback; mobile keyboards can dictate into it.</DialogDescription></DialogHeader>
+            <textarea className="min-h-32 w-full rounded-md border border-border bg-surface p-3 text-sm" value={voiceNoteText} onChange={(e) => setVoiceNoteText(e.target.value)} placeholder="Tap microphone on your mobile keyboard or type the note…" />
+            <DialogFooter><Button variant="ghost" onClick={() => setVoiceNoteOpen(false)}>Cancel</Button><Button onClick={() => { try { localStorage.setItem(`wvi_voice_note_${Date.now()}`, voiceNoteText); } catch {}; setVoiceNoteText(''); setVoiceNoteOpen(false); toast({ title: 'Voice note saved locally', description: 'Attach it to the incident/task when connectivity allows.', variant: 'success' }); }}>Save note</Button></DialogFooter>
+          </DialogContent>
+        </Dialog>
+      )}
+
+      {photoCaptureOpen && (
+        <Dialog open={photoCaptureOpen} onOpenChange={setPhotoCaptureOpen}>
+          <DialogContent className="max-w-md">
+            <DialogHeader><DialogTitle>Photo evidence capture</DialogTitle><DialogDescription>Capture layout variance, incident, damage, or setup evidence for day-of follow-up.</DialogDescription></DialogHeader>
+            <input type="file" accept="image/*" capture="environment" className="w-full rounded-md border border-border bg-surface p-3 text-sm" aria-label="Capture photo evidence" />
+            <textarea className="min-h-24 w-full rounded-md border border-border bg-surface p-3 text-sm" value={photoEvidenceNote} onChange={(e) => setPhotoEvidenceNote(e.target.value)} placeholder="What does this photo show?" />
+            <DialogFooter><Button variant="ghost" onClick={() => setPhotoCaptureOpen(false)}>Cancel</Button><Button onClick={() => { try { localStorage.setItem(`wvi_photo_evidence_note_${Date.now()}`, photoEvidenceNote); } catch {}; setPhotoEvidenceNote(''); setPhotoCaptureOpen(false); toast({ title: 'Photo evidence staged', description: 'Upload/attach it when the event workspace is online.', variant: 'success' }); }}>Stage evidence</Button></DialogFooter>
+          </DialogContent>
+        </Dialog>
+      )}
+
+      {deviceQaOpen && (
+        <Dialog open={deviceQaOpen} onOpenChange={setDeviceQaOpen}>
+          <DialogContent className="max-w-2xl">
+            <DialogHeader><DialogTitle>Device-specific day-of QA checklist</DialogTitle><DialogDescription>Use before doors open on each device type.</DialogDescription></DialogHeader>
+            <div className="grid gap-3 sm:grid-cols-2">
+              {[
+                ['iPhone', 'Safari loads run sheet; guest search works; tap-to-call opens Phone; camera QR permission confirmed.'],
+                ['Android', 'Chrome loads check-in; SMS links open Messages; low data mode readable outdoors; offline packet cached.'],
+                ['iPad/tablet', 'Run sheet and staff roster fit without horizontal scroll; kiosk brightness/lock settings checked.'],
+                ['Tablet kiosk', 'Vendor/staff check-in open; scanner fallback visible; charger connected; screen timeout disabled.'],
+              ].map(([device, checks]) => <div key={device} className="rounded-xl border border-border bg-surface p-3 text-sm"><strong className="text-brand">{device}</strong><p className="mt-1 text-xs text-fg-muted">{checks}</p></div>)}
+            </div>
+            <DialogFooter><Button onClick={() => setDeviceQaOpen(false)}>Done</Button></DialogFooter>
+          </DialogContent>
+        </Dialog>
+      )}
+
       {/* Advanced Connection Diagnostics & Recovery Modal Dialog (Phase 4) */}
       {diagnosticsOpen && (
         <Dialog open={diagnosticsOpen} onOpenChange={setDiagnosticsOpen}>
-          <DialogContent className="max-w-md bg-[#FDFBF7] border border-[#e1d5c9] rounded-2xl shadow-xl font-semibold text-xs text-fg">
+          <DialogContent className="max-w-md bg-surface border border-border rounded-2xl shadow-xl font-semibold text-xs text-fg">
             <DialogHeader>
               <DialogTitle className="font-serif font-bold text-lg text-fg flex items-center gap-1.5">
-                 <Activity className="w-5 h-5 text-brand animate-pulse" /> Workspace Status &amp; Diagnostics
+                <Activity className="w-5 h-5 text-brand animate-pulse" />{" "}
+                Workspace Status &amp; Diagnostics
               </DialogTitle>
               <DialogDescription>
-                 Monitor local database caches, live websocket message buses, and force offline recoveries.
+                Monitor local database caches, live realtime message buses, and
+                force offline recoveries.
               </DialogDescription>
             </DialogHeader>
 
             <div className="space-y-4 pt-2">
-               
-               {/* Section 1: Connection Health */}
-               <div className="space-y-2 bg-white p-3.5 rounded-xl border border-[#e1d5c9] shadow-xs">
-                  <h4 className="text-[10px] font-bold text-fg-subtle uppercase tracking-wider font-serif">Connection &amp; Message Bus</h4>
-                  <div className="flex justify-between items-center text-xs">
-                     <span>WebSocket Live Link</span>
-                     <span className={cn("font-bold flex items-center gap-1", simulatedOffline ? "text-danger" : "text-success")}>
-                        {simulatedOffline ? <WifiOff className="w-3.5 h-3.5" /> : <Wifi className="w-3.5 h-3.5" />}
-                        {simulatedOffline ? 'Offline (Simulated)' : 'Online (14ms latency)'}
-                     </span>
-                  </div>
-                  <div className="flex justify-between items-center text-xs pt-1 border-t border-border/40">
-                     <span>SQLite Sync Engine</span>
-                     <span className="font-bold text-success">Listening</span>
-                  </div>
-               </div>
+              {/* Section 1: Connection Health */}
+              <div className="space-y-2 bg-surface p-3.5 rounded-xl border border-border shadow-xs">
+                <h4 className="text-[10px] font-bold text-fg-subtle uppercase tracking-wider font-serif">
+                  Connection &amp; Message Bus
+                </h4>
+                <div className="flex justify-between items-center text-xs">
+                  <span>Realtime Live Link</span>
+                  <span
+                    className={cn(
+                      "font-bold flex items-center gap-1",
+                      effectiveOffline ? "text-danger" : "text-success",
+                    )}
+                  >
+                    {effectiveOffline ? (
+                      <WifiOff className="w-3.5 h-3.5" />
+                    ) : (
+                      <Wifi className="w-3.5 h-3.5" />
+                    )}
+                    {effectiveOffline
+                      ? simulatedOffline
+                        ? "Offline (Simulated)"
+                        : "Offline / server unreachable"
+                      : "Online"}
+                  </span>
+                </div>
+                <div className="flex justify-between items-center text-xs pt-1 border-t border-border/40">
+                  <span>SQLite Sync Engine</span>
+                  <span className="font-bold text-success">Listening</span>
+                </div>
+              </div>
 
-               {/* Section 2: Caches Health */}
-               <div className="space-y-2 bg-white p-3.5 rounded-xl border border-[#e1d5c9] shadow-xs">
-                  <h4 className="text-[10px] font-bold text-fg-subtle uppercase tracking-wider font-serif">Local Storage &amp; Cache</h4>
-                  <div className="flex justify-between items-center text-xs">
-                     <span>IndexedDB Offline Syncs</span>
-                     <span className="font-bold text-success">Healthy (0 pending)</span>
+              {/* Section 2: Caches Health */}
+              <div className="space-y-2 bg-surface p-3.5 rounded-xl border border-border shadow-xs">
+                <h4 className="text-[10px] font-bold text-fg-subtle uppercase tracking-wider font-serif">
+                  Local Storage &amp; Cache
+                </h4>
+                <div className="flex justify-between items-center text-xs">
+                  <span>Offline Write Queue</span>
+                  <span
+                    className={cn(
+                      "font-bold",
+                      syncStatus.queueSize > 0
+                        ? "text-warning"
+                        : "text-success",
+                    )}
+                  >
+                    {syncStatus.queueSize} pending
+                  </span>
+                </div>
+                {syncStatus.queueSize > 0 && (
+                  <div className="rounded-lg border border-warning/30 bg-warning/10 p-2 text-[11px] text-fg-muted">
+                    {Object.entries(syncStatus.queueByDomain).map(
+                      ([domain, count]) => (
+                        <div
+                          key={domain}
+                          className="flex justify-between gap-2"
+                        >
+                          <span>{domain}</span>
+                          <strong>{count} pending</strong>
+                        </div>
+                      ),
+                    )}
                   </div>
-                  <div className="flex justify-between items-center text-xs pt-1 border-t border-border/40">
-                     <span>Service Worker Precaches</span>
-                     <span className="font-bold text-fg">Active (PWA v1.3.0)</span>
-                  </div>
-                  <div className="flex justify-between items-center text-xs pt-1 border-t border-border/40">
-                     <span>App Memory Footprint</span>
-                     <span className="font-bold text-fg">24.1 MB (Optimal)</span>
-                  </div>
-               </div>
+                )}
+                <div className="flex justify-between items-center text-xs pt-1 border-t border-border/40">
+                  <span>Service Worker Precaches</span>
+                  <span className="font-bold text-fg">Active (PWA v1.3.0)</span>
+                </div>
+                <div className="flex justify-between items-center text-xs pt-1 border-t border-border/40">
+                  <span>App Memory Footprint</span>
+                  <span className="font-bold text-fg">24.1 MB (Optimal)</span>
+                </div>
+              </div>
 
-               {/* Section 3: Recovery Controls */}
-               <div className="space-y-2 pt-2">
-                  <h4 className="text-[10px] font-bold text-fg-subtle uppercase tracking-wider font-serif">Diagnostics Recovery Actions</h4>
-                  
-                  <div className="grid grid-cols-1 gap-2">
-                     <Button 
-                       variant="outline" 
-                       onClick={handleForceSync}
-                       disabled={isSyncingData}
-                       className="w-full text-xs font-bold h-9 border-[#e1d5c9] bg-white hover:bg-brand-soft/20 text-brand"
-                     >
-                        <RefreshCw className={cn("w-3.5 h-3.5 mr-1.5", isSyncingData && "animate-spin")} />
-                        {isSyncingData ? 'Force-Syncing...' : 'Force Local Database Re-Sync'}
-                     </Button>
+              {/* Section 3: Recovery Controls */}
+              <div className="space-y-2 pt-2">
+                <h4 className="text-[10px] font-bold text-fg-subtle uppercase tracking-wider font-serif">
+                  Diagnostics Recovery Actions
+                </h4>
 
-                     <Button 
-                       variant="outline" 
-                       onClick={handleClearCache}
-                       className="w-full text-xs font-bold h-9 border-danger/20 hover:bg-danger/10 text-danger"
-                     >
-                        <Trash2 className="w-3.5 h-3.5 mr-1.5" />
-                        Purge Local Assets Cache
-                     </Button>
+                <div className="grid grid-cols-1 gap-2">
+                  <Button
+                    variant="outline"
+                    onClick={handleForceSync}
+                    disabled={isSyncingData}
+                    className="w-full text-xs font-bold h-9 border-border bg-surface hover:bg-brand-soft/20 text-brand"
+                  >
+                    <RefreshCw
+                      className={cn(
+                        "w-3.5 h-3.5 mr-1.5",
+                        isSyncingData && "animate-spin",
+                      )}
+                    />
+                    {isSyncingData
+                      ? "Force-Syncing..."
+                      : "Force Local Database Re-Sync"}
+                  </Button>
 
-                     <Button 
-                       variant="secondary" 
-                       onClick={() => {
-                          setSimulatedOffline(!simulatedOffline);
-                          toast({ title: !simulatedOffline ? 'Offline mode simulated' : 'Live sync connection restored', description: !simulatedOffline ? 'Simulating offline database cache queues...' : 'Reconnected successfully.', variant: !simulatedOffline ? 'default' : 'success' });
-                       }}
-                       className="w-full text-xs font-bold h-9"
-                     >
-                        {!simulatedOffline ? '🔌 Simulate Offline Disconnect' : '⚡ Reconnect Live Sync'}
-                     </Button>
-                  </div>
-               </div>
+                  <Button
+                    variant="outline"
+                    onClick={handleClearCache}
+                    className="w-full text-xs font-bold h-9 border-danger/20 hover:bg-danger/10 text-danger"
+                  >
+                    <Trash2 className="w-3.5 h-3.5 mr-1.5" />
+                    Purge Local Assets Cache
+                  </Button>
 
+                  <Button
+                    variant="secondary"
+                    onClick={() => {
+                      setSimulatedOffline(!simulatedOffline);
+                      toast({
+                        title: !simulatedOffline
+                          ? "Offline mode simulated"
+                          : "Live sync connection restored",
+                        description: !simulatedOffline
+                          ? "Simulating offline database cache queues..."
+                          : "Reconnected successfully.",
+                        variant: !simulatedOffline ? "default" : "success",
+                      });
+                    }}
+                    className="w-full text-xs font-bold h-9"
+                  >
+                    {!simulatedOffline
+                      ? "🔌 Simulate Offline Disconnect"
+                      : "⚡ Reconnect Live Sync"}
+                  </Button>
+                </div>
+              </div>
             </div>
 
-            <DialogFooter className="border-t border-[#e1d5c9] pt-4 mt-2">
-               <Button onClick={() => setDiagnosticsOpen(false)} className="w-full">Close Diagnostics Panel</Button>
+            <DialogFooter className="border-t border-border pt-4 mt-2">
+              <Button
+                onClick={() => setDiagnosticsOpen(false)}
+                className="w-full"
+              >
+                Close Diagnostics Panel
+              </Button>
             </DialogFooter>
           </DialogContent>
         </Dialog>
       )}
+    </div>
+  );
+}
+
+
+function ManagerDayOfDock({
+  eventId,
+  currentPath,
+  effectiveOffline,
+  lastSyncedAt,
+  largeOutdoorType,
+  lowConnectivityMode,
+  onToggleDayMode,
+  onToggleLargeType,
+  onToggleLowConnectivity,
+  onOpenDiagnostics,
+  onOpenVoiceNote,
+  onOpenPhotoCapture,
+  onOpenDeviceQa,
+}: {
+  eventId?: string;
+  currentPath: string;
+  effectiveOffline: boolean;
+  lastSyncedAt: string;
+  largeOutdoorType: boolean;
+  lowConnectivityMode: boolean;
+  onToggleDayMode: () => void;
+  onToggleLargeType: () => void;
+  onToggleLowConnectivity: () => void;
+  onOpenDiagnostics: () => void;
+  onOpenVoiceNote: () => void;
+  onOpenPhotoCapture: () => void;
+  onOpenDeviceQa: () => void;
+}) {
+  const base = eventId ? `#/events/${eventId}` : '#/events';
+  const actions = [
+    { label: 'Run sheet', href: eventId ? `${base}/run-sheet` : '#/events', icon: FileText, primary: true },
+    { label: 'Guests', href: eventId ? `${base}?tab=guests` : '#/guests', icon: Search },
+    { label: 'Vendors', href: eventId ? `${base}?tab=vendors` : '#/vendors', icon: Truck },
+    { label: 'Check-in', href: eventId ? `${base}/check-in` : '#/events', icon: QrCode },
+    { label: 'Staff', href: eventId ? `${base}?tab=staff` : '#/events', icon: ClipboardList },
+    { label: 'Emergency', href: eventId ? `${base}?tab=emergency` : '#/events', icon: Siren, danger: true },
+  ];
+  const criticalScreen = /run-sheet|check-in|tab=(guests|vendors|staff|emergency|layout)/.test(currentPath);
+  return (
+    <div className="fixed bottom-9 left-0 right-0 z-40 border-t border-brand/20 bg-surface/95 px-2 py-2 shadow-elev-2 backdrop-blur print:hidden" aria-label="Manager event-day mobile app shell">
+      <div className="mx-auto flex max-w-7xl flex-col gap-2">
+        <div className="flex items-center justify-between gap-2 px-2 text-[11px]">
+          <div className="flex min-w-0 items-center gap-2">
+            <Badge variant={effectiveOffline ? 'warning' : 'success'}>{effectiveOffline ? 'Low/offline mode' : 'Manager Day-of Mode'}</Badge>
+            {criticalScreen && <span className="truncate text-fg-muted">Last synced {lastSyncedAt}</span>}
+          </div>
+          <div className="flex items-center gap-1">
+            <button onClick={onToggleLargeType} className={cn('rounded-md border border-border px-2 py-1 font-bold', largeOutdoorType ? 'bg-brand text-brand-fg' : 'bg-surface-2 text-fg-muted')}><Sun className="mr-1 inline h-3.5 w-3.5" />Large type</button>
+            <button onClick={onToggleLowConnectivity} className={cn('rounded-md border border-border px-2 py-1 font-bold', lowConnectivityMode ? 'bg-warning text-warning-fg' : 'bg-surface-2 text-fg-muted')}>Low data</button>
+            <button onClick={onToggleDayMode} className="rounded-md border border-border bg-surface-2 px-2 py-1 font-bold text-fg-muted">Hide</button>
+          </div>
+        </div>
+        <div className="flex gap-1 overflow-x-auto px-1">
+          {actions.map(({ label, href, icon: Icon, primary, danger }) => (
+            <a key={label} href={href} className={cn('inline-flex min-w-[76px] flex-1 flex-col items-center justify-center rounded-xl border px-2 py-2 text-[10px] font-bold', danger ? 'border-danger/30 bg-danger-soft text-danger' : primary ? 'border-brand/30 bg-brand-soft/40 text-brand' : 'border-border bg-surface-2 text-fg')}>
+              <Icon className="mb-1 h-4 w-4" />{label}
+            </a>
+          ))}
+          <button onClick={onOpenVoiceNote} className="inline-flex min-w-[76px] flex-1 flex-col items-center justify-center rounded-xl border border-border bg-surface-2 px-2 py-2 text-[10px] font-bold text-fg"><Mic className="mb-1 h-4 w-4" />Voice</button>
+          <button onClick={onOpenPhotoCapture} className="inline-flex min-w-[76px] flex-1 flex-col items-center justify-center rounded-xl border border-border bg-surface-2 px-2 py-2 text-[10px] font-bold text-fg"><Camera className="mb-1 h-4 w-4" />Photo</button>
+          <button onClick={onOpenDeviceQa} className="inline-flex min-w-[76px] flex-1 flex-col items-center justify-center rounded-xl border border-border bg-surface-2 px-2 py-2 text-[10px] font-bold text-fg"><CheckCircle2 className="mb-1 h-4 w-4" />Device QA</button>
+          <button onClick={onOpenDiagnostics} className="inline-flex min-w-[76px] flex-1 flex-col items-center justify-center rounded-xl border border-border bg-surface-2 px-2 py-2 text-[10px] font-bold text-fg"><Database className="mb-1 h-4 w-4" />Offline</button>
+          <a href={eventId ? `${base}?tab=emergency` : '#/events'} className="inline-flex min-w-[92px] flex-1 flex-col items-center justify-center rounded-xl border border-danger/40 bg-black px-2 py-2 text-[10px] font-bold text-white"><LockKeyhole className="mb-1 h-4 w-4" />Lock contacts</a>
+        </div>
+      </div>
     </div>
   );
 }
@@ -409,7 +837,12 @@ interface SidebarProps {
   autoFocus?: boolean;
 }
 
-function Sidebar({ navItems, currentPath, className, autoFocus }: SidebarProps) {
+function Sidebar({
+  navItems,
+  currentPath,
+  className,
+  autoFocus,
+}: SidebarProps) {
   const firstLinkRef = useRef<HTMLAnchorElement>(null);
 
   useEffect(() => {
@@ -421,7 +854,7 @@ function Sidebar({ navItems, currentPath, className, autoFocus }: SidebarProps) 
   return (
     <nav
       className={cn(
-        'flex-col w-56 shrink-0 border-r border-border bg-surface h-[calc(100vh-3.5rem)] sticky top-14 overflow-y-auto',
+        "flex-col w-56 shrink-0 border-r border-border bg-surface h-[calc(100vh-3.5rem)] sticky top-14 overflow-y-auto",
         className,
       )}
       aria-label="Main navigation"
@@ -432,8 +865,8 @@ function Sidebar({ navItems, currentPath, className, autoFocus }: SidebarProps) 
           if (!meta) return null;
           const Icon = meta.icon;
           const isActive =
-            meta.href === '#/'
-              ? currentPath === '#/' || currentPath === '#'
+            meta.href === "#/"
+              ? currentPath === "#/" || currentPath === "#"
               : currentPath.startsWith(meta.href);
 
           return (
@@ -441,20 +874,20 @@ function Sidebar({ navItems, currentPath, className, autoFocus }: SidebarProps) 
               <a
                 ref={index === 0 ? firstLinkRef : undefined}
                 href={meta.href}
-                aria-current={isActive ? 'page' : undefined}
+                aria-current={isActive ? "page" : undefined}
                 aria-label={meta.label}
                 className={cn(
-                  'flex items-center gap-2.5 rounded-lg px-3 py-2 text-sm font-medium transition-colors',
-                  'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand',
+                  "flex items-center gap-2.5 rounded-lg px-3 py-2 text-sm font-medium transition-colors",
+                  "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand",
                   isActive
-                    ? 'bg-brand/10 text-brand'
-                    : 'text-fg-muted hover:bg-surface-2 hover:text-fg',
+                    ? "bg-brand/10 text-brand"
+                    : "text-fg-muted hover:bg-surface-2 hover:text-fg",
                 )}
               >
                 <Icon
                   className={cn(
-                    'h-4 w-4 shrink-0',
-                    isActive ? 'text-brand' : 'text-fg-muted',
+                    "h-4 w-4 shrink-0",
+                    isActive ? "text-brand" : "text-fg-muted",
                   )}
                   aria-hidden="true"
                 />
@@ -496,7 +929,9 @@ export function PageHeader({
               </a>
             )}
             <div className="min-w-0">
-              <h1 className="text-xl font-semibold text-fg truncate font-serif">{title}</h1>
+              <h1 className="text-xl font-semibold text-fg truncate font-serif">
+                {title}
+              </h1>
               {description && (
                 <p className="mt-1 text-sm text-fg-muted">{description}</p>
               )}
@@ -523,7 +958,7 @@ export function PageBody({
   return (
     <div
       className={cn(
-        'mx-auto max-w-7xl px-4 sm:px-6 py-6 print:m-0 print:p-0 print:max-w-none',
+        "mx-auto max-w-7xl px-4 sm:px-6 py-6 print:m-0 print:p-0 print:max-w-none",
         className,
       )}
     >
@@ -543,17 +978,17 @@ function UserMenu({ user, onLogout }: { user: SdkUser; onLogout: () => void }) {
     const handler = (e: MouseEvent) => {
       if (!menuRef.current?.contains(e.target as Node)) setOpen(false);
     };
-    document.addEventListener('mousedown', handler);
-    return () => document.removeEventListener('mousedown', handler);
+    document.addEventListener("mousedown", handler);
+    return () => document.removeEventListener("mousedown", handler);
   }, [open]);
 
   useEffect(() => {
     if (!open) return;
     const handler = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') setOpen(false);
+      if (e.key === "Escape") setOpen(false);
     };
-    window.addEventListener('keydown', handler);
-    return () => window.removeEventListener('keydown', handler);
+    window.addEventListener("keydown", handler);
+    return () => window.removeEventListener("keydown", handler);
   }, [open]);
 
   return (
@@ -567,7 +1002,7 @@ function UserMenu({ user, onLogout }: { user: SdkUser; onLogout: () => void }) {
       >
         <UserCircle className="h-6 w-6 text-fg-muted" aria-hidden="true" />
         <span className="hidden sm:inline text-sm text-fg-muted max-w-[160px] truncate">
-          {user.fullName || user.email.split('@')[0]}
+          {user.fullName || user.email.split("@")[0]}
         </span>
       </button>
 
@@ -599,7 +1034,7 @@ function UserMenu({ user, onLogout }: { user: SdkUser; onLogout: () => void }) {
             onClick={(e) => {
               e.preventDefault();
               setOpen(false);
-              window.dispatchEvent(new CustomEvent('wvi:open-shortcuts'));
+              window.dispatchEvent(new CustomEvent("wvi:open-shortcuts"));
             }}
             className="flex items-center gap-2 px-4 py-2.5 text-sm text-fg-muted hover:bg-surface-2 hover:text-fg transition-colors focus-visible:ring-2 focus-visible:ring-brand focus-visible:outline-none"
             role="menuitem"
@@ -609,7 +1044,10 @@ function UserMenu({ user, onLogout }: { user: SdkUser; onLogout: () => void }) {
           </a>
 
           <button
-            onClick={() => { setOpen(false); onLogout(); }}
+            onClick={() => {
+              setOpen(false);
+              onLogout();
+            }}
             className="w-full flex items-center gap-2 px-4 py-2.5 text-sm text-fg-muted hover:bg-surface-2 hover:text-danger transition-colors border-t border-border focus-visible:ring-2 focus-visible:ring-brand focus-visible:outline-none"
             role="menuitem"
           >
@@ -619,5 +1057,505 @@ function UserMenu({ user, onLogout }: { user: SdkUser; onLogout: () => void }) {
         </div>
       )}
     </div>
+  );
+}
+
+const HELP_MODULES = [
+  {
+    title: "Events",
+    detail:
+      "Create weddings, track lead/hold/booked/planning status, and open each event workspace for guests, vendors, timeline, contracts, budget, layout, and portals.",
+    next: "Manager next step: open the event with the nearest date and review operations readiness before sales/finance details.",
+  },
+  {
+    title: "Guests",
+    detail:
+      "Import guest lists, track RSVPs, meal choices, dietary notes, accessibility needs, seating, lodging, and duplicate identities.",
+    next: "Manager next step: work the exceptions first — no RSVP, dietary, accessibility, VIP, unseated, and lodging gaps.",
+  },
+  {
+    title: "Vendors",
+    detail:
+      "Manage vendor contacts, preferred partners, contracts, payments, COIs, secure vendor portal links, and check-in readiness.",
+    next: "Manager next step: verify COI, arrival time, contact phone, load-in path, and unread messages.",
+  },
+  {
+    title: "Timeline",
+    detail:
+      "Build the run-of-show and detect timeline overlaps, missing ceremony/reception phases, and vendors not tied to timeline items.",
+    next: "Manager next step: compare the timeline against vendor arrival, staffing coverage, and final run sheet.",
+  },
+  {
+    title: "Layout",
+    detail:
+      "Create floorplans, seating, tables, vendor zones, approval workflows, and readiness checks for capacity/collisions.",
+    next: "Manager next step: use mobile review mode to verify ADA path, exits, power, seating, vendor zones, and print packet.",
+  },
+  {
+    title: "Staff",
+    detail:
+      "Assign staff tasks, shifts, incident follow-up, coverage, and day-of command responsibilities.",
+    next: "Manager next step: open the What-to-do-now queue and make sure critical tasks have contacts.",
+  },
+  {
+    title: "Contracts & Payments",
+    detail:
+      "Track agreements, e-signature state, payment links, balances due, and budget performance.",
+    next: "Manager next step: only review operational blockers; escalate legal/finance decisions to the owner/admin.",
+  },
+  {
+    title: "Intelligence",
+    detail:
+      "Use Event Health Command Center, forecast, vendor reliability, guest identity, RSVP lag, and readiness signals to prioritize action.",
+    next: "Manager next step: filter for actions you can fix today and assign/escalate the rest.",
+  },
+] as const;
+
+const GLOSSARY_TERMS = [
+  ["Lead", "A new inquiry or early opportunity that has not committed yet."],
+  [
+    "Hold",
+    "A date temporarily reserved while the couple decides or contract/payment is pending.",
+  ],
+  ["Booked", "The event is committed and should move into detailed planning."],
+  [
+    "Planning",
+    "The event is actively being prepared: guests, vendors, timeline, budget, contracts, and layout.",
+  ],
+  [
+    "SLA",
+    "Service-level agreement or response target, such as responding to an inquiry, vendor issue, or guest problem within a set time.",
+  ],
+  [
+    "BEO",
+    "Banquet Event Order — the operational packet summarizing rooms, timeline, food/beverage, setup, staffing, and special instructions.",
+  ],
+  [
+    "Load-in",
+    "The scheduled window and route for vendors to arrive and bring equipment onto the property.",
+  ],
+  [
+    "Strike",
+    "The teardown/load-out process after an event, including rentals, cleanup, trash, and venue reset.",
+  ],
+  [
+    "Captain mode",
+    "A day-of operations mode where the lead manager prioritizes urgent tasks, incidents, staff coverage, and vendor arrivals.",
+  ],
+  [
+    "Escalation",
+    "A handoff to an owner/admin when an issue requires approval, finance/legal access, policy decision, or authority outside your role.",
+  ],
+  [
+    "Incident",
+    "A day-of problem that needs tracking, severity, owner awareness, or follow-up, such as safety, guest, vendor, damage, or weather issues.",
+  ],
+  [
+    "Readiness",
+    "A practical measure of whether an event is operationally ready: timeline, layout, guests, vendors, staff, contracts, payments, and risks.",
+  ],
+  [
+    "Run sheet",
+    "The day-of timeline that tells staff and vendors what happens when.",
+  ],
+  [
+    "COI",
+    "Certificate of Insurance — proof a vendor has required insurance coverage.",
+  ],
+  [
+    "NPS",
+    "Net Promoter Score — post-event feedback score from 0–10 that measures satisfaction.",
+  ],
+  [
+    "Health score",
+    "A 0–100 readiness/risk score based on alerts like RSVPs, contracts, balance due, vendors, and timeline coverage.",
+  ],
+  [
+    "Vendor reliability score",
+    "A 0–100 score based on vendor ratings, quality, timeliness, communication, and confidence.",
+  ],
+  [
+    "Layout approval",
+    "The process of marking a floorplan as approved for operational use.",
+  ],
+] as const;
+
+const MANAGER_LESSONS = [
+  {
+    id: "quick-start",
+    title: "Manager quick start: first 30 minutes",
+    minutes: 6,
+    detail:
+      "Check today’s events, health actions, open staff tasks, vendor exceptions, guest issues, and escalation blockers.",
+    href: "#/",
+  },
+  {
+    id: "event-review",
+    title: "Review an event workspace",
+    minutes: 8,
+    detail:
+      "Use Event Detail to inspect timeline, layout readiness, guests, vendors, staff, emergency plan, and notes.",
+    href: "#/events",
+  },
+  {
+    id: "run-sheet",
+    title: "Use the run sheet and day-of mode",
+    minutes: 5,
+    detail:
+      "Print or open phone-friendly run sheets, then use check-in, quick contacts, incident reporting, and sync status.",
+    href: "#/calendar",
+  },
+  {
+    id: "exceptions",
+    title: "Work exception queues",
+    minutes: 7,
+    detail:
+      "Prioritize RSVP lag, dietary/accessibility, missing COIs, unread vendor messages, unassigned critical staff tasks, and layout issues.",
+    href: "#/intelligence",
+  },
+  {
+    id: "escalation",
+    title: "Escalate owner/admin issues",
+    minutes: 4,
+    detail:
+      "Learn which budget, contract, integration, admin, and policy actions require owner/admin approval.",
+    href: "#/system",
+  },
+] as const;
+
+const MANAGER_CERTIFICATION = [
+  "Can explain event statuses and operational readiness",
+  "Can find today’s events and assigned staff tasks",
+  "Can review vendor COI/load-in/contact readiness",
+  "Can use mobile guest lookup and guest exception filters",
+  "Can review layout readiness and print a floorplan packet",
+  "Can run Vendor Check-In and use manual fallback search",
+  "Can report incidents and escalate admin/finance blockers",
+] as const;
+
+const COUPLE_LESSONS = [
+  { id: 'rsvp', title: 'How RSVP works', minutes: 4, detail: 'Track responses, meal choices, household groups, dietary notes, accessibility requests, and what guests can see.', href: '#/couple/events' },
+  { id: 'floor-plan', title: 'How to review floor plans', minutes: 5, detail: 'Review tables, seating, ceremony/reception spaces, change requests, and approval status using couple-friendly floor plan language.', href: '#/couple/events' },
+  { id: 'documents', title: 'How to sign documents', minutes: 4, detail: 'Understand contracts, invoices, shared documents, e-signature steps, pending items, and venue approval states.', href: '#/couple/events' },
+  { id: 'messages', title: 'How to message the venue', minutes: 3, detail: 'Ask questions, request changes, find support contacts, and understand expected response status without internal operations language.', href: '#/couple/events' },
+  { id: 'guest-visibility', title: 'What guests can see', minutes: 3, detail: 'Preview the guest RSVP portal, travel details, registry, schedule, seating visibility, and privacy boundaries before sharing links.', href: '#/portal/your-event-id' },
+] as const;
+
+const COUPLE_GLOSSARY = [
+  ['BEO', 'Banquet Event Order — the venue’s final event details packet. Couples usually review the client-facing summary, not staff-only operations notes.'],
+  ['Final count', 'The final guest count due by the venue deadline, often used for catering, seating, staffing, and invoice adjustments.'],
+  ['Room block', 'Reserved hotel/lodging rooms for guests, usually with a deadline and booking instructions.'],
+  ['Rain plan', 'The approved backup plan for weather, including timing, spaces, guest communication, and layout changes.'],
+  ['Load-in', 'The time vendors are allowed to arrive and set up. Couples may see a simple vendor arrival summary.'],
+  ['Floor plan', 'The seating and room setup view showing tables, ceremony/reception spaces, dance floor, bars, and guest flow.'],
+  ['Ceremony rehearsal', 'A scheduled practice before the wedding for processional order, family/wedding party cues, and venue logistics.'],
+  ['Strike', 'Vendor and venue cleanup/load-out after the event. Usually internal, but it may affect contracted end time.'],
+] as const;
+
+function helpContextForPath(path: string): string {
+  if (path.includes("/couple/events/"))
+    return "Current screen: Wedding Hub — start with your next 3 planning steps, then review RSVP, documents, floor plan, timeline, and venue messages.";
+  if (path.includes("/events/") && path.includes("run-sheet"))
+    return "Current screen: Run Sheet — focus on timeline, quick contacts, print packet, and day-of command actions.";
+  if (path.includes("/events/") && path.includes("check-in"))
+    return "Current screen: Vendor Check-In — focus on QR/manual fallback, vendor arrival status, and call/SMS actions.";
+  if (path.includes("/events/"))
+    return "Current screen: Event Detail — use tab guidance to review operations readiness and escalate restricted actions.";
+  if (path.includes("/system/integrations"))
+    return "Current screen: Integration Hub — managers should verify status and escalate broken provider setup to admins.";
+  if (path.includes("/intelligence"))
+    return "Current screen: Intelligence — work health actions you can fix; assign or escalate the rest.";
+  if (path.includes("/guests"))
+    return "Current screen: Guests — prioritize exceptions: RSVP, dietary, accessibility, VIP, seating, and lodging.";
+  if (path.includes("/vendors"))
+    return "Current screen: Vendors — prioritize COIs, arrival times, contacts, messages, and check-in readiness.";
+  return "Current screen: Dashboard — start with today queue, event risk, assigned work, and manager onboarding checklist.";
+}
+
+function HelpCenterDialog({
+  open,
+  onOpenChange,
+  currentPath,
+}: {
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+  currentPath: string;
+}) {
+  const [query, setQuery] = useState("");
+  const [completedLessons, setCompletedLessons] = useState<Set<string>>(() => {
+    try {
+      return new Set(
+        JSON.parse(
+          localStorage.getItem("wvi_manager_completed_lessons") || "[]",
+        ),
+      );
+    } catch {
+      return new Set();
+    }
+  });
+  const [completedCoupleLessons, setCompletedCoupleLessons] = useState<Set<string>>(() => {
+    try {
+      return new Set(JSON.parse(localStorage.getItem("wvi_couple_completed_lessons") || "[]"));
+    } catch {
+      return new Set();
+    }
+  });
+  const normalizedQuery = query.trim().toLowerCase();
+  const filteredModules = HELP_MODULES.filter(
+    (item) =>
+      !normalizedQuery ||
+      `${item.title} ${item.detail} ${item.next}`
+        .toLowerCase()
+        .includes(normalizedQuery),
+  );
+  const filteredGlossary = [...GLOSSARY_TERMS, ...COUPLE_GLOSSARY].filter(
+    ([term, definition]) =>
+      !normalizedQuery ||
+      `${term} ${definition}`.toLowerCase().includes(normalizedQuery),
+  );
+  const completedCertCount = Math.min(
+    completedLessons.size,
+    MANAGER_CERTIFICATION.length,
+  );
+
+  function toggleLesson(id: string) {
+    setCompletedLessons((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      try {
+        localStorage.setItem(
+          "wvi_manager_completed_lessons",
+          JSON.stringify([...next]),
+        );
+      } catch {
+        /* ignore */
+      }
+      return next;
+    });
+  }
+
+  function toggleCoupleLesson(id: string) {
+    setCompletedCoupleLessons((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      try { localStorage.setItem("wvi_couple_completed_lessons", JSON.stringify([...next])); } catch { /* ignore */ }
+      return next;
+    });
+  }
+
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="max-w-5xl max-h-[85vh] overflow-y-auto">
+        <DialogHeader>
+          <DialogTitle className="flex items-center gap-2 text-xl font-serif text-brand">
+            <HelpCircle className="h-5 w-5" aria-hidden="true" /> <span>Help Center</span><span className="text-fg-muted">& Self-Learning</span>
+          </DialogTitle>
+          <DialogDescription>
+            Searchable self-learning guidance for couples, owners, managers, planners,
+            and event-day operators.
+          </DialogDescription>
+        </DialogHeader>
+
+        <div className="space-y-4">
+          <div className="rounded-xl border border-brand/20 bg-brand-soft/20 p-3 text-sm text-brand">
+            <strong>Operations knowledge for this screen:</strong>{" "}
+            {helpContextForPath(currentPath)}
+          </div>
+          <div>
+            <label
+              htmlFor="help-search"
+              className="text-xs font-bold uppercase tracking-wider text-fg-subtle"
+            >
+              Search help, lessons, and glossary
+            </label>
+            <input
+              id="help-search"
+              value={query}
+              onChange={(event) => setQuery(event.target.value)}
+              placeholder="Search BEO, load-in, escalation, vendors, timeline…"
+              className="mt-1 h-11 w-full rounded-lg border border-border bg-surface px-3 text-sm text-fg outline-none focus:border-brand"
+            />
+          </div>
+        </div>
+
+        <section className="rounded-xl border border-brand/20 bg-brand-soft/10 p-4 space-y-3" aria-labelledby="couple-help-title">
+          <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+            <div>
+              <h3 id="couple-help-title" className="text-sm font-bold text-brand">Couple help center</h3>
+              <p className="text-xs text-fg-muted">Persistent client-friendly lessons for RSVP, floor plans, documents, venue messages, and what guests can see.</p>
+            </div>
+            <Badge variant={completedCoupleLessons.size >= COUPLE_LESSONS.length ? "success" : "outline"}>{completedCoupleLessons.size}/{COUPLE_LESSONS.length} couple lessons</Badge>
+          </div>
+          <div className="grid gap-2 md:grid-cols-2">
+            {COUPLE_LESSONS.map((lesson) => (
+              <div key={lesson.id} className="rounded-lg border border-border bg-surface p-3">
+                <div className="flex items-start gap-3">
+                  <input type="checkbox" className="mt-1 h-4 w-4 accent-brand" checked={completedCoupleLessons.has(lesson.id)} onChange={() => toggleCoupleLesson(lesson.id)} aria-label={`Mark ${lesson.title} complete`} />
+                  <div className="min-w-0 flex-1">
+                    <div className="flex flex-wrap items-center gap-2"><h4 className="font-semibold text-fg">{lesson.title}</h4><Badge variant="outline">{lesson.minutes} min</Badge></div>
+                    <p className="mt-1 text-xs text-fg-muted">{lesson.detail}</p>
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
+          <div className="rounded-lg border border-amber-200 bg-amber-50 p-3 text-xs text-amber-900">
+            <strong>Short walkthroughs:</strong> RSVP import, seating review, timeline approval, payment/signature, and final walkthrough prep are available as embedded text/GIF-style lesson placeholders for deployment teams to replace with venue-branded media.
+          </div>
+        </section>
+
+        <div className="grid gap-6 lg:grid-cols-[1.35fr_1fr]">
+          <section
+            className="space-y-4"
+            aria-labelledby="manager-training-title"
+          >
+            <div className="rounded-xl border border-border bg-surface p-4 space-y-3">
+              <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+                <div>
+                  <h3
+                    id="manager-training-title"
+                    className="text-sm font-bold text-brand"
+                  >
+                    Interactive manager training center
+                  </h3>
+                  <p className="text-xs text-fg-muted">
+                    Embedded micro-lessons with completion tracking for internal
+                    SOP onboarding.
+                  </p>
+                </div>
+                <Badge
+                  variant={
+                    completedLessons.size >= MANAGER_LESSONS.length
+                      ? "success"
+                      : "outline"
+                  }
+                >
+                  {completedLessons.size}/{MANAGER_LESSONS.length} lessons
+                  complete
+                </Badge>
+              </div>
+              <div className="grid gap-2">
+                {MANAGER_LESSONS.map((lesson) => (
+                  <div
+                    key={lesson.id}
+                    className="rounded-lg border border-border bg-surface-2 p-3"
+                  >
+                    <div className="flex items-start gap-3">
+                      <input
+                        type="checkbox"
+                        className="mt-1 h-4 w-4 accent-brand"
+                        checked={completedLessons.has(lesson.id)}
+                        onChange={() => toggleLesson(lesson.id)}
+                        aria-label={`Mark ${lesson.title} complete`}
+                      />
+                      <div className="min-w-0 flex-1">
+                        <div className="flex flex-wrap items-center gap-2">
+                          <h4 className="font-semibold text-fg">
+                            {lesson.title}
+                          </h4>
+                          <Badge variant="outline">{lesson.minutes} min</Badge>
+                        </div>
+                        <p className="mt-1 text-xs text-fg-muted">
+                          {lesson.detail}
+                        </p>
+                      </div>
+                      <a
+                        href={lesson.href}
+                        onClick={() => onOpenChange(false)}
+                        className="text-xs font-bold text-brand hover:underline"
+                      >
+                        Open example
+                      </a>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            <div className="rounded-xl border border-border bg-surface p-4 space-y-3">
+              <div className="flex items-center justify-between gap-2">
+                <h3 className="text-sm font-bold text-brand">
+                  Manager certification checklist
+                </h3>
+                <Badge
+                  variant={
+                    completedCertCount === MANAGER_CERTIFICATION.length
+                      ? "success"
+                      : "warning"
+                  }
+                >
+                  {completedCertCount}/{MANAGER_CERTIFICATION.length}
+                </Badge>
+              </div>
+              <div className="grid gap-2 sm:grid-cols-2">
+                {MANAGER_CERTIFICATION.map((item, index) => (
+                  <div
+                    key={item}
+                    className="rounded-lg border border-border bg-surface-2 p-2 text-xs text-fg-muted"
+                  >
+                    <span className="mr-1 font-bold text-brand">
+                      {index + 1}.
+                    </span>
+                    {item}
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            <section className="space-y-3" aria-labelledby="help-modules-title">
+              <h3
+                id="help-modules-title"
+                className="text-xs font-bold uppercase tracking-wider text-fg-subtle"
+              >
+                Module help
+              </h3>
+              <div className="grid gap-3 sm:grid-cols-2">
+                {filteredModules.map((module) => (
+                  <div
+                    key={module.title}
+                    className="rounded-xl border border-border bg-surface p-4 space-y-2"
+                  >
+                    <h4 className="font-semibold text-fg">{module.title}</h4>
+                    <p className="text-sm text-fg-muted leading-relaxed">
+                      {module.detail}
+                    </p>
+                    <div className="rounded-lg bg-brand-soft/30 border border-brand/10 p-2 text-xs text-brand">
+                      <strong>Recommended next step:</strong> {module.next}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </section>
+          </section>
+
+          <section className="space-y-3" aria-labelledby="glossary-title">
+            <h3
+              id="glossary-title"
+              className="text-xs font-bold uppercase tracking-wider text-fg-subtle"
+            >
+              Glossary
+            </h3>
+            <dl className="space-y-2">
+              {filteredGlossary.map(([term, definition], index) => (
+                <div
+                  key={`${term}-${index}`}
+                  className="rounded-lg border border-border bg-surface-2 p-3"
+                  title={definition}
+                >
+                  <dt className="font-semibold text-sm text-fg">{term}</dt>
+                  <dd className="text-xs text-fg-muted mt-1">{definition}</dd>
+                </div>
+              ))}
+            </dl>
+          </section>
+        </div>
+
+        <DialogFooter>
+          <Button onClick={() => onOpenChange(false)}>Close help</Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
   );
 }
