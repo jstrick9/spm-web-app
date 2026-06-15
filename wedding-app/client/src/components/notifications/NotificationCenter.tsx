@@ -9,7 +9,7 @@
  *   5. Persists read state in localStorage
  */
 import { useState, useEffect, useCallback } from 'react';
-import { Bell, Check, X, ExternalLink } from 'lucide-react';
+import { Bell, Check, X, ExternalLink, SlidersHorizontal, ShieldAlert } from 'lucide-react';
 import { Button } from '../../ui/Button';
 import { Badge } from '../../ui/Badge';
 import { cn } from '../../ui/lib/cn';
@@ -24,6 +24,7 @@ interface Notification {
   read: boolean;
   timestamp: string;
   linkUrl?: string;
+  severity?: 'fyi' | 'action_needed' | 'urgent' | 'owner_escalation';
 }
 
 const EVENT_META: Record<string, { title: string; message: (p: any) => string; linkUrl?: (p: any) => string }> = {
@@ -35,6 +36,13 @@ const EVENT_META: Record<string, { title: string; message: (p: any) => string; l
   'budget.updated':  { title: 'Budget Changed',          message: () => 'A budget item was updated.',             linkUrl: (p) => `/events/${p.eventId}?tab=budget` },
   'webhook.test':    { title: 'Webhook Test',            message: () => 'A test webhook was dispatched.',         linkUrl: () => '/system/integrations' },
 };
+
+function severityFor(type: string): Notification['severity'] {
+  if (/critical|incident|payment|contract|health|error|failed/i.test(type)) return 'urgent';
+  if (/vendor|timeline|rsvp|guest|staff/i.test(type)) return 'action_needed';
+  if (/owner|admin|approval/i.test(type)) return 'owner_escalation';
+  return 'fyi';
+}
 
 const STORAGE_KEY = 'wvi_notifications_read';
 
@@ -54,6 +62,8 @@ export function NotificationCenter() {
   const [open, setOpen] = useState(false);
   const [notifications, setNotifications] = useState<Notification[]>([]);
   const [readIds, setReadIds] = useState<Set<string>>(getReadIds);
+  const [managerPreset, setManagerPreset] = useState(() => localStorage.getItem('wvi_manager_notification_preset') || 'balanced');
+  const managerMode = typeof window !== 'undefined' && localStorage.getItem('wvi_registration_role') === 'venue_manager';
   const { navigate } = useRouter();
 
   // Listen for SSE events from the useSSE hook in useRealtimeInvalidation
@@ -71,6 +81,7 @@ export function NotificationCenter() {
       read: readIds.has(`sse-${e.id}`),
       timestamp: e.timestamp,
       linkUrl: meta.linkUrl?.(e.payload),
+      severity: severityFor(e.type),
     };
 
     setNotifications(prev => {
@@ -85,7 +96,12 @@ export function NotificationCenter() {
     return () => window.removeEventListener('wvi:sse-event', handleSSEEvent as EventListener);
   }, [handleSSEEvent]);
 
-  const unreadCount = notifications.filter(n => !n.read && !readIds.has(n.id)).length;
+  useEffect(() => {
+    try { localStorage.setItem('wvi_manager_notification_preset', managerPreset); } catch {}
+  }, [managerPreset]);
+
+  const visibleNotifications = managerMode && managerPreset === 'urgent_only' ? notifications.filter(n => n.severity === 'urgent' || n.severity === 'owner_escalation') : notifications;
+  const unreadCount = visibleNotifications.filter(n => !n.read && !readIds.has(n.id)).length;
 
   function markRead(id: string) {
     const newIds = new Set(readIds);
@@ -97,10 +113,10 @@ export function NotificationCenter() {
 
   function markAllRead() {
     const newIds = new Set(readIds);
-    notifications.forEach(n => newIds.add(n.id));
+    visibleNotifications.forEach(n => newIds.add(n.id));
     setReadIds(newIds);
     saveReadIds(newIds);
-    setNotifications(prev => prev.map(n => ({ ...n, read: true })));
+    setNotifications(prev => prev.map(n => visibleNotifications.some(v => v.id === n.id) ? { ...n, read: true } : n));
   }
 
   function handleClick(notif: Notification) {
@@ -153,16 +169,30 @@ export function NotificationCenter() {
               </div>
             </div>
 
+            {managerMode && (
+              <div className="border-b border-border bg-brand-soft/10 p-3 text-xs">
+                <div className="mb-2 flex items-center gap-2 font-bold text-brand"><SlidersHorizontal className="h-3.5 w-3.5" /> Manager notification center</div>
+                <div className="grid grid-cols-3 gap-1">
+                  {[
+                    ['balanced', 'Balanced'],
+                    ['urgent_only', 'Urgent only'],
+                    ['event_day', 'Event-day'],
+                  ].map(([id, label]) => <button key={id} onClick={() => setManagerPreset(id)} className={cn('rounded-md border px-2 py-1 font-semibold', managerPreset === id ? 'border-brand bg-brand text-brand-fg' : 'border-border bg-surface text-fg-muted')}>{label}</button>)}
+                </div>
+                <p className="mt-2 text-fg-muted"><ShieldAlert className="mr-1 inline h-3.5 w-3.5" /> Severity levels: FYI · action needed · urgent · owner escalation. Quiet hours can be overridden for event-day urgent alerts.</p>
+              </div>
+            )}
+
             {/* List */}
             <div className="max-h-80 overflow-y-auto">
-              {notifications.length === 0 ? (
+              {visibleNotifications.length === 0 ? (
                 <div className="py-10 text-center text-sm text-fg-muted">
                   <Bell className="h-6 w-6 mx-auto mb-2 text-fg-subtle" />
                   No notifications yet.
                   <p className="text-xs mt-1">Activity from your team will appear here in real time.</p>
                 </div>
               ) : (
-                notifications.map(notif => {
+                visibleNotifications.map(notif => {
                   const isUnread = !notif.read && !readIds.has(notif.id);
                   return (
                     <button
@@ -178,9 +208,9 @@ export function NotificationCenter() {
                           <span className="mt-1.5 h-2 w-2 rounded-full bg-brand shrink-0" />
                         )}
                         <div className="flex-1 min-w-0">
-                          <p className={cn("text-sm", isUnread ? "font-semibold" : "font-medium")}>
+                          <div className="flex items-center gap-1"><p className={cn("text-sm", isUnread ? "font-semibold" : "font-medium")}>
                             {notif.title}
-                          </p>
+                          </p>{notif.severity && <Badge variant={notif.severity === 'urgent' || notif.severity === 'owner_escalation' ? 'danger' : notif.severity === 'action_needed' ? 'warning' : 'outline'} className="text-[9px]">{notif.severity.replace('_', ' ')}</Badge>}</div>
                           <p className="text-xs text-fg-muted mt-0.5 truncate">{notif.message}</p>
                           <p className="text-[10px] text-fg-subtle mt-1">
                             {new Date(notif.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}

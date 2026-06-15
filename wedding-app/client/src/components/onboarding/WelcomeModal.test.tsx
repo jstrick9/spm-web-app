@@ -1,6 +1,21 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { render, screen, fireEvent, waitFor } from '@testing-library/react';
+import { render, screen, fireEvent } from '@testing-library/react';
 import { WelcomeModal } from './WelcomeModal';
+import { ToastProvider } from '../../ui/Toast';
+
+function renderWelcome(roleKey: string, props: Partial<React.ComponentProps<typeof WelcomeModal>> = {}) {
+  return render(
+    <ToastProvider>
+      <WelcomeModal
+        memberships={[{ roleKey } as any]}
+        orgId="org-1"
+        userConfig={{}}
+        onComplete={vi.fn()}
+        {...props}
+      />
+    </ToastProvider>,
+  );
+}
 
 describe('WelcomeModal', () => {
   beforeEach(() => {
@@ -8,34 +23,55 @@ describe('WelcomeModal', () => {
     localStorage.clear();
   });
 
-  it('renders onboarding and allows navigation', () => {
-    // Should render for owner mapping all slides
-    render(<WelcomeModal memberships={[{ roleKey: 'owner' } as any]} onComplete={vi.fn()} />);
-    
-    expect(screen.getByText('Welcome to the WVI Platform')).toBeInTheDocument();
-    
-    // Test navigation
-    const nextBtn = screen.getByRole('button', { name: /Next/i });
-    fireEvent.click(nextBtn);
-    
-    expect(screen.getByText('Interactive Floor Plans')).toBeInTheDocument();
-  });
-  
-  it('filters slides based on role', () => {
-    render(<WelcomeModal memberships={[{ roleKey: 'vendor' } as any]} onComplete={vi.fn()} />);
-    
-    // Vendors should not see the "Interactive Floor Plans" screen
-    expect(screen.queryByText('Interactive Floor Plans')).not.toBeInTheDocument();
-  });
+  it('renders role-specific owner onboarding and allows navigation', async () => {
+    renderWelcome('owner');
 
-  it('renders custom couple onboarding slides for couple role', () => {
-    render(<WelcomeModal memberships={[{ roleKey: 'couple' } as any]} onComplete={vi.fn()} />);
-
-    expect(screen.getByText('Your Wedding Planning Hub!')).toBeInTheDocument();
+    expect(await screen.findByText('Start with your venue setup')).toBeInTheDocument();
 
     const nextBtn = screen.getByRole('button', { name: /Next/i });
     fireEvent.click(nextBtn);
 
-    expect(screen.getByText('Design Your Floor Plan')).toBeInTheDocument();
+    expect(screen.getByText('Build your event pipeline')).toBeInTheDocument();
+  });
+
+  it('filters slides based on role', async () => {
+    renderWelcome('vendor');
+
+    expect(await screen.findByText('Your vendor portal')).toBeInTheDocument();
+    expect(screen.queryByText('Build your event pipeline')).not.toBeInTheDocument();
+  });
+
+  it('renders complete couple onboarding tour for couple role', async () => {
+    render(
+      <ToastProvider>
+        <WelcomeModal
+          memberships={[{ roleKey: 'couple', eventId: 'event-1' } as any]}
+          orgId="org-1"
+          userConfig={{}}
+          onComplete={vi.fn()}
+        />
+      </ToastProvider>,
+    );
+
+    expect(await screen.findByText('Your private wedding hub')).toBeInTheDocument();
+    expect(screen.getByText(/wedding details, planning checklist/i)).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: /^Next/i }));
+    expect(screen.getByText('What should I do first?')).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: /^Next/i }));
+    expect(screen.getByText('Understand how RSVP works')).toBeInTheDocument();
+  });
+
+  it('does not reopen when server-side state is completed', () => {
+    renderWelcome('owner', {
+      userConfig: {
+        onboarding: {
+          welcomeTourByOrg: {
+            'org-1': { status: 'completed', currentSlide: 6, completedSlides: ['owner-venue-setup'] },
+          },
+        },
+      } as any,
+    });
+
+    expect(screen.queryByText('Start with your venue setup')).not.toBeInTheDocument();
   });
 });
