@@ -47,6 +47,9 @@ export const emailTemplatesSdk = {
   }): Promise<{ template: SdkEmailTemplate }> {
     return api.post(`/api/orgs/${orgId}/email-templates`, input);
   },
+  update(id: string, patch: Partial<{ name: string; subject: string; bodyHtml: string; bodyText: string; category: string }>): Promise<{ template: SdkEmailTemplate }> {
+    return api.patch(`/api/email-templates/${id}`, patch);
+  },
   delete(id: string): Promise<void> {
     return api.delete(`/api/email-templates/${id}`);
   },
@@ -75,8 +78,8 @@ export const paymentLinksSdk = {
   }): Promise<{ payment: SdkPaymentLink }> {
     return api.post(`/api/events/${eventId}/payments`, input);
   },
-  updateStatus(id: string, status: SdkPaymentLink['status']): Promise<{ payment: SdkPaymentLink }> {
-    return api.patch(`/api/payments/${id}/status`, { status });
+  updateStatus(id: string, status: SdkPaymentLink['status'], patch: { metadata?: Record<string, any>; reconciliationNote?: string; partialPaidCents?: number; refundedCents?: number } = {}): Promise<{ payment: SdkPaymentLink }> {
+    return api.patch(`/api/payments/${id}/status`, { status, ...patch });
   },
   /**
    * Create a real hosted checkout (Stripe/Square) for a payment link and
@@ -122,6 +125,67 @@ export interface RevenueForecast {
   pipeline: { openEvents: number; openRevenueCents: number };
   meta: { monthsOfHistory: number; horizonMonths: number; confidence: 'low' | 'medium' | 'high' };
 }
+
+export type HealthActionPriority = 'critical' | 'high' | 'medium' | 'low';
+export type HealthActionSource = 'risk' | 'forecast' | 'vendor_reliability' | 'guest_identity' | 'rsvp_lag' | 'timeline_completeness' | 'contracts' | 'payments';
+
+export interface HealthCommandAction {
+  id: string;
+  priority: HealthActionPriority;
+  source: HealthActionSource;
+  title: string;
+  detail: string;
+  href: string;
+  eventId?: string;
+  eventTitle?: string;
+  impact: string;
+  confidence: 'high' | 'medium' | 'low';
+  relatedSignals: string[];
+  thresholdExplanation?: string;
+  fixCta?: string;
+  state?: {
+    status: 'open' | 'acknowledged' | 'snoozed' | 'resolved';
+    snoozedUntil: string | null;
+    assignedTo: string | null;
+    note: string | null;
+    updatedAt: string;
+  };
+}
+
+export interface HealthCommandCenter {
+  summary: {
+    openEvents: number;
+    flaggedEvents: number;
+    criticalActions: number;
+    highActions: number;
+    mediumActions: number;
+    lowActions: number;
+    avgHealthScore: number | null;
+    forecastConfidence: 'high' | 'medium' | 'low';
+    projectedRevenueCents: number;
+    pipelineRevenueCents: number;
+    lowReliabilityVendors: number;
+    guestDuplicateClusters: number;
+    rsvpLagEvents: number;
+    timelineIncompleteEvents: number;
+  };
+  actions: HealthCommandAction[];
+  resolvedActions?: Array<{ actionId: string; status: string; note: string | null; updatedAt: string }>;
+}
+
+export const healthCommandSdk = {
+  get(orgId: string): Promise<{ commandCenter: HealthCommandCenter }> {
+    return api.get(`/api/orgs/${orgId}/health-command-center`);
+  },
+  updateActionState(orgId: string, actionId: string, input: {
+    status: 'open' | 'acknowledged' | 'snoozed' | 'resolved';
+    snoozedUntil?: string | null;
+    assignedTo?: string | null;
+    note?: string | null;
+  }): Promise<{ state: any }> {
+    return api.patch(`/api/orgs/${orgId}/health-command-center/actions/${encodeURIComponent(actionId)}`, input);
+  },
+};
 
 export const forecastSdk = {
   get(orgId: string, opts: { history?: number; horizon?: number } = {}): Promise<{ forecast: RevenueForecast }> {

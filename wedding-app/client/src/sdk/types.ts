@@ -17,11 +17,12 @@ export interface SdkUser {
 }
 
 export type AppRoleKey =
-  | 'owner' | 'admin' | 'planner' | 'couple' | 'staff' | 'vendor' | 'guest';
+  | 'owner' | 'admin' | 'manager' | 'planner' | 'couple' | 'staff' | 'vendor' | 'guest';
 
 export interface SdkMembership {
   organizationId?: string;
   eventId?: string;
+  eventOrganizationId?: string;
   roleId: string;     // 'sys_owner' or uuid
   roleKey: string;    // 'owner' / 'admin' / 'catering-lead' / ...
   roleName: string;   // display name
@@ -228,6 +229,8 @@ export interface SdkAuthResponse {
   token: string;
   user: SdkUser;
   organizationId?: string;
+  eventId?: string | null;
+  redirectTo?: string;
 }
 
 export interface ApiErrorBody {
@@ -250,6 +253,9 @@ export interface SdkStaffTask {
   estimated_minutes: number | null;
   completed_at: string | null;
   completed_by: string | null;
+  assignee_name?: string | null;
+  assignee_phone?: string | null;
+  assignee_email?: string | null;
   assigned_staff: string[];
   assigned_areas: string[];
   tags: string[];
@@ -282,6 +288,13 @@ export interface SdkStaffShift {
   starts_at: string;
   ends_at: string;
   notes: string | null;
+  contact_name?: string | null;
+  contact_phone?: string | null;
+  contact_email?: string | null;
+  radio_channel?: string | null;
+  handoff_notes?: string | null;
+  clocked_in_at?: string | null;
+  clocked_out_at?: string | null;
   created_at: string;
   updated_at: string;
 }

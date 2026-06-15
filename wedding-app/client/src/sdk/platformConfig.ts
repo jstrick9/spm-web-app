@@ -8,12 +8,34 @@
 import { api } from './client.js';
 import type { PartialPlatformConfig } from '../config/schema.js';
 
+export interface AdminChangeRequest {
+  id: string;
+  organization_id: string;
+  requested_by: string | null;
+  title: string;
+  area: string;
+  reason: string | null;
+  status: 'open' | 'approved' | 'rejected' | 'resolved';
+  response_note: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
 export const platformConfigSdk = {
   getOrg(orgId: string): Promise<{ config: PartialPlatformConfig }> {
     return api.get(`/api/orgs/${orgId}/config`);
   },
   putOrg(orgId: string, cfg: PartialPlatformConfig): Promise<{ config: PartialPlatformConfig }> {
     return api.put(`/api/orgs/${orgId}/config`, cfg);
+  },
+  listAdminChangeRequests(orgId: string): Promise<{ requests: AdminChangeRequest[] }> {
+    return api.get(`/api/orgs/${orgId}/admin-change-requests`);
+  },
+  createAdminChangeRequest(orgId: string, input: { title: string; area?: string; reason?: string }): Promise<{ request: AdminChangeRequest }> {
+    return api.post(`/api/orgs/${orgId}/admin-change-requests`, input);
+  },
+  updateAdminChangeRequest(orgId: string, id: string, input: { status?: AdminChangeRequest['status']; responseNote?: string | null }): Promise<{ request: AdminChangeRequest }> {
+    return api.patch(`/api/orgs/${orgId}/admin-change-requests/${id}`, input);
   },
 
   getEvent(eventId: string): Promise<{ config: PartialPlatformConfig }> {

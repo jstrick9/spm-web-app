@@ -103,7 +103,7 @@ describe('roles SDK', () => {
     const reg = await sdk.auth.register({ email: 'r@x.com', password: 'pw1234', fullName: 'R', orgName: 'O' });
     const res = await sdk.roles.listRoles(reg.organizationId!);
     const keys = res.roles.map(r => r.key).sort();
-    expect(keys).toEqual(['admin','couple','guest','owner','planner','staff','vendor']);
+    expect(keys).toEqual(['admin','couple','guest','manager','owner','planner','staff','vendor']);
   });
 
   it('creates a custom role and updates its permissions', async () => {

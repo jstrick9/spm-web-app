@@ -41,6 +41,14 @@ export interface PortalGuestEntry {
   roomAssignment: string | null;
   allowLodgingAccess?: boolean;
   subEventInvites?: string[];
+  subEventStatuses?: Record<string, string>;
+  rsvpStatus?: 'pending' | 'attending' | 'declined' | 'maybe' | null;
+  partyName?: string | null;
+  householdId?: string | null;
+  householdName?: string | null;
+  householdAuthorized?: boolean;
+  inviteStatus?: string;
+  plusOneAllowed?: boolean;
 }
 
 // ── Canvas layout items (discriminated union) ─────────────────────────────
@@ -103,12 +111,97 @@ export interface PortalInfoResponse {
     title: string;
     startDate: string | null;
     endDate: string | null;
+    eventType?: string;
+    locationSummary?: string;
+    rsvpDeadline?: string | null;
+    lastUpdatedAt?: string | null;
   };
   portalEnabled: boolean;
   requiresPassword: boolean;
   guests: PortalGuestEntry[];
   layout: PortalLayoutPayload | null;
   theme: PortalTheme | null;
+  branding?: {
+    platformName?: string;
+    logoUrl?: string;
+    tagline?: string;
+    supportEmail?: string;
+  };
+  config?: Record<string, any>;
+  access?: { startsAt: string | null; endsAt: string | null; gracePeriodHours: number | null } | null;
+  identity?: { mode: 'tokenized' | 'lookup_required'; tokenStatus: 'valid' | 'invalid' | 'revoked' | 'missing'; selectedGuestId: string | null; guestDirectoryExposed: boolean; supportMessage: string | null };
+  guestExperience?: { welcomeTitle: string; can: string[]; cannot: string[] };
+  guestHome?: { eventType: string; locationSummary: string; primaryActions: string[]; rsvpDeadline: string | null; editWindowDays: number | null; lastUpdatedAt: string | null; changeNotices: Array<{ id: string; title: string; body: string; category: string; updatedAt: string }> };
+  guestSchedule?: { timezone: string; ceremonyArrivalTime: string | null; ceremonyStartTime: string | null; receptionEndTime: string | null; shuttleDepartureTime: string | null; afterPartyTime: string | null; calendarUrl: string; hiddenInternalCount: number; changeAlerts: Array<Record<string, any>> };
+  guestTravel?: { venueAddress: string; mapUrl: string; parkingEntrance: string; dropoffPoint: string; rideshareInstructions: string; shuttleSchedule: string; shuttlePickupLocation: string; shuttleDropoffLocation: string; lastShuttleReminder: string; roomBlockDetails: string; accessibleParking: string; mobilityDropoff: string; destinationTravelFaq: string; weatherRainPlanNote: string; offlineCardUrl: string };
+  guestPostEvent?: {
+    enabled: boolean;
+    afterEvent: boolean;
+    thankYouTitle: string;
+    thankYouMessage: string;
+    links: Array<{ id: string; label: string; url: string; description: string }>;
+    uploadEnabled: boolean;
+    moderationCopy: string;
+    consentCopy: string;
+    feedbackEnabled: boolean;
+    npsQuestion: string;
+  };
+  guestDayOf?: {
+    enabled: boolean;
+    title: string;
+    contactLabel: string;
+    contactPhone: string;
+    contactEmail: string;
+    offlinePassUrl: string;
+    staffHelpUrl: string;
+    qrPayload: string;
+    pushAvailable: boolean;
+    pushCopy: string;
+  };
+  guestReminders?: {
+    providers: { emailConnected: boolean; smsConnected: boolean };
+    defaults: { rsvpReminderEnabled: boolean; scheduleReminderEnabled: boolean; rainPlanReminderEnabled: boolean; shuttleReminderEnabled: boolean; dayBeforeReminderEnabled: boolean; dayOfReminderEnabled: boolean; guestFriendlyCopy: string };
+    preferences: { emailOptIn: boolean; smsOptIn: boolean; confirmationPreference: 'email' | 'sms' | 'both' | 'none'; reminderTypes: string[]; quietHoursStart: string; quietHoursEnd: string; language: string };
+    actions: { scheduleAvailable: boolean; directionsAvailable: boolean; preferencesUrl: string };
+  };
+  guestPrivacy?: {
+    summary: string;
+    visibility: { rsvp: string; meal: string; allergy: string; accessibility: string; lodging: string; notes: string };
+    consent: { emailReminderLabel: string; smsReminderLabel: string };
+    retention: string;
+    correctionDeletion: { enabled: boolean; contactLabel: string; contactEmail: string };
+    antiAbuse: string;
+    access: { mode: string; tokenStatus: string; guestDirectoryExposed: boolean; privateWeddingDefault: boolean };
+  };
+  guestCare?: {
+    contact: { label: string; email: string; phone: string; helpText: string };
+    details: { accessibleParking: string; accessibleEntrance: string; accessibleRestroom: string; accessibleSeating: string; accessibleRoute: string; mobilityDropoff: string };
+    requestTypes: string[];
+    portalPreferences: { largeText: boolean; highContrast: boolean; languageSelector: boolean };
+  };
+  guestGifts?: {
+    links: Array<{ id: string; type: 'registry' | 'honeymoon' | 'charity' | 'cash' | 'website' | 'other'; label: string; url: string; description: string }>;
+    cardsGiftTableLocation: string;
+    note: string;
+    externalLinkWarning: string;
+  };
+  guestFaq?: {
+    dressCode: { summary: string; examples: string; weather: string; rainPlan: string };
+    policies: { kidsPolicy: string; plusOneRules: string; phonePhotoPolicy: string; smokingVapingPolicy: string; barAlcoholPolicy: string };
+    categories: string[];
+    items: Array<{ id: string; category: string; question: string; answer: string; translations?: Record<string, { question?: string; answer?: string }> }>;
+    multilingual: { availableLanguages: Array<{ code: string; label: string }> };
+    askQuestion: { enabled: boolean; contactLabel: string };
+  };
+  guestWayfinding?: {
+    seatingPrivacyMode: 'personal_only' | 'full_chart';
+    labels: Array<{ id: string; type: string; label: string; details: string }>;
+    indoorMapNote: string;
+    outdoorMapNote: string;
+    accessibilityRouteDetails: string;
+    arPreviewUrl: string;
+    arPreviewDescription: string;
+  };
 }
 
 // ── RSVP submission input ─────────────────────────────────────────────────
@@ -116,9 +209,22 @@ export interface PortalInfoResponse {
 export interface PortalRsvpInput {
   guestId: string;
   attending: boolean;
+  attendingDays?: string[];
   mealChoice?: string;
+  plusOneName?: string;
+  plusOneMealChoice?: string;
+  dietaryNotes?: string;
+  allergies?: string;
+  allergySeverity?: 'none' | 'mild' | 'moderate' | 'severe';
+  crossContaminationWarning?: boolean;
+  beveragePreference?: string;
+  severeAllergyContact?: boolean;
+  specialNeeds?: string;
   notes?: string;
-  subEventRSVPs?: Record<string, boolean>;
+  subEventRSVPs?: Record<string, boolean | 'attending' | 'declined' | 'unsure'>;
+  token?: string;
+  emailReminderConsent?: boolean;
+  smsReminderConsent?: boolean;
 }
 
 // ── Poll option (Phase 35a) ───────────────────────────────────────────────

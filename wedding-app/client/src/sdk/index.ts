@@ -35,8 +35,10 @@ import { decorSdk }                                              from './decor.j
 import { platformConfigSdk }                                     from './platformConfig.js';
 import { pushSdk }                                               from './push.js';
 import { webhooksSdk }                                           from './webhooks.js';
+import { integrationsSdk }                                       from './integrations.js';
 import { budgetSdk }                                             from './budget.js';
 import { contractsSdk }                                          from './contracts.js';
+import { coupleSdk }                                             from './couple.js';
 import { inventorySdk }                                          from './inventory.js';
 import { gallerySdk }                                            from './gallery.js';
 import { checkinsSdk }                                           from './checkins.js';
@@ -47,6 +49,7 @@ import {
   emailTemplatesSdk,
   paymentLinksSdk,
   recommendationsSdk,
+  healthCommandSdk,
   forecastSdk,
   vendorScoringSdk,
   riskSdk,
@@ -95,6 +98,7 @@ export const sdk = {
   // Finance
   budget:          budgetSdk,
   contracts:       contractsSdk,
+  couple:          coupleSdk,
   paymentLinks:    paymentLinksSdk,
 
   // Comms
@@ -104,6 +108,7 @@ export const sdk = {
   platformConfig:  platformConfigSdk,
   push:            pushSdk,
   webhooks:        webhooksSdk,
+  integrations:    integrationsSdk,
   inventory:       inventorySdk,
   audit:           auditSdk,
 
@@ -122,6 +127,7 @@ export const sdk = {
    */
   intelligence: {
     recommendations: recommendationsSdk,
+    healthCommand:   healthCommandSdk,
     forecast:        forecastSdk,
     risk:            riskSdk,
     vendorRatings:   vendorRatingsSdk,
@@ -135,6 +141,7 @@ export const sdk = {
   vendorRatings:   vendorRatingsSdk,
   emailTemplates:  emailTemplatesSdk,
   recommendations: recommendationsSdk,
+  healthCommand:   healthCommandSdk,
   forecast:        forecastSdk,
   vendorScoring:   vendorScoringSdk,
   risk:            riskSdk,
@@ -145,10 +152,10 @@ export {
   authSdk, orgsSdk, rolesSdk, eventsSdk, venuesSdk, catalogSdk,
   layoutsSdk, guestsSdk, rsvpSdk, portalSdk, vendorsSdk, timelineSdk,
   platformConfigSdk, staffSdk, questionsSdk, feedbackSdk, pushSdk,
-  webhooksSdk, budgetSdk, contractsSdk, inventorySdk, gallerySdk,
+  webhooksSdk, integrationsSdk, budgetSdk, contractsSdk, inventorySdk, gallerySdk,
   checkinsSdk, inviteTrackingSdk, lifecycleEmailsSdk,
   vendorRatingsSdk, emailTemplatesSdk, paymentLinksSdk,
-  recommendationsSdk, forecastSdk, vendorScoringSdk, riskSdk,
+  recommendationsSdk, healthCommandSdk, forecastSdk, vendorScoringSdk, riskSdk,
 };
 
 export { createSSEStream, type SSEEvent, type SSEEventHandler } from './sse.js';

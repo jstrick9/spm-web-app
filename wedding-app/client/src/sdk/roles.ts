@@ -43,6 +43,18 @@ export const rolesSdk = {
     return api.post(`/api/orgs/${orgId}/members`, input);
   },
 
+  inviteMember(orgId: string, input: { email: string; roleId: string }): Promise<{ ok: boolean; status: string; invitation?: any; token?: string }> {
+    return api.post(`/api/orgs/${orgId}/team-invitations`, input);
+  },
+
+  inviteEventMember(eventId: string, input: { email: string; roleId?: string; roleKey?: 'couple' | 'planner' }): Promise<{ ok: boolean; status: string; eventId: string; roleKey: string; invitation?: any; token?: string }> {
+    return api.post(`/api/events/${eventId}/couple-invitations`, input);
+  },
+
+  listInvitations(orgId: string): Promise<{ invitations: any[] }> {
+    return api.get(`/api/orgs/${orgId}/team-invitations`);
+  },
+
   updateMemberRole(orgId: string, userId: string, roleId: string) {
     return api.patch(`/api/orgs/${orgId}/members/${userId}`, { roleId });
   },

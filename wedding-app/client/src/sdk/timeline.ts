@@ -1,6 +1,34 @@
 import { api } from './client.js';
 import type { SdkTimelineItem } from './types.js';
 
+export type ReadinessSeverity = 'critical' | 'warning' | 'info';
+export type ReadinessCategory = 'timeline' | 'layout' | 'vendors' | 'guests' | 'staff';
+
+export interface ReadinessIssue {
+  id: string;
+  severity: ReadinessSeverity;
+  category: ReadinessCategory;
+  title: string;
+  detail: string;
+  href: string;
+  relatedIds: string[];
+  ownerExplanation?: string;
+}
+
+export interface EventReadiness {
+  eventId: string;
+  score: number;
+  summary: {
+    timelineItems: number;
+    vendors: number;
+    attendingGuests: number;
+    layoutSeats: number;
+    assignedSeats: number;
+    hasApprovedLayout: boolean;
+  };
+  issues: ReadinessIssue[];
+}
+
 export interface TimelineInput {
   title: string;
   category?: string;
@@ -14,9 +42,91 @@ export interface TimelineInput {
   metadata?: Record<string, unknown>;
 }
 
+export type TimelineApprovalStatus = 'not_started' | 'requested' | 'approved' | 'changes_requested';
+export type TimelineApprovalRole = 'manager' | 'owner' | 'planner';
+export type TimelineAudience = 'venue_staff' | 'vendors' | 'couple' | 'planner';
+export type TimelineIncidentSeverity = 'info' | 'delay' | 'incident' | 'critical';
+
+export interface TimelineOpsApproval {
+  id: string;
+  event_id: string;
+  role: TimelineApprovalRole;
+  status: TimelineApprovalStatus;
+  note: string | null;
+  updated_at: string;
+}
+
+export interface TimelineOpsChangeLog {
+  id: string;
+  event_id: string;
+  timeline_item_id: string | null;
+  change_type: string;
+  summary: string;
+  payload: string;
+  created_at: string;
+}
+
+export interface TimelineOpsIncident {
+  id: string;
+  event_id: string;
+  timeline_item_id: string | null;
+  severity: TimelineIncidentSeverity;
+  note: string;
+  status: 'open' | 'monitoring' | 'resolved';
+  created_at: string;
+}
+
+export interface TimelineOpsReminder {
+  id: string;
+  event_id: string;
+  timeline_item_id: string | null;
+  remind_at: string;
+  channel: 'in_app' | 'sms' | 'email';
+  audience: TimelineAudience;
+  status: 'queued' | 'sent' | 'cancelled';
+  payload: string;
+}
+
+export interface TimelineOpsOfflinePacket {
+  id: string;
+  event_id: string;
+  audience: TimelineAudience;
+  payload: string;
+  updated_at: string;
+}
+
+export interface TimelineOpsState {
+  approvals: TimelineOpsApproval[];
+  changeLogs: TimelineOpsChangeLog[];
+  incidents: TimelineOpsIncident[];
+  reminders: TimelineOpsReminder[];
+  offlinePackets: TimelineOpsOfflinePacket[];
+}
+
 export const timelineSdk = {
   list(eventId: string): Promise<{ items: SdkTimelineItem[] }> {
     return api.get(`/api/events/${eventId}/timeline`);
+  },
+  readiness(eventId: string): Promise<{ readiness: EventReadiness }> {
+    return api.get(`/api/events/${eventId}/readiness`);
+  },
+  ops(eventId: string): Promise<{ ops: TimelineOpsState }> {
+    return api.get(`/api/events/${eventId}/timeline-ops`);
+  },
+  setApproval(eventId: string, input: { role: TimelineApprovalRole; status: TimelineApprovalStatus; note?: string }): Promise<{ approval: TimelineOpsApproval }> {
+    return api.post(`/api/events/${eventId}/timeline-ops/approval`, input);
+  },
+  addChangeLog(eventId: string, input: { timelineItemId?: string | null; changeType: string; summary: string; payload?: Record<string, unknown> }): Promise<{ changeLog: TimelineOpsChangeLog }> {
+    return api.post(`/api/events/${eventId}/timeline-ops/change-log`, input);
+  },
+  addIncident(eventId: string, input: { timelineItemId?: string | null; severity?: TimelineIncidentSeverity; note: string; status?: 'open' | 'monitoring' | 'resolved' }): Promise<{ incident: TimelineOpsIncident }> {
+    return api.post(`/api/events/${eventId}/timeline-ops/incident`, input);
+  },
+  addReminder(eventId: string, input: { timelineItemId?: string | null; remindAt: string; channel?: 'in_app' | 'sms' | 'email'; audience?: TimelineAudience; payload?: Record<string, unknown> }): Promise<{ reminder: TimelineOpsReminder }> {
+    return api.post(`/api/events/${eventId}/timeline-ops/reminder`, input);
+  },
+  saveOfflinePacket(eventId: string, input: { audience: TimelineAudience; payload: Record<string, unknown> }): Promise<{ offlinePacket: TimelineOpsOfflinePacket }> {
+    return api.post(`/api/events/${eventId}/timeline-ops/offline-packet`, input);
   },
   create(eventId: string, input: TimelineInput): Promise<{ item: SdkTimelineItem }> {
     return api.post(`/api/events/${eventId}/timeline`, input);

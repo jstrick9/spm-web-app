@@ -82,6 +82,22 @@ export const guestsSdk = {
     return api.get(`/api/events/${eventId}/guests`);
   },
 
+  guestHelpRequests(eventId: string): Promise<{ requests: Array<{ id: string; kind: string; name: string | null; email: string | null; message: string | null; status: string; assignedTo: string | null; resolutionNote: string | null; slaDueAt?: string | null; slaStatus?: string; lastReplyAt?: string | null; lastReplyChannel?: string | null; lastReplyJobId?: string | null; lastReplyStatus?: string | null; createdAt: string; updatedAt: string }>; counts: Record<string, number> }> {
+    return api.get(`/api/events/${eventId}/guest-help-requests`);
+  },
+
+  guestPortalSecurity(eventId: string): Promise<{ summary: { totalAudits: number; suspiciousCount: number; uniqueDeviceSessions: number; genericGuestDirectoryExposed: boolean; tokenizedLinksPreferred: boolean; rateLimitsAndHoneypotsActive: boolean }; counts: Record<string, number>; topDeviceSessions: Array<{ deviceSession: string; count: number }>; suspicious: Array<Record<string, any>>; audits: Array<Record<string, any>> }> {
+    return api.get(`/api/events/${eventId}/guest-portal-security`);
+  },
+
+  updateGuestHelpRequest(eventId: string, requestId: string, input: { status?: 'open' | 'in_review' | 'resolved' | 'closed'; assignedTo?: string; resolutionNote?: string; slaDueAt?: string; slaDays?: number }): Promise<{ request: any }> {
+    return api.patch(`/api/events/${eventId}/guest-help-requests/${requestId}`, input);
+  },
+
+  replyGuestHelpRequest(eventId: string, requestId: string, input: { channel?: 'email' | 'sms' | 'in_app'; message: string; closeRequest?: boolean }): Promise<{ request: any; jobId: string | null; dispatchStatus: string }> {
+    return api.post(`/api/events/${eventId}/guest-help-requests/${requestId}/reply`, input);
+  },
+
   listForOrg(
     orgId: string,
     filters: {
@@ -191,8 +207,57 @@ export const portalSdk = {
    * The old `SdkPortalInfo` type is preserved in types.ts for other
    * consumers; this method is the only one that needs the richer type.
    */
-  info(eventId: string): Promise<PortalInfoResponse> {
-    return api.get(`/api/portal/${eventId}/info`, { auth: false });
+  info(eventId: string, params?: { guest?: string; token?: string }): Promise<PortalInfoResponse> {
+    const qs = params?.guest ? `?guest=${encodeURIComponent(params.guest)}${params.token ? `&token=${encodeURIComponent(params.token)}` : ''}` : '';
+    return api.get(`/api/portal/${eventId}/info${qs}`, { auth: false });
+  },
+
+  lookup(eventId: string, input: { query: string; email?: string }): Promise<{ matches: Array<{ id: string; label: string; partyName: string | null; requiresSecureLink: boolean }>; privacy: string }> {
+    return api.post(`/api/portal/${eventId}/lookup`, input, { auth: false });
+  },
+
+  status(eventId: string): Promise<{ event: { id: string; title: string; startDate: string | null }; status: 'available' | 'disabled'; support: { label: string; email: string; phone: string }; message: string; recovery: { requestNewLink: boolean; helpKinds: string[] } }> {
+    return api.get(`/api/portal/${eventId}/status`, { auth: false });
+  },
+
+  requestHelp(eventId: string, input: { kind?: 'cannot_find_name' | 'wrong_guest' | 'expired_or_revoked' | 'other'; name?: string; email?: string; message?: string; guestId?: string }): Promise<{ ok: boolean; requestId: string; message: string }> {
+    return api.post(`/api/portal/${eventId}/help-request`, input, { auth: false });
+  },
+
+  askQuestion(eventId: string, input: { guestId?: string; token?: string; name?: string; email?: string; category: string; language?: string; question: string }): Promise<{ ok: boolean; requestId: string; message: string }> {
+    return api.post(`/api/portal/${eventId}/question`, input, { auth: false });
+  },
+
+  requestAccessibility(eventId: string, input: { guestId?: string; token?: string; name?: string; email?: string; phone?: string; mobility?: string; seating?: string; sensory?: string; interpretationLanguage?: string; serviceAnimal?: string; dietaryAllergy?: string; caregiver?: string; contactPreference?: 'email' | 'phone' | 'text' | 'in_app'; notes?: string }): Promise<{ ok: boolean; requestId: string; message: string }> {
+    return api.post(`/api/portal/${eventId}/accessibility-request`, input, { auth: false });
+  },
+
+  requestPrivacy(eventId: string, input: { guestId?: string; token?: string; name?: string; email?: string; requestType: 'update_contact' | 'delete_contact' | 'data_question' | 'consent_change'; message: string }): Promise<{ ok: boolean; requestId: string; message: string }> {
+    return api.post(`/api/portal/${eventId}/privacy-request`, input, { auth: false });
+  },
+
+  saveReminderPreferences(eventId: string, input: { guestId: string; token?: string; emailOptIn?: boolean; smsOptIn?: boolean; confirmationPreference?: 'email' | 'sms' | 'both' | 'none'; reminderTypes?: Array<'rsvp' | 'schedule' | 'rain_plan' | 'shuttle' | 'directions' | 'day_before' | 'day_of'>; quietHoursStart?: string; quietHoursEnd?: string; language?: string; sendInfo?: 'schedule' | 'directions' }): Promise<{ ok: boolean; preferences: Record<string, any>; message: string; dispatchStatus: string; jobId?: string | null }> {
+    return api.post(`/api/portal/${eventId}/reminder-preferences`, input, { auth: false });
+  },
+
+  dayOfHelp(eventId: string, input: { guestId?: string; token?: string; kind: 'running_late' | 'need_help'; name?: string; email?: string; message?: string }): Promise<{ ok: boolean; requestId: string; message: string }> {
+    return api.post(`/api/portal/${eventId}/day-of-help`, input, { auth: false });
+  },
+
+  submitMemory(eventId: string, input: { guestId?: string; token?: string; name?: string; email?: string; photoUrl?: string; caption?: string; consent: boolean }): Promise<{ ok: boolean; requestId: string; moderationStatus: string; message: string }> {
+    return api.post(`/api/portal/${eventId}/memory-submission`, input, { auth: false });
+  },
+
+  submitGuestFeedback(eventId: string, input: { guestId?: string; token?: string; name?: string; npsScore: number; comment?: string; consentToContact?: boolean }): Promise<{ ok: boolean; feedback: Record<string, any>; message: string }> {
+    return api.post(`/api/portal/${eventId}/guest-feedback`, input, { auth: false });
+  },
+
+  resendLink(eventId: string, input: { email: string; name?: string }): Promise<{ ok: boolean; queued: boolean; message: string }> {
+    return api.post(`/api/portal/${eventId}/resend-link`, input, { auth: false });
+  },
+
+  messages(eventId: string, params: { guest: string; token: string }): Promise<{ helpRequests: Array<Record<string, any>>; replies: Array<{ id: string; requestId: string; channel: 'email' | 'sms' | 'in_app'; body: string; dispatchStatus: string | null; sentByLabel: string; createdAt: string }>; tokenStatus: string; emptyState: string }> {
+    return api.get(`/api/portal/${eventId}/messages?guest=${encodeURIComponent(params.guest)}&token=${encodeURIComponent(params.token)}`, { auth: false });
   },
 
   verifyPassword(eventId: string, password: string): Promise<{ ok: boolean }> {
@@ -206,7 +271,7 @@ export const portalSdk = {
   submitRsvp(
     eventId: string,
     input: PortalRsvpInput,
-  ): Promise<{ ok: boolean; rsvpId: string }> {
+  ): Promise<{ ok: boolean; rsvpId: string; confirmation?: { status: string; emailJobId?: string; smsJobId?: string } }> {
     return api.post(`/api/portal/${eventId}/rsvp`, input, { auth: false });
   },
 };

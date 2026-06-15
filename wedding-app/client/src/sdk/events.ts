@@ -13,6 +13,7 @@ export interface CreateEventInput {
   leadSource?: string;
   rsvpDeadline?: string;
   venueId?: string;
+  metadata?: Record<string, any>;
 }
 
 export type UpdateEventInput = Partial<Omit<CreateEventInput, 'organizationId'>> & {
@@ -71,7 +72,11 @@ export const eventsSdk = {
     return api.get(`/api/events/${eventId}/sub-events`);
   },
 
-  createSubEvent(eventId: string, input: { title: string; startsAt: string; endsAt?: string; venueId?: string; inviteOnly?: boolean }) {
+  createSubEvent(eventId: string, input: { title: string; startsAt: string; endsAt?: string; venueId?: string; inviteOnly?: boolean; metadata?: Record<string, unknown> }) {
     return api.post(`/api/events/${eventId}/sub-events`, input);
+  },
+
+  updateSubEvent(subEventId: string, input: Partial<{ title: string; startsAt: string; endsAt: string | null; venueId: string | null; inviteOnly: boolean; metadata: Record<string, unknown> }>) {
+    return api.patch(`/api/sub-events/${subEventId}`, input);
   },
 };
