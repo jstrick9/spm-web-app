@@ -27,7 +27,7 @@ export type { PermissionId } from './permissions.js';
 // that want to refer to "the kind of role" (e.g. when seeding the demo
 // org we want to grant the user the system 'owner' role).
 export type AppRole =
-  | 'owner' | 'admin' | 'planner' | 'couple' | 'staff' | 'vendor' | 'guest';
+  | 'owner' | 'admin' | 'manager' | 'planner' | 'couple' | 'staff' | 'vendor' | 'guest';
 
 /**
  * A membership ties a user to a scope (org OR event) via a role id.

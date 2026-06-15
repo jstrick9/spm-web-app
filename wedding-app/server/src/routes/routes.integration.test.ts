@@ -3,6 +3,7 @@ import { describe, it, expect, beforeAll, beforeEach } from 'vitest';
 import { db } from '../db/database.js';
 import { buildApp } from '../index.js';
 import type { FastifyInstance } from 'fastify';
+import { guestsRepo } from '../db/repos/index.js';
 
 let app: FastifyInstance;
 
@@ -165,7 +166,12 @@ describe('Guests + RSVP (the wedding-critical flow)', () => {
     expect(list.json().counts.pending).toBe(1);
 
     // Public portal info (no auth)
-    const info = await app.inject({ method: 'GET', url: `/api/portal/${evt.id}/info` });
+    const genericInfo = await app.inject({ method: 'GET', url: `/api/portal/${evt.id}/info` });
+    expect(genericInfo.statusCode).toBe(200);
+    expect(genericInfo.json().identity.mode).toBe('lookup_required');
+    expect(genericInfo.json().guests).toHaveLength(0);
+    const token = guestsRepo.rotatePortalToken(guest.id);
+    const info = await app.inject({ method: 'GET', url: `/api/portal/${evt.id}/info?guest=${guest.id}&token=${token}` });
     expect(info.statusCode).toBe(200);
     expect(info.json().guests).toHaveLength(1);
     expect(info.json().guests[0].fullName).toBe('Aunt Mary');

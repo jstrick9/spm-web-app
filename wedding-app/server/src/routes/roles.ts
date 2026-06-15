@@ -18,8 +18,9 @@ import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
 import { requireAuth } from '../middleware/auth.js';
 import { assertCan } from '../lib/rbac.js';
-import { auditRepo, orgsRepo, rolesRepo, usersRepo } from '../db/repos/index.js';
+import { auditRepo, eventsRepo, orgsRepo, rolesRepo, teamInvitationsRepo, usersRepo } from '../db/repos/index.js';
 import { BadRequest, Forbidden, NotFound } from '../lib/errors.js';
+import { deliverTeamInvitation } from '../lib/teamInviteDelivery.js';
 import { isValidPermissionId, type PermissionId } from '../lib/permissions.js';
 
 const KEY_RE = /^[a-z0-9][a-z0-9_-]{1,49}$/;
@@ -45,6 +46,17 @@ const updateRoleSchema = z.object({
 const addMemberSchema = z.object({
   userEmail: z.string().email(),
   roleId:    z.string().min(1),
+});
+
+const inviteMemberSchema = z.object({
+  email: z.string().email(),
+  roleId: z.string().min(1),
+});
+
+const inviteEventMemberSchema = z.object({
+  email: z.string().email(),
+  roleId: z.string().min(1).optional(),
+  roleKey: z.enum(['couple', 'planner']).default('couple'),
 });
 
 const updateMemberRoleSchema = z.object({
@@ -191,6 +203,158 @@ export async function roleRoutes(app: FastifyInstance) {
       const { orgId } = req.params as { orgId: string };
       assertCan(req.auth!.memberships, { organizationId: orgId }, 'org.view');
       return { members: orgsRepo.listMembers(orgId) };
+    },
+  );
+
+  app.get(
+    '/api/orgs/:orgId/team-invitations',
+    { preHandler: requireAuth },
+    async (req) => {
+      const { orgId } = req.params as { orgId: string };
+      assertCan(req.auth!.memberships, { organizationId: orgId }, 'org.members.invite');
+      return { invitations: teamInvitationsRepo.listForOrg(orgId).map((i) => ({
+        id: i.id,
+        organization_id: i.organization_id,
+        email: i.email,
+        role_id: i.role_id,
+        expires_at: i.expires_at,
+        accepted_at: i.accepted_at,
+        revoked_at: i.revoked_at,
+        invited_by: i.invited_by,
+        created_at: i.created_at,
+      })) };
+    },
+  );
+
+  app.post(
+    '/api/events/:eventId/couple-invitations',
+    { preHandler: requireAuth, config: { rateLimit: { max: 20, timeWindow: '1 minute' } } },
+    async (req, reply) => {
+      const { eventId } = req.params as { eventId: string };
+      const event = eventsRepo.findById(eventId);
+      if (!event) throw NotFound('event-not-found');
+      const orgMap = eventsRepo.orgMapForUser(req.auth!.userId);
+      assertCan(req.auth!.memberships, { eventId }, 'events.members.invite', orgMap);
+      const parsed = inviteEventMemberSchema.safeParse(req.body);
+      if (!parsed.success) throw BadRequest('invalid-input', parsed.error.issues);
+
+      const role = parsed.data.roleId ? rolesRepo.findById(parsed.data.roleId) : rolesRepo.findByKey(null, parsed.data.roleKey);
+      if (!role) throw BadRequest('role-not-found');
+      if (!['couple', 'planner'].includes(role.key)) throw BadRequest('event-invite-role-not-allowed');
+      if (role.organization_id && role.organization_id !== event.organization_id) throw Forbidden();
+
+      const existing = usersRepo.findByEmail(parsed.data.email);
+      if (existing) {
+        eventsRepo.addMember({ eventId, userId: existing.id, roleId: role.id });
+        auditRepo.log({
+          organizationId: event.organization_id,
+          actorUserId: req.auth!.userId,
+          actorLabel: req.auth!.email,
+          action: 'event.member.invite.existing_user',
+          targetType: 'user',
+          targetId: existing.id,
+          ip: req.ip,
+          details: { email: parsed.data.email, roleKey: role.key, eventId },
+        });
+        return reply.code(201).send({ ok: true, status: 'added_existing_user', eventId, roleKey: role.key });
+      }
+
+      const invitation = teamInvitationsRepo.create({
+        organizationId: event.organization_id,
+        eventId,
+        invitationType: 'event',
+        email: parsed.data.email,
+        roleId: role.id,
+        invitedBy: req.auth!.userId,
+      });
+      let delivery: Record<string, unknown> = {};
+      try {
+        delivery = await deliverTeamInvitation({ invitation: invitation.row, token: invitation.token });
+      } catch (err) {
+        delivery = { channel: 'failed', error: (err as Error).message };
+      }
+      auditRepo.log({
+        organizationId: event.organization_id,
+        actorUserId: req.auth!.userId,
+        actorLabel: req.auth!.email,
+        action: 'event.member.invite.pending_user',
+        targetType: 'team_invitation',
+        targetId: invitation.row.id,
+        ip: req.ip,
+        details: { email: parsed.data.email, roleKey: role.key, eventId, delivery },
+      });
+      return reply.code(201).send({
+        ok: true,
+        status: 'invitation_sent',
+        eventId,
+        roleKey: role.key,
+        invitation: { id: invitation.row.id, email: invitation.row.email, role_id: invitation.row.role_id, event_id: invitation.row.event_id, expires_at: invitation.row.expires_at },
+        ...(process.env.NODE_ENV !== 'production' || process.env.TEST_DB === ':memory:' ? { token: invitation.token } : {}),
+      });
+    },
+  );
+
+  app.post(
+    '/api/orgs/:orgId/team-invitations',
+    { preHandler: requireAuth, config: { rateLimit: { max: 20, timeWindow: '1 minute' } } },
+    async (req, reply) => {
+      const { orgId } = req.params as { orgId: string };
+      assertCan(req.auth!.memberships, { organizationId: orgId }, 'org.members.invite');
+      const parsed = inviteMemberSchema.safeParse(req.body);
+      if (!parsed.success) throw BadRequest('invalid-input', parsed.error.issues);
+
+      const role = rolesRepo.findById(parsed.data.roleId);
+      if (!role) throw BadRequest('role-not-found');
+      if (role.organization_id && role.organization_id !== orgId) throw Forbidden();
+
+      const existing = usersRepo.findByEmail(parsed.data.email);
+      if (existing) {
+        try {
+          orgsRepo.addMember({ orgId, userId: existing.id, roleId: role.id, invitedBy: req.auth!.userId });
+        } catch (err) {
+          if ((err as { code?: string }).code !== 'SQLITE_CONSTRAINT_UNIQUE') throw err;
+        }
+        auditRepo.log({
+          organizationId: orgId,
+          actorUserId: req.auth!.userId,
+          actorLabel: req.auth!.email,
+          action: 'member.invite.existing_user',
+          targetType: 'user',
+          targetId: existing.id,
+          ip: req.ip,
+          details: { email: parsed.data.email, roleKey: role.key },
+        });
+        return reply.code(201).send({ ok: true, status: 'added_existing_user' });
+      }
+
+      const invitation = teamInvitationsRepo.create({
+        organizationId: orgId,
+        email: parsed.data.email,
+        roleId: role.id,
+        invitedBy: req.auth!.userId,
+      });
+      let delivery: Record<string, unknown> = {};
+      try {
+        delivery = await deliverTeamInvitation({ invitation: invitation.row, token: invitation.token });
+      } catch (err) {
+        delivery = { channel: 'failed', error: (err as Error).message };
+      }
+      auditRepo.log({
+        organizationId: orgId,
+        actorUserId: req.auth!.userId,
+        actorLabel: req.auth!.email,
+        action: 'member.invite.pending_user',
+        targetType: 'team_invitation',
+        targetId: invitation.row.id,
+        ip: req.ip,
+        details: { email: parsed.data.email, roleKey: role.key, delivery },
+      });
+      return reply.code(201).send({
+        ok: true,
+        status: 'invitation_sent',
+        invitation: { id: invitation.row.id, email: invitation.row.email, role_id: invitation.row.role_id, expires_at: invitation.row.expires_at },
+        ...(process.env.NODE_ENV !== 'production' || process.env.TEST_DB === ':memory:' ? { token: invitation.token } : {}),
+      });
     },
   );
 

@@ -74,6 +74,28 @@ export function saveDataUri(dataUri: string, prefix = 'img'): string {
  * Delete a file from disk (if it's a local upload path). Uses basename() so a
  * crafted path like "/uploads/../../etc/passwd" can never escape UPLOAD_DIR.
  */
+export function saveDocumentDataUri(dataUri: string, prefix = 'doc'): string {
+  if (!dataUri.startsWith('data:')) return dataUri;
+  const match = dataUri.match(/^data:([^;]+);base64,(.+)$/);
+  if (!match) throw BadRequest('invalid-document', 'Expected a base64-encoded data URI');
+  const mimeType = match[1].trim().toLowerCase();
+  const extMap: Record<string, string> = {
+    'application/pdf': 'pdf',
+    'image/jpeg': 'jpg',
+    'image/jpg': 'jpg',
+    'image/png': 'png',
+    'image/webp': 'webp',
+  };
+  const ext = extMap[mimeType];
+  if (!ext) throw BadRequest('unsupported-document-type', `Unsupported document type: ${mimeType}`);
+  const buffer = Buffer.from(match[2], 'base64');
+  if (buffer.length === 0) throw BadRequest('invalid-document', 'Empty document payload');
+  if (buffer.length > MAX_DECODED_BYTES) throw BadRequest('document-too-large', 'Document exceeds the 8 MB limit');
+  const filename = `${prefix}_${uuid()}.${ext}`;
+  writeFileSync(join(UPLOAD_DIR, filename), buffer);
+  return `/uploads/${filename}`;
+}
+
 export function deleteFile(urlPath: string): void {
   if (!urlPath.startsWith('/uploads/')) return;
   const safeName = basename(urlPath); // strips any directory traversal segments

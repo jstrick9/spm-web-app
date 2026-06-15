@@ -1,9 +1,21 @@
 import type { FastifyInstance } from 'fastify';
 import { requireAuth } from '../middleware/auth.js';
 import { can } from '../lib/rbac.js';
-import { guestsRepo, vendorsRepo, eventsRepo } from '../db/repos/index.js';
+import { guestsRepo, vendorsRepo, eventsRepo, timelineRepo, staffTasksRepo, layoutsRepo } from '../db/repos/index.js';
 import { budgetRepo } from '../db/repos/budget.js';
 import { Forbidden } from '../lib/errors.js';
+import { buildOperationsPacketManifest, buildOperationsPacketZip, type OperationsPacketData } from '../lib/operationsPacket.js';
+
+function collectOperationsPacketData(eventId: string): OperationsPacketData {
+  const event = eventsRepo.findById(eventId);
+  if (!event) throw Forbidden();
+  const guests = guestsRepo.listForEvent(eventId);
+  const vendors = vendorsRepo.listForOrg(event.organization_id, { eventId });
+  const timeline = timelineRepo.listForEvent(eventId);
+  const staffTasks = staffTasksRepo.listForOrg(event.organization_id, { eventId });
+  const layouts = layoutsRepo.listForOrg(event.organization_id, { eventId });
+  return { exportedAt: new Date().toISOString(), event: event as unknown as Record<string, any>, guests, vendors, timeline, staffTasks, layouts };
+}
 
 export async function exportRoutes(app: FastifyInstance) {
   // ─── Export all guests as CSV ─────────────────────────
@@ -64,6 +76,57 @@ export async function exportRoutes(app: FastifyInstance) {
     reply.header('Content-Type', 'application/json');
     reply.header('Content-Disposition', 'attachment; filename="financials_export.json"');
     return reply.send(JSON.stringify({ exportedAt: new Date().toISOString(), events: data }, null, 2));
+  });
+
+  // ─── Event day-of operations packet (JSON) ───────────
+  app.get('/api/events/:eventId/export/day-of-packet.json', { preHandler: requireAuth }, async (req, reply) => {
+    const { eventId } = req.params as { eventId: string };
+    const event = eventsRepo.findById(eventId);
+    if (!event) throw Forbidden();
+    const orgMap = eventsRepo.orgMapForUser(req.auth!.userId);
+    if (!can(req.auth!.memberships, { eventId }, 'events.view', orgMap)) throw Forbidden();
+
+    const packetData = collectOperationsPacketData(eventId);
+    const { guests, vendors, timeline, staffTasks, layouts } = packetData;
+    const packet = {
+      exportedAt: packetData.exportedAt,
+      type: 'event_day_operations_packet',
+      event,
+      summary: {
+        guestCount: guests.length,
+        vendorCount: vendors.length,
+        timelineItems: timeline.length,
+        staffTasks: staffTasks.length,
+        layouts: layouts.length,
+      },
+      guests: guests.map(g => ({ name: g.full_name, rsvp: g.rsvp_status, phone: g.phone, table: g.table_assignment, room: g.room_assignment, dietary: g.dietary_restrictions, accessibility: g.accessibility_notes })),
+      vendors: vendors.map(v => ({ name: v.name, category: v.category, contact: v.contact_name, phone: v.phone, email: v.email, notes: v.notes, metadata: v.metadata })),
+      timeline,
+      staffTasks,
+      layouts: layouts.map(l => ({ id: l.id, name: l.name, status: l.approval_status, revision: l.revision, updatedAt: l.updated_at })),
+    };
+    reply.header('Content-Type', 'application/json');
+    reply.header('Content-Disposition', `attachment; filename="event_day_packet_${eventId}_${new Date().toISOString().slice(0,10)}.json"`);
+    return reply.send(JSON.stringify(packet, null, 2));
+  });
+
+  // ─── Branded BEO / operations packet (PDF in ZIP) ─────
+  app.get('/api/events/:eventId/export/operations-packet.zip', { preHandler: requireAuth }, async (req, reply) => {
+    const { eventId } = req.params as { eventId: string };
+    const event = eventsRepo.findById(eventId);
+    if (!event) throw Forbidden();
+    const orgMap = eventsRepo.orgMapForUser(req.auth!.userId);
+    if (!can(req.auth!.memberships, { eventId }, 'events.view', orgMap)) throw Forbidden();
+
+    const packetData = collectOperationsPacketData(eventId);
+    const zip = buildOperationsPacketZip(packetData);
+    const manifest = buildOperationsPacketManifest(packetData);
+    const filenameSafeTitle = String(manifest.event.title || 'event').replace(/[^a-zA-Z0-9]+/g, '_').replace(/^_|_$/g, '') || 'event';
+    reply.header('Content-Type', 'application/zip');
+    reply.header('Content-Length', String(zip.length));
+    reply.header('X-Operations-Packet-Type', manifest.type);
+    reply.header('Content-Disposition', `attachment; filename="${filenameSafeTitle}_operations_packet_${new Date().toISOString().slice(0,10)}.zip"`);
+    return reply.send(zip);
   });
 
   // ─── Full org data backup (JSON) ──────────────────────

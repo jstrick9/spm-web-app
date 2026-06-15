@@ -13,7 +13,7 @@ declare module 'fastify' {
     auth?: {
       userId: string;
       email: string;
-      memberships: Array<Membership & { roleKey: string; roleName: string }>;
+      memberships: Array<Membership & { roleKey: string; roleName: string; eventOrganizationId?: string }>;
     };
   }
 }
@@ -59,11 +59,12 @@ export async function requireAuth(
   ).all(payload.sub) as Array<{ organization_id: string; role_id: string; role_key: string; role_name: string }>;
 
   const eventMems = db.prepare(
-    `SELECT em.event_id, em.role_id, r.key AS role_key, r.name AS role_name
+    `SELECT em.event_id, e.organization_id AS event_organization_id, em.role_id, r.key AS role_key, r.name AS role_name
      FROM event_memberships em
+     JOIN events e ON e.id = em.event_id
      JOIN roles r ON r.id = em.role_id
-     WHERE em.user_id = ? AND em.status = 'active'`
-  ).all(payload.sub) as Array<{ event_id: string; role_id: string; role_key: string; role_name: string }>;
+     WHERE em.user_id = ? AND em.status = 'active' AND e.deleted_at IS NULL`
+  ).all(payload.sub) as Array<{ event_id: string; event_organization_id: string; role_id: string; role_key: string; role_name: string }>;
 
   req.auth = {
     userId: userRow.id,
@@ -75,6 +76,7 @@ export async function requireAuth(
       })),
       ...eventMems.map((m) => ({
         eventId: m.event_id,
+        eventOrganizationId: m.event_organization_id,
         roleId: m.role_id, roleKey: m.role_key, roleName: m.role_name,
       })),
     ],

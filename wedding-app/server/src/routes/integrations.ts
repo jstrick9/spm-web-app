@@ -50,9 +50,9 @@ export async function integrationRoutes(app: FastifyInstance) {
     { preHandler: requireAuth },
     async (req) => {
       const { orgId } = req.params as { orgId: string };
-      assertCan(req.auth!.memberships, { organizationId: orgId }, 'org.settings.manage');
+      if (!can(req.auth!.memberships, { organizationId: orgId }, 'integrations.view')) throw Forbidden();
       return {
-        providers: listProviders().map((p) => ({
+        providers: listProviders().map((p) => ({ 
           id: p.id,
           name: p.name,
           category: p.category,

@@ -85,13 +85,13 @@ describe('GET /api/orgs/:id/roles/permissions', () => {
 });
 
 describe('GET /api/orgs/:id/roles', () => {
-  it('returns all 7 system roles + any org-custom ones', async () => {
+  it('returns all system roles + any org-custom ones', async () => {
     const u = await register();
     const res = await authed(u.token, 'GET', `/api/orgs/${u.orgId}/roles`);
     expect(res.statusCode).toBe(200);
     const roles = res.json().roles as Array<{ key: string; is_system: number }>;
     const systemKeys = roles.filter(r => r.is_system === 1).map(r => r.key).sort();
-    expect(systemKeys).toEqual(['admin','couple','guest','owner','planner','staff','vendor']);
+    expect(systemKeys).toEqual(['admin','couple','guest','manager','owner','planner','staff','vendor']);
   });
 });
 

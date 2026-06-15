@@ -2,8 +2,10 @@ import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
 import { requireAuth } from '../middleware/auth.js';
 import { can } from '../lib/rbac.js';
-import { vendorsRepo, auditRepo } from '../db/repos/index.js';
-import { BadRequest, Forbidden, NotFound } from '../lib/errors.js';
+import { vendorsRepo, auditRepo, orgsRepo, integrationsRepo, jobsRepo } from '../db/repos/index.js';
+import { BadRequest, Forbidden, NotFound, Unauthorized } from '../lib/errors.js';
+import { assertNoPublicHoneypot, auditPublicSubmission } from '../lib/publicAbuse.js';
+import { saveDocumentDataUri } from '../lib/fileStorage.js';
 
 const vendorSchema = z.object({
   name:                 z.string().min(1).max(200),
@@ -26,12 +28,103 @@ const paymentSchema = z.object({
   notes:       z.string().max(2000).optional(),
 });
 
+const portalTokenSchema = z.object({
+  expiresInDays: z.number().int().min(1).max(365).optional().default(30),
+});
+
+const portalInviteSchema = z.object({
+  expiresInDays: z.number().int().min(1).max(365).optional().default(30),
+  message: z.string().max(2000).optional(),
+});
+
+const coiUploadSchema = z.object({
+  fileName: z.string().min(1).max(200),
+  mimeType: z.enum(['application/pdf','image/jpeg','image/png','image/webp']),
+  dataUri: z.string().min(1),
+  expiresAt: z.string().optional(),
+});
+
+function parseVendorMetadata(metadata: string): Record<string, unknown> {
+  try {
+    const parsed = JSON.parse(metadata);
+    return parsed && typeof parsed === 'object' && !Array.isArray(parsed) ? parsed as Record<string, unknown> : {};
+  } catch {
+    return {};
+  }
+}
+
+function publicVendorPortalView(v: NonNullable<ReturnType<typeof vendorsRepo.findById>>) {
+  // Keep the unauthenticated portal useful for assigned vendors, but do not
+  // disclose internal CRM fields such as notes or private contact details.
+  return {
+    id: v.id,
+    event_id: v.event_id,
+    name: v.name,
+    category: v.category,
+    contract_amount_cents: v.contract_amount_cents,
+    amount_paid_cents: v.amount_paid_cents,
+    is_preferred: v.is_preferred,
+    metadata: parseVendorMetadata(v.metadata),
+  };
+}
+
+function portalTokenFrom(req: { query?: unknown; body?: unknown }): string | null {
+  const queryToken = (req.query as { token?: unknown } | undefined)?.token;
+  if (typeof queryToken === 'string' && queryToken.trim()) return queryToken.trim();
+  const bodyToken = (req.body as { token?: unknown } | undefined)?.token;
+  if (typeof bodyToken === 'string' && bodyToken.trim()) return bodyToken.trim();
+  return null;
+}
+
+function assertValidVendorPortalToken(vendorId: string, token: string | null) {
+  if (!token) throw Unauthorized('vendor-portal-token-required');
+  const row = vendorsRepo.verifyPortalToken(vendorId, token);
+  if (!row) throw Unauthorized('vendor-portal-token-invalid-or-expired');
+  return row;
+}
+
+function portalExpiresAt(expiresInDays: number): string {
+  return new Date(Date.now() + expiresInDays * 24 * 60 * 60 * 1000).toISOString();
+}
+
+function appBaseUrl(): string {
+  return (process.env.PUBLIC_APP_URL || process.env.BASE_URL || 'http://localhost:5173').replace(/\/+$/, '');
+}
+
+async function deliverVendorInvite(input: { vendor: NonNullable<ReturnType<typeof vendorsRepo.findById>>; token: string; expiresAt: string; message?: string }) {
+  const url = `${appBaseUrl()}/#/vendor/${input.vendor.id}?token=${encodeURIComponent(input.token)}`;
+  const subject = `Vendor portal invitation for ${input.vendor.name}`;
+  const text = [
+    input.message || `Please complete your vendor onboarding details for the event.`,
+    '',
+    `Open your secure vendor portal: ${url}`,
+    `This link expires ${new Date(input.expiresAt).toLocaleString()}.`,
+  ].join('\n');
+  const html = `<p>${input.message || 'Please complete your vendor onboarding details for the event.'}</p><p><a href="${url}">Open secure vendor portal</a></p><p>This link expires ${new Date(input.expiresAt).toLocaleString()}.</p>`;
+
+  const smtp = integrationsRepo.findByOrgProvider(input.vendor.organization_id, 'email_smtp');
+  if (smtp?.status === 'connected' && input.vendor.email) {
+    jobsRepo.enqueue({ kind: 'email.send', organizationId: input.vendor.organization_id, payload: { integrationId: smtp.id, to: input.vendor.email, subject, text, html, headers: { 'X-WVI-Email-Type': 'vendor-portal-invite' } } });
+    return { channel: 'smtp', queued: true, url };
+  }
+  const webhookUrl = process.env.VENDOR_INVITE_WEBHOOK_URL || process.env.WVI_VENDOR_INVITE_WEBHOOK_URL;
+  if (webhookUrl && input.vendor.email) {
+    const res = await fetch(webhookUrl, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ type: 'vendor_portal.invite', to: input.vendor.email, subject, text, html, url, expiresAt: input.expiresAt }) });
+    if (!res.ok) throw new Error(`vendor invite webhook failed: HTTP ${res.status}`);
+    return { channel: 'webhook', queued: false, url };
+  }
+  return { channel: 'copy_only', queued: false, url };
+}
+
 export async function vendorRoutes(app: FastifyInstance) {
   // ─── Public Portal Endpoints ───────────────────────
-  app.get('/api/portal/vendors/:id/info', async (req, reply) => {
+  app.get('/api/portal/vendors/:id/info', { config: { rateLimit: { max: 60, timeWindow: '1 minute' } } }, async (req, reply) => {
     const { id } = req.params as { id: string };
     const v = vendorsRepo.findById(id);
     if (!v) throw NotFound();
+    assertValidVendorPortalToken(id, portalTokenFrom(req));
+    const currentMeta = parseVendorMetadata(v.metadata);
+    vendorsRepo.update(id, { metadata: { ...currentMeta, lastPortalActivityAt: new Date().toISOString() } });
     
     // We need the event and timeline
     let event = null;
@@ -47,11 +140,21 @@ export async function vendorRoutes(app: FastifyInstance) {
        }
     }
     
+    const org = event ? orgsRepo.findById(event.organization_id) : orgsRepo.findById(v.organization_id);
+    const branding = org ? parseVendorMetadata(org.branding) : {};
+
     return {
-      vendor: v,
+      vendor: publicVendorPortalView(v),
       event,
       timeline,
       layouts,
+      branding: {
+        platformName: typeof branding.platformName === 'string' && branding.platformName.trim() ? branding.platformName : org?.name ?? 'Wedding Venue Intelligence',
+        logoUrl: typeof branding.logoUrl === 'string' ? branding.logoUrl : '',
+        tagline: typeof branding.tagline === 'string' ? branding.tagline : '',
+        brandColor: typeof branding.brandColor === 'string' ? branding.brandColor : '',
+        supportEmail: typeof branding.supportEmail === 'string' ? branding.supportEmail : org?.support_email ?? '',
+      },
     };
   });
 
@@ -60,6 +163,12 @@ export async function vendorRoutes(app: FastifyInstance) {
     const { eventId } = req.query as { eventId?: string };
     if (!can(req.auth!.memberships, { organizationId: orgId }, 'vendors.view')) throw Forbidden();
     return { vendors: vendorsRepo.listForOrg(orgId, { eventId }) };
+  });
+
+  app.get('/api/orgs/:orgId/vendor-portal-tokens', { preHandler: requireAuth }, async (req) => {
+    const { orgId } = req.params as { orgId: string };
+    if (!can(req.auth!.memberships, { organizationId: orgId }, 'vendors.view')) throw Forbidden();
+    return { tokens: vendorsRepo.listPortalTokenSummariesForOrg(orgId) };
   });
 
   app.post('/api/orgs/:orgId/vendors', { preHandler: requireAuth }, async (req, reply) => {
@@ -94,6 +203,60 @@ export async function vendorRoutes(app: FastifyInstance) {
     return reply.code(204).send();
   });
 
+  app.post('/api/vendors/:id/portal-token', { preHandler: requireAuth }, async (req, reply) => {
+    const { id } = req.params as { id: string };
+    const v = vendorsRepo.findById(id);
+    if (!v) throw NotFound();
+    if (!can(req.auth!.memberships, { organizationId: v.organization_id }, 'vendors.invite') &&
+        !can(req.auth!.memberships, { organizationId: v.organization_id }, 'vendors.manage')) throw Forbidden();
+
+    const parsed = portalTokenSchema.safeParse(req.body ?? {});
+    if (!parsed.success) throw BadRequest('invalid-input', parsed.error.issues);
+
+    // Rotation policy: generating a new portal link revokes all prior active links.
+    vendorsRepo.revokePortalTokens(id);
+    const { token, row } = vendorsRepo.createPortalToken(id, {
+      expiresAt: portalExpiresAt(parsed.data.expiresInDays),
+      createdBy: req.auth!.userId,
+    });
+    auditRepo.log({
+      organizationId: v.organization_id, actorUserId: req.auth!.userId, actorLabel: req.auth!.email,
+      action: 'vendor.portal_token.create', targetType: 'vendor', targetId: id, ip: req.ip,
+    });
+    return reply.code(201).send({ token, tokenId: row.id, expiresAt: row.expires_at });
+  });
+
+  app.post('/api/vendors/:id/portal-invite', { preHandler: requireAuth }, async (req, reply) => {
+    const { id } = req.params as { id: string };
+    const v = vendorsRepo.findById(id);
+    if (!v) throw NotFound();
+    if (!can(req.auth!.memberships, { organizationId: v.organization_id }, 'vendors.invite') &&
+        !can(req.auth!.memberships, { organizationId: v.organization_id }, 'vendors.manage')) throw Forbidden();
+    const parsed = portalInviteSchema.safeParse(req.body ?? {});
+    if (!parsed.success) throw BadRequest('invalid-input', parsed.error.issues);
+    vendorsRepo.revokePortalTokens(id);
+    const { token, row } = vendorsRepo.createPortalToken(id, { expiresAt: portalExpiresAt(parsed.data.expiresInDays), createdBy: req.auth!.userId });
+    const delivery = await deliverVendorInvite({ vendor: v, token, expiresAt: row.expires_at, message: parsed.data.message });
+    const meta = parseVendorMetadata(v.metadata);
+    vendorsRepo.update(id, { metadata: { ...meta, portalInvitedAt: new Date().toISOString(), portalInviteDelivery: delivery.channel } });
+    auditRepo.log({ organizationId: v.organization_id, actorUserId: req.auth!.userId, actorLabel: req.auth!.email, action: 'vendor.portal_invite.send', targetType: 'vendor', targetId: id, ip: req.ip, details: { delivery: delivery.channel, queued: delivery.queued } });
+    return reply.code(201).send({ ok: true, tokenId: row.id, expiresAt: row.expires_at, delivery, ...(process.env.NODE_ENV !== 'production' || process.env.TEST_DB === ':memory:' ? { token } : {}) });
+  });
+
+  app.delete('/api/vendors/:id/portal-token', { preHandler: requireAuth }, async (req, reply) => {
+    const { id } = req.params as { id: string };
+    const v = vendorsRepo.findById(id);
+    if (!v) throw NotFound();
+    if (!can(req.auth!.memberships, { organizationId: v.organization_id }, 'vendors.invite') &&
+        !can(req.auth!.memberships, { organizationId: v.organization_id }, 'vendors.manage')) throw Forbidden();
+    vendorsRepo.revokePortalTokens(id);
+    auditRepo.log({
+      organizationId: v.organization_id, actorUserId: req.auth!.userId, actorLabel: req.auth!.email,
+      action: 'vendor.portal_token.revoke', targetType: 'vendor', targetId: id, ip: req.ip,
+    });
+    return reply.code(204).send();
+  });
+
   // Payments
   app.get('/api/vendors/:id/payments', { preHandler: requireAuth }, async (req) => {
     const { id } = req.params as { id: string };
@@ -113,19 +276,20 @@ export async function vendorRoutes(app: FastifyInstance) {
     return reply.code(201).send({ payment: vendorsRepo.addPayment(id, parsed.data) });
   });
 
-  app.post('/api/portal/vendors/:id/questionnaire', async (req, reply) => {
+  app.post('/api/portal/vendors/:id/questionnaire', { config: { rateLimit: { max: 20, timeWindow: '1 minute' } } }, async (req, reply) => {
     const { id } = req.params as { id: string };
     const { vendorsRepo } = await import('../db/repos/index.js');
     const v = vendorsRepo.findById(id);
     if (!v) throw NotFound();
+    assertNoPublicHoneypot(req, { organizationId: v.organization_id, action: 'vendor.questionnaire.blocked', targetType: 'vendor', targetId: id });
+    assertValidVendorPortalToken(id, portalTokenFrom(req));
 
-    const parsed = z.record(z.unknown()).safeParse(req.body);
+    const body = { ...((req.body ?? {}) as Record<string, unknown>) };
+    delete body.token;
+    const parsed = z.record(z.unknown()).safeParse(body);
     if (!parsed.success) throw BadRequest('invalid-input', parsed.error.issues);
 
-    let meta: Record<string, unknown> = {};
-    try {
-      meta = JSON.parse(v.metadata);
-    } catch { }
+    const meta = parseVendorMetadata(v.metadata);
 
     meta.questionnaire = {
       ...(meta.questionnaire as Record<string, unknown> || {}),
@@ -134,13 +298,45 @@ export async function vendorRoutes(app: FastifyInstance) {
     };
 
     const updated = vendorsRepo.update(id, { metadata: meta });
-    return { ok: true, vendor: updated };
+    auditPublicSubmission(req, {
+      organizationId: v.organization_id,
+      action: 'vendor.questionnaire.submit',
+      targetType: 'vendor',
+      targetId: id,
+      details: { fields: Object.keys(parsed.data).filter(k => k !== 'token') },
+    });
+    return { ok: true, vendor: updated ? publicVendorPortalView(updated) : null };
   });
 
-  app.get('/api/portal/vendors/:id/messages', async (req) => {
+  app.post('/api/portal/vendors/:id/coi-upload', { config: { rateLimit: { max: 10, timeWindow: '1 minute' } } }, async (req, reply) => {
     const { id } = req.params as { id: string };
     const v = vendorsRepo.findById(id);
     if (!v) throw NotFound();
+    assertNoPublicHoneypot(req, { organizationId: v.organization_id, action: 'vendor.coi_upload.blocked', targetType: 'vendor', targetId: id });
+    assertValidVendorPortalToken(id, portalTokenFrom(req));
+    const parsed = coiUploadSchema.extend({ token: z.string().optional() }).safeParse(req.body);
+    if (!parsed.success) throw BadRequest('invalid-input', parsed.error.issues);
+    const url = saveDocumentDataUri(parsed.data.dataUri, `vendor_coi_${id}`);
+    const meta = parseVendorMetadata(v.metadata);
+    const updated = vendorsRepo.update(id, { metadata: {
+      ...meta,
+      coiReceived: true,
+      coiLink: url,
+      coiFileName: parsed.data.fileName,
+      coiMimeType: parsed.data.mimeType,
+      coiExpirationDate: parsed.data.expiresAt || (meta.coiExpirationDate as string | undefined),
+      coiUploadedAt: new Date().toISOString(),
+      coiVerificationStatus: 'pending_review',
+    } });
+    auditPublicSubmission(req, { organizationId: v.organization_id, action: 'vendor.coi.upload', targetType: 'vendor', targetId: id, details: { fileName: parsed.data.fileName, mimeType: parsed.data.mimeType } });
+    return reply.code(201).send({ ok: true, url, vendor: updated ? publicVendorPortalView(updated) : null });
+  });
+
+  app.get('/api/portal/vendors/:id/messages', { config: { rateLimit: { max: 60, timeWindow: '1 minute' } } }, async (req) => {
+    const { id } = req.params as { id: string };
+    const v = vendorsRepo.findById(id);
+    if (!v) throw NotFound();
+    assertValidVendorPortalToken(id, portalTokenFrom(req));
     if (!v.event_id) return { messages: [] };
 
     const { messagesRepo } = await import('../db/repos/index.js');
@@ -150,14 +346,17 @@ export async function vendorRoutes(app: FastifyInstance) {
     };
   });
 
-  app.post('/api/portal/vendors/:id/messages', async (req, reply) => {
+  app.post('/api/portal/vendors/:id/messages', { config: { rateLimit: { max: 20, timeWindow: '1 minute' } } }, async (req, reply) => {
     const { id } = req.params as { id: string };
     const v = vendorsRepo.findById(id);
     if (!v) throw NotFound();
+    assertNoPublicHoneypot(req, { organizationId: v.organization_id, action: 'vendor.message.blocked', targetType: 'vendor', targetId: id });
+    assertValidVendorPortalToken(id, portalTokenFrom(req));
     if (!v.event_id) throw BadRequest('Vendor is not linked to any event.');
 
     const parsed = z.object({
       body: z.string().min(1).max(10000),
+      token: z.string().optional(),
     }).safeParse(req.body);
     if (!parsed.success) throw BadRequest('invalid-input', parsed.error.issues);
 
@@ -168,6 +367,13 @@ export async function vendorRoutes(app: FastifyInstance) {
       senderId: v.id,
       senderRole: 'vendor',
       body: parsed.data.body
+    });
+    auditPublicSubmission(req, {
+      organizationId: v.organization_id,
+      action: 'vendor.message.send',
+      targetType: 'vendor',
+      targetId: id,
+      details: { threadId },
     });
 
     return reply.code(201).send({ message });

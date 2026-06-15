@@ -16,6 +16,9 @@ const taskSchema = z.object({
   priority:         z.enum(['low','medium','high','critical']).optional(),
   dueAt:            z.string().optional(),
   estimatedMinutes: z.number().int().min(0).optional(),
+  assigneeName:     z.string().max(160).optional(),
+  assigneePhone:    z.string().max(40).optional(),
+  assigneeEmail:    z.string().email().optional().or(z.literal('')),
   assignedStaff:    z.array(z.string()).optional(),
   assignedAreas:    z.array(z.string()).optional(),
   tags:             z.array(z.string()).optional(),
@@ -43,6 +46,11 @@ const shiftSchema = z.object({
   endsAt:   z.string().min(1),
   notes:    z.string().max(2000).optional(),
   eventId:  z.string().optional(),
+  contactName: z.string().max(160).optional(),
+  contactPhone: z.string().max(40).optional(),
+  contactEmail: z.string().email().optional().or(z.literal('')),
+  radioChannel: z.string().max(80).optional(),
+  handoffNotes: z.string().max(4000).optional(),
 });
 
 export async function staffRoutes(app: FastifyInstance) {
@@ -134,6 +142,18 @@ export async function staffRoutes(app: FastifyInstance) {
       broadcastSSE(shift.organization_id, 'staff.shift_deleted', { shiftId: (req.params as { id: string }).id }, req.auth!.userId);
     }
     return reply.code(204).send();
+  });
+
+  app.patch('/api/staff/shifts/:id', { preHandler: requireAuth }, async (req) => {
+    const { id } = req.params as { id: string };
+    const shift = staffShiftsRepo.findById(id);
+    if (!shift) throw NotFound();
+    if (!can(req.auth!.memberships, { organizationId: shift.organization_id }, 'staff.manage')) throw Forbidden();
+    const parsed = shiftSchema.partial().safeParse(req.body);
+    if (!parsed.success) throw BadRequest('invalid-input', parsed.error.issues);
+    const updated = staffShiftsRepo.update(id, parsed.data);
+    broadcastSSE(shift.organization_id, 'staff.shift_updated', { shiftId: id, staffId: shift.staff_id, role: shift.role }, req.auth!.userId);
+    return { shift: updated };
   });
 
   app.post('/api/staff/shifts/:id/clock-in', { preHandler: requireAuth }, async (req) => {

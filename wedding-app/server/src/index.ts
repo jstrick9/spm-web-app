@@ -41,6 +41,7 @@ import { intelligenceRoutes }   from "./routes/intelligence.js";
 import { feedbackRoutes }       from "./routes/feedback.js";
 import { lifecycleEmailRoutes } from "./routes/lifecycleEmails.js";
 import { paymentRoutes }        from "./routes/payments.js";
+import { coupleRoutes }         from "./routes/couple.js";
 
 import { db } from './db/database.js';
 import { rolesRepo } from './db/repos/index.js';
@@ -61,7 +62,7 @@ db.exec(`CREATE TABLE IF NOT EXISTS schema_version (
   version INTEGER PRIMARY KEY, applied_at TEXT NOT NULL DEFAULT (datetime('now'))
 );`);
 
-// Seed/refresh the 7 system roles into the roles table on every boot.
+// Seed/refresh the system roles into the roles table on every boot.
 // Idempotent: re-syncs permission grants if the code-side definitions
 // changed (e.g. a deploy added a new permission to the 'admin' system role).
 // Silently skipped if the roles table doesn't exist yet (fresh boot before
@@ -197,6 +198,7 @@ export async function buildApp() {
   await app.register(intelligenceRoutes);
   await app.register(feedbackRoutes);
   await app.register(lifecycleEmailRoutes);
+  await app.register(coupleRoutes);
   // Payment routes register their own raw-body parser for webhook signature
   // verification; encapsulated so it doesn't affect other routes' JSON parsing.
   await app.register(paymentRoutes);

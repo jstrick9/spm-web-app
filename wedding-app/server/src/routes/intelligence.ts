@@ -6,11 +6,12 @@ import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
 import { requireAuth } from '../middleware/auth.js';
 import { can } from '../lib/rbac.js';
-import { eventsRepo, auditRepo, vendorsRepo } from '../db/repos/index.js';
+import { eventsRepo, auditRepo, vendorsRepo, healthActionStatesRepo } from '../db/repos/index.js';
 import { vendorRatingsRepo } from '../db/repos/vendorRatings.js';
 import { emailTemplatesRepo } from '../db/repos/emailTemplates.js';
 import { paymentLinksRepo } from '../db/repos/paymentLinks.js';
 import { recommendationsRepo } from '../db/repos/recommendations.js';
+import { healthCommandRepo } from '../db/repos/healthCommand.js';
 import { forecastRepo } from '../db/repos/forecast.js';
 import { vendorScoringRepo } from '../db/repos/vendorScoring.js';
 import { riskRepo } from '../db/repos/risk.js';
@@ -76,6 +77,23 @@ export async function intelligenceRoutes(app: FastifyInstance) {
     return reply.code(201).send({ template });
   });
 
+  app.patch('/api/email-templates/:id', { preHandler: requireAuth }, async (req) => {
+    const { id } = req.params as { id: string };
+    const template = emailTemplatesRepo.findById(id);
+    if (!template) throw NotFound();
+    if (!can(req.auth!.memberships, { organizationId: template.organization_id }, 'invites.manage')) throw Forbidden();
+    const parsed = z.object({
+      name: z.string().min(1).max(100).optional(),
+      subject: z.string().min(1).max(200).optional(),
+      bodyHtml: z.string().max(50000).optional(),
+      bodyText: z.string().max(10000).optional(),
+      category: z.enum(['save_the_date','invitation','rsvp_reminder','thank_you','logistics','custom']).optional(),
+    }).safeParse(req.body);
+    if (!parsed.success) throw BadRequest('invalid-input', parsed.error.issues);
+    const updated = emailTemplatesRepo.update(id, parsed.data);
+    return { template: updated };
+  });
+
   app.delete('/api/email-templates/:id', { preHandler: requireAuth }, async (req, reply) => {
     const { id } = req.params as { id: string };
     const template = emailTemplatesRepo.findById(id);
@@ -96,7 +114,7 @@ export async function intelligenceRoutes(app: FastifyInstance) {
     const sampleData: Record<string, string> = {
       guest_name: 'Jane Smith', event_title: 'Smith Wedding',
       event_date: 'September 12, 2026', table_assignment: 'Table 3',
-      rsvp_deadline: 'August 1, 2026', venue_name: 'Seven Paths Manor',
+      rsvp_deadline: 'August 1, 2026', venue_name: 'Your Venue',
       portal_link: 'https://venue.example.com/#/portal/demo',
     };
     return { rendered: emailTemplatesRepo.render(template, sampleData) };
@@ -141,9 +159,24 @@ export async function intelligenceRoutes(app: FastifyInstance) {
     if (!can(req.auth!.memberships, { organizationId: payment.organization_id }, 'budget.manage')) throw Forbidden();
     const parsed = z.object({
       status: z.enum(['pending','processing','completed','failed','refunded']),
+      metadata: z.record(z.any()).optional(),
+      reconciliationNote: z.string().max(2000).optional(),
+      partialPaidCents: z.number().int().min(0).optional(),
+      refundedCents: z.number().int().min(0).optional(),
     }).safeParse(req.body);
     if (!parsed.success) throw BadRequest('invalid-input', parsed.error.issues);
-    return { payment: paymentLinksRepo.updateStatus(id, parsed.data.status, parsed.data.status === 'completed' ? new Date().toISOString() : undefined) };
+    return { payment: paymentLinksRepo.updateStatus(
+      id,
+      parsed.data.status,
+      parsed.data.status === 'completed' ? new Date().toISOString() : undefined,
+      {
+        ...(parsed.data.metadata ?? {}),
+        reconciliationNote: parsed.data.reconciliationNote,
+        partialPaidCents: parsed.data.partialPaidCents,
+        refundedCents: parsed.data.refundedCents,
+        reconciledAt: new Date().toISOString(),
+      },
+    ) };
   });
 
   // ═══ RECOMMENDATIONS ENGINE ═══════════════════════════
@@ -151,6 +184,45 @@ export async function intelligenceRoutes(app: FastifyInstance) {
     const { orgId } = req.params as { orgId: string };
     if (!can(req.auth!.memberships, { organizationId: orgId }, 'reports.view')) throw Forbidden();
     return { recommendations: recommendationsRepo.forOrg(orgId) };
+  });
+
+  // ═══ EVENT HEALTH COMMAND CENTER ══════════════════════
+  app.get('/api/orgs/:orgId/health-command-center', { preHandler: requireAuth }, async (req) => {
+    const { orgId } = req.params as { orgId: string };
+    if (!can(req.auth!.memberships, { organizationId: orgId }, 'reports.view')) throw Forbidden();
+    return { commandCenter: healthCommandRepo.forOrg(orgId) };
+  });
+
+  app.patch('/api/orgs/:orgId/health-command-center/actions/:actionId', { preHandler: requireAuth }, async (req) => {
+    const { orgId, actionId } = req.params as { orgId: string; actionId: string };
+    if (!can(req.auth!.memberships, { organizationId: orgId }, 'reports.view')) throw Forbidden();
+    const parsed = z.object({
+      status: z.enum(['open', 'acknowledged', 'snoozed', 'resolved']),
+      snoozedUntil: z.string().nullable().optional(),
+      assignedTo: z.string().nullable().optional(),
+      note: z.string().max(2000).nullable().optional(),
+    }).safeParse(req.body);
+    if (!parsed.success) throw BadRequest('invalid-input', parsed.error.issues);
+    const state = healthActionStatesRepo.upsert({
+      organizationId: orgId,
+      actionId: decodeURIComponent(actionId),
+      status: parsed.data.status,
+      snoozedUntil: parsed.data.snoozedUntil,
+      assignedTo: parsed.data.assignedTo,
+      note: parsed.data.note,
+      updatedBy: req.auth!.userId,
+    });
+    auditRepo.log({
+      organizationId: orgId,
+      actorUserId: req.auth!.userId,
+      actorLabel: req.auth!.email,
+      action: 'health_action.state.update',
+      targetType: 'health_action',
+      targetId: decodeURIComponent(actionId),
+      details: { status: parsed.data.status, snoozedUntil: parsed.data.snoozedUntil, assignedTo: parsed.data.assignedTo },
+      ip: req.ip,
+    });
+    return { state };
   });
 
   // ═══ PREDICTIVE FORECAST ══════════════════════════════

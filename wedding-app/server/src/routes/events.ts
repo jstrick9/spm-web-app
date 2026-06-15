@@ -23,6 +23,7 @@ const createEventSchema = z.object({
   leadSource: z.enum(['website','referral','the_knot','weddingwire','facebook','instagram','google','walk_in','other']).optional(),
   rsvpDeadline: z.string().optional(),
   venueId: z.string().optional(),
+  metadata: z.record(z.any()).optional(),
 });
 
 const updateEventSchema = createEventSchema.extend({
@@ -35,6 +36,7 @@ const subEventSchema = z.object({
   endsAt:      z.string().optional(),
   venueId:     z.string().optional(),
   inviteOnly:  z.boolean().optional(),
+  metadata:    z.record(z.unknown()).optional(),
 });
 
 export async function eventRoutes(app: FastifyInstance) {
@@ -107,6 +109,10 @@ export async function eventRoutes(app: FastifyInstance) {
       guestCount: parsed.data.guestCount,
       budgetCents: parsed.data.budgetCents,
       primaryContactUserId: parsed.data.primaryContactUserId,
+      leadSource: parsed.data.leadSource,
+      rsvpDeadline: parsed.data.rsvpDeadline,
+      venueId: parsed.data.venueId,
+      metadata: parsed.data.metadata,
       createdBy: req.auth!.userId,
     });
     auditRepo.log({
@@ -242,6 +248,21 @@ export async function eventRoutes(app: FastifyInstance) {
     if (!parsed.success) throw BadRequest('invalid-input', parsed.error.issues);
     const subEvent = subEventsRepo.create({ eventId, ...parsed.data });
     return reply.code(201).send({ subEvent });
+  });
+
+  app.patch('/api/sub-events/:subId', { preHandler: requireAuth }, async (req) => {
+    const { subId } = req.params as { subId: string };
+    const sub = subEventsRepo.findById(subId);
+    if (!sub) throw NotFound();
+    const ev = eventsRepo.findById(sub.event_id);
+    if (!ev) throw NotFound();
+    const orgMap = eventsRepo.orgMapForUser(req.auth!.userId);
+    if (!can(req.auth!.memberships, { eventId: ev.id }, 'events.edit', orgMap)) throw Forbidden();
+    const parsed = subEventSchema.partial().safeParse(req.body);
+    if (!parsed.success) throw BadRequest('invalid-input', parsed.error.issues);
+    const updated = subEventsRepo.update(subId, parsed.data as never);
+    auditRepo.log({ organizationId: ev.organization_id, actorUserId: req.auth!.userId, actorLabel: req.auth!.email, action: 'sub_event.update', targetType: 'sub_event', targetId: subId, ip: req.ip, details: { fields: Object.keys(parsed.data) } });
+    return { subEvent: updated };
   });
 
   app.delete('/api/sub-events/:subId', { preHandler: requireAuth }, async (req, reply) => {

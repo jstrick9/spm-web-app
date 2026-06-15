@@ -19,7 +19,7 @@ beforeEach(() => {
     'budget_items','webhook_deliveries','webhooks','push_subscriptions','sse_events',
     'audit_logs','direct_messages','event_answers','event_questions',
     'staff_shifts','staff_areas','staff_tasks','timeline_events',
-    'vendor_payments','vendors','decor_packages','decor_arrangements',
+    'vendor_portal_tokens','vendor_payments','vendors','decor_packages','decor_arrangements',
     'decor_categories','decor_items','guest_portal_configs','rsvp_submissions',
     'guest_sub_event_invitations','guests','layout_versions','layouts',
     'catalog_items','venues','sub_events','event_memberships','events',
@@ -148,6 +148,54 @@ describe('Vendors: edge cases', () => {
     const cr = await req(s.token, 'POST', `/api/orgs/${s.orgId}/vendors`, { name: 'ToDelete', eventId: s.eventId });
     const del = await req(s.token, 'DELETE', `/api/vendors/${cr.json().vendor.id}`);
     expect(del.statusCode).toBe(204);
+  });
+
+  it('requires signed vendor portal token and redacts private fields', async () => {
+    const s = await setup();
+    const cr = await req(s.token, 'POST', `/api/orgs/${s.orgId}/vendors`, {
+      name: 'Secure Vendor', eventId: s.eventId, email: 'private@example.com', phone: '555-1234', notes: 'internal-only',
+      metadata: { questionnaire: { arrivalTime: '12:00' } },
+    });
+    const vendorId = cr.json().vendor.id;
+
+    const noToken = await app.inject({ method: 'GET', url: `/api/portal/vendors/${vendorId}/info` });
+    expect(noToken.statusCode).toBe(401);
+
+    const tokenRes = await req(s.token, 'POST', `/api/vendors/${vendorId}/portal-token`, { expiresInDays: 7 });
+    expect(tokenRes.statusCode).toBe(201);
+    expect(tokenRes.json().token).toBeTruthy();
+
+    const tokenList = await req(s.token, 'GET', `/api/orgs/${s.orgId}/vendor-portal-tokens`);
+    expect(tokenList.statusCode).toBe(200);
+    expect(tokenList.json().tokens.find((t: any) => t.vendor_id === vendorId && t.is_active === 1)).toBeTruthy();
+    expect(tokenList.json().tokens[0].token_hash).toBeUndefined();
+
+    const info = await app.inject({ method: 'GET', url: `/api/portal/vendors/${vendorId}/info?token=${encodeURIComponent(tokenRes.json().token)}` });
+    expect(info.statusCode).toBe(200);
+    expect(info.json().vendor.name).toBe('Secure Vendor');
+    expect(info.json().vendor.email).toBeUndefined();
+    expect(info.json().vendor.phone).toBeUndefined();
+    expect(info.json().vendor.notes).toBeUndefined();
+  });
+
+  it('revokes and expires vendor portal tokens', async () => {
+    const s = await setup();
+    const cr = await req(s.token, 'POST', `/api/orgs/${s.orgId}/vendors`, { name: 'Token Vendor', eventId: s.eventId });
+    const vendorId = cr.json().vendor.id;
+
+    const tokenRes = await req(s.token, 'POST', `/api/vendors/${vendorId}/portal-token`, { expiresInDays: 7 });
+    const token = tokenRes.json().token;
+
+    const revoke = await req(s.token, 'DELETE', `/api/vendors/${vendorId}/portal-token`);
+    expect(revoke.statusCode).toBe(204);
+    const revokedInfo = await app.inject({ method: 'GET', url: `/api/portal/vendors/${vendorId}/info?token=${encodeURIComponent(token)}` });
+    expect(revokedInfo.statusCode).toBe(401);
+
+    const tokenRes2 = await req(s.token, 'POST', `/api/vendors/${vendorId}/portal-token`, { expiresInDays: 7 });
+    const token2 = tokenRes2.json().token;
+    db.prepare(`UPDATE vendor_portal_tokens SET expires_at = '2000-01-01T00:00:00.000Z' WHERE vendor_id = ?`).run(vendorId);
+    const expiredInfo = await app.inject({ method: 'GET', url: `/api/portal/vendors/${vendorId}/info?token=${encodeURIComponent(token2)}` });
+    expect(expiredInfo.statusCode).toBe(401);
   });
 });
 

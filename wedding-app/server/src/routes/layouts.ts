@@ -2,7 +2,8 @@ import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
 import { requireAuth } from '../middleware/auth.js';
 import { can } from '../lib/rbac.js';
-import { auditRepo, eventsRepo, layoutsRepo } from '../db/repos/index.js';
+import { auditRepo, eventsRepo, layoutOpsRepo, layoutsRepo } from '../db/repos/index.js';
+import { saveDataUri } from '../lib/fileStorage.js';
 import { BadRequest, Forbidden, NotFound, HttpError } from '../lib/errors.js';
 
 const createSchema = z.object({
@@ -21,6 +22,39 @@ const saveSchema = z.object({
   expectedRevision:  z.number().int().min(1).optional(),
   approvalStatus:    z.enum(['draft','pending','approved','rejected']).optional(),
 });
+
+const floorWalkSchema = z.object({
+  checkId: z.string().min(1).max(80),
+  status: z.enum(['pending', 'verified', 'issue']),
+  note: z.string().max(2000).optional(),
+});
+const varianceEvidenceSchema = z.object({
+  note: z.string().min(1).max(4000),
+  photoDataUri: z.string().optional(),
+  photoUrl: z.string().optional(),
+});
+const rainPlanSchema = z.object({
+  active: z.boolean(),
+  note: z.string().max(2000).optional(),
+});
+const vendorInspectionSchema = z.object({
+  vendorId: z.string().optional(),
+  status: z.enum(['pending', 'verified', 'issue']),
+  zoneLabel: z.string().max(200).optional(),
+  note: z.string().max(2000).optional(),
+});
+const setupPacketSchema = z.object({
+  audience: z.enum(['setup_crew', 'vendors', 'planner', 'fire_marshal']).default('setup_crew'),
+  payload: z.record(z.unknown()).optional(),
+  expiresAt: z.string().optional(),
+});
+
+function requireLayoutAccess(layoutId: string, memberships: any[], permission: 'layouts.view' | 'layouts.edit') {
+  const layout = layoutsRepo.findById(layoutId);
+  if (!layout) throw NotFound();
+  if (!can(memberships, { organizationId: layout.organization_id }, permission)) throw Forbidden();
+  return layout;
+}
 
 export async function layoutRoutes(app: FastifyInstance) {
   app.get('/api/orgs/:orgId/layouts', { preHandler: requireAuth }, async (req) => {
@@ -98,6 +132,121 @@ export async function layoutRoutes(app: FastifyInstance) {
     if (!layout) throw NotFound();
     if (!can(req.auth!.memberships, { organizationId: layout.organization_id }, 'layouts.view')) throw Forbidden();
     return { versions: layoutsRepo.listVersions(id) };
+  });
+
+  app.get('/api/layouts/:id/ops', { preHandler: requireAuth }, async (req) => {
+    const { id } = req.params as { id: string };
+    requireLayoutAccess(id, req.auth!.memberships, 'layouts.view');
+    return { ops: layoutOpsRepo.listForLayout(id) };
+  });
+
+  app.post('/api/layouts/:id/floor-walk-checks', { preHandler: requireAuth }, async (req, reply) => {
+    const { id } = req.params as { id: string };
+    const layout = requireLayoutAccess(id, req.auth!.memberships, 'layouts.edit');
+    const parsed = floorWalkSchema.safeParse(req.body);
+    if (!parsed.success) throw BadRequest('invalid-input', parsed.error.issues);
+    const check = layoutOpsRepo.setFloorWalkCheck({
+      orgId: layout.organization_id,
+      eventId: layout.event_id,
+      layoutId: id,
+      checkId: parsed.data.checkId,
+      status: parsed.data.status,
+      note: parsed.data.note,
+      actorId: req.auth!.userId,
+    });
+    return reply.code(201).send({ check });
+  });
+
+  app.post('/api/layouts/:id/variance-evidence', { preHandler: requireAuth }, async (req, reply) => {
+    const { id } = req.params as { id: string };
+    const layout = requireLayoutAccess(id, req.auth!.memberships, 'layouts.edit');
+    const parsed = varianceEvidenceSchema.safeParse(req.body);
+    if (!parsed.success) throw BadRequest('invalid-input', parsed.error.issues);
+    const photoUrl = parsed.data.photoDataUri ? saveDataUri(parsed.data.photoDataUri, `layout_variance_${id}`) : parsed.data.photoUrl;
+    const evidence = layoutOpsRepo.addVarianceEvidence({
+      orgId: layout.organization_id,
+      eventId: layout.event_id,
+      layoutId: id,
+      note: parsed.data.note,
+      photoUrl,
+      actorId: req.auth!.userId,
+    });
+    return reply.code(201).send({ evidence });
+  });
+
+  app.post('/api/layouts/:id/rain-plan', { preHandler: requireAuth }, async (req, reply) => {
+    const { id } = req.params as { id: string };
+    const layout = requireLayoutAccess(id, req.auth!.memberships, 'layouts.edit');
+    const parsed = rainPlanSchema.safeParse(req.body);
+    if (!parsed.success) throw BadRequest('invalid-input', parsed.error.issues);
+    const activation = layoutOpsRepo.activateRainPlan({
+      orgId: layout.organization_id,
+      eventId: layout.event_id,
+      layoutId: id,
+      active: parsed.data.active,
+      note: parsed.data.note,
+      actorId: req.auth!.userId,
+    });
+    return reply.code(201).send({ activation });
+  });
+
+  app.post('/api/layouts/:id/vendor-zone-inspections', { preHandler: requireAuth }, async (req, reply) => {
+    const { id } = req.params as { id: string };
+    const layout = requireLayoutAccess(id, req.auth!.memberships, 'layouts.edit');
+    const parsed = vendorInspectionSchema.safeParse(req.body);
+    if (!parsed.success) throw BadRequest('invalid-input', parsed.error.issues);
+    const inspection = layoutOpsRepo.setVendorZoneInspection({
+      orgId: layout.organization_id,
+      eventId: layout.event_id,
+      layoutId: id,
+      vendorId: parsed.data.vendorId,
+      status: parsed.data.status,
+      zoneLabel: parsed.data.zoneLabel,
+      note: parsed.data.note,
+      actorId: req.auth!.userId,
+    });
+    return reply.code(201).send({ inspection });
+  });
+
+  app.post('/api/layouts/:id/setup-packet', { preHandler: requireAuth }, async (req, reply) => {
+    const { id } = req.params as { id: string };
+    const layout = requireLayoutAccess(id, req.auth!.memberships, 'layouts.view');
+    const parsed = setupPacketSchema.safeParse(req.body);
+    if (!parsed.success) throw BadRequest('invalid-input', parsed.error.issues);
+    const packet = layoutOpsRepo.upsertSetupPacket({
+      orgId: layout.organization_id,
+      eventId: layout.event_id,
+      layoutId: id,
+      audience: parsed.data.audience,
+      payload: parsed.data.payload ?? {},
+      expiresAt: parsed.data.expiresAt,
+      actorId: req.auth!.userId,
+    });
+    return reply.code(201).send({ packet, publicUrl: `/api/public/layout-packets/${packet.token}` });
+  });
+
+  app.get('/api/public/layout-packets/:token', async (req) => {
+    const { token } = req.params as { token: string };
+    const packet = layoutOpsRepo.findPacketByToken(token);
+    if (!packet) throw NotFound();
+    const layout = layoutsRepo.findById(packet.layout_id);
+    if (!layout) throw NotFound();
+    let payload: Record<string, unknown> = {};
+    try { payload = JSON.parse(packet.payload || '{}'); } catch {}
+    return {
+      packet: {
+        id: packet.id,
+        audience: packet.audience,
+        layoutId: packet.layout_id,
+        eventId: packet.event_id,
+        layoutName: layout.name,
+        layoutRevision: layout.revision,
+        approvalStatus: layout.approval_status,
+        payload,
+        createdAt: packet.created_at,
+        updatedAt: packet.updated_at,
+      },
+    };
   });
 
   app.delete('/api/layouts/:id', { preHandler: requireAuth }, async (req, reply) => {

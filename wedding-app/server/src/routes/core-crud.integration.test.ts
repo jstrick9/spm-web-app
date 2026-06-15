@@ -6,6 +6,7 @@ import './../test/setup.js';
 import { describe, it, expect, beforeAll, beforeEach } from 'vitest';
 import { db } from '../db/database.js';
 import { buildApp } from '../index.js';
+import { guestsRepo } from '../db/repos/index.js';
 import type { FastifyInstance } from 'fastify';
 import { rolesRepo } from '../db/repos/index.js';
 
@@ -199,10 +200,16 @@ describe('Public portal flow', () => {
 
     await req(s.token, 'POST', `/api/events/${eventId}/guests`, { fullName: 'Portal Guest' });
 
-    // No auth needed for portal
-    const pr = await app.inject({ method: 'GET', url: `/api/portal/${eventId}/info` });
+    // Generic portal does not expose the full guest list by default.
+    const generic = await app.inject({ method: 'GET', url: `/api/portal/${eventId}/info` });
+    expect(generic.statusCode).toBe(200);
+    expect(generic.json().event.title).toBe('Portal Test');
+    expect(generic.json().identity.mode).toBe('lookup_required');
+    expect(generic.json().guests).toHaveLength(0);
+    const guest = db.prepare(`SELECT id FROM guests WHERE event_id = ? LIMIT 1`).get(eventId) as { id: string };
+    const token = guestsRepo.rotatePortalToken(guest.id);
+    const pr = await app.inject({ method: 'GET', url: `/api/portal/${eventId}/info?guest=${guest.id}&token=${token}` });
     expect(pr.statusCode).toBe(200);
-    expect(pr.json().event.title).toBe('Portal Test');
     expect(pr.json().guests).toHaveLength(1);
     expect(pr.json().guests[0].fullName).toBe('Portal Guest');
   });

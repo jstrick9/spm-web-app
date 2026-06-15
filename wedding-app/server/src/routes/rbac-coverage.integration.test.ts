@@ -138,12 +138,14 @@ describe('System role grants', () => {
     }
   });
 
-  it('couple has budget.view but NOT budget.manage', () => {
+  it('couple uses client-safe event-scoped finance instead of generic budget/contracts access', () => {
     const coupleDef = SYSTEM_ROLE_DEFINITIONS.find(r => r.key === 'couple')!;
-    expect(coupleDef.permissions).toContain('budget.view');
+    expect(coupleDef.permissions).not.toContain('budget.view');
     expect(coupleDef.permissions).not.toContain('budget.manage');
-    expect(coupleDef.permissions).toContain('contracts.sign');
+    expect(coupleDef.permissions).not.toContain('contracts.view');
+    expect(coupleDef.permissions).not.toContain('contracts.sign');
     expect(coupleDef.permissions).not.toContain('contracts.manage');
+    expect(coupleDef.permissions).toContain('events.view');
   });
 
   it('staff has check-in + timeline + messaging but NOT admin', () => {

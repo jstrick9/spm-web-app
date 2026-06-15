@@ -184,3 +184,52 @@ describe('Intelligence — recommendations', () => {
     expect(res.statusCode).toBe(403);
   });
 });
+
+describe('Intelligence — Event Health Command Center', () => {
+  it('consolidates risk, RSVP, timeline, vendor, guest identity, and forecast signals into actions', async () => {
+    const s = await makeOrg('cmd');
+
+    const soon = new Date(Date.now() + 10 * 86_400_000).toISOString().slice(0, 10);
+    const overdue = new Date(Date.now() - 2 * 86_400_000).toISOString().slice(0, 10);
+    db.prepare(`UPDATE events SET start_date = ?, rsvp_deadline = ?, budget_cents = ? WHERE id = ?`)
+      .run(soon, overdue, 1000000, s.eventId);
+
+    // RSVP lag + guest identity duplicate cluster.
+    await req(s.token, 'POST', `/api/events/${s.eventId}/guests`, { fullName: 'Alex Guest', email: 'alex@example.com' });
+    await req(s.token, 'POST', `/api/events/${s.eventId}/guests`, { fullName: 'Alex Guest', email: 'alex@example.com' });
+    await req(s.token, 'POST', `/api/events/${s.eventId}/guests`, { fullName: 'Pending Guest 3' });
+
+    // Low vendor reliability.
+    const vendorRes = await req(s.token, 'POST', `/api/orgs/${s.orgId}/vendors`, {
+      name: 'Risky DJ', category: 'music', eventId: s.eventId, contractAmountCents: 250000,
+    });
+    const vendorId = vendorRes.json().vendor.id as string;
+    await req(s.token, 'POST', `/api/vendors/${vendorId}/ratings`, {
+      eventId: s.eventId, rating: 1, qualityScore: 1, timelinessScore: 1, communicationScore: 1,
+    });
+
+    const res = await req(s.token, 'GET', `/api/orgs/${s.orgId}/health-command-center`);
+    expect(res.statusCode).toBe(200);
+    const cc = res.json().commandCenter;
+    expect(cc.summary.openEvents).toBeGreaterThanOrEqual(1);
+    expect(cc.summary.rsvpLagEvents).toBeGreaterThanOrEqual(1);
+    expect(cc.summary.timelineIncompleteEvents).toBeGreaterThanOrEqual(1);
+    expect(cc.summary.lowReliabilityVendors).toBeGreaterThanOrEqual(1);
+    expect(cc.summary.guestDuplicateClusters).toBeGreaterThanOrEqual(1);
+
+    const sources = cc.actions.map((a: any) => a.source);
+    expect(sources).toContain('rsvp_lag');
+    expect(sources).toContain('timeline_completeness');
+    expect(sources).toContain('vendor_reliability');
+    expect(sources).toContain('guest_identity');
+    expect(cc.actions[0]).toHaveProperty('priority');
+    expect(cc.actions[0]).toHaveProperty('href');
+  });
+
+  it('blocks cross-org command center access', async () => {
+    const a = await makeOrg('cmdA');
+    const b = await makeOrg('cmdB');
+    const res = await req(a.token, 'GET', `/api/orgs/${b.orgId}/health-command-center`);
+    expect(res.statusCode).toBe(403);
+  });
+});

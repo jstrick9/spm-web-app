@@ -69,6 +69,34 @@ describe('Staff RBAC Integration', () => {
     expect(staffData.tasks[0].title).toBe('Staff Task');
   });
 
+  it('persists day-of task contact fields for quick call and SMS actions', async () => {
+    const createRes = await app.inject({
+      method: 'POST',
+      url: `/api/orgs/${orgId}/staff/tasks`,
+      headers: { authorization: `Bearer ${adminToken}` },
+      payload: {
+        title: 'Captain radio check',
+        assigneeName: 'Day-of Captain',
+        assigneePhone: '555-210-9999',
+        assigneeEmail: 'captain@example.com',
+      },
+    });
+    expect(createRes.statusCode).toBe(201);
+    const created = JSON.parse(createRes.payload);
+    expect(created.task.assignee_name).toBe('Day-of Captain');
+    expect(created.task.assignee_phone).toBe('555-210-9999');
+    expect(created.task.assignee_email).toBe('captain@example.com');
+
+    const updateRes = await app.inject({
+      method: 'PATCH',
+      url: `/api/staff/tasks/${created.task.id}`,
+      headers: { authorization: `Bearer ${adminToken}` },
+      payload: { assigneePhone: '555-210-0001' },
+    });
+    expect(updateRes.statusCode).toBe(200);
+    expect(JSON.parse(updateRes.payload).task.assignee_phone).toBe('555-210-0001');
+  });
+
   it('allows staff to clock in and out of their assigned shifts', async () => {
     const { staffShiftsRepo } = await import('../db/repos/index.js');
     const shift = staffShiftsRepo.create(orgId, {

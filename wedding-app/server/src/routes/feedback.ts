@@ -4,6 +4,7 @@ import { requireAuth } from '../middleware/auth.js';
 import { can } from '../lib/rbac.js';
 import { eventsRepo } from '../db/repos/index.js';
 import { BadRequest, Forbidden, NotFound } from '../lib/errors.js';
+import { assertNoPublicHoneypot, auditPublicSubmission } from '../lib/publicAbuse.js';
 import { uuid } from '../lib/crypto.js';
 
 const pollSchema = z.object({
@@ -59,11 +60,12 @@ export async function feedbackRoutes(app: FastifyInstance) {
   });
 
   // Voting is intentionally public (guests vote from the portal without auth)
-  app.post('/api/events/:eventId/polls/:pollId/vote', async (req) => {
+  app.post('/api/events/:eventId/polls/:pollId/vote', { config: { rateLimit: { max: 30, timeWindow: '1 minute' } } }, async (req) => {
     const { eventId, pollId } = req.params as { eventId: string; pollId: string };
+    const { ev, meta } = getEventMeta(eventId);
+    assertNoPublicHoneypot(req, { organizationId: ev.organization_id, action: 'poll.vote.blocked', targetType: 'poll', targetId: pollId });
     const { optionId } = req.body as { optionId: string };
     
-    const { meta } = getEventMeta(eventId);
     const polls = meta.polls || [];
     const poll = polls.find((p: any) => p.id === pollId);
     if (!poll || poll.status !== 'active') throw BadRequest('poll-inactive');
@@ -72,6 +74,13 @@ export async function feedbackRoutes(app: FastifyInstance) {
     if (option) {
       option.votes = (option.votes || 0) + 1;
       saveEventMeta(eventId, meta);
+      auditPublicSubmission(req, {
+        organizationId: ev.organization_id,
+        action: 'poll.vote',
+        targetType: 'poll',
+        targetId: pollId,
+        details: { eventId, optionId },
+      });
     }
     
     return { poll };
@@ -103,15 +112,15 @@ export async function feedbackRoutes(app: FastifyInstance) {
   });
 
   // ─── Public NPS / Feedback submission (no auth needed) ───
-  app.post('/api/public/events/:eventId/nps', async (req) => {
+  app.post('/api/public/events/:eventId/nps', { config: { rateLimit: { max: 10, timeWindow: '1 minute' } } }, async (req) => {
     const { eventId } = req.params as { eventId: string };
+    const { ev, meta } = getEventMeta(eventId);
+    assertNoPublicHoneypot(req, { organizationId: ev.organization_id, action: 'nps.blocked', targetType: 'event', targetId: eventId });
     const { score, comment, submittedBy } = req.body as { score: number; comment?: string; submittedBy?: string };
 
     if (typeof score !== 'number' || score < 0 || score > 10) {
       throw BadRequest('score-range-0-10');
     }
-
-    const { ev, meta } = getEventMeta(eventId);
     const npsResponse = {
       id: uuid(),
       score,
@@ -122,6 +131,13 @@ export async function feedbackRoutes(app: FastifyInstance) {
 
     meta.nps = [...(meta.nps || []), npsResponse];
     saveEventMeta(eventId, meta);
+    auditPublicSubmission(req, {
+      organizationId: ev.organization_id,
+      action: 'nps.submit',
+      targetType: 'event',
+      targetId: eventId,
+      details: { score },
+    });
 
     return { nps: npsResponse };
   });

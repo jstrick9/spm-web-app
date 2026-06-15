@@ -43,22 +43,25 @@ describe('GET /integrations/providers', () => {
     expect(res.statusCode).toBe(200);
     const ids = res.json().providers.map((p: { id: string }) => p.id);
     expect(ids).toContain('email_smtp');
+    expect(ids).toContain('sms_twilio');
   });
 
-  it('forbids non-admin users', async () => {
+  it('allows managers with integrations.view to see provider catalog but still forbids staff', async () => {
     const owner = await register();
+    const manager = await register();
     const staff = await register();
+    await req(owner.token, 'POST', `/api/orgs/${owner.orgId}/members`, {
+      userEmail: manager.email, roleId: SYSTEM_ROLE_IDS.manager,
+    });
     await req(owner.token, 'POST', `/api/orgs/${owner.orgId}/members`, {
       userEmail: staff.email, roleId: SYSTEM_ROLE_IDS.staff,
     });
-    const login = await app.inject({
-      method: 'POST', url: '/api/auth/login',
-      payload: { email: staff.email, password: 'testpass123' },
-      headers: { 'content-type': 'application/json' },
-    });
-    const staffToken = login.json().token;
-    const res = await req(staffToken, 'GET', `/api/orgs/${owner.orgId}/integrations/providers`);
-    expect(res.statusCode).toBe(403);
+    const managerLogin = await app.inject({ method: 'POST', url: '/api/auth/login', payload: { email: manager.email, password: 'testpass123' }, headers: { 'content-type': 'application/json' } });
+    const staffLogin = await app.inject({ method: 'POST', url: '/api/auth/login', payload: { email: staff.email, password: 'testpass123' }, headers: { 'content-type': 'application/json' } });
+    const managerRes = await req(managerLogin.json().token, 'GET', `/api/orgs/${owner.orgId}/integrations/providers`);
+    expect(managerRes.statusCode).toBe(200);
+    const staffRes = await req(staffLogin.json().token, 'GET', `/api/orgs/${owner.orgId}/integrations/providers`);
+    expect(staffRes.statusCode).toBe(403);
   });
 });
 

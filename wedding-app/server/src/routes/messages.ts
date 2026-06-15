@@ -2,7 +2,7 @@ import type { FastifyInstance, FastifyRequest } from 'fastify';
 import { z } from 'zod';
 import { requireAuth } from '../middleware/auth.js';
 import { can } from '../lib/rbac.js';
-import { messagesRepo, eventsRepo } from '../db/repos/index.js';
+import { messagesRepo, eventsRepo, communicationsRepo, vendorsRepo, staffTasksRepo } from '../db/repos/index.js';
 import { BadRequest, Forbidden, NotFound } from '../lib/errors.js';
 import type { PermissionId } from '../lib/permissions.js';
 
@@ -26,7 +26,62 @@ function authorizeThread(req: FastifyRequest, threadId: string, permission: Perm
   return eventId;
 }
 
+const broadcastSchema = z.object({
+  title: z.string().min(1).max(200),
+  body: z.string().min(1).max(4000),
+  channel: z.enum(['in_app', 'sms', 'email', 'all']).default('in_app'),
+  audience: z.enum(['staff', 'vendors', 'guests', 'all']).default('all'),
+  severity: z.enum(['fyi', 'action_needed', 'urgent', 'owner_escalation']).default('fyi'),
+  approvalRequired: z.boolean().optional(),
+  quietHoursOverride: z.boolean().optional(),
+});
+
+function recipientRows(eventId: string, orgId: string, audience: 'staff' | 'vendors' | 'guests' | 'all') {
+  const recipients: Array<{ recipientType: string; recipientLabel: string; contact?: string | null }> = [];
+  if (audience === 'staff' || audience === 'all') {
+    const tasks = staffTasksRepo.listForOrg(orgId, { eventId }).filter(t => t.assignee_name || t.assignee_phone || t.assignee_email).slice(0, 20);
+    for (const task of tasks) recipients.push({ recipientType: 'staff', recipientLabel: task.assignee_name || task.title, contact: task.assignee_phone || task.assignee_email });
+    if (!tasks.length) recipients.push({ recipientType: 'staff', recipientLabel: 'Staff operations team' });
+  }
+  if (audience === 'vendors' || audience === 'all') {
+    const vendors = vendorsRepo.listForOrg(orgId, { eventId }).slice(0, 30);
+    for (const vendor of vendors) recipients.push({ recipientType: 'vendor', recipientLabel: vendor.name, contact: vendor.phone || vendor.email });
+    if (!vendors.length) recipients.push({ recipientType: 'vendor', recipientLabel: 'Vendor partners' });
+  }
+  if (audience === 'guests' || audience === 'all') recipients.push({ recipientType: 'guests', recipientLabel: 'Guest communications list' });
+  return recipients;
+}
+
 export async function messageRoutes(app: FastifyInstance) {
+  app.get('/api/events/:eventId/communications', { preHandler: requireAuth }, async (req) => {
+    const { eventId } = req.params as { eventId: string };
+    const event = eventsRepo.findById(eventId);
+    if (!event) throw NotFound();
+    const orgMap = eventsRepo.orgMapForUser(req.auth!.userId);
+    if (!can(req.auth!.memberships, { eventId }, 'messages.view', orgMap)) throw Forbidden();
+    return { communications: communicationsRepo.listForEvent(eventId) };
+  });
+
+  app.post('/api/events/:eventId/communications/broadcast', { preHandler: requireAuth }, async (req, reply) => {
+    const { eventId } = req.params as { eventId: string };
+    const event = eventsRepo.findById(eventId);
+    if (!event) throw NotFound();
+    const orgMap = eventsRepo.orgMapForUser(req.auth!.userId);
+    if (!can(req.auth!.memberships, { eventId }, 'messages.send', orgMap)) throw Forbidden();
+    const parsed = broadcastSchema.safeParse(req.body);
+    if (!parsed.success) throw BadRequest('invalid-input', parsed.error.issues);
+    const recipients = recipientRows(eventId, event.organization_id, parsed.data.audience);
+    const audit = communicationsRepo.createBroadcast({
+      organizationId: event.organization_id,
+      eventId,
+      ...parsed.data,
+      createdBy: req.auth!.userId,
+      recipients,
+    });
+    messagesRepo.send({ threadId: `${eventId}:urgent`, senderId: req.auth!.userId, senderRole: 'manager', body: `[${parsed.data.severity.toUpperCase()}][${parsed.data.audience}/${parsed.data.channel}] ${parsed.data.title}\n${parsed.data.body}` });
+    return reply.code(201).send({ broadcast: audit, recipients });
+  });
+
   app.get('/api/messages/:threadId', { preHandler: requireAuth }, async (req) => {
     const { threadId } = req.params as { threadId: string };
     authorizeThread(req, threadId, 'messages.view');

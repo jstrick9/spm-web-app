@@ -23,7 +23,7 @@ import { z } from 'zod';
 import { requireAuth } from '../middleware/auth.js';
 import { assertCan, can } from '../lib/rbac.js';
 import { db } from '../db/database.js';
-import { eventsRepo, orgsRepo, auditRepo } from '../db/repos/index.js';
+import { eventsRepo, orgsRepo, auditRepo, adminChangeRequestsRepo } from '../db/repos/index.js';
 import { parseJson, stringifyJson } from '../lib/json.js';
 import { BadRequest, Forbidden, NotFound } from '../lib/errors.js';
 
@@ -32,6 +32,15 @@ import { BadRequest, Forbidden, NotFound } from '../lib/errors.js';
 const MAX_CONFIG_BYTES = 64 * 1024;
 
 const configBodySchema = z.record(z.unknown());
+const adminChangeRequestSchema = z.object({
+  title: z.string().min(1).max(300),
+  area: z.string().min(1).max(80).optional(),
+  reason: z.string().max(4000).optional(),
+});
+const adminChangeRequestUpdateSchema = z.object({
+  status: z.enum(['open','approved','rejected','resolved']).optional(),
+  responseNote: z.string().max(4000).nullable().optional(),
+});
 
 function validateSize(body: unknown): void {
   const serialized = JSON.stringify(body);
@@ -76,6 +85,33 @@ export async function platformConfigRoutes(app: FastifyInstance) {
     });
 
     return { config: parsed.data };
+  });
+
+  app.get('/api/orgs/:orgId/admin-change-requests', { preHandler: requireAuth }, async (req) => {
+    const { orgId } = req.params as { orgId: string };
+    if (!can(req.auth!.memberships, { organizationId: orgId }, 'org.view')) throw Forbidden();
+    return { requests: adminChangeRequestsRepo.listForOrg(orgId) };
+  });
+
+  app.post('/api/orgs/:orgId/admin-change-requests', { preHandler: requireAuth }, async (req, reply) => {
+    const { orgId } = req.params as { orgId: string };
+    if (!can(req.auth!.memberships, { organizationId: orgId }, 'org.view')) throw Forbidden();
+    const parsed = adminChangeRequestSchema.safeParse(req.body);
+    if (!parsed.success) throw BadRequest('invalid-input', parsed.error.issues);
+    const request = adminChangeRequestsRepo.create({ orgId, requestedBy: req.auth!.userId, ...parsed.data });
+    auditRepo.log({ organizationId: orgId, actorUserId: req.auth!.userId, actorLabel: req.auth!.email, action: 'admin_change.request.create', targetType: 'admin_change_request', targetId: request.id, ip: req.ip, details: parsed.data });
+    return reply.code(201).send({ request });
+  });
+
+  app.patch('/api/orgs/:orgId/admin-change-requests/:id', { preHandler: requireAuth }, async (req) => {
+    const { orgId, id } = req.params as { orgId: string; id: string };
+    assertCan(req.auth!.memberships, { organizationId: orgId }, 'roles.manage');
+    const parsed = adminChangeRequestUpdateSchema.safeParse(req.body);
+    if (!parsed.success) throw BadRequest('invalid-input', parsed.error.issues);
+    const request = adminChangeRequestsRepo.update(id, parsed.data);
+    if (!request || request.organization_id !== orgId) throw NotFound('request-not-found');
+    auditRepo.log({ organizationId: orgId, actorUserId: req.auth!.userId, actorLabel: req.auth!.email, action: 'admin_change.request.update', targetType: 'admin_change_request', targetId: id, ip: req.ip, details: parsed.data });
+    return { request };
   });
 
   // ─── Event-level ────────────────────────────────────────

@@ -19,7 +19,7 @@ import { describe, it, expect, beforeAll, beforeEach } from 'vitest';
 import { db } from '../db/database.js';
 import { buildApp } from '../index.js';
 import type { FastifyInstance } from 'fastify';
-import { rolesRepo } from '../db/repos/index.js';
+import { guestsRepo, rolesRepo } from '../db/repos/index.js';
 
 let app: FastifyInstance;
 beforeAll(async () => { app = await buildApp(); await app.ready(); });
@@ -141,7 +141,11 @@ describe('Complete venue owner journey', () => {
     expect(signRes.json().contract.status).toBe('signed');
 
     // ═══ 8. Public portal RSVP ═════════════════════════════
-    const portalRes = await app.inject({ method: 'GET', url: `/api/portal/${eventId}/info` });
+    const genericPortalRes = await app.inject({ method: 'GET', url: `/api/portal/${eventId}/info` });
+    expect(genericPortalRes.statusCode).toBe(200);
+    expect(genericPortalRes.json().identity.mode).toBe('lookup_required');
+    const guestToken = guestsRepo.rotatePortalToken(guestId);
+    const portalRes = await app.inject({ method: 'GET', url: `/api/portal/${eventId}/info?guest=${guestId}&token=${guestToken}` });
     expect(portalRes.statusCode).toBe(200);
     expect(portalRes.json().guests.length).toBeGreaterThanOrEqual(1);
 

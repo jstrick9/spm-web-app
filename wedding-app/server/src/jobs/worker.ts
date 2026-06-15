@@ -125,4 +125,19 @@ function registerCoreHandlers(): void {
       input,
     }) as Record<string, unknown>;
   });
+
+
+  /** Convenience: enqueue('sms.send', {...}) without the integration wrapping. */
+  registerHandler('sms.send', async (payload) => {
+    const { integrationId, ...input } = payload as {
+      integrationId: string;
+      to: string | string[];
+      body: string;
+    };
+    return await runAction({
+      integrationId,
+      actionId: 'sendSms',
+      input,
+    }) as Record<string, unknown>;
+  });
 }
