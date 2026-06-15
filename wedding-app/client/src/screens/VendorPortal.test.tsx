@@ -41,7 +41,7 @@ describe('VendorPortal', () => {
       timeline: [{ id: 't1', title: 'Arrival', time: '14:00' }]
     });
 
-    render(<VendorPortal vendorId="v1" />, { wrapper: TestWrapper });
+    render(<VendorPortal vendorId="v1" token="tok-1" />, { wrapper: TestWrapper });
 
     expect(await screen.findByText(/Vendor Portal/i)).toBeInTheDocument();
     expect(screen.getByText('Prepared for DJ Snake')).toBeInTheDocument();
@@ -62,7 +62,7 @@ describe('VendorPortal', () => {
     
     (sdk.vendors.submitQuestionnaire as any).mockResolvedValue({ ok: true });
 
-    render(<VendorPortal vendorId="v1" />, { wrapper: TestWrapper });
+    render(<VendorPortal vendorId="v1" token="tok-1" />, { wrapper: TestWrapper });
 
     // Wait for load
     await screen.findByText(/Logistics Questionnaire/i);
@@ -95,7 +95,7 @@ describe('VendorPortal', () => {
 
     (sdk.vendors.portalSendMessage as any).mockResolvedValue({ message: { id: 'm2' } });
 
-    render(<VendorPortal vendorId="v1" />, { wrapper: TestWrapper });
+    render(<VendorPortal vendorId="v1" token="tok-1" />, { wrapper: TestWrapper });
 
     // Verify chat header and message feed
     expect(await screen.findByText('Direct Coordinator Live Chat')).toBeInTheDocument();
@@ -109,7 +109,7 @@ describe('VendorPortal', () => {
     fireEvent.click(sendBtn);
 
     await waitFor(() => {
-      expect(sdk.vendors.portalSendMessage).toHaveBeenCalledWith('v1', 'Setting up gear now');
+      expect(sdk.vendors.portalSendMessage).toHaveBeenCalledWith('v1', 'Setting up gear now', 'tok-1');
     });
   });
 });

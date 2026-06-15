@@ -69,10 +69,16 @@ describe('VendorCheckInApp', () => {
     expect(arriveButtons.length).toBeGreaterThanOrEqual(1);
   });
 
-  it('has scan button', async () => {
+  it('lazy-loads scanner after Scan is tapped and supports simulated QR scan', async () => {
     render(<VendorCheckInApp eventId="evt-1" organizationId="org-1" />, { wrapper: makeWrapper() });
     await screen.findByText('DJ Snake');
-    expect(screen.getByRole('button', { name: /Scan/i })).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: /Scan/i }));
+    expect(await screen.findByText(/Loading secure camera scanner/i)).toBeInTheDocument();
+    const simulate = await screen.findByRole('button', { name: /Simulate Scan/i });
+    fireEvent.click(simulate);
+    await waitFor(() => {
+      expect(screen.queryByText(/Scan Vendor Pass/i)).not.toBeInTheDocument();
+    });
   });
 
   it('has filter buttons', async () => {

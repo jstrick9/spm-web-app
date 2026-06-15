@@ -36,7 +36,7 @@ import { render, screen, fireEvent, waitFor, act } from '@testing-library/react'
 
 vi.mock('../../sdk', () => ({
   sdk: {
-    portal:   { info: vi.fn(), submitRsvp: vi.fn() },
+    portal:   { info: vi.fn(), status: vi.fn(), submitRsvp: vi.fn(), lookup: vi.fn(), requestHelp: vi.fn(), askQuestion: vi.fn(), requestAccessibility: vi.fn(), requestPrivacy: vi.fn(), saveReminderPreferences: vi.fn(), dayOfHelp: vi.fn(), submitMemory: vi.fn(), submitGuestFeedback: vi.fn(), resendLink: vi.fn(), messages: vi.fn() },
     feedback: { getPolls: vi.fn(), votePoll: vi.fn() },
   },
   ApiError: class ApiError extends Error {},
@@ -66,7 +66,10 @@ vi.mock('react-konva', () => ({
   }) => {
     capturedOnWheel    = onWheel;
     capturedOnDragMove = onDragMove;
-    return <div data-testid="konva-stage" {...(props as Record<string, unknown>)}>{children}</div>;
+    // Strip Konva-only props before rendering the DOM mock to keep React's
+    // unknown-prop warnings out of test logs.
+    const { scaleX: _scaleX, scaleY: _scaleY, ...domProps } = props as Record<string, unknown>;
+    return <div data-testid="konva-stage" {...domProps}>{children}</div>;
   },
   Layer:  ({ children }: { children?: React.ReactNode }) => <>{children}</>,
   Group:  ({ children }: { children?: React.ReactNode }) => <>{children}</>,
@@ -116,6 +119,7 @@ const CLOSED_POLL = {
 };
 
 function renderPortal(eventId = 'e-1') {
+  if (!vi.mocked(sdk.portal.status).getMockImplementation()) vi.mocked(sdk.portal.status).mockResolvedValue({ event: { id: eventId, title: 'Smith Wedding', startDate: FUTURE_DATE }, status: 'available', support: { label: 'Venue', email: 'help@test.com', phone: '555-0100' }, message: 'Guest portal is available.', recovery: { requestNewLink: true, helpKinds: [] } } as never);
   capturedOnWheel    = undefined;
   capturedOnDragMove = undefined;
   return render(<PublicGuestPortal eventId={eventId} />);
@@ -162,6 +166,9 @@ describe('PublicGuestPortal — handleWheel (any#7 fix + bonus bug)', () => {
     vi.mocked(sdk.portal.info).mockResolvedValue(BASE_INFO as never);
     vi.mocked(sdk.feedback.getPolls).mockResolvedValue({ polls: [] });
     vi.mocked(sdk.portal.submitRsvp).mockResolvedValue({ ok: true, rsvpId: 'r-1' });
+    vi.mocked(sdk.portal.messages).mockResolvedValue({ helpRequests: [], replies: [], tokenStatus: 'valid', emptyState: 'Venue replies to your guest help requests will appear here.' });
+    vi.mocked(sdk.portal.askQuestion).mockResolvedValue({ ok: true, requestId: 'q-1', message: 'Your question was sent to the venue/couple team.' });
+    vi.mocked(sdk.portal.askQuestion).mockResolvedValue({ ok: true, requestId: 'q-1', message: 'Your question was sent to the venue/couple team.' });
     window.location.hash = '';
   });
 
@@ -249,6 +256,8 @@ describe('PublicGuestPortal — poll typing (any#8/9/10 fix)', () => {
     });
     vi.mocked(sdk.feedback.votePoll).mockResolvedValue({ poll: ACTIVE_POLL });
     vi.mocked(sdk.portal.submitRsvp).mockResolvedValue({ ok: true, rsvpId: 'r-1' });
+    vi.mocked(sdk.portal.messages).mockResolvedValue({ helpRequests: [], replies: [], tokenStatus: 'valid', emptyState: 'Venue replies to your guest help requests will appear here.' });
+    vi.mocked(sdk.portal.askQuestion).mockResolvedValue({ ok: true, requestId: 'q-1', message: 'Your question was sent to the venue/couple team.' });
     window.location.hash = '#/portal/e-1?guest=g-1'; // pre-select guest so polls show
   });
 
@@ -310,10 +319,33 @@ describe('PublicGuestPortal — Phase 34b regression suite', () => {
     vi.mocked(sdk.portal.info).mockResolvedValue(BASE_INFO as never);
     vi.mocked(sdk.feedback.getPolls).mockResolvedValue({ polls: [] });
     vi.mocked(sdk.portal.submitRsvp).mockResolvedValue({ ok: true, rsvpId: 'r-1' });
+    vi.mocked(sdk.portal.messages).mockResolvedValue({ helpRequests: [], replies: [], tokenStatus: 'valid', emptyState: 'Venue replies to your guest help requests will appear here.' });
+    vi.mocked(sdk.portal.askQuestion).mockResolvedValue({ ok: true, requestId: 'q-1', message: 'Your question was sent to the venue/couple team.' });
     window.location.hash = '';
   });
 
   afterEach(() => { vi.clearAllMocks(); });
+
+
+  it('renders guest portal recovery center for invalid/expired or disabled links with support contact', async () => {
+    vi.mocked(sdk.portal.info).mockRejectedValue({ kind: 'not-found', code: 'portal-disabled', message: '404 portal-disabled' });
+    vi.mocked(sdk.portal.status).mockResolvedValue({ event: { id: 'e-1', title: 'Smith Wedding', startDate: FUTURE_DATE }, status: 'disabled', support: { label: 'Venue concierge', email: 'help@test.com', phone: '555-0100' }, message: 'Portal opens after invitations are approved.', recovery: { requestNewLink: true, helpKinds: ['expired_or_revoked'] } } as never);
+    renderPortal();
+    expect(await screen.findByText('Guest portal recovery center')).toBeInTheDocument();
+    expect(screen.getByText('Guest portal is not available yet')).toBeInTheDocument();
+    expect(screen.getByText('Portal opens after invitations are approved.')).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: 'help@test.com' })).toHaveAttribute('href', 'mailto:help@test.com');
+    expect(screen.getByRole('link', { name: '555-0100' })).toHaveAttribute('href', 'tel:555-0100');
+  });
+
+  it('renders status-page style temporarily unavailable state for network failures', async () => {
+    vi.mocked(sdk.portal.info).mockRejectedValue({ kind: 'offline', code: 'network-error', message: 'network-error' });
+    vi.mocked(sdk.portal.status).mockRejectedValue(new Error('offline'));
+    renderPortal();
+    expect(await screen.findByText('Portal temporarily unavailable')).toBeInTheDocument();
+    expect(screen.getByText(/Try again/i)).toBeInTheDocument();
+    expect(screen.getByText(/server may be temporarily unavailable/i)).toBeInTheDocument();
+  });
 
   it('shows loading state while portal.info fetches', () => {
     vi.mocked(sdk.portal.info).mockImplementation(() => new Promise(() => {}));
@@ -324,7 +356,8 @@ describe('PublicGuestPortal — Phase 34b regression suite', () => {
   it('shows error when portal.info rejects', async () => {
     vi.mocked(sdk.portal.info).mockRejectedValue(new Error('Not found'));
     renderPortal();
-    await waitFor(() => expect(screen.getByText('Event not found.')).toBeTruthy());
+    await waitFor(() => expect(screen.getByText('Guest portal recovery center')).toBeTruthy());
+    expect(screen.getByText(/invalid, expired, or not yet available/i)).toBeTruthy();
   });
 
   it('renders event title (r.event.title typed correctly)', async () => {
@@ -416,17 +449,213 @@ describe('PublicGuestPortal — Phase 34b regression suite', () => {
     expect(await screen.findByText('Wedding Day Countdown')).toBeInTheDocument();
     
     // Check Weather Station displays
-    expect(screen.getByText('Seven Paths Manor Live Weather Station')).toBeInTheDocument();
+    expect(screen.getByText('Venue Weather Station')).toBeInTheDocument();
     
     // Check schedule section and tab switches
-    expect(screen.getByText('Event Schedule & Timelines')).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: /Ceremony Run of Show/i })).toBeInTheDocument();
+    expect(await screen.findByText('Guest Schedule')).toBeInTheDocument();
+    expect(await screen.findByRole('button', { name: /Ceremony Run of Show/i })).toBeInTheDocument();
     
     const subeventsBtn = screen.getByRole('button', { name: /Weekend Sub-Events/i });
     expect(subeventsBtn).toBeInTheDocument();
     
     fireEvent.click(subeventsBtn);
-    expect(screen.getByText('Rehearsal Dinner')).toBeInTheDocument();
+    expect(await screen.findByText(/Rehearsal Dinner/)).toBeInTheDocument();
+  });
+
+
+
+
+
+
+
+
+  it('renders Guest Memories, Photos & Feedback with moderation consent and feedback submission', async () => {
+    vi.mocked(sdk.portal.info).mockResolvedValue({
+      ...BASE_INFO,
+      guestPostEvent: {
+        enabled: true,
+        afterEvent: true,
+        thankYouTitle: 'Thank you for celebrating with us',
+        thankYouMessage: 'Gallery and memory sharing are open.',
+        links: [{ id: 'gallery', label: 'Photo gallery', url: 'https://gallery.example.com', description: 'Official gallery' }],
+        uploadEnabled: true,
+        moderationCopy: 'Photos are reviewed before sharing.',
+        consentCopy: 'I have permission to share this photo/link.',
+        feedbackEnabled: true,
+        npsQuestion: 'How was the guest experience?',
+      },
+    } as any);
+    vi.mocked(sdk.portal.submitMemory).mockResolvedValue({ ok: true, requestId: 'm-1', moderationStatus: 'pending_review', message: 'Your memory/photo submission was received and will be reviewed before sharing.' });
+    vi.mocked(sdk.portal.submitGuestFeedback).mockResolvedValue({ ok: true, feedback: {}, message: 'Thank you for sharing guest feedback.' });
+    window.location.hash = '#/portal/e-1?guest=g-1&token=t-1';
+    renderPortal();
+    expect(await screen.findByText('Guest Memories, Photos & Feedback')).toBeInTheDocument();
+    expect(screen.getAllByText('Gallery and memory sharing are open.').length).toBeGreaterThan(0);
+    expect(screen.getByRole('link', { name: /Photo gallery/i })).toHaveAttribute('href', 'https://gallery.example.com');
+    fireEvent.change(screen.getByLabelText('Guest photo link'), { target: { value: 'https://photos.example.com/album' } });
+    fireEvent.change(screen.getByLabelText('Guest memory caption'), { target: { value: 'Favorite dance floor moment' } });
+    fireEvent.click(screen.getByLabelText(/permission to share/i));
+    fireEvent.click(screen.getByRole('button', { name: 'Submit for review' }));
+    await waitFor(() => expect(vi.mocked(sdk.portal.submitMemory)).toHaveBeenCalledWith('e-1', expect.objectContaining({ guestId: 'g-1', token: 't-1', photoUrl: 'https://photos.example.com/album', consent: true })));
+    fireEvent.change(screen.getByLabelText('Guest NPS score'), { target: { value: '9' } });
+    fireEvent.change(screen.getByLabelText('Guest post-event feedback comment'), { target: { value: 'Great guest experience.' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Submit feedback' }));
+    await waitFor(() => expect(vi.mocked(sdk.portal.submitGuestFeedback)).toHaveBeenCalledWith('e-1', expect.objectContaining({ guestId: 'g-1', token: 't-1', npsScore: 9, comment: 'Great guest experience.' })));
+  });
+
+  it('renders Guest Event-Day Mobile Mode with offline pass, quick help, push prompt, and staff QR', async () => {
+    vi.mocked(sdk.portal.info).mockResolvedValue({
+      ...BASE_INFO,
+      guestTravel: { venueAddress: '1 Venue Lane', mapUrl: '', parkingEntrance: 'West lot', dropoffPoint: 'Front circle', rideshareInstructions: '', shuttleSchedule: 'Shuttle every 20 minutes', shuttlePickupLocation: '', shuttleDropoffLocation: '', lastShuttleReminder: '', roomBlockDetails: '', accessibleParking: '', mobilityDropoff: '', destinationTravelFaq: '', weatherRainPlanNote: '', offlineCardUrl: '/travel.txt' },
+      guestDayOf: { enabled: true, title: 'Wedding day quick card', contactLabel: 'venue concierge', contactPhone: '555-0100', contactEmail: 'help@test.com', offlinePassUrl: '/api/portal/e-1/guest-pass.txt?guest=g-1&token=t-1', staffHelpUrl: '/api/portal/e-1/staff-help?guest=g-1&token=t-1', qrPayload: 'WVI-GUEST-HELP:e-1:g-1', pushAvailable: true, pushCopy: 'Allow rain-plan and shuttle alerts.' },
+    } as any);
+    vi.mocked(sdk.portal.dayOfHelp).mockResolvedValue({ ok: true, requestId: 'h-1', message: 'Thanks for letting us know. The venue/couple team can see that you are running late.' });
+    window.location.hash = '#/portal/e-1?guest=g-1&token=t-1';
+    renderPortal();
+    expect(await screen.findByText('Guest Event-Day Mobile Mode')).toBeInTheDocument();
+    expect(screen.getAllByText('1 Venue Lane').length).toBeGreaterThan(0);
+    expect(screen.getAllByText(/Table 3/).length).toBeGreaterThan(0);
+    expect(screen.getAllByText('Shuttle every 20 minutes').length).toBeGreaterThan(0);
+    expect(screen.getByRole('link', { name: /Offline guest pass/i })).toHaveAttribute('href', '/api/portal/e-1/guest-pass.txt?guest=g-1&token=t-1');
+    expect(screen.getByRole('img', { name: /Venue staff help QR code/i })).toBeInTheDocument();
+    expect(screen.getByText('WVI-GUEST-HELP:e-1:g-1')).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Running late' }));
+    await waitFor(() => expect(vi.mocked(sdk.portal.dayOfHelp)).toHaveBeenCalledWith('e-1', expect.objectContaining({ guestId: 'g-1', token: 't-1', kind: 'running_late' })));
+  });
+
+  it('renders Guest Reminder Preferences and supports send-me schedule action', async () => {
+    vi.mocked(sdk.portal.info).mockResolvedValue({
+      ...BASE_INFO,
+      identity: { mode: 'tokenized', tokenStatus: 'valid', selectedGuestId: 'g-1', guestDirectoryExposed: false, supportMessage: null },
+      guestReminders: {
+        providers: { emailConnected: true, smsConnected: true },
+        defaults: { rsvpReminderEnabled: true, scheduleReminderEnabled: true, rainPlanReminderEnabled: true, shuttleReminderEnabled: true, dayBeforeReminderEnabled: true, dayOfReminderEnabled: true, guestFriendlyCopy: 'Helpful guest reminders only.' },
+        preferences: { emailOptIn: false, smsOptIn: false, confirmationPreference: 'email', reminderTypes: ['rsvp','schedule'], quietHoursStart: '22:00', quietHoursEnd: '07:00', language: 'en' },
+        actions: { scheduleAvailable: true, directionsAvailable: true, preferencesUrl: '/api/portal/e-1/reminder-preferences' },
+      },
+    } as any);
+    vi.mocked(sdk.portal.saveReminderPreferences).mockResolvedValue({ ok: true, preferences: {}, message: 'Reminder preferences saved.', dispatchStatus: 'email_provider_not_connected', jobId: null });
+    window.location.hash = '#/portal/e-1?guest=g-1&token=t-1';
+    renderPortal();
+    expect(await screen.findByText('Guest Reminder Preferences')).toBeInTheDocument();
+    expect(screen.getByText('Helpful guest reminders only.')).toBeInTheDocument();
+    fireEvent.click(screen.getByLabelText('Email reminders'));
+    fireEvent.change(screen.getByLabelText('Reminder channel preference'), { target: { value: 'email' } });
+    fireEvent.click(screen.getByRole('button', { name: /Send me the schedule/i }));
+    await waitFor(() => expect(vi.mocked(sdk.portal.saveReminderPreferences)).toHaveBeenCalledWith('e-1', expect.objectContaining({ guestId: 'g-1', token: 't-1', emailOptIn: true, sendInfo: 'schedule' })));
+    expect(await screen.findByText(/Reminder preferences saved/i)).toBeInTheDocument();
+  });
+
+  it('renders Guest Privacy & Consent module and routes data correction/deletion requests', async () => {
+    vi.mocked(sdk.portal.info).mockResolvedValue({
+      ...BASE_INFO,
+      identity: { mode: 'tokenized', tokenStatus: 'valid', selectedGuestId: 'g-1', guestDirectoryExposed: false, supportMessage: null },
+      guestPrivacy: {
+        summary: 'Your RSVP is used only for this private wedding.',
+        visibility: { rsvp: 'Couple and venue see RSVP.', meal: 'Catering sees meal needs.', allergy: 'Safety team sees allergy details.', accessibility: 'Care team sees accessibility needs.', lodging: 'Venue sees lodging details.', notes: 'Authorized planners see notes.' },
+        consent: { emailReminderLabel: 'Email reminders okay', smsReminderLabel: 'SMS reminders okay' },
+        retention: 'Guest data retained for 90 days after event unless required longer.',
+        correctionDeletion: { enabled: true, contactLabel: 'privacy concierge', contactEmail: 'privacy@test.com' },
+        antiAbuse: 'Use your secure invitation link.',
+        access: { mode: 'tokenized', tokenStatus: 'valid', guestDirectoryExposed: false, privateWeddingDefault: true },
+      },
+    } as any);
+    vi.mocked(sdk.portal.requestPrivacy).mockResolvedValue({ ok: true, requestId: 'p-1', message: 'Your privacy/data request was sent to the privacy concierge.' });
+    window.location.hash = '#/portal/e-1?guest=g-1&token=t-1';
+    renderPortal();
+    expect(await screen.findByText('Guest Privacy & Consent')).toBeInTheDocument();
+    expect(screen.getByText('Your RSVP is used only for this private wedding.')).toBeInTheDocument();
+    expect(screen.getByText(/Private wedding mode is on by default/i)).toBeInTheDocument();
+    expect(screen.getByText(/Guest data retained for 90 days/i)).toBeInTheDocument();
+    fireEvent.change(screen.getByLabelText('Privacy request type'), { target: { value: 'delete_contact' } });
+    fireEvent.change(screen.getByLabelText('Privacy request message'), { target: { value: 'Please delete my old phone number.' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Send privacy request' }));
+    await waitFor(() => expect(vi.mocked(sdk.portal.requestPrivacy)).toHaveBeenCalledWith('e-1', expect.objectContaining({ guestId: 'g-1', token: 't-1', requestType: 'delete_contact', message: 'Please delete my old phone number.' })));
+    expect(await screen.findByText(/privacy\/data request was sent/i)).toBeInTheDocument();
+  });
+
+  it('renders Guest Accessibility & Care Center, public accessibility preferences, and submits explicit care request', async () => {
+    vi.mocked(sdk.portal.info).mockResolvedValue({
+      ...BASE_INFO,
+      guestTravel: { venueAddress: '1 Venue Lane', mapUrl: '', parkingEntrance: '', dropoffPoint: '', rideshareInstructions: '', shuttleSchedule: '', shuttlePickupLocation: '', shuttleDropoffLocation: '', lastShuttleReminder: '', roomBlockDetails: '', accessibleParking: 'ADA parking by west lot', mobilityDropoff: 'Covered drop-off at front door', destinationTravelFaq: '', weatherRainPlanNote: '', offlineCardUrl: '/travel.txt' },
+      guestCare: {
+        contact: { label: 'venue accessibility concierge', email: 'access@test.com', phone: '555-0100', helpText: 'Tell us how we can support your arrival and seating.' },
+        details: { accessibleParking: 'ADA parking by west lot', accessibleEntrance: 'Ramp at main entrance', accessibleRestroom: 'Accessible restroom in lobby', accessibleSeating: 'Aisle and companion seating available', accessibleRoute: 'Paved route from parking to ceremony', mobilityDropoff: 'Covered drop-off at front door' },
+        requestTypes: ['mobility', 'seating', 'sensory', 'interpretation_language', 'service_animal', 'dietary_allergy', 'caregiver'],
+        portalPreferences: { largeText: true, highContrast: true, languageSelector: true },
+      },
+    } as any);
+    vi.mocked(sdk.portal.requestAccessibility).mockResolvedValue({ ok: true, requestId: 'a-1', message: 'Your accessibility and care request was sent to the venue accessibility concierge.' });
+    window.location.hash = '#/portal/e-1?guest=g-1&token=t-1';
+    renderPortal();
+    expect(await screen.findByText('Guest Accessibility & Care Center')).toBeInTheDocument();
+    expect(screen.getAllByText('ADA parking by west lot').length).toBeGreaterThan(0);
+    expect(screen.getByText('Ramp at main entrance')).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: /Toggle large text mode/i }));
+    fireEvent.click(screen.getByRole('button', { name: /Toggle high contrast mode/i }));
+    fireEvent.change(screen.getByLabelText('Portal shell language'), { target: { value: 'es' } });
+    expect((screen.getByLabelText('Portal shell language') as HTMLSelectElement).value).toBe('es');
+    fireEvent.change(screen.getByLabelText('Mobility needs'), { target: { value: 'Wheelchair access from parking' } });
+    fireEvent.change(screen.getByLabelText('Seating needs'), { target: { value: 'Aisle companion seat' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Send accessibility request' }));
+    await waitFor(() => expect(vi.mocked(sdk.portal.requestAccessibility)).toHaveBeenCalledWith('e-1', expect.objectContaining({ guestId: 'g-1', token: 't-1', mobility: 'Wheelchair access from parking', seating: 'Aisle companion seat' })));
+    expect(await screen.findByText(/accessibility and care request was sent/i)).toBeInTheDocument();
+  });
+
+  it('renders polished Registry & Gifts module with labeled external links and cards table location', async () => {
+    vi.mocked(sdk.portal.info).mockResolvedValue({
+      ...BASE_INFO,
+      guestGifts: {
+        links: [
+          { id: 'reg-1', type: 'registry', label: 'Zola Registry', url: 'https://zola.example/registry', description: 'Home goods and experiences' },
+          { id: 'moon-1', type: 'honeymoon', label: 'Honeymoon Fund', url: 'https://fund.example/honeymoon', description: 'Optional travel contribution' },
+          { id: 'charity-1', type: 'charity', label: 'Animal Rescue Donation', url: 'https://charity.example/donate', description: 'Optional donation in our honor' },
+        ],
+        cardsGiftTableLocation: 'Welcome table near the reception entrance',
+        note: 'Your presence is the best gift.',
+        externalLinkWarning: 'Gift links open in a new tab on an external website.',
+      },
+    } as any);
+    renderPortal();
+    expect(await screen.findByText('Registry & Gifts')).toBeInTheDocument();
+    expect(screen.getByText('Your presence is the best gift.')).toBeInTheDocument();
+    expect(screen.getByText(/Welcome table near the reception entrance/i)).toBeInTheDocument();
+    const registry = screen.getByRole('link', { name: /Zola Registry opens in a new tab/i });
+    expect(registry).toHaveAttribute('href', 'https://zola.example/registry');
+    expect(registry).toHaveAttribute('target', '_blank');
+    expect(screen.getByText('Honeymoon Fund')).toBeInTheDocument();
+    expect(screen.getByText('Animal Rescue Donation')).toBeInTheDocument();
+    expect(screen.getByText(/External link safety/i)).toBeInTheDocument();
+  });
+
+  it('renders searchable Guest FAQ & Etiquette policies and sends guest questions', async () => {
+    vi.mocked(sdk.portal.info).mockResolvedValue({
+      ...BASE_INFO,
+      guestFaq: {
+        dressCode: { summary: 'Garden cocktail attire', examples: 'Sundresses, suits, wedges recommended', weather: 'Bring a wrap for cool evening weather.', rainPlan: 'Choose shoes that work indoors if rain plan is activated.' },
+        policies: { kidsPolicy: 'Adults-only reception except named children.', plusOneRules: 'Only named plus-ones may attend.', phonePhotoPolicy: 'Unplugged ceremony; photos welcome at reception.', smokingVapingPolicy: 'Smoking only in the marked patio area.', barAlcoholPolicy: 'Open bar with ID required; no outside alcohol.' },
+        categories: ['Dress code', 'Kids & plus-ones', 'Ceremony', 'Reception'],
+        items: [
+          { id: 'faq-1', category: 'Dress code', question: 'Can I wear heels?', answer: 'Block heels or wedges are best for the lawn.', translations: { es: { question: '¿Puedo usar tacones?', answer: 'Tacones anchos o cuñas son mejores para el césped.' } } },
+          { id: 'faq-2', category: 'Reception', question: 'Is the bar hosted?', answer: 'Yes, please bring ID.' },
+        ],
+        multilingual: { availableLanguages: [{ code: 'en', label: 'English' }, { code: 'es', label: 'Español' }] },
+        askQuestion: { enabled: true, contactLabel: 'venue/couple team' },
+      },
+    } as any);
+    window.location.hash = '#/portal/e-1?guest=g-1&token=t-1';
+    renderPortal();
+    expect(await screen.findByText('Guest FAQ & Etiquette')).toBeInTheDocument();
+    expect(screen.getByText('Garden cocktail attire')).toBeInTheDocument();
+    expect(screen.getByText(/Adults-only reception/i)).toBeInTheDocument();
+    fireEvent.change(screen.getByLabelText('FAQ language'), { target: { value: 'es' } });
+    expect(await screen.findByText('¿Puedo usar tacones?')).toBeInTheDocument();
+    fireEvent.change(screen.getByPlaceholderText(/Search FAQ/i), { target: { value: 'bar' } });
+    expect(screen.getByText('Is the bar hosted?')).toBeInTheDocument();
+    fireEvent.change(screen.getByPlaceholderText(/Ask about dress code/i), { target: { value: 'Is the patio paved for accessibility?' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Send question' }));
+    await waitFor(() => expect(vi.mocked(sdk.portal.askQuestion)).toHaveBeenCalledWith('e-1', expect.objectContaining({ guestId: 'g-1', token: 't-1', question: 'Is the patio paved for accessibility?' })));
+    expect(await screen.findByText(/Your question was sent/i)).toBeInTheDocument();
   });
 
   it('supports name type-ahead search filters and draft discard warning prompts on navigation', async () => {
@@ -481,6 +710,56 @@ describe('PublicGuestPortal — Phase 34b regression suite', () => {
 
     // Verify search input is cleared
     expect((mapSearchInput as HTMLInputElement).value).toBe('');
+  });
+
+
+  it('shows guest-first wayfinding actions, map labels, rain-plan toggle, and AR preview', async () => {
+    vi.mocked(sdk.portal.info).mockResolvedValue({
+      ...BASE_INFO,
+      guestWayfinding: {
+        seatingPrivacyMode: 'personal_only',
+        labels: [
+          { id: 'parking', type: 'parking', label: 'Guest parking', details: 'West lot' },
+          { id: 'entrance', type: 'entrance', label: 'Main entrance', details: 'Garden gate' },
+          { id: 'restroom', type: 'restroom', label: 'Restrooms', details: 'Reception hall hallway' },
+          { id: 'ada_route', type: 'ada_route', label: 'ADA route', details: 'Paved route from accessible parking' },
+        ],
+        indoorMapNote: 'Use the reception hall entrance for rain plan.',
+        outdoorMapNote: 'Use the garden arrival path.',
+        accessibilityRouteDetails: 'Paved route from accessible parking',
+        arPreviewUrl: 'https://example.com/walkthrough',
+        arPreviewDescription: 'Guest-safe walkthrough preview',
+      },
+      guestTravel: { venueAddress: '1 Venue Lane', mapUrl: '', parkingEntrance: 'West lot', dropoffPoint: 'Garden gate', rideshareInstructions: '', shuttleSchedule: '', shuttlePickupLocation: '', shuttleDropoffLocation: '', lastShuttleReminder: '', roomBlockDetails: '', accessibleParking: '', mobilityDropoff: '', destinationTravelFaq: '', weatherRainPlanNote: '', offlineCardUrl: '/travel.txt' },
+    } as any);
+    window.location.hash = '#/portal/e-1?guest=g-1';
+    renderPortal();
+    const mapBtn = await screen.findByRole('button', { name: 'Map' });
+    fireEvent.click(mapBtn);
+    expect(await screen.findByText('Find My Seat / Wayfinding')).toBeInTheDocument();
+    expect(screen.getByText('Find my seat')).toBeInTheDocument();
+    expect(screen.getByText('Find restroom')).toBeInTheDocument();
+    expect(screen.getByText(/Personal-only seating privacy/i)).toBeInTheDocument();
+    expect(screen.getAllByText(/West lot/i).length).toBeGreaterThan(0);
+    fireEvent.click(screen.getByRole('button', { name: /Indoor \/ rain-plan map/i }));
+    expect(screen.getByText(/Use the reception hall entrance for rain plan/i)).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: /Open guest walkthrough/i })).toHaveAttribute('href', 'https://example.com/walkthrough');
+  });
+
+  it('shows friendly seat-not-assigned state without blocking restroom or entrance wayfinding', async () => {
+    vi.mocked(sdk.portal.info).mockResolvedValue({
+      ...BASE_INFO,
+      guests: [{ id: 'g-2', fullName: 'Bob Johnson', tableAssignment: null, seatAssignment: null }],
+      guestWayfinding: { seatingPrivacyMode: 'full_chart', labels: [{ id: 'entrance', type: 'entrance', label: 'Main entrance', details: 'Garden gate' }], indoorMapNote: '', outdoorMapNote: '', accessibilityRouteDetails: '', arPreviewUrl: '', arPreviewDescription: '' },
+    } as any);
+    window.location.hash = '#/portal/e-1?guest=g-2';
+    renderPortal();
+    const mapBtn = await screen.findByRole('button', { name: 'Map' });
+    fireEvent.click(mapBtn);
+    await screen.findByText('Find My Seat / Wayfinding');
+    expect(screen.getAllByText(/Seat not assigned yet\./i).length).toBeGreaterThan(0);
+    expect(screen.getByText('Find entrance')).toBeInTheDocument();
+    expect(screen.getAllByText(/Garden gate/i).length).toBeGreaterThan(0);
   });
 
   it('supports the interactive lodging & cabin maps and roommate lists', async () => {

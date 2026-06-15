@@ -7,7 +7,7 @@
  */
 import { useState, useMemo } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { ClipboardList, Search, Filter, User, Clock, Shield } from 'lucide-react';
+import { ClipboardList, Search, Filter, User, Clock, Shield, KeyRound, TabletSmartphone, UserCog, AlertTriangle } from 'lucide-react';
 import { sdk } from '../../sdk';
 import type { SdkAuditLog } from '../../sdk/audit';
 import { PageBody, PageHeader } from '../../ui/AppShell';
@@ -34,6 +34,10 @@ const ACTION_META: Record<string, { label: string; color: string; icon: string }
   'user.login':         { label: 'User Login',          color: 'default', icon: '🔑' },
   'user.logout':        { label: 'User Logout',         color: 'default', icon: '🚪' },
   'user.password.change': { label: 'Password Changed', color: 'warning', icon: '🔒' },
+  'user.password.reset.request': { label: 'Password Reset Requested', color: 'warning', icon: '📧' },
+  'user.password.reset.complete': { label: 'Password Reset Completed', color: 'success', icon: '🔐' },
+  'member.invite.pending_user': { label: 'Team Invite Sent', color: 'info', icon: '✉️' },
+  'member.invite.existing_user': { label: 'Team Member Added', color: 'success', icon: '👥' },
   'org.branding.update': { label: 'Branding Updated',  color: 'info',    icon: '🎨' },
 };
 
@@ -41,9 +45,26 @@ function getActionMeta(action: string) {
   return ACTION_META[action] ?? { label: action.replace(/\./g, ' ').replace(/\b\w/g, c => c.toUpperCase()), color: 'default', icon: '📋' };
 }
 
+function renderAuditDetails(log: SdkAuditLog) {
+  if (!log.details || log.details === '{}') return null;
+  try {
+    const details = JSON.parse(log.details);
+    if (log.action === 'user.password.reset.request') {
+      return <div className="mt-2 rounded bg-surface-2 px-2 py-1 text-xs text-fg-muted">Delivery: <strong>{details.delivery}</strong>{details.queued !== undefined ? ` • queued: ${String(details.queued)}` : ''}{details.error ? ` • ${details.error}` : ''}</div>;
+    }
+    if (log.action.startsWith('member.invite')) {
+      const delivery = details.delivery;
+      return <div className="mt-2 rounded bg-surface-2 px-2 py-1 text-xs text-fg-muted">Invite: <strong>{details.email}</strong>{details.roleKey ? ` • role: ${details.roleKey}` : ''}{delivery?.channel ? ` • delivery: ${delivery.channel}` : ''}</div>;
+    }
+  } catch { /* ignore malformed details */ }
+  return null;
+}
+
 export function AuditLog({ orgId }: Props) {
   const [search, setSearch] = useState('');
   const [actionFilter, setActionFilter] = useState<string | null>(null);
+  const [managerAuditFilter, setManagerAuditFilter] = useState<'all' | 'manager_ops' | 'pii' | 'approvals' | 'communications'>('all');
+  const managerMode = typeof window !== 'undefined' && localStorage.getItem('wvi_registration_role') === 'venue_manager';
   const debouncedSearch = useDebouncedValue(search, 250);
 
   const { data, isLoading } = useQuery({
@@ -58,14 +79,25 @@ export function AuditLog({ orgId }: Props) {
 
   // Client-side search filter
   const filtered = useMemo(() => {
-    if (!debouncedSearch) return logs;
+    let out = logs;
+    if (managerAuditFilter !== 'all') {
+      out = out.filter((log) => {
+        const haystack = `${log.action} ${log.target_type || ''} ${log.details || ''}`.toLowerCase();
+        if (managerAuditFilter === 'manager_ops') return /guest|vendor|staff|timeline|layout|portal|checkin|communication|broadcast|health/.test(haystack);
+        if (managerAuditFilter === 'pii') return /guest|rsvp|portal|contact|email|phone|pii/.test(haystack);
+        if (managerAuditFilter === 'approvals') return /approval|approved|rejected|owner|delegated|portalchange|go_no_go/.test(haystack);
+        if (managerAuditFilter === 'communications') return /message|broadcast|communication|email|sms|invite|notification/.test(haystack);
+        return true;
+      });
+    }
+    if (!debouncedSearch) return out;
     const q = debouncedSearch.toLowerCase();
-    return logs.filter(l =>
+    return out.filter(l =>
       l.action.toLowerCase().includes(q) ||
       (l.actor_label ?? '').toLowerCase().includes(q) ||
       (l.target_type ?? '').toLowerCase().includes(q)
     );
-  }, [logs, debouncedSearch]);
+  }, [logs, debouncedSearch, managerAuditFilter]);
 
   // Extract unique action types for filter chips
   const actionTypes = useMemo(() => {
@@ -114,6 +146,50 @@ export function AuditLog({ orgId }: Props) {
           </div>
         </div>
 
+        {managerMode && (
+          <div className="grid gap-4 lg:grid-cols-[1.1fr_0.9fr]">
+            <Card className="border-brand/20 bg-brand-soft/5">
+              <CardHeader><CardTitle className="flex items-center gap-2 text-base"><UserCog className="h-4 w-4 text-brand" /> Manager permission policy template</CardTitle></CardHeader>
+              <CardContent className="space-y-3 text-xs text-fg-muted">
+                <div className="grid gap-2 sm:grid-cols-2">
+                  <SecurityPolicyItem label="Can run operations" detail="events, guests, vendors, timeline, layout review, staff, check-in, messages, reports" />
+                  <SecurityPolicyItem label="Must escalate owner/admin" detail="billing, destructive restores, role changes, provider credentials, legal/finance approvals" />
+                  <SecurityPolicyItem label="Per-event manager access scope" detail="Managers should only access assigned event workspaces and relevant PII for operational purposes." />
+                  <SecurityPolicyItem label="Delegated approval workflow" detail="Manager requests → owner/admin review → approved/rejected/resolved audit trail." />
+                </div>
+              </CardContent>
+            </Card>
+            <Card className="border-warning/30 bg-warning-soft/20">
+              <CardHeader><CardTitle className="flex items-center gap-2 text-base"><TabletSmartphone className="h-4 w-4 text-warning" /> Shared tablet/kiosk session security</CardTitle></CardHeader>
+              <CardContent className="space-y-2 text-xs text-fg-muted">
+                <p><strong>Use kiosk/shared tablet mode only on trusted devices.</strong> Sign out after check-in, keep device passcode enabled, avoid saving passwords, and keep guest/vendor PII out of screenshots.</p>
+                <p><KeyRound className="inline h-3.5 w-3.5 mr-1" /> If a device is lost, owner/admin should revoke sessions and rotate shared credentials immediately.</p>
+                <p><AlertTriangle className="inline h-3.5 w-3.5 mr-1" /> Sensitive manager actions require confirmation: broadcasts, portal toggles, approvals, exports, and bulk guest/contact operations.</p>
+              </CardContent>
+            </Card>
+            <Card className="lg:col-span-2">
+              <CardHeader><CardTitle className="flex items-center gap-2 text-base"><Shield className="h-4 w-4 text-brand" /> Manager audit filters & PII access report</CardTitle></CardHeader>
+              <CardContent className="space-y-3">
+                <div className="flex flex-wrap gap-2">
+                  {([
+                    ['all', 'All activity'],
+                    ['manager_ops', 'Manager operations'],
+                    ['pii', 'PII access'],
+                    ['approvals', 'Approvals / delegation'],
+                    ['communications', 'Messages / broadcasts'],
+                  ] as const).map(([id, label]) => <button key={id} onClick={() => setManagerAuditFilter(id)} className={`rounded-full px-3 py-1 text-xs font-bold ${managerAuditFilter === id ? 'bg-brand text-brand-fg' : 'bg-surface-2 text-fg-muted'}`}>{label}</button>)}
+                </div>
+                <div className="grid gap-2 sm:grid-cols-4 text-xs">
+                  <SecurityPolicyItem label="PII events" detail={`${logs.filter(l => /guest|rsvp|portal|contact|email|phone/i.test(`${l.action} ${l.target_type} ${l.details}`)).length} matching audit record(s)`} />
+                  <SecurityPolicyItem label="Approvals" detail={`${logs.filter(l => /approval|approved|rejected|delegated/i.test(`${l.action} ${l.details}`)).length} approval-related record(s)`} />
+                  <SecurityPolicyItem label="Messages" detail={`${logs.filter(l => /message|broadcast|communication|invite|email|sms/i.test(`${l.action} ${l.details}`)).length} communication record(s)`} />
+                  <SecurityPolicyItem label="Current filter" detail={`${filtered.length} visible record(s)`} />
+                </div>
+              </CardContent>
+            </Card>
+          </div>
+        )}
+
         {/* Log entries */}
         {isLoading ? (
           <div className="space-y-3">{[1,2,3,4,5].map(i => <Skeleton key={i} className="h-16" />)}</div>
@@ -152,6 +228,7 @@ export function AuditLog({ orgId }: Props) {
                           <span className="text-fg-subtle">{log.ip}</span>
                         )}
                       </div>
+                      {renderAuditDetails(log)}
                     </div>
                   </div>
                 );
@@ -162,4 +239,9 @@ export function AuditLog({ orgId }: Props) {
       </PageBody>
     </>
   );
+}
+
+
+function SecurityPolicyItem({ label, detail }: { label: string; detail: string }) {
+  return <div className="rounded-lg border border-border bg-surface p-3"><div className="text-xs font-bold text-fg">{label}</div><p className="mt-1 text-[11px] text-fg-muted">{detail}</p></div>;
 }

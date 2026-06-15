@@ -85,11 +85,16 @@ export function PlatformStudio({ orgId, onSaved }: Props) {
         title="Platform Studio"
         description="Configure how the platform looks and behaves for everyone in your organization."
         actions={
-          previewActive && (
-            <Badge variant="warning" className="px-3 py-1">
-              Live preview active — release the card to clear
-            </Badge>
-          )
+          <div className="flex items-center gap-2">
+            {previewActive && (
+              <Badge variant="warning" className="px-3 py-1">
+                Live preview active — release the card to clear
+              </Badge>
+            )}
+            <Button variant="outline" size="sm" onClick={() => window.dispatchEvent(new CustomEvent('wvi:open-owner-setup'))}>
+              Restart setup wizard
+            </Button>
+          </div>
         }
       />
       <PageBody>

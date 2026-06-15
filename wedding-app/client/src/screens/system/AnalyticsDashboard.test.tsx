@@ -18,7 +18,16 @@ vi.mock('../../sdk', () => ({
       }),
     },
     vendors: {
-      list: vi.fn().mockResolvedValue({ vendors: [{ id: 'v1', name: 'DJ Snake', category: 'entertainment' }] })
+      list: vi.fn().mockResolvedValue({ vendors: [{ id: 'v1', name: 'DJ Snake', category: 'entertainment', metadata: JSON.stringify({ arrivalTime: '3:00 PM', coiReceived: true }), contract_amount_cents: 100000, amount_paid_cents: 100000 }] })
+    },
+    staff: {
+      listTasks: vi.fn().mockResolvedValue({ tasks: [
+        { id: 't1', title: 'Setup ceremony', status: 'completed', priority: 'high' },
+        { id: 't2', title: 'Resolve incident', status: 'blocked', priority: 'critical' }
+      ] })
+    },
+    risk: {
+      forOrg: vi.fn().mockResolvedValue({ events: [{ eventId: 'e1', eventTitle: 'Smith', healthScore: 72, daysUntil: 5, alerts: [] }] })
     }
   }
 }));
@@ -26,6 +35,8 @@ vi.mock('../../sdk', () => ({
 describe('AnalyticsDashboard', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    localStorage.clear();
+    queryClient.clear();
   });
 
   const TestWrapper = ({ children }: any) => (
@@ -49,6 +60,21 @@ describe('AnalyticsDashboard', () => {
     
     // Total Vendors Tracked
     expect(screen.getByText('1')).toBeInTheDocument();
+  });
+
+
+  it('renders manager operations analytics dashboard in manager mode', async () => {
+    localStorage.setItem('wvi_registration_role', 'venue_manager');
+    render(<AnalyticsDashboard orgId="org-1" />, { wrapper: TestWrapper });
+
+    expect(await screen.findByText('Manager Operations Analytics')).toBeInTheDocument();
+    expect(screen.getByText('Manager operations analytics dashboard')).toBeInTheDocument();
+    expect(screen.getByText('Post-event debrief generator')).toBeInTheDocument();
+    expect(screen.getByText('Timeline drift report')).toBeInTheDocument();
+    expect(screen.getByText('Staff productivity report')).toBeInTheDocument();
+    expect(screen.getByText('Vendor scorecard report')).toBeInTheDocument();
+    expect(screen.getByText('Guest service operations report')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /Export weekly manager briefing/i })).toBeInTheDocument();
   });
 
 

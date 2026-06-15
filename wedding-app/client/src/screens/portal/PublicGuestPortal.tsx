@@ -19,62 +19,45 @@
  *
  * After Phase 35a, PublicGuestPortal.tsx has ZERO `any` annotations.
  */
-import React, { useState, useEffect, useMemo } from 'react';
-import type { KonvaEventObject } from 'konva/lib/Node';
+import React, { lazy, Suspense, useState, useEffect, useMemo } from 'react';
 import { ApiError, sdk }           from '../../sdk';
-import { Card, CardContent, CardHeader, CardTitle } from '../../ui/Card';
+import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '../../ui/Card';
 import { Button }                  from '../../ui/Button';
 import { Label }                   from '../../ui/Label';
-import { Input }                   from '../../ui/Input';
-import { Map as MapIcon, Home, Send, CloudRain, Activity } from 'lucide-react';
+import { Map as MapIcon, Home, Send, CloudRain, HelpCircle, Bus, Gift, Mail, Contrast, Languages, RefreshCw, ShieldAlert, Type } from 'lucide-react';
 import { Badge }                   from '../../ui/Badge';
-import { Stage, Layer, Rect, Circle, Text, Group } from 'react-konva';
 import { cn }                      from '../../ui/lib/cn';
 import type { Poll }               from '../../sdk/feedback.js';
 import type {
   PortalInfoResponse,
   PortalGuestEntry,
   PortalLayoutPayload,
-  LayoutCanvasItem,
-  RoundTableItem,
-  RectTableItem,
-  DanceFloorItem,
-  ChairItem,
   PollOption,
 } from '../../sdk/portalTypes.js';
+
+
+const GuestPortalHome = lazy(() => import('./GuestPortalHome').then((m) => ({ default: m.GuestPortalHome })));
+const GuestRsvpWizard = lazy(() => import('./GuestRsvpWizard').then((m) => ({ default: m.GuestRsvpWizard })));
+const GuestWeekendItinerary = lazy(() => import('./GuestWeekendItinerary').then((m) => ({ default: m.GuestWeekendItinerary })));
+const GuestMapWayfinding = lazy(() => import('./GuestMapWayfinding').then((m) => ({ default: m.GuestMapWayfinding }))); 
 
 // ── Default portal palette (warm/elegant) ─────────────────────────────────
 
 const DEFAULT_PALETTE = {
   bg:           '#fdfbf7',
   surface:      '#ffffff',
-  border:       '#e1d5c9',
+  border:       'rgb(var(--color-border))',
   fg:           '#2c3e2e',
   fgMuted:      '#6b7280',
   fgSubtle:     '#9ca3af',
   primary:      '#2c3e2e',
   primaryFg:    '#ffffff',
   primaryHover: '#1a251b',
-  accent:       '#e1d5c9',
+  accent:       'rgb(var(--color-accent))',
   accentSoft:   'rgba(225,213,201,0.3)',
 };
 
 type Palette = typeof DEFAULT_PALETTE;
-
-// ── Type guards for canvas item discriminated union ───────────────────────
-
-function isRoundTable(item: LayoutCanvasItem): item is RoundTableItem {
-  return item.type === 'round_table';
-}
-function isRectTable(item: LayoutCanvasItem): item is RectTableItem {
-  return item.type === 'rect_table';
-}
-function isDanceFloor(item: LayoutCanvasItem): item is DanceFloorItem {
-  return item.type === 'dance_floor';
-}
-function isChair(item: LayoutCanvasItem): item is ChairItem {
-  return item.type === 'chair';
-}
 
 // ── PublicGuestPortal ─────────────────────────────────────────────────────
 
@@ -91,12 +74,37 @@ export function PublicGuestPortal({ eventId }: { eventId: string }) {
   const [notes,           setNotes]          = useState('');
   const [done,            setDone]           = useState(false);
   const [error,           setError]          = useState<string | null>(null);
+  const [portalStatus,    setPortalStatus]   = useState<{ event?: { title: string; startDate: string | null }; status?: 'available' | 'disabled'; support?: { label: string; email: string; phone: string }; message?: string } | null>(null);
   const [activeTab,       setActiveTab]      = useState<'home' | 'map' | 'rsvp'>('home');
 
   const [subEvents,       setSubEvents]      = useState<any[]>([]);
   const [timeline,        setTimeline]       = useState<any[]>([]);
+  const [portalBranding,  setPortalBranding] = useState<PortalInfoResponse['branding'] | null>(null);
+  const [portalConfig,    setPortalConfig]   = useState<Record<string, any>>({});
+  const [portalAccess,    setPortalAccess]   = useState<PortalInfoResponse['access'] | null>(null);
+  const [guestHome,       setGuestHome]      = useState<PortalInfoResponse['guestHome'] | null>(null);
+  const [guestSchedule,   setGuestSchedule]  = useState<PortalInfoResponse['guestSchedule'] | null>(null);
+  const [guestTravel,     setGuestTravel]    = useState<PortalInfoResponse['guestTravel'] | null>(null);
+  const [guestWayfinding, setGuestWayfinding] = useState<PortalInfoResponse['guestWayfinding'] | null>(null);
+  const [guestFaq,        setGuestFaq]       = useState<PortalInfoResponse['guestFaq'] | null>(null);
+  const [guestGifts,      setGuestGifts]     = useState<PortalInfoResponse['guestGifts'] | null>(null);
+  const [guestCare,       setGuestCare]      = useState<PortalInfoResponse['guestCare'] | null>(null);
+  const [guestPrivacy,    setGuestPrivacy]   = useState<PortalInfoResponse['guestPrivacy'] | null>(null);
+  const [guestReminders,  setGuestReminders] = useState<PortalInfoResponse['guestReminders'] | null>(null);
+  const [guestDayOf,      setGuestDayOf]     = useState<PortalInfoResponse['guestDayOf'] | null>(null);
+  const [guestPostEvent,  setGuestPostEvent] = useState<PortalInfoResponse['guestPostEvent'] | null>(null);
+  const [largeTextMode,   setLargeTextMode]  = useState(() => localStorage.getItem('wvi_guest_large_text') === '1');
+  const [highContrastMode,setHighContrastMode] = useState(() => localStorage.getItem('wvi_guest_high_contrast') === '1');
   const [nowTime,         setNowTime]        = useState(Date.now());
   const [scheduleTab,     setScheduleTab]    = useState<'wedding' | 'subevents'>('wedding');
+  const [guestToken,      setGuestToken]      = useState('');
+  const [guestLanguage,   setGuestLanguage]   = useState('en');
+  const [lookupQuery,     setLookupQuery]     = useState('');
+  const [lookupEmail,     setLookupEmail]     = useState('');
+  const [lookupResults,   setLookupResults]   = useState<Array<{ id: string; label: string; partyName: string | null; requiresSecureLink: boolean }>>([]);
+  const [lookupMessage,   setLookupMessage]   = useState('');
+  const [venueReplies,    setVenueReplies]    = useState<Array<{ id: string; body: string; channel: string; sentByLabel: string; createdAt: string }>>([]);
+  const [venueMessagesEmpty, setVenueMessagesEmpty] = useState('Venue replies to your guest help requests will appear here.');
 
   const [searchQuery,         setSearchQuery]         = useState('');
   const [checkedHouseholdIds, setCheckedHouseholdIds] = useState<string[]>([]);
@@ -104,7 +112,6 @@ export function PublicGuestPortal({ eventId }: { eventId: string }) {
   const [memberMeals,         setMemberMeals]         = useState<Record<string, string>>({});
   const [subEventAttending,   setSubEventAttending]   = useState<Record<string, boolean>>({});
   const [isFormDirty,         setIsFormDirty]         = useState(false);
-  const [mapSearchQuery,      setMapSearchQuery]      = useState('');
 
   const activeGuest = guests.find((g) => g.id === selectedGuestId);
 
@@ -114,11 +121,6 @@ export function PublicGuestPortal({ eventId }: { eventId: string }) {
     return guests.filter(g => g.fullName.toLowerCase().includes(q));
   }, [guests, searchQuery]);
 
-  const mapFilteredGuests = useMemo(() => {
-    if (!mapSearchQuery.trim()) return [];
-    const q = mapSearchQuery.toLowerCase();
-    return guests.filter(g => g.fullName.toLowerCase().includes(q) && g.tableAssignment);
-  }, [guests, mapSearchQuery]);
 
   const householdCandidates = useMemo(() => {
     if (!activeGuest) return [];
@@ -137,20 +139,51 @@ export function PublicGuestPortal({ eventId }: { eventId: string }) {
     return () => clearInterval(interval);
   }, []);
 
+  useEffect(() => { localStorage.setItem('wvi_guest_large_text', largeTextMode ? '1' : '0'); }, [largeTextMode]);
+  useEffect(() => { localStorage.setItem('wvi_guest_high_contrast', highContrastMode ? '1' : '0'); }, [highContrastMode]);
+
+  const portalPalette = highContrastMode ? {
+    ...palette,
+    bg: '#000000', surface: '#0b0b0b', border: '#ffffff', fg: '#ffffff', fgMuted: '#f3f4f6', fgSubtle: '#e5e7eb', primary: '#ffffff', primaryFg: '#000000', primaryHover: '#f3f4f6', accent: '#facc15', accentSoft: '#1f2937',
+  } : palette;
+
   // ── Boot: load portal data ───────────────────────────────────────────────
   useEffect(() => {
     const sp = new URLSearchParams(window.location.hash.split('?')[1] || '');
     const guestParam = sp.get('guest');
+    const tokenParam = sp.get('token') || '';
     if (guestParam) setSelectedGuestId(guestParam);
+    if (tokenParam) setGuestToken(tokenParam);
 
     // any#1 fixed (Phase 34b): r is PortalInfoResponse, not any
-    sdk.portal.info(eventId)
+    sdk.portal.info(eventId, guestParam ? { guest: guestParam, token: tokenParam } : undefined)
       .then((r: any) => {
         setInfo(r.event);
         setGuests(r.guests);   // any#2 fixed
         setLayout(r.layout);   // any#3 fixed
         setSubEvents(r.subEvents || []);
         setTimeline(r.timeline || []);
+        setPortalBranding(r.branding ?? null);
+        setPortalConfig(r.config ?? {});
+        setPortalAccess(r.access ?? null);
+        setGuestHome(r.guestHome ?? null);
+        setGuestSchedule(r.guestSchedule ?? null);
+        setGuestTravel(r.guestTravel ?? null);
+        setGuestWayfinding(r.guestWayfinding ?? null);
+        setGuestFaq(r.guestFaq ?? null);
+        setGuestGifts(r.guestGifts ?? null);
+        setGuestCare(r.guestCare ?? null);
+        setGuestPrivacy(r.guestPrivacy ?? null);
+        setGuestReminders(r.guestReminders ?? null);
+        setGuestDayOf(r.guestDayOf ?? null);
+        setGuestPostEvent(r.guestPostEvent ?? null);
+        if (r.identity?.selectedGuestId) setSelectedGuestId(r.identity.selectedGuestId);
+        if (r.identity?.supportMessage) setLookupMessage(r.identity.supportMessage);
+        if (r.identity?.selectedGuestId && tokenParam) {
+          sdk.portal.messages(eventId, { guest: r.identity.selectedGuestId, token: tokenParam })
+            .then((messages) => { setVenueReplies(messages.replies || []); setVenueMessagesEmpty(messages.emptyState); })
+            .catch(() => setVenueMessagesEmpty('Sign in with your secure invitation link to see venue replies.'));
+        }
 
         // r.theme was the missing field that forced the original `any` cast
         if (r.theme) {
@@ -174,7 +207,12 @@ export function PublicGuestPortal({ eventId }: { eventId: string }) {
           .then((res) => setPolls(res.polls))   // any#4 fixed: Poll[]
           .catch(() => {});
       })
-      .catch(() => setError('Event not found.'));
+      .catch((err: any) => {
+        const isOffline = err?.kind === 'offline' || err?.code === 'network-error';
+        const isDisabled = err?.code === 'portal-disabled';
+        setError(isOffline ? 'Network connection failed. Your portal may be temporarily unavailable.' : isDisabled ? 'This guest portal is currently disabled by the venue/couple team.' : 'Event not found. This guest portal link may be invalid, expired, or not yet available.');
+        sdk.portal.status(eventId).then((status) => setPortalStatus(status)).catch(() => setPortalStatus(null));
+      });
   }, [eventId]);
 
   // ── RSVP submit ──────────────────────────────────────────────────────────
@@ -186,6 +224,7 @@ export function PublicGuestPortal({ eventId }: { eventId: string }) {
       // Submit primary guest
       await sdk.portal.submitRsvp(eventId, {
         guestId:    selectedGuestId,
+        token: guestToken || undefined,
         attending,
         mealChoice,
         notes: notes || undefined,
@@ -219,24 +258,73 @@ export function PublicGuestPortal({ eventId }: { eventId: string }) {
     setIsFormDirty(false);
   };
 
+  async function lookupGuest() {
+    setError(null);
+    setLookupMessage('');
+    try {
+      const res = await sdk.portal.lookup(eventId, { query: lookupQuery, email: lookupEmail || undefined });
+      setLookupResults(res.matches);
+      setLookupMessage(res.matches.length ? res.privacy : 'No matching invitation was found. You can request help or ask for a secure link.');
+    } catch (err) {
+      setLookupMessage((err as Error).message || 'Lookup failed. Please request help.');
+    }
+  }
+
+  async function requestGuestHelp(kind: 'cannot_find_name' | 'wrong_guest' | 'expired_or_revoked' | 'other') {
+    const email = window.prompt('Email where the venue/couple can reach you', lookupEmail || '') || undefined;
+    const message = window.prompt('Optional note', kind === 'wrong_guest' ? 'This invitation link is not for me.' : '') || undefined;
+    const res = await sdk.portal.requestHelp(eventId, { kind, name: lookupQuery || activeGuest?.fullName, email, message, guestId: selectedGuestId || undefined });
+    setLookupMessage(res.message);
+  }
+
+  async function resendSecureLink() {
+    const email = lookupEmail || window.prompt('Enter your email address to request your secure RSVP link') || '';
+    if (!email) return;
+    const res = await sdk.portal.resendLink(eventId, { email, name: lookupQuery || undefined });
+    setLookupMessage(res.message);
+  }
+
+  function saveGuestEventDetails() {
+    if (!info) return;
+    const lines = [
+      `${info.title} — Guest event details`,
+      `Type: ${guestHome?.eventType || info.eventType || 'wedding'}`,
+      `Date: ${info.startDate || 'TBD'}`,
+      `Location: ${guestHome?.locationSummary || info.locationSummary || 'Venue details pending'}`,
+      `RSVP deadline: ${guestHome?.rsvpDeadline || info.rsvpDeadline || 'TBD'}`,
+      activeGuest ? `Guest: ${activeGuest.fullName}` : 'Guest: not selected yet',
+      activeGuest?.tableAssignment ? `Table: ${activeGuest.tableAssignment}` : '',
+      activeGuest?.seatAssignment ? `Seat: ${activeGuest.seatAssignment}` : '',
+      activeGuest?.roomAssignment ? `Lodging: ${activeGuest.roomAssignment}` : '',
+      '',
+      'Schedule:',
+      ...timeline.slice(0, 8).map((item: any) => `- ${item.title || 'Schedule item'} ${item.starts_at ? new Date(item.starts_at).toLocaleString() : ''}`),
+      '',
+      'Guest-facing updates:',
+      ...((guestHome?.changeNotices || []).map((notice) => `- ${notice.title}: ${notice.body}`)),
+    ].filter(Boolean).join('\n');
+    const url = URL.createObjectURL(new Blob([lines], { type: 'text/plain' }));
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `guest-event-details-${eventId}.txt`;
+    a.click();
+    URL.revokeObjectURL(url);
+  }
+
   // ── Guards ───────────────────────────────────────────────────────────────
   if (error && !info) {
-    return (
-      <Card className="max-w-md mx-auto mt-20">
-        <CardContent className="pt-6 text-danger">{error}</CardContent>
-      </Card>
-    );
+    return <GuestPortalRecoveryCenter eventId={eventId} error={error} portalStatus={portalStatus} onRetry={() => window.location.reload()} />;
   }
 
   if (!info) {
     return (
       <div
         className="min-h-screen flex items-center justify-center"
-        style={{ background: palette.bg }}
+        style={{ background: portalPalette.bg }}
         aria-busy="true"
         aria-label="Loading wedding portal"
       >
-        <div className="animate-pulse" style={{ color: palette.fgMuted }}>
+        <div className="animate-pulse" style={{ color: portalPalette.fgMuted }}>
           Loading Portal…
         </div>
       </div>
@@ -245,38 +333,48 @@ export function PublicGuestPortal({ eventId }: { eventId: string }) {
 
   // Inline CSS var block so all children inherit the theme via var()
   const themeVars: React.CSSProperties = {
-    '--portal-bg':           palette.bg,
-    '--portal-surface':      palette.surface,
-    '--portal-border':       palette.border,
-    '--portal-fg':           palette.fg,
-    '--portal-fg-muted':     palette.fgMuted,
-    '--portal-primary':      palette.primary,
-    '--portal-primary-fg':   palette.primaryFg,
-    '--portal-primary-hover':palette.primaryHover,
-    '--portal-accent':       palette.accent,
-    '--portal-accent-soft':  palette.accentSoft,
+    '--portal-bg':           portalPalette.bg,
+    '--portal-surface':      portalPalette.surface,
+    '--portal-border':       portalPalette.border,
+    '--portal-fg':           portalPalette.fg,
+    '--portal-fg-muted':     portalPalette.fgMuted,
+    '--portal-primary':      portalPalette.primary,
+    '--portal-primary-fg':   portalPalette.primaryFg,
+    '--portal-primary-hover':portalPalette.primaryHover,
+    '--portal-accent':       portalPalette.accent,
+    '--portal-accent-soft':  portalPalette.accentSoft,
   } as React.CSSProperties;
 
   return (
     <div
-      className="min-h-screen font-serif flex flex-col relative pb-20"
-      style={{ background: palette.bg, color: palette.fg, ...themeVars }}
+      className={cn("min-h-screen font-serif flex flex-col relative pb-20", largeTextMode && "text-lg")}
+      style={{ background: portalPalette.bg, color: portalPalette.fg, ...themeVars }}
     >
       {/* Header */}
       <header
         className="py-6 px-4 text-center sticky top-0 z-10 shadow-sm"
-        style={{ background: palette.surface, borderBottom: `1px solid ${palette.border}` }}
+        style={{ background: portalPalette.surface, borderBottom: `1px solid ${portalPalette.border}` }}
       >
         <h1 className="text-2xl md:text-4xl font-display font-bold tracking-widest">
           {info.title}
         </h1>
-        <p className="mt-2 text-sm uppercase tracking-widest" style={{ color: palette.fgMuted }}>
+        {portalBranding?.platformName && (
+          <div className="mt-1 text-[10px] uppercase tracking-widest font-bold" style={{ color: portalPalette.fgMuted }}>
+            {portalBranding.platformName}
+          </div>
+        )}
+        <p className="mt-2 text-sm uppercase tracking-widest" style={{ color: portalPalette.fgMuted }}>
           {info.startDate
             ? new Date(info.startDate).toLocaleDateString(undefined, {
                 weekday: 'long', year: 'numeric', month: 'long', day: 'numeric',
               })
             : 'TBD'}
         </p>
+        <div className="mt-3 flex flex-wrap items-center justify-center gap-2" aria-label="Public portal accessibility preferences">
+          <Button type="button" size="sm" variant="outline" onClick={() => setLargeTextMode((v) => !v)} aria-pressed={largeTextMode} aria-label="Toggle large text mode"><Type className="h-3.5 w-3.5 mr-1" /> Large text</Button>
+          <Button type="button" size="sm" variant="outline" onClick={() => setHighContrastMode((v) => !v)} aria-pressed={highContrastMode} aria-label="Toggle high contrast mode"><Contrast className="h-3.5 w-3.5 mr-1" /> High contrast</Button>
+          <label className="inline-flex h-8 items-center gap-1 rounded-md border px-2 text-xs font-bold" style={{ borderColor: portalPalette.border, background: portalPalette.surface }}><Languages className="h-3.5 w-3.5" /><span className="sr-only">Portal language</span><select value={guestLanguage} onChange={(e) => setGuestLanguage(e.target.value)} aria-label="Portal shell language" className="bg-transparent"><option value="en">English</option><option value="es">Español</option><option value="fr">Français</option><option value="zh">中文</option></select></label>
+        </div>
       </header>
 
       <main className="flex-1 max-w-4xl mx-auto w-full p-4 md:p-8">
@@ -287,17 +385,55 @@ export function PublicGuestPortal({ eventId }: { eventId: string }) {
             {/* Hero banner */}
             <div
               className="aspect-[21/9] w-full rounded-xl overflow-hidden shadow-lg relative flex items-center justify-center"
-              style={{ background: palette.accent }}
+              style={{ background: portalPalette.accent }}
             >
               {/* Dark scrim — keeps headline ≥3:1 contrast over any accent colour */}
               <div className="absolute inset-0 bg-black/45" aria-hidden="true" />
               <h2
-                className="relative z-10 text-white font-display text-4xl md:text-5xl lg:text-6xl text-center px-4 leading-tight"
+                className="relative z-10 text-brand-fg font-display text-4xl md:text-5xl lg:text-6xl text-center px-4 leading-tight"
                 style={{ textShadow: '0 1px 4px rgba(0,0,0,0.6)' }}
               >
                 We can't wait to <br /> celebrate with you.
               </h2>
             </div>
+
+            <Suspense fallback={<Card><CardContent className="pt-6"><div className="h-64 animate-pulse rounded-lg bg-surface-2" /></CardContent></Card>}>
+              <GuestPortalHome
+                eventId={eventId}
+                info={info}
+                guestHome={guestHome}
+                activeGuest={activeGuest}
+                palette={portalPalette}
+                guestToken={guestToken}
+                guestLanguage={guestLanguage}
+                setGuestLanguage={setGuestLanguage}
+                portalAccess={portalAccess}
+                lookupQuery={lookupQuery}
+                setLookupQuery={setLookupQuery}
+                lookupEmail={lookupEmail}
+                setLookupEmail={setLookupEmail}
+                lookupGuest={lookupGuest}
+                lookupMessage={lookupMessage}
+                lookupResults={lookupResults}
+                onSelectLookupGuest={(match) => { setGuests((current) => current.some((g) => g.id === match.id) ? current : [...current, { id: match.id, fullName: match.label, tableAssignment: null, seatAssignment: null, roomAssignment: null }]); setSelectedGuestId(match.id); setActiveTab('rsvp'); }}
+                resendSecureLink={resendSecureLink}
+                requestGuestHelp={requestGuestHelp}
+                venueReplies={venueReplies}
+                venueMessagesEmpty={venueMessagesEmpty}
+                setActiveTab={setActiveTab}
+                saveGuestEventDetails={saveGuestEventDetails}
+                config={portalConfig}
+                branding={portalBranding}
+                guestTravel={guestTravel}
+                guestFaq={guestFaq}
+                guestGifts={guestGifts}
+                guestCare={guestCare}
+                guestPrivacy={guestPrivacy}
+                guestReminders={guestReminders}
+                guestDayOf={guestDayOf}
+                guestPostEvent={guestPostEvent}
+              />
+            </Suspense>
 
             {/* Precision Countdown */}
             {info.startDate && (() => {
@@ -309,26 +445,26 @@ export function PublicGuestPortal({ eventId }: { eventId: string }) {
               const minutes = Math.max(0, Math.floor((diff % 3600000) / 60000));
 
               return (
-                <div className="text-center py-6 px-4 rounded-2xl border" style={{ borderColor: palette.border, background: palette.surface }}>
-                  <span className="text-[10px] uppercase font-bold tracking-widest block mb-1.5" style={{ color: palette.primary }}>Wedding Day Countdown</span>
+                <div className="text-center py-6 px-4 rounded-2xl border" style={{ borderColor: portalPalette.border, background: portalPalette.surface }}>
+                  <span className="text-[10px] uppercase font-bold tracking-widest block mb-1.5" style={{ color: portalPalette.primary }}>Wedding Day Countdown</span>
                   {isPast ? (
-                    <div className="font-display text-2xl py-4" style={{ color: palette.primary }}>
+                    <div className="font-display text-2xl py-4" style={{ color: portalPalette.primary }}>
                       🎉 Congratulations! It's Celebration Time!
                     </div>
                   ) : (
                     <div className="flex justify-center items-center gap-4 sm:gap-6 py-2">
                       <div className="text-center">
-                        <div className="font-display text-4xl sm:text-5xl font-black" style={{ color: palette.primary }}>{days}</div>
+                        <div className="font-display text-4xl sm:text-5xl font-black" style={{ color: portalPalette.primary }}>{days}</div>
                         <div className="text-[9px] uppercase tracking-wider text-fg-subtle mt-0.5 font-sans font-bold">Days</div>
                       </div>
                       <div className="font-display text-2xl sm:text-3xl text-fg-subtle opacity-40">:</div>
                       <div className="text-center">
-                        <div className="font-display text-4xl sm:text-5xl font-black" style={{ color: palette.primary }}>{hours}</div>
+                        <div className="font-display text-4xl sm:text-5xl font-black" style={{ color: portalPalette.primary }}>{hours}</div>
                         <div className="text-[9px] uppercase tracking-wider text-fg-subtle mt-0.5 font-sans font-bold">Hours</div>
                       </div>
                       <div className="font-display text-2xl sm:text-3xl text-fg-subtle opacity-40">:</div>
                       <div className="text-center">
-                        <div className="font-display text-4xl sm:text-5xl font-black" style={{ color: palette.primary }}>{minutes}</div>
+                        <div className="font-display text-4xl sm:text-5xl font-black" style={{ color: portalPalette.primary }}>{minutes}</div>
                         <div className="text-[9px] uppercase tracking-wider text-fg-subtle mt-0.5 font-sans font-bold">Minutes</div>
                       </div>
                     </div>
@@ -338,120 +474,48 @@ export function PublicGuestPortal({ eventId }: { eventId: string }) {
             })()}
 
             {/* On-Site Weather Station Widget */}
-            <Card style={{ background: palette.surface, borderColor: palette.border }}>
+            <Card style={{ background: portalPalette.surface, borderColor: portalPalette.border }}>
                <CardContent className="p-5 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
                   <div className="space-y-1">
-                     <span className="text-[9px] uppercase font-bold tracking-widest block" style={{ color: palette.primary }}>Seven Paths Manor Live Weather Station</span>
+                     <span className="text-[9px] uppercase font-bold tracking-widest block" style={{ color: portalPalette.primary }}>Venue Weather Station</span>
                      <h4 className="text-base font-serif font-black text-brand flex items-center gap-1.5">
-                        <CloudRain className="w-5 h-5 text-brand" /> Estate Atmospheric Monitor
+                        <CloudRain className="w-5 h-5 text-brand" /> Venue Weather Monitor
                      </h4>
                      <p className="text-xs text-fg-subtle font-semibold max-w-md">
-                        Live forecasts at the manor coordinates. Plan outfits, umbrellas, or footwear accordingly.
+                        Live forecast guidance for the venue area. Plan outfits, umbrellas, or footwear accordingly.
                      </p>
                   </div>
 
-                  <div className="flex gap-4 items-center bg-[#FDFBF7] p-3 rounded-xl border border-[#e1d5c9] w-full sm:w-auto">
+                  <div className="flex gap-4 items-center bg-surface p-3 rounded-xl border border-border w-full sm:w-auto">
                      <div className="text-center shrink-0">
                         <span className="text-2xl">🌦️</span>
                         <div className="text-xs font-black mt-0.5">72°F</div>
                      </div>
                      <div className="text-xs font-semibold text-fg-muted space-y-0.5">
                         <div>Condition: <strong className="text-fg font-bold">Passing Showers</strong></div>
-                        <div>Rain Risk: <strong className="text-amber-600 font-bold">40% afternoon</strong></div>
-                        <div>Staging: <strong className="text-emerald-600 font-bold">Plan B on standby</strong></div>
+                        <div>Rain Risk: <strong className="text-warning font-bold">40% afternoon</strong></div>
+                        <div>Staging: <strong className="text-success font-bold">Plan B on standby</strong></div>
                      </div>
                   </div>
                </CardContent>
             </Card>
 
-            {/* Dual-Schedule Timeline Widget */}
-            {(timeline.length > 0 || subEvents.length > 0) && (
-              <div className="space-y-4 pt-6" style={{ borderTop: `1px solid ${palette.border}` }}>
-                 <h3 className="font-display text-2xl text-center">Event Schedule &amp; Timelines</h3>
-                 
-                 <div className="flex justify-center border border-[#e1d5c9] p-1 rounded-xl bg-white max-w-sm mx-auto">
-                    <button
-                       type="button"
-                       onClick={() => setScheduleTab('wedding')}
-                       className={cn(
-                          "flex-1 py-1.5 text-xs font-bold rounded-lg transition-all",
-                          scheduleTab === 'wedding' ? "bg-[#2C2A29] text-white" : "text-fg-muted hover:bg-gray-100"
-                       )}
-                    >
-                       Ceremony Run of Show
-                    </button>
-                    <button
-                       type="button"
-                       onClick={() => setScheduleTab('subevents')}
-                       className={cn(
-                          "flex-1 py-1.5 text-xs font-bold rounded-lg transition-all",
-                          scheduleTab === 'subevents' ? "bg-[#2C2A29] text-white" : "text-fg-muted hover:bg-gray-100"
-                       )}
-                    >
-                       Weekend Sub-Events
-                    </button>
-                 </div>
 
-                 {scheduleTab === 'wedding' ? (
-                    <div className="space-y-3 bg-white p-4 rounded-xl border text-left" style={{ borderColor: palette.border }}>
-                       {timeline.length === 0 ? (
-                          <p className="text-xs text-fg-subtle italic text-center py-4">No wedding milestones published yet.</p>
-                       ) : (
-                          timeline.slice(0, 6).map((item: any) => {
-                             const time = item.time || (item.starts_at ? new Date(item.starts_at).toLocaleTimeString(undefined, {hour: '2-digit', minute: '2-digit'}) : 'TBD');
-                             return (
-                                <div key={item.id} className="flex gap-4 items-start text-xs border-b last:border-0 pb-2.5 last:pb-0">
-                                   <Badge variant="outline" className="text-[9px] font-bold text-brand bg-brand-soft/10 select-none py-0.5 px-1.5 shrink-0">{time}</Badge>
-                                   <div className="space-y-0.5">
-                                      <div className="font-bold text-fg">{item.title}</div>
-                                      {item.description && <p className="text-[10px] text-fg-subtle font-semibold">{item.description}</p>}
-                                   </div>
-                                </div>
-                             );
-                          })
-                       )}
-                    </div>
-                 ) : (
-                    <div className="space-y-3 bg-white p-4 rounded-xl border text-left" style={{ borderColor: palette.border }}>
-                       {(() => {
-                          const visibleSubEvents = activeGuest
-                             ? subEvents.filter((sub: any) => !sub.invite_only || activeGuest.subEventInvites?.includes(sub.id))
-                             : subEvents.filter((sub: any) => !sub.invite_only);
-                             
-                          if (visibleSubEvents.length === 0) {
-                             return <p className="text-xs text-fg-subtle italic text-center py-4">No public weekend sub-events scheduled yet.</p>;
-                          }
-                          
-                          return visibleSubEvents.map((sub: any) => {
-                             const dateStr = sub.starts_at ? new Date(sub.starts_at).toLocaleDateString(undefined, { weekday: 'short', month: 'short', day: 'numeric' }) : 'TBD';
-                             const timeStr = sub.starts_at ? new Date(sub.starts_at).toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' }) : 'TBD';
-                             return (
-                                <div key={sub.id} className="flex gap-4 items-start text-xs border-b last:border-0 pb-2.5 last:pb-0">
-                                   <div className="text-center shrink-0 bg-[#FDFBF7] border rounded-lg p-1.5 min-w-[64px]">
-                                      <span className="text-[9px] uppercase font-bold text-brand block">{dateStr}</span>
-                                      <span className="text-[10px] font-black text-fg mt-0.5 block">{timeStr}</span>
-                                   </div>
-                                   <div className="space-y-1">
-                                      <div className="font-bold text-brand text-sm font-serif">{sub.title}</div>
-                                      <Badge variant="outline" className="text-[8px] uppercase tracking-wider bg-surface-2">{sub.invite_only ? '💍 Private / Invite Only' : '👥 All Guests Welcome'}</Badge>
-                                   </div>
-                                </div>
-                             );
-                          });
-                       })()}
-                    </div>
-                 )}
-              </div>
+            {/* Wedding Weekend Itinerary */}
+            {(timeline.length > 0 || subEvents.length > 0) && (
+              <Suspense fallback={<Card><CardContent className="pt-6"><div className="h-48 animate-pulse rounded-lg bg-surface-2" /></CardContent></Card>}>
+                <GuestWeekendItinerary eventId={eventId} timeline={timeline} subEvents={subEvents} activeGuest={activeGuest} palette={portalPalette} guestSchedule={guestSchedule} />
+              </Suspense>
             )}
 
             {/* Guest welcome card */}
             {activeGuest && (
-              <Card style={{ background: palette.surface, borderColor: palette.border }}>
+              <Card style={{ background: portalPalette.surface, borderColor: portalPalette.border }}>
                 <CardContent className="text-center py-6">
                   <h3 className="text-xl font-display mb-2">
                     Welcome, {activeGuest.fullName}
                   </h3>
-                  <p className="text-sm mb-6 max-w-md mx-auto" style={{ color: palette.fgMuted }}>
+                  <p className="text-sm mb-6 max-w-md mx-auto" style={{ color: portalPalette.fgMuted }}>
                     We are so excited to share our special day with you. Please browse the
                     venue map to find your seat, or submit your RSVP!
                   </p>
@@ -459,13 +523,13 @@ export function PublicGuestPortal({ eventId }: { eventId: string }) {
                     <Button
                       variant="outline"
                       onClick={() => handleTabChange('map')}
-                      style={{ borderColor: palette.border, color: palette.fg }}
+                      style={{ borderColor: portalPalette.border, color: portalPalette.fg }}
                     >
                       <MapIcon className="w-4 h-4 mr-2" aria-hidden="true" /> View Map
                     </Button>
                     <Button
                       onClick={() => handleTabChange('rsvp')}
-                      style={{ background: palette.primary, color: palette.primaryFg }}
+                      style={{ background: portalPalette.primary, color: portalPalette.primaryFg }}
                     >
                       <Send className="w-4 h-4 mr-2" aria-hidden="true" /> RSVP Now
                     </Button>
@@ -479,16 +543,16 @@ export function PublicGuestPortal({ eventId }: { eventId: string }) {
               <div className="space-y-4">
                 <h3
                   className="font-display text-2xl text-center pt-8"
-                  style={{ borderTop: `1px solid ${palette.border}` }}
+                  style={{ borderTop: `1px solid ${portalPalette.border}` }}
                 >
-                  Couple's Polls
+                  Optional Guest Polls
                 </h3>
 
                 {/* any#8 fixed: p is Poll, not any */}
                 {polls.filter((p: Poll) => p.status === 'active').map((poll: Poll) => (
-                  <Card key={poll.id} style={{ borderColor: palette.border }}>
+                  <Card key={poll.id} style={{ borderColor: portalPalette.border }}>
                     <CardContent className="p-6">
-                      <h4 className="font-semibold text-lg mb-4">{poll.question}</h4>
+                      <p className="mb-2 text-xs" style={{ color: portalPalette.fgMuted }}>Optional and event-appropriate: answer only if you want to.</p><h4 className="font-semibold text-lg mb-4">{poll.question}</h4>
                       <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
 
                         {/* any#10 fixed: opt is PollOption, not any */}
@@ -497,7 +561,7 @@ export function PublicGuestPortal({ eventId }: { eventId: string }) {
                             key={opt.id}
                             variant="outline"
                             className="justify-between h-auto py-3 whitespace-normal text-left"
-                            style={{ borderColor: palette.border, color: palette.fg }}
+                            style={{ borderColor: portalPalette.border, color: portalPalette.fg }}
                             onClick={async () => {
                               await sdk.feedback.votePoll(eventId, poll.id, opt.id);
                               const res = await sdk.feedback.getPolls(eventId);
@@ -510,9 +574,9 @@ export function PublicGuestPortal({ eventId }: { eventId: string }) {
                               variant="outline"
                               className="ml-2 text-[10px]"
                               style={{
-                                borderColor:  palette.border,
-                                background:   palette.accentSoft,
-                                color:        palette.fg,
+                                borderColor:  portalPalette.border,
+                                background:   portalPalette.accentSoft,
+                                color:        portalPalette.fg,
                               }}
                             >
                               {opt.votes} votes
@@ -534,7 +598,7 @@ export function PublicGuestPortal({ eventId }: { eventId: string }) {
                 </p>
                 <Button
                   onClick={() => handleTabChange('rsvp')}
-                  style={{ background: palette.primary, color: palette.primaryFg }}
+                  style={{ background: portalPalette.primary, color: portalPalette.primaryFg }}
                 >
                   Find Your Invitation
                 </Button>
@@ -543,558 +607,44 @@ export function PublicGuestPortal({ eventId }: { eventId: string }) {
           </div>
         )}
 
-        {/* ── MAP TAB ──────────────────────────────────────────────────── */}
+        {/* ── MAP / WAYFINDING TAB ─────────────────────────────── */}
         {activeTab === 'map' && (
-          <div className="space-y-6 flex flex-col relative">
-            <div className="text-center space-y-1">
-              <h2 className="text-3xl font-display">Venue Map</h2>
-              <p className="text-xs font-semibold text-fg-subtle">
-                 Pinch to zoom and drag to explore the layout.
-              </p>
-            </div>
-
-            {/* "FIND MY SEAT" SMART SEARCH OVERLAY BAR */}
-            <div className="w-full max-w-sm mx-auto space-y-1 relative">
-               <Label htmlFor="mapSearch" className="text-[10px] uppercase font-bold text-fg-subtle tracking-widest block mb-1">🔍 Find My Seat</Label>
-               <Input 
-                  id="mapSearch"
-                  placeholder="Enter your name to locate your seat..." 
-                  value={mapSearchQuery}
-                  onChange={(e: any) => setMapSearchQuery(e.target.value)}
-                  className="bg-white border-[#e1d5c9] text-xs h-10 font-semibold"
-               />
-               
-               {mapFilteredGuests.length > 0 && (
-                  <div className="absolute z-50 bg-[#FDFBF7] border border-[#e1d5c9] rounded-xl p-2 w-full shadow-lg space-y-1 flex flex-col text-left top-16">
-                     {mapFilteredGuests.slice(0, 5).map(member => (
-                        <button
-                           key={member.id}
-                           onClick={() => {
-                              setSelectedGuestId(member.id);
-                              setMapSearchQuery('');
-                           }}
-                           className="p-2 text-xs font-semibold hover:bg-[#e1d5c9]/30 rounded-lg text-left text-fg border-b border-gray-100 last:border-0"
-                        >
-                           🔍 Find seat for: <strong className="text-brand">{member.fullName}</strong> ({member.tableAssignment})
-                        </button>
-                     ))}
-                  </div>
-               )}
-            </div>
-
-            {activeGuest && layout && (
-              <div
-                className="p-4 rounded-xl flex items-center justify-center gap-2 text-xs font-bold border shadow-xs"
-                style={{ background: '#fdf2f8', borderColor: '#fbcfe8', color: '#9d174d' }}
-              >
-                <span className="w-2.5 h-2.5 rounded-full bg-pink-500 animate-ping shrink-0" aria-hidden="true" />
-                <span>Your assigned seat is highlighted with a pulsing golden-pink beacon!</span>
-              </div>
-            )}
-
-            {/* FLOATING MOBILE PINCH-TO-ZOOM TOOLTIP */}
-            <div className="text-center text-[10px] uppercase font-bold tracking-widest text-brand bg-white p-2 rounded-lg border max-w-xs mx-auto flex items-center justify-center gap-1.5 shadow-inner">
-               👋 Touch Gesture Help: Double tap / Pinch to Zoom
-            </div>
-
-            <div
-              className="flex-1 min-h-[400px] w-full rounded-2xl overflow-hidden relative border shadow-inner"
-              style={{ background: palette.surface, borderColor: palette.border }}
-            >
-              {!layout ? (
-                <div
-                  className="w-full h-full flex flex-col items-center justify-center"
-                  style={{ color: palette.fgSubtle }}
-                >
-                  <MapIcon className="w-12 h-12 mb-4 opacity-50" aria-hidden="true" />
-                  <p>The layout map hasn't been published yet.</p>
-                </div>
-              ) : (
-                /* any#5 fixed (Phase 34b): layout is PortalLayoutPayload, not any */
-                <PortalMapViewer layout={layout} activeGuestId={selectedGuestId} />
-              )}
-            </div>
-
-            {/* HIGH-CONTRAST SEATING LIST FALLBACK (WCAG AA ACCESSIBILITY) */}
-            {activeGuest && (
-              <div className="bg-white p-4 rounded-xl border space-y-2 text-left" style={{ borderColor: palette.border }}>
-                 <span className="text-[10px] uppercase font-bold text-fg-subtle tracking-widest block">📋 High-Contrast Seating Assignment</span>
-                 <div className="text-xs font-semibold text-fg space-y-1">
-                    <div>Guest Name: <strong className="text-brand font-serif">{activeGuest.fullName}</strong></div>
-                    {activeGuest.tableAssignment ? (
-                       <>
-                          <div>Assigned Table: <strong className="text-brand">{activeGuest.tableAssignment}</strong></div>
-                          {activeGuest.seatAssignment && (
-                             <div>Assigned Chair: <strong className="text-[#9d174d]">{activeGuest.seatAssignment}</strong></div>
-                          )}
-                       </>
-                    ) : (
-                       <div className="text-fg-subtle italic">No table assignment has been registered yet. Please consult with the venue director upon arrival.</div>
-                    )}
-                 </div>
-              </div>
-            )}
-
-            {/* INTERACTIVE LODGING & CABIN MAP (NEW PORTAL ADDITION) */}
-            {activeGuest && activeGuest.allowLodgingAccess && activeGuest.roomAssignment && (
-              <div className="bg-white p-5 rounded-xl border space-y-4 text-left shadow-sm animate-in zoom-in-95 duration-200" style={{ borderColor: palette.border }}>
-                 <div className="space-y-1">
-                    <span className="text-[10px] uppercase font-bold text-fg-subtle tracking-widest block">🏡 On-Site Estate Lodging Map</span>
-                    <h4 className="text-sm font-serif font-black text-brand">Your Assigned Cabin: <strong className="text-brand font-black underline">{activeGuest.roomAssignment}</strong></h4>
-                 </div>
-
-                 {/* Vector SVG Map of Manor Estate properties */}
-                 <div className="border border-[#e1d5c9] rounded-xl overflow-hidden bg-[#FDFBF7] p-2 relative h-48 flex items-center justify-center">
-                    <svg viewBox="0 0 320 200" className="w-full h-full text-fg">
-                       {/* Estate paths */}
-                       <path d="M 30,100 Q 160,80 290,120" fill="none" stroke="#e1d5c9" strokeWidth="6" strokeLinecap="round" opacity="0.5" />
-                       <path d="M 100,50 L 100,150" fill="none" stroke="#e1d5c9" strokeWidth="4" strokeLinecap="round" opacity="0.3" />
-
-                       {/* Pine Cottage */}
-                       {(() => {
-                          const isPine = activeGuest.roomAssignment?.toLowerCase().includes('pine') || activeGuest.roomAssignment?.toLowerCase().includes('cottage');
-                          return (
-                             <g transform="translate(40,40)">
-                                <rect x="-20" y="-15" width="40" height="30" rx="4" fill={isPine ? "#fef3c7" : "#fff"} stroke={isPine ? "#f59e0b" : "#9ca3af"} strokeWidth={isPine ? 2.5 : 1.5} />
-                                {isPine && <circle cx="0" cy="0" r="22" stroke="#f59e0b" strokeWidth="1.5" opacity="0.4" strokeDasharray="3,1.5" />}
-                                <text x="0" y="2" fontSize="12" textAnchor="middle">🏡</text>
-                                <text x="0" y="24" fontSize="8" fontWeight="bold" textAnchor="middle" fill={isPine ? "#b45309" : "#6b7280"}>Pine Cottage</text>
-                             </g>
-                          );
-                       })()}
-
-                       {/* Maple Cabin */}
-                       {(() => {
-                          const isMaple = activeGuest.roomAssignment?.toLowerCase().includes('maple') || activeGuest.roomAssignment?.toLowerCase().includes('cabin');
-                          return (
-                             <g transform="translate(160,30)">
-                                <rect x="-20" y="-15" width="40" height="30" rx="4" fill={isMaple ? "#fef3c7" : "#fff"} stroke={isMaple ? "#f59e0b" : "#9ca3af"} strokeWidth={isMaple ? 2.5 : 1.5} />
-                                {isMaple && <circle cx="0" cy="0" r="22" stroke="#f59e0b" strokeWidth="1.5" opacity="0.4" strokeDasharray="3,1.5" />}
-                                <text x="0" y="2" fontSize="12" textAnchor="middle">🏡</text>
-                                <text x="0" y="24" fontSize="8" fontWeight="bold" textAnchor="middle" fill={isMaple ? "#b45309" : "#6b7280"}>Maple Cabin</text>
-                             </g>
-                          );
-                       })()}
-
-                       {/* Cedar Lodge */}
-                       {(() => {
-                          const isCedar = activeGuest.roomAssignment?.toLowerCase().includes('cedar') || activeGuest.roomAssignment?.toLowerCase().includes('lodge');
-                          return (
-                             <g transform="translate(240,110)">
-                                <rect x="-20" y="-15" width="40" height="30" rx="4" fill={isCedar ? "#fef3c7" : "#fff"} stroke={isCedar ? "#f59e0b" : "#9ca3af"} strokeWidth={isCedar ? 2.5 : 1.5} />
-                                {isCedar && <circle cx="0" cy="0" r="22" stroke="#f59e0b" strokeWidth="1.5" opacity="0.4" strokeDasharray="3,1.5" />}
-                                <text x="0" y="2" fontSize="12" textAnchor="middle">🏰</text>
-                                <text x="0" y="24" fontSize="8" fontWeight="bold" textAnchor="middle" fill={isCedar ? "#b45309" : "#6b7280"}>Cedar Lodge</text>
-                             </g>
-                          );
-                       })()}
-
-                       {/* Birch Suite */}
-                       {(() => {
-                          const isBirch = activeGuest.roomAssignment?.toLowerCase().includes('birch') || activeGuest.roomAssignment?.toLowerCase().includes('suite');
-                          return (
-                             <g transform="translate(100,120)">
-                                <rect x="-20" y="-15" width="40" height="30" rx="4" fill={isBirch ? "#fef3c7" : "#fff"} stroke={isBirch ? "#f59e0b" : "#9ca3af"} strokeWidth={isBirch ? 2.5 : 1.5} />
-                                {isBirch && <circle cx="0" cy="0" r="22" stroke="#f59e0b" strokeWidth="1.5" opacity="0.4" strokeDasharray="3,1.5" />}
-                                <text x="0" y="2" fontSize="12" textAnchor="middle">🏡</text>
-                                <text x="0" y="24" fontSize="8" fontWeight="bold" textAnchor="middle" fill={isBirch ? "#b45309" : "#6b7280"}>Birch Suite</text>
-                             </g>
-                          );
-                       })()}
-                    </svg>
-                 </div>
-
-                 {/* "My Roommates" Social Dashboard Card */}
-                 <div className="space-y-2 border-t pt-3.5">
-                    <span className="text-[10px] uppercase font-bold text-fg-subtle tracking-widest block">👥 My Roommates / Suite Group</span>
-                    {(() => {
-                       const roommates = guests.filter(g => 
-                          g.id !== selectedGuestId && 
-                          g.roomAssignment === activeGuest.roomAssignment
-                       );
-
-                       if (roommates.length === 0) {
-                          return <div className="text-xs text-fg-subtle italic">No other roommates are assigned to this cabin. Enjoy your private suite!</div>;
-                       }
-
-                       return (
-                          <div className="grid grid-cols-2 gap-2 text-xs">
-                             {roommates.map(m => (
-                                <div key={m.id} className="p-2 border rounded-lg bg-surface flex items-center gap-2">
-                                   <div className="w-5 h-5 rounded-full bg-brand-soft text-brand-strong font-bold text-[10px] flex items-center justify-center shrink-0">
-                                      {m.fullName.split(' ').map((n: string) => n[0]).join('')}
-                                   </div>
-                                   <span className="font-semibold text-fg-muted truncate">{m.fullName}</span>
-                                </div>
-                             ))}
-                          </div>
-                       );
-                    })()}
-                 </div>
-              </div>
-            )}
-          </div>
+          <Suspense fallback={<Card><CardContent className="pt-6"><div className="h-96 animate-pulse rounded-lg bg-surface-2" /></CardContent></Card>}>
+            <GuestMapWayfinding
+              guests={guests}
+              activeGuest={activeGuest}
+              selectedGuestId={selectedGuestId}
+              setSelectedGuestId={setSelectedGuestId}
+              layout={layout}
+              timeline={timeline}
+              subEvents={subEvents}
+              palette={portalPalette}
+              guestTravel={guestTravel}
+              guestWayfinding={guestWayfinding}
+            />
+          </Suspense>
         )}
 
         {/* ── RSVP TAB ─────────────────────────────────────────────────── */}
         {activeTab === 'rsvp' && (
-          <div className="max-w-lg mx-auto mt-8">
-            {done ? (
-              <Card className="text-center shadow-lg" style={{ borderColor: palette.border }}>
-                <CardContent className="pt-10 pb-8 space-y-4">
-                  <div className="text-6xl mb-2" role="img" aria-label={attending ? 'Celebration' : 'Thank you'}>
-                    {attending ? '🎉' : '💌'}
-                  </div>
-                  <h2 className="font-display text-2xl">Thank You!</h2>
-                  <p style={{ color: palette.fgMuted }}>
-                    {attending
-                      ? "We're thrilled you can make it! We can't wait to celebrate with you."
-                      : "We're sorry you can't make it. You'll be missed!"}
-                  </p>
-                  {attending && (
-                    <div
-                      className="rounded-lg p-4 text-left text-sm space-y-2"
-                      style={{ background: palette.accentSoft, border: `1px solid ${palette.border}` }}
-                    >
-                      <div className="flex justify-between">
-                        <span style={{ color: palette.fgMuted }}>Guest</span>
-                        <span className="font-medium">{activeGuest?.fullName}</span>
-                      </div>
-                      <div className="flex justify-between">
-                        <span style={{ color: palette.fgMuted }}>Response</span>
-                        <span className="font-medium">Joyfully Accepts</span>
-                      </div>
-                      <div className="flex justify-between">
-                        <span style={{ color: palette.fgMuted }}>Meal</span>
-                        <span className="font-medium capitalize">{mealChoice}</span>
-                      </div>
-                      {info.startDate && (
-                        <div className="flex justify-between">
-                          <span style={{ color: palette.fgMuted }}>Date</span>
-                          <span className="font-medium">
-                            {new Date(info.startDate).toLocaleDateString(undefined, {
-                              weekday: 'long', month: 'long', day: 'numeric', year: 'numeric',
-                            })}
-                          </span>
-                        </div>
-                      )}
-                    </div>
-                  )}
-                  <div className="flex flex-wrap gap-3 justify-center pt-2">
-                    <Button
-                      variant="outline"
-                      onClick={() => handleTabChange('home')}
-                      style={{ borderColor: palette.border }}
-                    >
-                      Return Home
-                    </Button>
-                    {attending && (
-                      <Button
-                        variant="outline"
-                        onClick={() => handleTabChange('map')}
-                        style={{ borderColor: palette.border }}
-                      >
-                        <MapIcon className="w-4 h-4 mr-1" aria-hidden="true" /> Find Your Seat
-                      </Button>
-                    )}
-                  </div>
-                </CardContent>
-              </Card>
-            ) : (
-              <Card className="shadow-lg" style={{ borderColor: palette.border }}>
-                <CardHeader className="text-center pb-2">
-                  <CardTitle className="font-display text-3xl">RSVP</CardTitle>
-                  <p className="text-sm mt-2" style={{ color: palette.fgMuted }}>
-                    Kindly respond by the deadline.
-                  </p>
-                </CardHeader>
-                <CardContent>
-                  <form onSubmit={submit} className="space-y-6" aria-label="RSVP form">
-                    <div>
-                      <Label htmlFor="gs" className="font-serif">Search Your Name</Label>
-                      <Input 
-                        id="gs"
-                        placeholder="Type your name to filter..." 
-                        value={searchQuery}
-                        onChange={(e: any) => setSearchQuery(e.target.value)}
-                        className="mt-1.5 h-11 border bg-white px-3 font-semibold text-xs"
-                        style={{ borderColor: palette.border, color: palette.fg }}
-                        aria-describedby={error ? 'rsvp-error' : undefined}
-                      />
-                    </div>
-
-                    <div className="mt-4">
-                      <Label htmlFor="gn" className="font-serif">Your Name</Label>
-                      <select
-                        id="gn"
-                        required
-                        value={selectedGuestId}
-                        onChange={(e: any) => {
-                           setSelectedGuestId(e.target.value);
-                           setIsFormDirty(true);
-                        }}
-                        className="mt-2 w-full h-12 px-4 rounded-md font-sans"
-                        style={{ border: `1px solid ${palette.border}`, background: palette.surface, color: palette.fg }}
-                        aria-required="true"
-                        aria-describedby={error ? 'rsvp-error' : undefined}
-                      >
-                        <option value="">— Find your name —</option>
-                        {/* Filtered list based on searchQuery */}
-                        {filteredGuests.map((g: PortalGuestEntry) => (
-                          <option key={g.id} value={g.id}>{g.fullName}</option>
-                        ))}
-                      </select>
-                    </div>
-
-                    {activeGuest && householdCandidates.length > 0 && (
-                      <div className="p-4 rounded-xl border space-y-2 text-left" style={{ borderColor: palette.border, background: palette.accentSoft }}>
-                         <span className="text-[10px] font-black uppercase text-brand tracking-widest block" style={{ color: palette.primary }}>🏠 Household Group RSVPs</span>
-                         <p className="text-xs text-fg-subtle leading-tight font-semibold">Select family members to RSVP together on a single screen:</p>
-                         <div className="space-y-1.5 pt-1.5 border-t border-dashed">
-                            {householdCandidates.map((member: any) => {
-                               const isChecked = checkedHouseholdIds.includes(member.id);
-                               return (
-                                  <label key={member.id} className="flex items-center gap-2.5 text-xs font-semibold cursor-pointer select-none">
-                                     <input 
-                                        type="checkbox" 
-                                        checked={isChecked}
-                                        onChange={() => {
-                                           setIsFormDirty(true);
-                                           if (isChecked) {
-                                              setCheckedHouseholdIds(checkedHouseholdIds.filter(id => id !== member.id));
-                                           } else {
-                                              setCheckedHouseholdIds([...checkedHouseholdIds, member.id]);
-                                           }
-                                        }}
-                                        className="rounded"
-                                        style={{ accentColor: palette.primary }}
-                                     />
-                                     <span>{member.fullName}</span>
-                                  </label>
-                               );
-                            })}
-                         </div>
-                      </div>
-                    )}
-
-                    {selectedGuestId && (
-                      <div className="space-y-6">
-                        <div className="border-b pb-2 text-left">
-                           <span className="text-[10px] uppercase font-bold text-fg-subtle tracking-widest block">Primary Guest RSVP</span>
-                           <h4 className="font-serif font-black text-brand text-sm">{activeGuest?.fullName}</h4>
-                        </div>
-
-                        <div>
-                          <Label className="font-serif">Will you be attending?</Label>
-                          <div
-                            className="flex flex-col sm:flex-row gap-2 sm:gap-3 mt-2"
-                            role="group"
-                            aria-label="RSVP response"
-                          >
-                            <Button
-                              type="button"
-                              className="flex-1 h-12 font-medium tracking-widest"
-                              style={attending
-                                ? { background: palette.primary, color: palette.primaryFg }
-                                : { background: palette.surface, color: palette.fg, border: `1px solid ${palette.border}` }}
-                              onClick={() => {
-                                 setAttending(true);
-                                 setIsFormDirty(true);
-                              }}
-                              aria-pressed={attending}
-                            >
-                              JOYFULLY ACCEPT
-                            </Button>
-                            <Button
-                              type="button"
-                              className="flex-1 h-12 font-medium tracking-widest"
-                              style={!attending
-                                ? { background: palette.primary, color: palette.primaryFg }
-                                : { background: palette.surface, color: palette.fg, border: `1px solid ${palette.border}` }}
-                              onClick={() => {
-                                 setAttending(false);
-                                 setIsFormDirty(true);
-                              }}
-                              aria-pressed={!attending}
-                            >
-                              REGRETFULLY DECLINE
-                            </Button>
-                          </div>
-                        </div>
-
-                        {attending && (
-                          <div>
-                            <Label htmlFor="meal" className="font-serif">Meal Preference</Label>
-                            <select
-                              id="meal"
-                              value={mealChoice}
-                              onChange={(e) => {
-                                 setMealChoice(e.target.value);
-                                 setIsFormDirty(true);
-                              }}
-                              className="mt-2 w-full h-12 px-4 rounded-md font-sans"
-                              style={{ border: `1px solid ${palette.border}`, background: palette.surface, color: palette.fg }}
-                              aria-describedby={error ? 'rsvp-error' : undefined}
-                            >
-                              <option value="standard">Standard (Beef/Chicken Duet)</option>
-                              <option value="vegetarian">Vegetarian</option>
-                              <option value="vegan">Vegan</option>
-                              <option value="gluten-free">Gluten-Free</option>
-                            </select>
-                          </div>
-                        )}
-
-                        {/* Dynamic Household Members Forms */}
-                        {householdCandidates.filter((m: any) => checkedHouseholdIds.includes(m.id)).map((member: any) => (
-                           <div key={member.id} className="space-y-4 border p-4 rounded-xl text-left bg-white" style={{ borderColor: palette.border }}>
-                              <div className="border-b pb-1.5 flex justify-between items-center">
-                                 <span className="font-serif font-black text-brand text-sm">{member.fullName}</span>
-                                 <Badge variant="outline" className="text-[8px] uppercase tracking-wider font-bold">Household Member</Badge>
-                              </div>
-                              
-                              <div className="space-y-1.5">
-                                 <Label className="text-[10px] font-bold text-fg-subtle uppercase tracking-wider block">Will {member.fullName.split(' ')[0]} attend?</Label>
-                                 <div className="flex gap-2">
-                                    <Button 
-                                       type="button" 
-                                       size="sm"
-                                       className="flex-1 h-9 font-bold text-xs uppercase"
-                                       style={memberAttending[member.id] !== false
-                                          ? { background: palette.primary, color: palette.primaryFg }
-                                          : { background: palette.surface, color: palette.fg, border: `1px solid ${palette.border}` }}
-                                       onClick={() => {
-                                          setIsFormDirty(true);
-                                          setMemberAttending({...memberAttending, [member.id]: true});
-                                       }}
-                                    >
-                                       Accepts
-                                    </Button>
-                                    <Button 
-                                       type="button" 
-                                       size="sm"
-                                       className="flex-1 h-9 font-bold text-xs uppercase"
-                                       style={memberAttending[member.id] === false
-                                          ? { background: palette.primary, color: palette.primaryFg }
-                                          : { background: palette.surface, color: palette.fg, border: `1px solid ${palette.border}` }}
-                                       onClick={() => {
-                                          setIsFormDirty(true);
-                                          setMemberAttending({...memberAttending, [member.id]: false});
-                                       }}
-                                    >
-                                       Declines
-                                    </Button>
-                                 </div>
-                              </div>
-                              
-                              {memberAttending[member.id] !== false && (
-                                 <div className="space-y-1.5">
-                                    <Label htmlFor={`meal-${member.id}`} className="text-[10px] font-bold text-fg-subtle uppercase tracking-wider block">Meal Preference</Label>
-                                    <select
-                                       id={`meal-${member.id}`}
-                                       value={memberMeals[member.id] || 'standard'}
-                                       onChange={(e) => {
-                                          setIsFormDirty(true);
-                                          setMemberMeals({...memberMeals, [member.id]: e.target.value});
-                                       }}
-                                       className="mt-1 w-full h-10 px-3 rounded-lg text-xs"
-                                       style={{ border: `1px solid ${palette.border}`, background: palette.surface }}
-                                    >
-                                       <option value="standard">Standard (Beef/Chicken Duet)</option>
-                                       <option value="vegetarian">Vegetarian</option>
-                                       <option value="vegan">Vegan</option>
-                                       <option value="gluten-free">Gluten-Free</option>
-                                    </select>
-                                 </div>
-                              )}
-                           </div>
-                        ))}
-
-                        {/* PERSONALIZED SUB-EVENTS GATED RSVPs */}
-                        {activeGuest && subEvents.filter((sub: any) => activeGuest.subEventInvites?.includes(sub.id)).length > 0 && (
-                          <div className="space-y-4 pt-4 border-t">
-                            <span className="text-[10px] uppercase font-bold text-fg-subtle tracking-widest block" style={{ color: palette.primary }}>🎉 Personalized Weekend Sub-Events RSVPs</span>
-                            
-                            {subEvents.filter((sub: any) => activeGuest.subEventInvites?.includes(sub.id)).map((sub: any) => (
-                              <div key={sub.id} className="space-y-3.5 border p-4 rounded-xl text-left bg-white" style={{ borderColor: palette.border }}>
-                                <div className="border-b pb-1.5 flex justify-between items-center">
-                                   <span className="font-serif font-black text-brand text-sm">{sub.title}</span>
-                                   <Badge variant="outline" className="text-[8px] uppercase tracking-wider font-bold">Sub-Event Invitation</Badge>
-                                </div>
-                                <div className="space-y-1.5">
-                                   <Label className="text-[10px] font-bold text-fg-subtle uppercase tracking-wider block">Will you attend the {sub.title}?</Label>
-                                   <div className="flex gap-2">
-                                      <Button
-                                         type="button"
-                                         size="sm"
-                                         className="flex-1 h-9 font-bold text-xs uppercase"
-                                         style={subEventAttending[sub.id] !== false
-                                            ? { background: palette.primary, color: palette.primaryFg }
-                                            : { background: palette.surface, color: palette.fg, border: `1px solid ${palette.border}` }}
-                                         onClick={() => {
-                                            setIsFormDirty(true);
-                                            setSubEventAttending({...subEventAttending, [sub.id]: true});
-                                         }}
-                                      >
-                                         Accepts
-                                      </Button>
-                                      <Button
-                                         type="button"
-                                         size="sm"
-                                         className="flex-1 h-9 font-bold text-xs uppercase"
-                                         style={subEventAttending[sub.id] === false
-                                            ? { background: palette.primary, color: palette.primaryFg }
-                                            : { background: palette.surface, color: palette.fg, border: `1px solid ${palette.border}` }}
-                                         onClick={() => {
-                                            setIsFormDirty(true);
-                                            setSubEventAttending({...subEventAttending, [sub.id]: false});
-                                         }}
-                                      >
-                                         Declines
-                                      </Button>
-                                   </div>
-                                </div>
-                              </div>
-                            ))}
-                          </div>
-                        )}
-
-                        <div>
-                          <Label htmlFor="notes" className="font-serif">
-                            A Note for the Couple (Optional)
-                          </Label>
-                          <textarea
-                            id="notes"
-                            value={notes}
-                            onChange={(e) => {
-                               setNotes(e.target.value);
-                               setIsFormDirty(true);
-                            }}
-                            className="mt-2 w-full min-h-[100px] p-4 rounded-md font-sans resize-none"
-                            style={{ border: `1px solid ${palette.border}`, background: palette.surface, color: palette.fg }}
-                            placeholder="Leave your wishes or mention any specific dietary allergies…"
-                            aria-describedby={error ? 'rsvp-error' : undefined}
-                          />
-                        </div>
-
-                        {error && (
-                          <p id="rsvp-error" className="text-sm text-red-600 font-sans" role="alert">
-                            {error}
-                          </p>
-                        )}
-
-                        <Button
-                          type="submit"
-                          className="w-full h-12 font-medium tracking-widest"
-                          style={{ background: palette.primary, color: palette.primaryFg }}
-                        >
-                          SEND RSVP
-                        </Button>
-                      </div>
-                    )}
-                  </form>
-                </CardContent>
-              </Card>
-            )}
+          <div className="space-y-8">
+            <Suspense fallback={<Card><CardContent className="pt-6"><div className="h-64 animate-pulse rounded-lg bg-surface-2" /></CardContent></Card>}>
+              <GuestRsvpWizard
+                eventId={eventId}
+                info={info}
+                guests={guests}
+                subEvents={subEvents}
+                palette={portalPalette}
+                selectedGuestId={selectedGuestId}
+                setSelectedGuestId={setSelectedGuestId}
+                guestToken={guestToken}
+                config={portalConfig}
+                guestPrivacy={guestPrivacy}
+                onDirty={() => setIsFormDirty(true)}
+                onReturnHome={() => handleTabChange('home')}
+                onFindSeat={() => handleTabChange('map')}
+              />
+            </Suspense>
           </div>
         )}
       </main>
@@ -1102,7 +652,7 @@ export function PublicGuestPortal({ eventId }: { eventId: string }) {
       {/* Bottom nav */}
       <nav
         className="fixed bottom-0 left-0 w-full pb-safe z-50"
-        style={{ background: palette.surface, borderTop: `1px solid ${palette.border}` }}
+        style={{ background: portalPalette.surface, borderTop: `1px solid ${portalPalette.border}` }}
         aria-label="Portal navigation"
       >
         <div className="flex items-center justify-around h-16 max-w-md mx-auto">
@@ -1119,7 +669,7 @@ export function PublicGuestPortal({ eventId }: { eventId: string }) {
               aria-current={activeTab === tab ? 'page' : undefined}
               aria-label={label}
               className="flex flex-col items-center gap-1 w-20 transition-colors"
-              style={{ color: activeTab === tab ? palette.primary : palette.fgMuted }}
+              style={{ color: activeTab === tab ? portalPalette.primary : portalPalette.fgMuted }}
             >
               <Icon className="w-5 h-5" aria-hidden="true" />
               <span className="text-[10px] uppercase font-bold tracking-widest">{label}</span>
@@ -1131,264 +681,41 @@ export function PublicGuestPortal({ eventId }: { eventId: string }) {
   );
 }
 
-// ── PortalMapViewer ───────────────────────────────────────────────────────
-/**
- * Interactive floor-plan canvas inside the guest portal.
- *
- * Phase 35a changes:
- *   any#7 FIXED: handleWheel (e: any) → (e: KonvaEventObject<WheelEvent>)
- *     - KonvaEventObject<T> is imported from 'react-konva' (re-exported
- *       from konva/lib/Node). No new npm dependency required.
- *     - e.evt is WheelEvent (preventDefault, deltaY — both typed)
- *     - e.target is Konva.Shape | Konva.Stage
- *
- *   BONUS BUG FIXED: getPointerPosition() returns Vector2d | null
- *     - The live code called .x/.y directly without a null guard.
- *     - This would throw if the pointer hadn't entered the canvas yet.
- *     - Added: `const pointerPos = stage.getPointerPosition(); if (!pointerPos) return;`
- *
- *   any#5 FIXED (Phase 34b): layout: any → layout: PortalLayoutPayload
- *   any#6 FIXED (Phase 34b): items.map((item: any)) → LayoutCanvasItem discriminated union
- */
-function PortalMapViewer({
-  layout,
-  activeGuestId,
-}: {
-  layout: PortalLayoutPayload;      // any#5 fixed
-  activeGuestId: string;
-}) {
-  const containerRef = React.useRef<HTMLDivElement>(null);
-  const [dimensions, setDimensions] = useState({ width: 0, height: 0 });
-  const [scale, setScale] = useState(0.8);
-  const [pos, setPos] = useState({ x: 50, y: 50 });
 
-  useEffect(() => {
-    const handleResize = () => {
-      if (containerRef.current) {
-        setDimensions({
-          width:  containerRef.current.offsetWidth,
-          height: containerRef.current.offsetHeight,
-        });
-      }
-    };
-    handleResize();
-    setPos({ x: dimensions.width / 4, y: 50 });
-    window.addEventListener('resize', handleResize);
-    return () => window.removeEventListener('resize', handleResize);
-  }, []);
-
-  // ── Auto-Panning WebGL Cam (Centering Viewport on Guest Chair)
-  useEffect(() => {
-    if (activeGuestId && layout?.items && dimensions.width > 0 && dimensions.height > 0) {
-      const itemsList = Array.isArray(layout.items) ? layout.items : [];
-      const guestChair = itemsList.find((i: any) => i.type === 'chair' && i.guestId === activeGuestId);
-      if (guestChair) {
-        const targetScale = 1.3;
-        const targetX = dimensions.width / 2 - (guestChair.x || 0) * targetScale;
-        const targetY = dimensions.height / 2 - (guestChair.y || 0) * targetScale;
-        
-        setScale(targetScale);
-        setPos({ x: targetX, y: targetY });
-      }
-    }
-  }, [activeGuestId, layout?.items, dimensions.width, dimensions.height]);
-
-  /**
-   * any#7 FIXED — KonvaEventObject<WheelEvent> replaces (e: any).
-   *
-   * react-konva v18 re-exports KonvaEventObject from 'react-konva':
-   *   import type { KonvaEventObject } from 'react-konva';
-   *
-   * Properties now fully typed:
-   *   e.evt              → WheelEvent  (.preventDefault(), .deltaY)
-   *   e.target           → Konva.Shape | Konva.Stage
-   *   e.target.getStage()→ Konva.Stage | undefined
-   *
-   * BONUS BUG FIXED: getPointerPosition() returns Vector2d | null.
-   * The live code called .x/.y without null-checking, crashing on first
-   * wheel event before the pointer had moved over the canvas. Fixed with
-   * an explicit null guard.
-   */
-  const handleWheel = (e: KonvaEventObject<WheelEvent>) => {
-    e.evt.preventDefault();
-
-    const scaleBy = 1.05;
-    const stage = e.target.getStage();
-    if (!stage) return;
-
-    // BONUS BUG FIX: getPointerPosition() → Vector2d | null
-    const pointerPos = stage.getPointerPosition();
-    if (!pointerPos) return;                    // guard that was missing before
-
-    const oldScale = stage.scaleX();
-    const mp = {
-      x: pointerPos.x / oldScale - stage.x() / oldScale,
-      y: pointerPos.y / oldScale - stage.y() / oldScale,
-    };
-    const ns = e.evt.deltaY > 0 ? oldScale / scaleBy : oldScale * scaleBy;
-    setScale(ns);
-    setPos({
-      x: -(mp.x - pointerPos.x / ns) * ns,
-      y: -(mp.y - pointerPos.y / ns) * ns,
-    });
-  };
-
-  // any#6 fixed: typed LayoutCanvasItem[] replaces layout.items (any[])
-  const items: LayoutCanvasItem[] = Array.isArray(layout.items) ? layout.items : [];
-
+function GuestPortalRecoveryCenter({ eventId, error, portalStatus, onRetry }: { eventId: string; error: string; portalStatus: { event?: { title: string; startDate: string | null }; status?: 'available' | 'disabled'; support?: { label: string; email: string; phone: string }; message?: string } | null; onRetry: () => void }) {
+  const isNetwork = error.toLowerCase().includes('network') || error.toLowerCase().includes('temporarily unavailable');
+  const title = portalStatus?.status === 'disabled' ? 'Guest portal is not available yet' : isNetwork ? 'Portal temporarily unavailable' : 'We could not verify this guest link';
+  const body = portalStatus?.message || error;
+  const support = portalStatus?.support;
   return (
-    <div
-      ref={containerRef}
-      className="w-full h-full cursor-grab active:cursor-grabbing"
-      role="img"
-      aria-label="Venue floor plan — interactive seat map"
-    >
-      <Stage
-        width={dimensions.width}
-        height={dimensions.height}
-        onWheel={handleWheel}
-        scaleX={scale}
-        scaleY={scale}
-        x={pos.x}
-        y={pos.y}
-        draggable
-        onDragMove={(e) => {
-          // e is inferred as KonvaEventObject<MouseEvent> from Stage's prop types
-          if (e.target === e.target.getStage()) {
-            setPos({ x: e.target.x(), y: e.target.y() });
-          }
-        }}
-      >
-        <Layer>
-          {items.map((item) => {
-            const isActive = !!(activeGuestId && isChair(item) && item.guestId === activeGuestId);
-
-            if (isRoundTable(item)) {
-              return (
-                <Group key={item.id} x={item.x} y={item.y}>
-                  <Circle
-                    radius={item.radius}
-                    fill="#f3f4f6"
-                    stroke="#9ca3af"
-                    strokeWidth={2}
-                  />
-                  <Text
-                    text={item.label}
-                    fontSize={14}
-                    fill="#374151"
-                    align="center"
-                    verticalAlign="middle"
-                    offsetX={item.radius}
-                    offsetY={7}
-                    width={item.radius * 2}
-                  />
-                </Group>
-              );
-            }
-
-            if (isRectTable(item)) {
-              return (
-                <Group key={item.id} x={item.x} y={item.y} rotation={item.rotation}>
-                  <Rect
-                    width={item.width}
-                    height={item.height}
-                    offsetX={item.width / 2}
-                    offsetY={item.height / 2}
-                    fill="#f3f4f6"
-                    stroke="#9ca3af"
-                    strokeWidth={2}
-                    cornerRadius={4}
-                  />
-                  <Text
-                    text={item.label}
-                    fontSize={14}
-                    fill="#374151"
-                    align="center"
-                    verticalAlign="middle"
-                    offsetX={item.width / 2}
-                    offsetY={7}
-                    width={item.width}
-                  />
-                </Group>
-              );
-            }
-
-            if (isDanceFloor(item)) {
-              return (
-                <Group key={item.id} x={item.x} y={item.y} rotation={item.rotation}>
-                  <Rect
-                    width={item.width}
-                    height={item.height}
-                    offsetX={item.width / 2}
-                    offsetY={item.height / 2}
-                    fill="#e5e7eb"
-                    stroke="#d1d5db"
-                    strokeWidth={1}
-                    dash={[10, 5]}
-                  />
-                  <Text
-                    text={item.label}
-                    fontSize={16}
-                    fill="#6b7280"
-                    fontStyle="italic"
-                    align="center"
-                    verticalAlign="middle"
-                    offsetX={item.width / 2}
-                    offsetY={8}
-                    width={item.width}
-                  />
-                </Group>
-              );
-            }
-
-            if (isChair(item)) {
-              return (
-                <Group key={item.id} x={item.x} y={item.y}>
-                  <Circle
-                    radius={item.radius}
-                    fill={isActive ? '#fdf2f8' : item.guestId ? '#e5e7eb' : '#fff'}
-                    stroke={isActive ? '#ec4899' : '#9ca3af'}
-                    strokeWidth={isActive ? 3 : 1.5}
-                  />
-                  {isActive && (
-                    <>
-                      <Circle
-                        radius={item.radius + 8}
-                        stroke="#ec4899"
-                        strokeWidth={2}
-                        opacity={0.6}
-                        dash={[4, 4]}
-                      />
-                      <Circle
-                        radius={item.radius + 14}
-                        stroke="#f59e0b"
-                        strokeWidth={1.5}
-                        opacity={0.4}
-                        dash={[6, 3]}
-                      />
-                    </>
-                  )}
-                  {item.guestInitials && !isActive && (
-                    <Text
-                      text={item.guestInitials}
-                      fontSize={8}
-                      fill="#6b7280"
-                      align="center"
-                      verticalAlign="middle"
-                      offsetX={item.radius}
-                      offsetY={4}
-                      width={item.radius * 2}
-                      listening={false}
-                    />
-                  )}
-                </Group>
-              );
-            }
-
-            return null; // unknown item types — safe no-render fallthrough
-          })}
-        </Layer>
-      </Stage>
+    <div className="min-h-screen bg-surface-2 px-4 py-10">
+      <Card className="mx-auto max-w-2xl border-warning/30">
+        <CardHeader>
+          <CardTitle className="font-display text-3xl flex items-center gap-2"><ShieldAlert className="h-6 w-6" /> Guest portal recovery center</CardTitle>
+          <CardDescription>Status page-style help for invalid, expired, disabled, or temporarily unavailable portal links.</CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-4 text-sm">
+          <div className="rounded-xl border border-warning/30 bg-warning-soft/20 p-4 text-warning"><strong>{title}</strong><p className="mt-1">{body}</p></div>
+          <div className="grid gap-2 sm:grid-cols-2">
+            <div className="rounded-xl border p-3"><strong>What may have happened</strong><ul className="mt-2 list-disc pl-5 text-xs text-fg-muted"><li>The portal may not be live yet.</li><li>Your link may have expired, been revoked, or been copied incorrectly.</li><li>Your internet connection or the server may be temporarily unavailable.</li></ul></div>
+            <div className="rounded-xl border p-3"><strong>How to get help</strong><p className="mt-2 text-xs text-fg-muted">Use the support contact from your invitation, request a new secure link, or ask the venue/couple team to confirm your invitation.</p>{support?.email && <a className="mt-2 block font-bold underline" href={`mailto:${support.email}`}>{support.email}</a>}{support?.phone && <a className="mt-1 block font-bold underline" href={`tel:${support.phone}`}>{support.phone}</a>}</div>
+          </div>
+          <div className="rounded-xl border p-3"><strong>Recovery actions</strong><div className="mt-3 flex flex-wrap gap-2"><Button type="button" onClick={onRetry}><RefreshCw className="h-4 w-4 mr-1" /> Try again</Button><Button type="button" variant="outline" onClick={() => { window.location.href = `mailto:${support?.email || ''}?subject=${encodeURIComponent('Guest portal help')}&body=${encodeURIComponent(`I need help with guest portal ${eventId}.`)}`; }} disabled={!support?.email}>Email support</Button></div></div>
+        </CardContent>
+      </Card>
     </div>
   );
 }
+
+function PortalInfoModules({ config, branding, palette, activeGuest, access }: { config: Record<string, any>; branding: PortalInfoResponse['branding'] | null; palette: Palette; activeGuest?: PortalGuestEntry; access: PortalInfoResponse['access'] | null }) {
+  const registryLinks = String(config.registryLinks || '').split(',').map((s) => s.trim()).filter(Boolean);
+  return (
+    <div className="grid gap-4 md:grid-cols-2">
+      {(config.faqText || config.transportationText) && <Card id="guest-faq-info" style={{ background: palette.surface, borderColor: palette.border }}><CardHeader><CardTitle className="text-base flex items-center gap-2"><HelpCircle className="h-4 w-4" /> Guest FAQ</CardTitle></CardHeader><CardContent className="space-y-3 text-sm"><p className="whitespace-pre-wrap">{config.faqText || 'FAQ details will be posted here.'}</p>{branding?.supportEmail && <p className="text-xs"><Mail className="inline h-3.5 w-3.5 mr-1" />Need help? <a className="font-bold underline" href={`mailto:${branding.supportEmail}`}>{branding.supportEmail}</a></p>}</CardContent></Card>}
+      {config.transportationText && <Card id="guest-travel-info" style={{ background: palette.surface, borderColor: palette.border }}><CardHeader><CardTitle className="text-base flex items-center gap-2"><Bus className="h-4 w-4" /> Transportation / shuttle</CardTitle></CardHeader><CardContent className="text-sm whitespace-pre-wrap">{config.transportationText}</CardContent></Card>}
+      {(registryLinks.length > 0 || config.rsvpEditWindowDays !== undefined) && <Card style={{ background: palette.surface, borderColor: palette.border }}><CardHeader><CardTitle className="text-base flex items-center gap-2"><Gift className="h-4 w-4" /> Registry & RSVP rules</CardTitle></CardHeader><CardContent className="space-y-2 text-sm">{registryLinks.map((link) => <a key={link} href={link} target="_blank" rel="noreferrer" className="block underline font-bold">{link}</a>)}{config.rsvpEditWindowDays !== undefined && <p className="text-xs" style={{ color: palette.fgMuted }}>RSVP edits may close {config.rsvpEditWindowDays} day(s) before the event.</p>}{access?.endsAt && <p className="text-xs" style={{ color: palette.fgMuted }}>Portal access window ends {new Date(access.endsAt).toLocaleString()}.</p>}</CardContent></Card>}
+      {activeGuest?.allowLodgingAccess && <Card id="guest-lodging-info" style={{ background: palette.surface, borderColor: palette.border }}><CardHeader><CardTitle className="text-base">Lodging / cabin request</CardTitle></CardHeader><CardContent className="text-sm">Your lodging details: <strong>{activeGuest.roomAssignment || 'Request lodging from the RSVP notes field.'}</strong></CardContent></Card>}
+    </div>
+  );
+}
+

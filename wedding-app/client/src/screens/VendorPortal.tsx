@@ -43,9 +43,10 @@ interface TourStep {
   targetId: string;
 }
 
-const TOUR_STEPS: TourStep[] = [
+function buildTourSteps(venueName: string): TourStep[] {
+  return [
   {
-    title: 'Welcome to Seven Paths Manor!',
+    title: `Welcome to ${venueName}!`,
     description: 'This is your dedicated portal for your upcoming wedding assignment. Let’s take a quick 45-second tour to get you fully set up.',
     targetId: 'header-brand'
   },
@@ -81,10 +82,11 @@ const TOUR_STEPS: TourStep[] = [
   },
   {
     title: 'Digital Entrance Pass (QR Code)',
-    description: 'Upon arrival at Seven Paths Manor, present this Digital Gate Pass QR Code to security or the lead planner for a 2-second check-in.',
+    description: `Upon arrival at ${venueName}, present this Digital Gate Pass QR Code to security or the lead planner for a 2-second check-in.`,
     targetId: 'gatepass-card'
   }
 ];
+}
 
 // ─── VENDOR-SPECIFIC CHEKLIST ITEMS BY CATEGORY ───
 interface ChecklistItem {
@@ -126,8 +128,20 @@ const DEFAULT_CHECKLIST: ChecklistItem[] = [
   { id: 'cleanup', label: 'Deliver clear trash bins behind setup zone' },
 ];
 
+function hexToRgbTriplet(hex?: string): string | null {
+  if (!hex) return null;
+  const m = /^#?([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})$/i.exec(hex);
+  if (!m) return null;
+  return `${parseInt(m[1], 16)} ${parseInt(m[2], 16)} ${parseInt(m[3], 16)}`;
+}
+
+function brandedPortalStyle(brandColor?: string): React.CSSProperties | undefined {
+  const rgb = hexToRgbTriplet(brandColor);
+  return rgb ? ({ '--color-brand': rgb } as React.CSSProperties) : undefined;
+}
+
 // ─── VENDOR LOGISTICS QUESTIONNAIRE WITH AUTO-SAVE & FILE UPLOAD ───
-function VendorLogistics({ vendorId, initialResponses }: { vendorId: string; initialResponses?: any }) {
+function VendorLogistics({ vendorId, token, initialResponses }: { vendorId: string; token: string; initialResponses?: any }) {
   const { toast } = useToast();
   const qc = useQueryClient();
 
@@ -161,7 +175,7 @@ function VendorLogistics({ vendorId, initialResponses }: { vendorId: string; ini
   }, [arrivalTime, departureTime, teamSize, coiLink, coiExpiration, draftKey]);
 
   const mutation = useMutation({
-    mutationFn: async (payload: any) => sdk.vendors.submitQuestionnaire(vendorId, payload),
+    mutationFn: async (payload: any) => sdk.vendors.submitQuestionnaire(vendorId, payload, token),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['vendorPortal', vendorId] });
       // Clean draft upon successful submission
@@ -181,34 +195,53 @@ function VendorLogistics({ vendorId, initialResponses }: { vendorId: string; ini
   const handleSimulatedUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
+    if (!['application/pdf', 'image/jpeg', 'image/png', 'image/webp'].includes(file.type)) {
+      toast({ title: 'Unsupported COI file type', description: 'Upload a PDF, JPG, PNG, or WebP file.', variant: 'destructive' });
+      return;
+    }
+    if (file.size > 8 * 1024 * 1024) {
+      toast({ title: 'COI file too large', description: 'Upload a file under 8 MB.', variant: 'destructive' });
+      return;
+    }
 
     setUploadedFileName(file.name);
     setIsUploading(true);
-    setUploadProgress(0);
-
-    // Simulate high-fidelity fast upload progress bar
-    let prog = 0;
-    const interval = setInterval(() => {
-      prog += Math.floor(Math.random() * 20) + 10;
-      if (prog >= 100) {
-        prog = 100;
-        clearInterval(interval);
-        setTimeout(() => {
-          setIsUploading(false);
-          const simulatedUrl = `https://sevenpathsmanor.com/cdn/uploads/coi_${vendorId}_${Date.now()}.pdf`;
-          setCoiLink(simulatedUrl);
-          toast({ title: 'Certificate of Insurance uploaded successfully', variant: 'success' });
-        }, 300);
+    setUploadProgress(15);
+    const reader = new FileReader();
+    reader.onprogress = (evt) => {
+      if (evt.lengthComputable) setUploadProgress(Math.max(15, Math.round((evt.loaded / evt.total) * 70)));
+    };
+    reader.onerror = () => {
+      setIsUploading(false);
+      toast({ title: 'Could not read COI file', variant: 'destructive' });
+    };
+    reader.onload = async () => {
+      try {
+        setUploadProgress(80);
+        const res = await sdk.vendors.uploadCoi(vendorId, token, {
+          fileName: file.name,
+          mimeType: file.type,
+          dataUri: String(reader.result),
+          expiresAt: coiExpiration || undefined,
+        });
+        setUploadProgress(100);
+        setCoiLink(res.url);
+        qc.invalidateQueries({ queryKey: ['vendorPortal', vendorId] });
+        toast({ title: 'Certificate of Insurance uploaded for review', description: 'Venue staff can now verify the COI.', variant: 'success' });
+      } catch (err: any) {
+        toast({ title: 'COI upload failed', description: err.message, variant: 'destructive' });
+      } finally {
+        setIsUploading(false);
       }
-      setUploadProgress(prog);
-    }, 150);
+    };
+    reader.readAsDataURL(file);
   };
 
   const isSubmitted = !!initialResponses?.submittedAt;
 
   return (
-    <Card id="logistics-card" className="bg-[#FDFBF7] border border-[#e1d5c9] shadow-sm rounded-2xl overflow-hidden">
-      <CardHeader className="pb-3 border-b border-[#e1d5c9]">
+    <Card id="logistics-card" className="bg-bg border border-border shadow-sm rounded-2xl overflow-hidden">
+      <CardHeader className="pb-3 border-b border-border">
         <CardTitle className="text-base font-serif font-black text-brand flex items-center justify-between">
            <span className="flex items-center gap-2">
              <FileUp className="w-4 h-4 text-brand" /> Logistics Questionnaire
@@ -238,7 +271,7 @@ function VendorLogistics({ vendorId, initialResponses }: { vendorId: string; ini
 
           <div className="space-y-2">
             <Label className="text-xs font-bold text-fg-muted uppercase tracking-wider">Certificate of Insurance (COI)</Label>
-            <div className="flex border border-[#e1d5c9] rounded-lg p-1 bg-white max-w-xs">
+            <div className="flex border border-border rounded-lg p-1 bg-surface max-w-xs">
               <Button 
                 type="button" 
                 variant={coiUploadMode === 'upload' ? 'secondary' : 'ghost'} 
@@ -267,22 +300,22 @@ function VendorLogistics({ vendorId, initialResponses }: { vendorId: string; ini
             ) : (
               <div className="mt-2 space-y-3">
                 {coiLink ? (
-                  <div className="border border-emerald-200 bg-emerald-50/20 p-3 rounded-lg flex items-center justify-between text-xs font-semibold text-emerald-800">
+                  <div className="border border-success/30 bg-success-soft/20 p-3 rounded-lg flex items-center justify-between text-xs font-semibold text-success">
                     <span className="flex items-center gap-1.5 truncate">
-                      <Check className="w-4 h-4 text-emerald-600 shrink-0" /> COI Secured &amp; Linked
+                      <Check className="w-4 h-4 text-success shrink-0" /> COI Secured &amp; Linked
                     </span>
                     <Button 
                       type="button" 
                       variant="ghost" 
                       size="xs" 
                       onClick={() => setCoiLink('')} 
-                      className="text-rose-600 hover:bg-rose-50 h-6 px-1.5 font-bold"
+                      className="text-danger hover:bg-danger-soft h-6 px-1.5 font-bold"
                     >
                       Remove
                     </Button>
                   </div>
                 ) : (
-                  <div className="border-2 border-dashed border-[#e1d5c9] rounded-xl p-4 bg-white text-center cursor-pointer hover:border-brand transition-all relative group">
+                  <div className="border-2 border-dashed border-border rounded-xl p-4 bg-surface text-center cursor-pointer hover:border-brand transition-all relative group">
                     <input 
                       type="file" 
                       accept=".pdf,image/*" 
@@ -301,7 +334,7 @@ function VendorLogistics({ vendorId, initialResponses }: { vendorId: string; ini
                       <span>Uploading {uploadedFileName}</span>
                       <span>{uploadProgress}%</span>
                     </div>
-                    <div className="w-full bg-gray-100 h-1.5 rounded-full overflow-hidden">
+                    <div className="w-full bg-surface-2 h-1.5 rounded-full overflow-hidden">
                       <div className="bg-brand h-full transition-all duration-300" style={{ width: `${uploadProgress}%` }} />
                     </div>
                   </div>
@@ -316,9 +349,9 @@ function VendorLogistics({ vendorId, initialResponses }: { vendorId: string; ini
                 type="date" 
                 value={coiExpiration} 
                 onChange={(e) => setCoiExpiration(e.target.value)} 
-                className="bg-white"
+                className="bg-surface"
               />
-              <p className="text-[10px] text-fg-subtle font-semibold mt-1">Providing an active Certificate of Insurance (COI) expiration is required for estate gate pass approval.</p>
+              <p className="text-[10px] text-fg-subtle font-semibold mt-1">Providing an active Certificate of Insurance (COI) expiration is required for venue gate pass approval.</p>
             </div>
           </div>
 
@@ -332,7 +365,7 @@ function VendorLogistics({ vendorId, initialResponses }: { vendorId: string; ini
 }
 
 // ─── MAIN VENDOR PORTAL WRAPPER ───
-export function VendorPortal({ vendorId }: { vendorId: string }) {
+export function VendorPortal({ vendorId, token }: { vendorId: string; token: string }) {
   const qc = useQueryClient();
   const { toast } = useToast();
   const chatBottomRef = useRef<HTMLDivElement>(null);
@@ -340,17 +373,21 @@ export function VendorPortal({ vendorId }: { vendorId: string }) {
   const [newMessageText, setNewMessageText] = useState('');
 
   const { data, isLoading, error } = useQuery({
-    queryKey: ['vendorPortal', vendorId],
-    queryFn: () => sdk.vendors.portalInfo(vendorId),
+    queryKey: ['vendorPortal', vendorId, token],
+    queryFn: () => sdk.vendors.portalInfo(vendorId, token),
+    enabled: !!token,
   });
 
   const portalData = data as any;
+  const branding = portalData?.branding || {};
+  const venueName = branding.platformName || 'Wedding Venue Intelligence';
+  const tourSteps = useMemo(() => buildTourSteps(venueName), [venueName]);
 
   // Real-Time Collaborative Portal Chat history query
   const { data: messagesData } = useQuery({
-    queryKey: ['vendorPortalMessages', vendorId],
-    queryFn: () => sdk.vendors.portalGetMessages(vendorId),
-    enabled: !!portalData?.event,
+    queryKey: ['vendorPortalMessages', vendorId, token],
+    queryFn: () => sdk.vendors.portalGetMessages(vendorId, token),
+    enabled: !!portalData?.event && !!token,
     refetchInterval: 5000, // Poll every 5 seconds to simulate sockets
   });
 
@@ -419,7 +456,7 @@ export function VendorPortal({ vendorId }: { vendorId: string }) {
       return sdk.vendors.submitQuestionnaire(vendorId, {
         ...currentQuestionnaire,
         vendorChecklist: updatedChecklist
-      });
+      }, token);
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['vendorPortal', vendorId] });
@@ -429,7 +466,7 @@ export function VendorPortal({ vendorId }: { vendorId: string }) {
 
   // Hook 6: useMutation for transmitting collaborative messages
   const sendMessageMutation = useMutation({
-    mutationFn: async (body: string) => sdk.vendors.portalSendMessage(vendorId, body),
+    mutationFn: async (body: string) => sdk.vendors.portalSendMessage(vendorId, body, token),
     onSuccess: () => {
       setNewMessageText('');
       qc.invalidateQueries({ queryKey: ['vendorPortalMessages', vendorId] });
@@ -456,7 +493,7 @@ export function VendorPortal({ vendorId }: { vendorId: string }) {
   };
 
   const handleNextTourStep = () => {
-    if (tourStep < TOUR_STEPS.length - 1) {
+    if (tourStep < tourSteps.length - 1) {
       setTourStep(tourStep + 1);
     } else {
       handleCompleteTour();
@@ -484,22 +521,26 @@ export function VendorPortal({ vendorId }: { vendorId: string }) {
   const catKey = portalData?.vendor?.category?.toLowerCase() || 'general';
   const customCategoryTasks = VENDOR_CHECKLISTS_BY_CATEGORY[catKey] || [];
   const fullChecklist = [...customCategoryTasks, ...DEFAULT_CHECKLIST];
+  const completedChecklist = fullChecklist.filter(item => checkedTasks[item.id]).length;
+  const portalCompletionItems = [vendorMetadata.arrivalTime, vendorMetadata.departureTime, vendorMetadata.teamSize, vendorMetadata.coiLink || vendorMetadata.coiReceived, vendorMetadata.coiExpiration || vendorMetadata.coiExpirationDate, completedChecklist >= Math.ceil(fullChecklist.length / 2)];
+  const portalCompletionPct = Math.round((portalCompletionItems.filter(Boolean).length / portalCompletionItems.length) * 100);
+  const unreadPlannerMessages = messages.filter((m: any) => m.sender_role !== 'vendor' && !m.read_at).length;
 
   // EARLY RENDERS GO DOWN HERE, STRICTLY AFTER ALL HOOKS
   if (isLoading) {
     return (
-      <div className="min-h-screen bg-[#FDFBF7] flex items-center justify-center p-4">
-         <div className="text-[#2C2A29] font-serif font-bold text-lg animate-pulse">Compiling portal details...</div>
+      <div className="min-h-screen bg-bg flex items-center justify-center p-4">
+         <div className="text-fg font-serif font-bold text-lg animate-pulse">Compiling portal details...</div>
       </div>
     );
   }
 
   if (error || !data) {
      return (
-      <div className="min-h-screen bg-[#FDFBF7] flex items-center justify-center p-4">
-        <Card className="max-w-md w-full bg-[#FDFBF7] border-2 border-rose-100 rounded-2xl shadow-lg">
-           <CardContent className="pt-6 text-center text-rose-700 font-semibold space-y-4">
-              <AlertCircle className="w-12 h-12 mx-auto text-rose-500" />
+      <div className="min-h-screen bg-bg flex items-center justify-center p-4">
+        <Card className="max-w-md w-full bg-bg border-2 border-danger/20 rounded-2xl shadow-lg">
+           <CardContent className="pt-6 text-center text-danger font-semibold space-y-4">
+              <AlertCircle className="w-12 h-12 mx-auto text-danger" />
               <p>Unable to load secure vendor details. Please verify your direct link or contact the venue administration.</p>
            </CardContent>
         </Card>
@@ -509,29 +550,30 @@ export function VendorPortal({ vendorId }: { vendorId: string }) {
 
   const { vendor, event, timeline, layouts } = data as any;
   const approvedLayout = layouts?.find((l: any) => l.approval_status === 'approved') || layouts?.[0];
+  const portalStyle = brandedPortalStyle(branding.brandColor);
 
   return (
-    <div className="min-h-screen bg-[#FDFBF7] text-[#2C2A29]">
+    <div className="min-h-screen bg-bg text-fg" style={portalStyle}>
       
       {/* GUIDED TOUR COACHMARK OVERLAY CONTAINER */}
       {!tourCompleted && (
         <div className="fixed inset-x-0 bottom-6 z-50 px-4 max-w-xl mx-auto animate-in slide-in-from-bottom-6 duration-300">
-          <div className="bg-[#2C2A29] text-white p-5 rounded-2xl shadow-2xl border border-gold/40 space-y-4 relative">
+          <div className="bg-fg text-fg-inverse p-5 rounded-2xl shadow-2xl border border-accent/40 space-y-4 relative">
             <button 
               onClick={handleCompleteTour} 
-              className="absolute right-3.5 top-3.5 text-white/50 hover:text-white"
+              className="absolute right-3.5 top-3.5 text-fg-inverse/50 hover:text-fg-inverse"
               title="Dismiss Walkthrough"
             >
               <X className="w-4 h-4" />
             </button>
 
             <div className="space-y-1">
-              <div className="flex items-center gap-1.5 text-xs font-bold text-brand uppercase tracking-widest text-[#e1d5c9]">
+              <div className="flex items-center gap-1.5 text-xs font-bold text-brand uppercase tracking-widest text-fg-muted">
                 <Compass className="w-4 h-4 text-brand animate-spin" style={{ animationDuration: '6s' }} /> 
-                Tour Step {tourStep + 1} of {TOUR_STEPS.length}
+                Tour Step {tourStep + 1} of {tourSteps.length}
               </div>
-              <h3 className="font-serif font-black text-lg text-[#FDFBF7]">{TOUR_STEPS[tourStep].title}</h3>
-              <p className="text-xs text-[#e1d5c9]/90 leading-relaxed font-medium">{TOUR_STEPS[tourStep].description}</p>
+              <h3 className="font-serif font-black text-lg text-fg-inverse">{tourSteps[tourStep].title}</h3>
+              <p className="text-xs text-fg-muted/90 leading-relaxed font-medium">{tourSteps[tourStep].description}</p>
             </div>
 
             <div className="flex justify-between items-center pt-2">
@@ -541,18 +583,18 @@ export function VendorPortal({ vendorId }: { vendorId: string }) {
                 size="xs" 
                 onClick={handlePrevTourStep} 
                 disabled={tourStep === 0}
-                className="text-white hover:bg-white/10 disabled:opacity-30 h-8 font-bold"
+                className="text-fg-inverse hover:bg-surface/10 disabled:opacity-30 h-8 font-bold"
               >
                 <ChevronLeft className="w-4 h-4 mr-0.5" /> Back
               </Button>
 
               <div className="flex gap-1">
-                {TOUR_STEPS.map((_, idx) => (
+                {tourSteps.map((_, idx) => (
                   <div 
                     key={idx} 
                     className={cn(
                       "w-1.5 h-1.5 rounded-full transition-all",
-                      idx === tourStep ? "bg-brand w-3" : "bg-white/30"
+                      idx === tourStep ? "bg-brand w-3" : "bg-surface/30"
                     )} 
                   />
                 ))}
@@ -561,9 +603,9 @@ export function VendorPortal({ vendorId }: { vendorId: string }) {
               <Button 
                 onClick={handleNextTourStep} 
                 size="xs"
-                className="bg-brand hover:bg-brand-strong text-[#2C2A29] h-8 font-bold"
+                className="bg-brand hover:bg-brand-strong text-fg h-8 font-bold"
               >
-                {tourStep === TOUR_STEPS.length - 1 ? 'Finish Tour' : 'Next'} <ChevronRight className="w-4 h-4 ml-0.5" />
+                {tourStep === tourSteps.length - 1 ? 'Finish Tour' : 'Next'} <ChevronRight className="w-4 h-4 ml-0.5" />
               </Button>
             </div>
           </div>
@@ -571,24 +613,24 @@ export function VendorPortal({ vendorId }: { vendorId: string }) {
       )}
 
       {/* HEADER SECTION */}
-      <header className="bg-[#FDFBF7] border-b border-[#e1d5c9] py-5 px-6 sticky top-0 z-40 shadow-xs">
+      <header className="bg-bg border-b border-border py-5 px-6 sticky top-0 z-40 shadow-xs">
          <div className="max-w-6xl mx-auto flex flex-col sm:flex-row sm:items-center justify-between gap-4">
             <div id="header-brand" className="space-y-1">
-               <span className="text-[10px] uppercase font-bold tracking-widest text-brand block">Seven Paths Manor Operational Suite</span>
+               <span className="text-[10px] uppercase font-bold tracking-widest text-brand block">{venueName} Vendor Operations</span>
                <h1 className="text-2xl font-serif font-black text-brand tracking-tight">Vendor Portal</h1>
                <p className="text-sm text-fg-muted">Prepared for {vendor.name}</p>
             </div>
             
             <div className="flex gap-2 items-center flex-wrap">
               {event && (
-                 <Badge variant="brand" className="font-serif text-xs font-bold py-1 px-3 border border-[#e1d5c9]">
+                 <Badge variant="brand" className="font-serif text-xs font-bold py-1 px-3 border border-border">
                    {event.title}
                  </Badge>
               )}
               <Button 
                 variant="outline" 
                 size="xs" 
-                className="h-8 text-xs font-bold text-brand border-[#e1d5c9] hover:bg-[#e1d5c9]/20"
+                className="h-8 text-xs font-bold text-brand border-border hover:bg-surface-2"
                 onClick={() => {
                   setTourCompleted(false);
                   setTourStep(0);
@@ -603,18 +645,27 @@ export function VendorPortal({ vendorId }: { vendorId: string }) {
       {/* MAIN LAYOUT */}
       <main className="max-w-6xl mx-auto p-4 sm:p-6 space-y-6">
 
+         <Card className="border-brand/20 bg-brand-soft/10">
+           <CardContent className="p-4 grid gap-3 sm:grid-cols-4">
+             <div><div className="text-xs font-bold text-brand">Vendor onboarding checklist</div><div className="text-2xl font-black">{portalCompletionPct}%</div><p className="text-[11px] text-fg-muted">Complete logistics, COI, and checklist items.</p></div>
+             <div><div className="text-xs font-bold text-brand">COI status</div><Badge variant={vendorMetadata.coiLink || vendorMetadata.coiReceived ? 'success' : 'danger'}>{vendorMetadata.coiLink || vendorMetadata.coiReceived ? 'Submitted' : 'Missing COI'}</Badge><p className="text-[11px] text-fg-muted mt-1">{vendorMetadata.coiExpiration || vendorMetadata.coiExpirationDate ? `Expires ${vendorMetadata.coiExpiration || vendorMetadata.coiExpirationDate}` : 'Expiration required'}</p></div>
+             <div><div className="text-xs font-bold text-brand">Unread messages</div><div className="text-2xl font-black">{unreadPlannerMessages}</div><p className="text-[11px] text-fg-muted">Coordinator messages needing review.</p></div>
+             <div><div className="text-xs font-bold text-brand">Load-in route</div><p className="text-xs text-fg-muted">{vendorMetadata.loadInRoute || 'Route planner will appear here when venue assigns it.'}</p></div>
+           </CardContent>
+         </Card>
+
          {/* LIVE WEDDING PROGRESS PACE TRACKER (REAL-TIME SYNC) */}
          {event && activeTimelineItemId && (
-           <Card className="bg-emerald-50/20 border-2 border-emerald-500/30 rounded-2xl p-5 flex items-center justify-between shadow-xs animate-pulse">
+           <Card className="bg-success-soft/20 border-2 border-success/30 rounded-2xl p-5 flex items-center justify-between shadow-xs animate-pulse">
              <div className="flex gap-3 items-center">
                <div className="relative flex h-3.5 w-3.5 shrink-0">
-                 <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
-                 <span className="relative inline-flex rounded-full h-3.5 w-3.5 bg-emerald-500"></span>
+                 <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-success opacity-75"></span>
+                 <span className="relative inline-flex rounded-full h-3.5 w-3.5 bg-success"></span>
                </div>
                <div className="space-y-0.5">
-                 <span className="text-[10px] uppercase font-bold tracking-widest text-emerald-800 block">💍 Real-Time Wedding Progress</span>
+                 <span className="text-[10px] uppercase font-bold tracking-widest text-success block">💍 Real-Time Wedding Progress</span>
                  <p className="font-serif font-black text-brand text-sm sm:text-base">
-                   Currently Active Phase: <strong className="text-emerald-700">"{timeline.find((i: any) => i.id === activeTimelineItemId)?.title || 'Milestone'}"</strong>
+                   Currently Active Phase: <strong className="text-success">"{timeline.find((i: any) => i.id === activeTimelineItemId)?.title || 'Milestone'}"</strong>
                  </p>
                </div>
              </div>
@@ -626,11 +677,11 @@ export function VendorPortal({ vendorId }: { vendorId: string }) {
 
          {/* LIVE COORDINATOR EMERGENCY BROADCAST ANNOUNCEMENT BANNER */}
          {event && currentBroadcast && (
-           <Card className="border-2 border-rose-500 bg-rose-50/30 rounded-2xl p-5 flex gap-3.5 items-start animate-bounce">
-             <AlertCircle className="w-6 h-6 text-rose-600 shrink-0 mt-0.5" />
-             <div className="space-y-1 text-xs sm:text-sm text-rose-900 font-semibold">
-               <p className="font-serif font-black text-rose-900 text-sm sm:text-base">🚨 URGENT COORDINATOR BROADCAST</p>
-               <p className="opacity-95 leading-relaxed text-xs font-bold text-rose-950">
+           <Card className="border-2 border-danger bg-danger-soft/30 rounded-2xl p-5 flex gap-3.5 items-start animate-bounce">
+             <AlertCircle className="w-6 h-6 text-danger shrink-0 mt-0.5" />
+             <div className="space-y-1 text-xs sm:text-sm text-danger font-semibold">
+               <p className="font-serif font-black text-danger text-sm sm:text-base">🚨 URGENT COORDINATOR BROADCAST</p>
+               <p className="opacity-95 leading-relaxed text-xs font-bold text-danger">
                  "{currentBroadcast}"
                </p>
              </div>
@@ -639,10 +690,10 @@ export function VendorPortal({ vendorId }: { vendorId: string }) {
 
          {/* DYNAMIC PLAN B CONTINGENCY WARNING BANNER */}
          {event && activePlan === 'plan-b' && (
-           <Card className="border-2 border-amber-400 bg-amber-50/30 rounded-2xl p-5 flex gap-3.5 items-start">
-             <AlertCircle className="w-6 h-6 text-amber-600 shrink-0 mt-0.5" />
-             <div className="space-y-1 text-xs sm:text-sm text-amber-900 font-semibold">
-               <p className="font-serif font-black text-amber-900 text-sm sm:text-base">🌧️ Active Weather Plan B Triggered</p>
+           <Card className="border-2 border-warning bg-warning-soft/30 rounded-2xl p-5 flex gap-3.5 items-start">
+             <AlertCircle className="w-6 h-6 text-warning shrink-0 mt-0.5" />
+             <div className="space-y-1 text-xs sm:text-sm text-warning font-semibold">
+               <p className="font-serif font-black text-warning text-sm sm:text-base">🌧️ Active Weather Plan B Triggered</p>
                <p className="opacity-90 leading-relaxed text-[11px] sm:text-xs">
                  The ceremony and setups have officially transitioned to the Indoor Ballroom. 
                  Please adapt cable-runs, stage positions, and decor layout structures accordingly. Maintain safe pathways around fire-escapes.
@@ -652,11 +703,11 @@ export function VendorPortal({ vendorId }: { vendorId: string }) {
          )}
 
          {!event ? (
-            <Card className="bg-[#FDFBF7] border border-[#e1d5c9] p-8 text-center rounded-2xl shadow-sm">
+            <Card className="bg-bg border border-border p-8 text-center rounded-2xl shadow-sm">
                <CardContent className="pt-6 text-center text-fg-subtle py-12 space-y-3">
                   <Truck className="w-12 h-12 mx-auto text-brand opacity-40 animate-bounce" />
                   <p className="font-serif font-black text-lg text-brand">No Wedding Schedule Linked</p>
-                  <p className="text-sm text-fg-muted max-w-sm mx-auto font-medium">You are registered on Seven Paths Manor platform but not currently assigned to an active upcoming layout timeline.</p>
+                  <p className="text-sm text-fg-muted max-w-sm mx-auto font-medium">You are registered on venue platform but not currently assigned to an active upcoming layout timeline.</p>
                </CardContent>
             </Card>
          ) : (
@@ -666,8 +717,8 @@ export function VendorPortal({ vendorId }: { vendorId: string }) {
                <div className="lg:col-span-4 space-y-6">
                   
                   {/* EVENT DETAILS CARD */}
-                  <Card className="bg-[#FDFBF7] border border-[#e1d5c9] shadow-sm rounded-2xl overflow-hidden">
-                     <CardHeader className="pb-3 border-b border-[#e1d5c9]">
+                  <Card className="bg-bg border border-border shadow-sm rounded-2xl overflow-hidden">
+                     <CardHeader className="pb-3 border-b border-border">
                         <CardTitle className="text-base font-serif font-black text-brand flex items-center gap-2">
                            <Calendar className="w-4 h-4 text-brand" />
                            Event Details
@@ -692,8 +743,8 @@ export function VendorPortal({ vendorId }: { vendorId: string }) {
                   </Card>
 
                   {/* COMMITMENT & FINANCES */}
-                  <Card id="commitment-card" className="bg-[#FDFBF7] border border-[#e1d5c9] shadow-sm rounded-2xl overflow-hidden">
-                     <CardHeader className="pb-3 border-b border-[#e1d5c9]">
+                  <Card id="commitment-card" className="bg-bg border border-border shadow-sm rounded-2xl overflow-hidden">
+                     <CardHeader className="pb-3 border-b border-border">
                         <CardTitle className="text-base font-serif font-black text-brand flex items-center gap-2">
                            <ShieldCheck className="w-4 h-4 text-brand" />
                            Commitment &amp; Financials
@@ -712,13 +763,13 @@ export function VendorPortal({ vendorId }: { vendorId: string }) {
                         <div className="grid grid-cols-2 gap-4 border-t pt-3">
                            <div>
                               <div className="text-[10px] uppercase font-bold text-fg-subtle mb-0.5">Agreement Cost</div>
-                              <div className="font-bold text-base text-[#2C2A29]">
+                              <div className="font-bold text-base text-fg">
                                  {vendor.contract_amount_cents ? `$${(vendor.contract_amount_cents / 100).toLocaleString(undefined, { minimumFractionDigits: 2 })}` : '—'}
                               </div>
                            </div>
                            <div>
                               <div className="text-[10px] uppercase font-bold text-fg-subtle mb-0.5">Balance Paid</div>
-                              <div className="font-black text-base text-emerald-600">
+                              <div className="font-black text-base text-success">
                                  ${(vendor.amount_paid_cents / 100).toLocaleString(undefined, { minimumFractionDigits: 2 })}
                               </div>
                            </div>
@@ -726,33 +777,41 @@ export function VendorPortal({ vendorId }: { vendorId: string }) {
                      </CardContent>
                   </Card>
 
+                  <Card className="bg-bg border border-border shadow-sm rounded-2xl overflow-hidden">
+                    <CardHeader className="pb-3 border-b border-border"><CardTitle className="text-sm font-serif font-black text-brand flex items-center gap-2"><FileText className="w-4 h-4" /> Vendor contract packet & document vault</CardTitle></CardHeader>
+                    <CardContent className="pt-4 space-y-2 text-xs">
+                      <div><strong>Insurance requirements:</strong> {vendorMetadata.insuranceRequirements || 'Venue requires active COI before load-in.'}</div>
+                      {(vendorMetadata.documents || []).length ? (vendorMetadata.documents || []).map((d: any) => <a key={d.id || d.url} href={d.url} target="_blank" rel="noreferrer" className="block text-brand underline">{d.name}</a>) : <p className="text-fg-muted">Contract packet and vendor documents will appear here.</p>}
+                    </CardContent>
+                  </Card>
+
                   {/* DIGITAL PASS FOR PORTAL GATE */}
-                  <Card id="gatepass-card" className="bg-[#FDFBF7] border border-[#e1d5c9] shadow-sm rounded-2xl overflow-hidden">
-                     <CardHeader className="pb-3 border-b border-[#e1d5c9] bg-[#e1d5c9]/10">
+                  <Card id="gatepass-card" className="bg-bg border border-border shadow-sm rounded-2xl overflow-hidden">
+                     <CardHeader className="pb-3 border-b border-border bg-surface-2">
                         <CardTitle className="text-sm font-serif font-black text-brand flex items-center gap-2">
                            <QrCode className="w-4 h-4 text-brand" />
                            Wedding Gate Check-In Pass
                         </CardTitle>
                         <CardDescription className="text-[9px] text-fg-subtle">
-                           Quick barcode entry at manor estate main gate security desk.
+                           Quick barcode entry at venue check-in desk.
                         </CardDescription>
                      </CardHeader>
                      <CardContent className="p-5 flex flex-col items-center justify-center space-y-4">
                         {/* HIGH FIDELITY SVG REPRESENTATION OF SECURE QR CODE MATRIX */}
-                        <div className="bg-white p-3.5 rounded-xl border border-[#e1d5c9] shadow-xs hover:scale-105 transition-transform duration-300">
-                          <svg viewBox="0 0 100 100" className="w-28 h-28" fill="#2C2A29">
+                        <div className="bg-surface p-3.5 rounded-xl border border-border shadow-xs hover:scale-105 transition-transform duration-300">
+                          <svg viewBox="0 0 100 100" className="w-28 h-28" fill="currentColor">
                             {/* Standard QR squares corners */}
                             <rect x="0" y="0" width="25" height="25" rx="2" />
-                            <rect x="4" y="4" width="17" height="17" rx="1" fill="#fff" />
-                            <rect x="8" y="8" width="9" height="9" fill="#2C2A29" />
+                            <rect x="4" y="4" width="17" height="17" rx="1" fill="rgb(var(--color-surface))" />
+                            <rect x="8" y="8" width="9" height="9" fill="currentColor" />
 
                             <rect x="75" y="0" width="25" height="25" rx="2" />
-                            <rect x="79" y="4" width="17" height="17" rx="1" fill="#fff" />
-                            <rect x="83" y="8" width="9" height="9" fill="#2C2A29" />
+                            <rect x="79" y="4" width="17" height="17" rx="1" fill="rgb(var(--color-surface))" />
+                            <rect x="83" y="8" width="9" height="9" fill="currentColor" />
 
                             <rect x="0" y="75" width="25" height="25" rx="2" />
-                            <rect x="4" y="79" width="17" height="17" rx="1" fill="#fff" />
-                            <rect x="8" y="83" width="9" height="9" fill="#2C2A29" />
+                            <rect x="4" y="79" width="17" height="17" rx="1" fill="rgb(var(--color-surface))" />
+                            <rect x="8" y="83" width="9" height="9" fill="currentColor" />
 
                             {/* Simulated randomized data points */}
                             <rect x="35" y="5" width="5" height="15" />
@@ -765,8 +824,8 @@ export function VendorPortal({ vendorId }: { vendorId: string }) {
                             <rect x="5" y="60" width="5" height="5" />
                             <rect x="15" y="60" width="5" height="10" />
 
-                            <rect x="35" y="35" width="30" height="30" rx="3" fill="#e1d5c9" />
-                            <rect x="42" y="42" width="16" height="16" rx="1" fill="#2C2A29" />
+                            <rect x="35" y="35" width="30" height="30" rx="3" fill="currentColor" opacity="0.35" />
+                            <rect x="42" y="42" width="16" height="16" rx="1" fill="currentColor" />
 
                             <rect x="75" y="35" width="5" height="15" />
                             <rect x="85" y="45" width="10" height="5" />
@@ -783,7 +842,7 @@ export function VendorPortal({ vendorId }: { vendorId: string }) {
                         </div>
                         <div className="text-center">
                           <span className="text-xs font-serif font-black tracking-wider text-brand block uppercase">PASS: {vendorId.slice(0, 8).toUpperCase()}</span>
-                          <span className="text-[10px] text-fg-subtle font-semibold block mt-0.5 max-w-[200px]">Present to Venue Director / Security Gatehouse upon loading arrival.</span>
+                          <span className="text-[10px] text-fg-subtle font-semibold block mt-0.5 max-w-[200px]">Present to Venue Director / Check-In Desk upon loading arrival.</span>
                         </div>
                      </CardContent>
                   </Card>
@@ -793,8 +852,8 @@ export function VendorPortal({ vendorId }: { vendorId: string }) {
                <div className="lg:col-span-8 space-y-6">
                   
                   {/* REAL-TIME SPATIAL BLUEPRINT MAP */}
-                  <Card id="blueprint-card" className="bg-[#FDFBF7] border border-[#e1d5c9] shadow-sm rounded-2xl overflow-hidden">
-                     <CardHeader className="pb-3 border-b border-[#e1d5c9]">
+                  <Card id="blueprint-card" className="bg-bg border border-border shadow-sm rounded-2xl overflow-hidden">
+                     <CardHeader className="pb-3 border-b border-border">
                         <CardTitle className="text-base font-serif font-black text-brand flex items-center gap-2">
                            <Map className="w-4 h-4 text-brand" />
                            Real-Time Floorplan Map Blueprint
@@ -806,7 +865,7 @@ export function VendorPortal({ vendorId }: { vendorId: string }) {
                      <CardContent className="pt-4">
                         {approvedLayout ? (
                            <div className="space-y-4">
-                              <div className="flex justify-between items-center text-xs font-semibold bg-white p-2.5 rounded-lg border border-[#e1d5c9]">
+                              <div className="flex justify-between items-center text-xs font-semibold bg-surface p-2.5 rounded-lg border border-border">
                                  <div>
                                     Layout: <strong className="text-brand">{approvedLayout.name}</strong> 
                                     <span className="text-fg-subtle ml-1">(v{approvedLayout.revision})</span>
@@ -817,14 +876,14 @@ export function VendorPortal({ vendorId }: { vendorId: string }) {
                               </div>
 
                               {/* Interactive SVG Renderer */}
-                              <div className="relative border border-[#e1d5c9] rounded-xl overflow-hidden bg-white">
+                              <div className="relative border border-border rounded-xl overflow-hidden bg-surface">
                                  {layoutItems.length === 0 ? (
                                     <div className="text-center py-12 text-fg-subtle">No physical elements placed in layout.</div>
                                  ) : (
-                                    <svg viewBox="0 0 800 600" className="w-full h-auto bg-[#FDFBF7]" aria-label="Floorplan Layout SVG Blueprint Map">
+                                    <svg viewBox="0 0 800 600" className="w-full h-auto bg-bg" aria-label="Floorplan Layout SVG Blueprint Map">
                                        <defs>
                                           <pattern id="dotGridPortal" width="20" height="20" patternUnits="userSpaceOnUse">
-                                             <circle cx="2" cy="2" r="1" fill="#e1d5c9" opacity="0.4" />
+                                             <circle cx="2" cy="2" r="1" fill="currentColor" opacity="0.35" />
                                           </pattern>
                                        </defs>
                                        <rect width="100%" height="100%" fill="url(#dotGridPortal)" />
@@ -833,20 +892,20 @@ export function VendorPortal({ vendorId }: { vendorId: string }) {
                                           if (item.type === 'round_table') {
                                              return (
                                                 <g key={item.id}>
-                                                   <circle cx={item.x} cy={item.y} r={item.radius || 30} fill="#ffffff" stroke="#9ca3af" strokeWidth="1.5" />
-                                                   <text x={item.x} y={item.y + 3} fontFamily="Georgia, serif" fontSize="9" textAnchor="middle" fill="#374151" fontWeight="bold">{item.label || 'Round'}</text>
+                                                   <circle cx={item.x} cy={item.y} r={item.radius || 30} fill="rgb(var(--color-surface))" stroke="rgb(var(--color-border-strong))" strokeWidth="1.5" />
+                                                   <text x={item.x} y={item.y + 3} fontFamily="Georgia, serif" fontSize="9" textAnchor="middle" fill="rgb(var(--color-fg))" fontWeight="bold">{item.label || 'Round'}</text>
                                                 </g>
                                              );
                                           }
                                           if (item.type === 'rect_table' || item.type === 'dance_floor') {
                                              const w = item.width || 120;
                                              const h = item.height || 40;
-                                             const fill = item.type === 'dance_floor' ? '#e5e7eb' : '#ffffff';
-                                             const stroke = item.type === 'dance_floor' ? '#d1d5db' : '#9ca3af';
+                                             const fill = item.type === 'dance_floor' ? 'rgb(var(--color-surface-2))' : 'rgb(var(--color-surface))';
+                                             const stroke = item.type === 'dance_floor' ? 'rgb(var(--color-border))' : 'rgb(var(--color-border-strong))';
                                              return (
                                                 <g key={item.id} transform={`rotate(${item.rotation || 0} ${item.x} ${item.y})`}>
                                                    <rect x={item.x - w/2} y={item.y - h/2} width={w} height={h} rx="4" fill={fill} stroke={stroke} strokeWidth="1.5" />
-                                                   <text x={item.x} y={item.y + 3} fontFamily="Georgia, serif" fontSize="9" textAnchor="middle" fill="#374151" fontWeight="bold">{item.label || 'Rect'}</text>
+                                                   <text x={item.x} y={item.y + 3} fontFamily="Georgia, serif" fontSize="9" textAnchor="middle" fill="rgb(var(--color-fg))" fontWeight="bold">{item.label || 'Rect'}</text>
                                                 </g>
                                              );
                                           }
@@ -856,13 +915,13 @@ export function VendorPortal({ vendorId }: { vendorId: string }) {
                                                    return acc + (idx % 2 === 0 ? `L ${val} ` : `${val} `);
                                                 }, '');
                                                 return (
-                                                   <path key={item.id} d={path} fill="none" stroke={item.color || '#374151'} strokeWidth={item.strokeWidth || 4} strokeLinecap="round" strokeLinejoin="round" />
+                                                   <path key={item.id} d={path} fill="none" stroke={item.color || 'rgb(var(--color-fg))'} strokeWidth={item.strokeWidth || 4} strokeLinecap="round" strokeLinejoin="round" />
                                                 );
                                              }
                                           }
                                           if (item.type === 'chair') {
                                              return (
-                                                <circle key={item.id} cx={item.x} cy={item.y} r={item.radius || 6} fill="#fff" stroke="#6b7280" strokeWidth="1" />
+                                                <circle key={item.id} cx={item.x} cy={item.y} r={item.radius || 6} fill="rgb(var(--color-surface))" stroke="rgb(var(--color-border-strong))" strokeWidth="1" />
                                              );
                                           }
                                           return null;
@@ -872,7 +931,7 @@ export function VendorPortal({ vendorId }: { vendorId: string }) {
                               </div>
                            </div>
                         ) : (
-                           <div className="text-center py-12 text-fg-subtle bg-white rounded-xl border border-dashed p-6">
+                           <div className="text-center py-12 text-fg-subtle bg-surface rounded-xl border border-dashed p-6">
                               <Map className="w-10 h-10 mx-auto text-brand/30 mb-2" />
                               <p className="font-serif font-black text-brand">No Approved Layout Map</p>
                               <p className="text-xs font-semibold max-w-xs mx-auto mt-1">The spatial seating plan has not been fully finalized yet. Please check back soon.</p>
@@ -882,19 +941,19 @@ export function VendorPortal({ vendorId }: { vendorId: string }) {
                   </Card>
 
                   {/* DIRECT COLLABORATIVE COORDINATOR LIVE CHAT CARD */}
-                  <Card id="chat-card" className="bg-[#FDFBF7] border border-[#e1d5c9] shadow-sm rounded-2xl overflow-hidden">
-                     <CardHeader className="pb-3 border-b border-[#e1d5c9]">
+                  <Card id="chat-card" className="bg-bg border border-border shadow-sm rounded-2xl overflow-hidden">
+                     <CardHeader className="pb-3 border-b border-border">
                         <CardTitle className="text-base font-serif font-black text-brand flex items-center gap-2">
                            <MessageSquare className="w-4 h-4 text-brand" /> Direct Coordinator Live Chat
                         </CardTitle>
                         <CardDescription className="text-xs text-fg-subtle">
-                           Secure, direct link to the Seven Paths Manor coordination crew and venue directors.
+                           Secure, direct link to the venue coordination crew and venue directors.
                         </CardDescription>
                      </CardHeader>
                      <CardContent className="pt-6 space-y-4">
                         
                         {/* Conversation feed */}
-                        <div className="border border-[#e1d5c9] rounded-xl p-4 bg-white h-64 overflow-y-auto space-y-3 flex flex-col">
+                        <div className="border border-border rounded-xl p-4 bg-surface h-64 overflow-y-auto space-y-3 flex flex-col">
                            {messages.length === 0 ? (
                               <div className="text-center my-auto text-xs text-fg-subtle font-semibold py-8 space-y-2">
                                  <MessageSquare className="w-8 h-8 text-brand/30 mx-auto mb-1 animate-bounce" />
@@ -910,8 +969,8 @@ export function VendorPortal({ vendorId }: { vendorId: string }) {
                                        className={cn(
                                           "max-w-[80%] rounded-2xl p-3 text-xs font-medium space-y-1 relative shadow-xs",
                                           isSelf 
-                                             ? "bg-[#2C2A29] text-[#FDFBF7] self-end rounded-tr-none" 
-                                             : "bg-surface-2 text-[#2C2A29] border border-border self-start rounded-tl-none"
+                                             ? "bg-fg text-fg-inverse self-end rounded-tr-none" 
+                                             : "bg-surface-2 text-fg border border-border self-start rounded-tl-none"
                                        )}
                                     >
                                        {!isSelf && (
@@ -939,14 +998,14 @@ export function VendorPortal({ vendorId }: { vendorId: string }) {
                               placeholder="Type message to venue crew..." 
                               value={newMessageText}
                               onChange={(e) => setNewMessageText(e.target.value)}
-                              className="text-xs h-9 border-[#e1d5c9] bg-white flex-1"
+                              className="text-xs h-9 border-border bg-surface flex-1"
                               required
                            />
                            <Button 
                               type="submit" 
                               size="xs" 
                               disabled={sendMessageMutation.isPending || !newMessageText.trim()}
-                              className="h-9 px-4 font-bold bg-[#2C2A29] hover:bg-[#3e3c3b] text-white flex items-center gap-1 shrink-0"
+                              className="h-9 px-4 font-bold bg-fg hover:bg-fg-muted text-fg-inverse flex items-center gap-1 shrink-0"
                            >
                               <Send className="w-3.5 h-3.5" /> Send
                            </Button>
@@ -956,8 +1015,8 @@ export function VendorPortal({ vendorId }: { vendorId: string }) {
                   </Card>
 
                   {/* INTERACTIVE CATEGORY-SPECIFIC CHECKLIST CARD */}
-                  <Card id="vendor-checklist-card" className="bg-[#FDFBF7] border border-[#e1d5c9] shadow-sm rounded-2xl overflow-hidden">
-                     <CardHeader className="pb-3 border-b border-[#e1d5c9]">
+                  <Card id="vendor-checklist-card" className="bg-bg border border-border shadow-sm rounded-2xl overflow-hidden">
+                     <CardHeader className="pb-3 border-b border-border">
                         <CardTitle className="text-base font-serif font-black text-brand flex items-center gap-2">
                            <CheckSquare className="w-4 h-4 text-brand" />
                            Your Setup &amp; Execution Checklist
@@ -975,17 +1034,17 @@ export function VendorPortal({ vendorId }: { vendorId: string }) {
                                     key={task.id}
                                     onClick={() => handleToggleTask(task.id)}
                                     className={cn(
-                                       "flex items-center gap-3 p-3 rounded-xl border transition-all cursor-pointer bg-white",
+                                       "flex items-center gap-3 p-3 rounded-xl border transition-all cursor-pointer bg-surface",
                                        isChecked 
-                                          ? "border-emerald-200 bg-emerald-50/10" 
-                                          : "border-[#e1d5c9] hover:border-brand"
+                                          ? "border-success/30 bg-success-soft/20" 
+                                          : "border-border hover:border-brand"
                                     )}
                                  >
                                     <div className={cn(
                                        "w-5 h-5 rounded-md border-2 flex items-center justify-center shrink-0 transition-all",
                                        isChecked 
-                                          ? "border-emerald-500 bg-emerald-5050 text-white" 
-                                          : "border-gray-300"
+                                          ? "border-success bg-success text-fg-inverse" 
+                                          : "border-border-strong"
                                     )}>
                                        {isChecked && <Check className="w-3.5 h-3.5 stroke-[3]" />}
                                     </div>
@@ -1004,7 +1063,8 @@ export function VendorPortal({ vendorId }: { vendorId: string }) {
 
                   {/* VENDOR LOGISTICS CARD */}
                   <VendorLogistics 
-                     vendorId={vendorId} 
+                     vendorId={vendorId}
+                     token={token}
                      initialResponses={(() => {
                         try {
                            const meta = typeof vendor.metadata === 'string' ? JSON.parse(vendor.metadata || '{}') : vendor.metadata;
@@ -1016,8 +1076,8 @@ export function VendorPortal({ vendorId }: { vendorId: string }) {
                   />
 
                   {/* RUN OF SHOW TIMELINE */}
-                  <Card id="timeline-card" className="bg-[#FDFBF7] border border-[#e1d5c9] shadow-sm rounded-2xl overflow-hidden">
-                     <CardHeader className="pb-4 border-b border-[#e1d5c9]">
+                  <Card id="timeline-card" className="bg-bg border border-border shadow-sm rounded-2xl overflow-hidden">
+                     <CardHeader className="pb-4 border-b border-border">
                         <CardTitle className="text-base font-serif font-black text-brand flex items-center gap-2">
                            <Clock className="w-4 h-4 text-brand" />
                            Wedding Timeline &amp; Milestones (Run of Show)
@@ -1026,13 +1086,13 @@ export function VendorPortal({ vendorId }: { vendorId: string }) {
                            Real-time schedule of setups, grand entrance, meals, and teardown.
                         </CardDescription>
                      </CardHeader>
-                     <CardContent className="p-0 bg-white">
+                     <CardContent className="p-0 bg-surface">
                         {timeline.length === 0 ? (
                            <div className="text-center text-fg-muted py-12 px-4 italic text-sm">
                               The official schedule for this event is currently being compiled by the coordination team.
                            </div>
                         ) : (
-                           <div className="divide-y divide-gray-100">
+                           <div className="divide-y divide-border">
                               {timeline.map((item: any) => {
                                  const time = item.time || (item.starts_at ? new Date(item.starts_at).toLocaleTimeString(undefined, {hour: '2-digit', minute: '2-digit'}) : 'TBD');
                                  const isActive = item.id === activeTimelineItemId;
@@ -1041,13 +1101,13 @@ export function VendorPortal({ vendorId }: { vendorId: string }) {
                                        key={item.id} 
                                        className={cn(
                                           "p-4 sm:p-5 flex gap-4 transition-colors",
-                                          isActive ? "bg-emerald-50/10 border-l-4 border-l-emerald-500 pl-4" : "hover:bg-surface-2"
+                                          isActive ? "bg-success-soft/20 border-l-4 border-l-success pl-4" : "hover:bg-surface-2"
                                        )}
                                     >
                                        <div className="w-20 sm:w-24 shrink-0 pt-0.5">
                                           <span className={cn(
                                              "text-xs font-bold px-2 py-0.5 rounded-md",
-                                             isActive ? "bg-emerald-500 text-white" : "bg-brand-soft/20 text-brand"
+                                             isActive ? "bg-success text-fg-inverse" : "bg-brand-soft/20 text-brand"
                                           )}>
                                              {time}
                                           </span>

@@ -4,7 +4,7 @@
  * their top alerts, each deep-linking into the relevant event tab.
  *
  * FIXES APPLIED:
- *   N3 — RBAC: analytics.view permission checked before rendering.
+ *   N3 — RBAC: reports.view permission checked before rendering.
  *   UX — Returns null silently when all events are healthy (quiet by design).
  *   UX — aria-labels on all icon-only elements for WCAG 2.1 AA compliance.
  *   UX — Focus-visible ring on event links for keyboard navigation.
@@ -39,8 +39,8 @@ function healthLabel(score: number): string {
 }
 
 export function RiskAlertsCard({ orgId }: Props) {
-  // N3 fix: respect analytics.view permission
-  const canViewAnalytics = usePermission('analytics.view');
+  // N3 fix: respect reports.view permission
+  const canViewAnalytics = usePermission('reports.view');
   if (!canViewAnalytics) return null;
 
   const { data, isLoading } = useQuery({
@@ -132,6 +132,9 @@ export function RiskAlertsCard({ orgId }: Props) {
                     >
                       <span className="font-medium">{a.title}.</span>{' '}
                       <span className="text-fg-muted">{a.detail}</span>
+                      <span className="block mt-0.5 text-[11px] text-fg-subtle">
+                        <strong>Why am I seeing this?</strong> This alert is generated from event readiness/risk data. <strong>Recommended next step:</strong> open the linked event tab and resolve the flagged item.
+                      </span>
                     </a>
                   </li>
                 );

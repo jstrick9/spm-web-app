@@ -29,7 +29,18 @@ function wrap() {
 }
 
 describe('AuditLog', () => {
-  beforeEach(() => { vi.clearAllMocks(); });
+  beforeEach(() => { vi.clearAllMocks(); localStorage.clear(); });
+
+  it('renders manager security and audit controls in manager mode', async () => {
+    localStorage.setItem('wvi_registration_role', 'venue_manager');
+    render(<AuditLog orgId="org1" />, { wrapper: wrap() });
+    expect(await screen.findByText('Manager permission policy template')).toBeTruthy();
+    expect(screen.getByText('Shared tablet/kiosk session security')).toBeTruthy();
+    expect(screen.getByText('Manager audit filters & PII access report')).toBeTruthy();
+    expect(screen.getByText('PII access')).toBeTruthy();
+    expect(screen.getByText('Per-event manager access scope')).toBeTruthy();
+    expect(screen.getByText('Delegated approval workflow')).toBeTruthy();
+  });
 
   it('renders the page header', async () => {
     render(<AuditLog orgId="org1" />, { wrapper: wrap() });

@@ -2,7 +2,7 @@
  * IntelligenceDashboard — the "intelligence" surface of the platform.
  *
  * FIXES APPLIED in this version:
- *   N3  — RBAC gate: analytics.view required; AccessDenied rendered otherwise.
+ *   N3  — RBAC gate: reports.view required; AccessDenied rendered otherwise.
  *   N4  — Emoji accessibility: aria-hidden + sr-only text for 🔥 ❄️ symbols.
  *   UX  — Minimum data guard: < 5 events → "Building Your Intelligence" empty state.
  *   UX  — forecastData staleTime bumped to 10 min (historical computation).
@@ -34,6 +34,7 @@ import { AccessDenied } from '../../ui/AccessDenied';
 import { RevenueForecastCard } from './RevenueForecastCard';
 import { RiskAlertsCard } from './RiskAlertsCard';
 import { NpsSurveyCard } from './NpsSurveyCard';
+import { EventHealthCommandCenter } from './EventHealthCommandCenter';
 // usePermission hook — guards this entire screen
 import { usePermission } from '../../lib/usePermission';
 
@@ -46,7 +47,7 @@ const MIN_EVENTS_FOR_INTELLIGENCE = 5;
 
 export function IntelligenceDashboard({ orgId }: Props) {
   // ── RBAC gate (N3 fix) ──────────────────────────────────────────────────
-  const canViewAnalytics = usePermission('analytics.view');
+  const canViewAnalytics = usePermission('reports.view');
 
   if (!canViewAnalytics) {
     return (
@@ -128,7 +129,8 @@ export function IntelligenceDashboard({ orgId }: Props) {
           }
           description="Data-driven insights from your historical event data."
         />
-        <PageBody>
+        <PageBody className="space-y-6">
+          <EventHealthCommandCenter orgId={orgId} />
           <EmptyState
             icon={<Sparkles className="h-6 w-6" />}
             title="Building Your Intelligence"
@@ -158,6 +160,8 @@ export function IntelligenceDashboard({ orgId }: Props) {
         description="Data-driven insights from your historical event data."
       />
       <PageBody className="space-y-6">
+
+        <EventHealthCommandCenter orgId={orgId} />
 
         {/* ── Budget & Guest Benchmarks ─────────────────────────────────── */}
         <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">

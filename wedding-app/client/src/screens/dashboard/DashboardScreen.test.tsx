@@ -9,7 +9,7 @@
  *   • "Upcoming This Week" section appears for future events
  *   • Empty state shown when no events at all
  *   • Intelligence snapshot shown only if canViewAnalytics + enough data
- *   • Intelligence snapshot hidden when user lacks analytics.view
+ *   • Intelligence snapshot hidden when user lacks reports.view
  *   • EventRiskBadge rendered for today's events
  *   • All heading levels correct (h1 in PageHeader, h2 for sections)
  */
@@ -25,6 +25,12 @@ vi.mock('../../lib/usePermission', () => ({
 vi.mock('../../sdk', () => ({
   sdk: {
     events:       { list: vi.fn() },
+    auth: { me: vi.fn().mockResolvedValue({ user: { id: 'owner-1' }, memberships: [] }) },
+    staff: { listTasks: vi.fn().mockResolvedValue({ tasks: [{ id: 't1', title: 'Incident follow-up', status: 'blocked', priority: 'critical', tags: ['incident'] }] }) },
+    vendors: { list: vi.fn().mockResolvedValue({ vendors: [{ id: 'v1', name: 'DJ Co', category: 'DJ', phone: null, metadata: '{}' }] }) },
+    layouts: { list: vi.fn().mockResolvedValue({ layouts: [] }) },
+    healthCommand: { get: vi.fn().mockResolvedValue({ commandCenter: { actions: [{ id: 'h1', title: 'Build timeline', source: 'timeline_completeness', priority: 'high' }], resolvedActions: [], summary: {} } }) },
+    platformConfig: { getOrg: vi.fn() },
     intelligence: { recommendations: { get: vi.fn() } },
   },
 }));
@@ -33,6 +39,10 @@ vi.mock('../events/components/EventRiskBadge', () => ({
   EventRiskBadge: ({ eventId }: { eventId: string }) => (
     <span data-testid={`risk-${eventId}`} />
   ),
+}));
+
+vi.mock('../../config/ConfigProvider', () => ({
+  useBranding: () => ({ platformName: 'Wedding Venue Intelligence', logoUrl: '', tagline: '' }),
 }));
 
 import { usePermission }     from '../../lib/usePermission';
@@ -84,22 +94,43 @@ const MOCK_RECS = {
   },
 };
 
-function renderDashboard(orgId = 'org-1') {
+function renderDashboard(orgId = 'org-1', onCreateEvent = vi.fn()) {
   const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } });
-  return render(
+  const view = render(
     <QueryClientProvider client={qc}>
-      <DashboardScreen user={MOCK_USER as any} orgId={orgId} />
+      <DashboardScreen user={MOCK_USER as any} orgId={orgId} onCreateEvent={onCreateEvent} />
     </QueryClientProvider>,
   );
+  return { ...view, onCreateEvent };
 }
 
 describe('DashboardScreen', () => {
   beforeEach(() => {
     vi.mocked(usePermission).mockImplementation((p: string) =>
-      ['analytics.view', 'events.create'].includes(p),
+      ['reports.view', 'events.create'].includes(p),
     );
     vi.mocked(sdk.events.list).mockResolvedValue(MOCK_EVENTS_TODAY as any);
+    vi.mocked(sdk.platformConfig.getOrg).mockResolvedValue({ config: { setup: { ownerSetup: { status: 'skipped', completedSteps: ['identity', 'spaces'] } } } } as any);
     vi.mocked(sdk.intelligence.recommendations.get).mockResolvedValue(MOCK_RECS as any);
+    vi.mocked(sdk.auth.me).mockResolvedValue({ user: { id: 'owner-1' }, memberships: [] } as any);
+    localStorage.clear();
+  });
+
+
+  it('renders best-in-class manager operations suite in manager mode', async () => {
+    localStorage.setItem('wvi_registration_role', 'venue_manager');
+    vi.mocked(sdk.auth.me).mockResolvedValue({ user: { id: 'manager-1' }, memberships: [{ roleKey: 'manager' }] } as any);
+    vi.mocked(usePermission).mockReturnValue(true as any);
+    renderDashboard();
+    await waitFor(() => {
+      expect(screen.getByText('Best-in-class manager operations suite')).toBeInTheDocument();
+      expect(screen.getAllByText('Venue Manager AI Copilot').length).toBeGreaterThanOrEqual(1);
+      expect(screen.getByText('Event BEO / operations packet generator')).toBeInTheDocument();
+      expect(screen.getByText('Vendor no-show contingency playbooks')).toBeInTheDocument();
+      expect(screen.getByText('Weather/rain-plan decision engine')).toBeInTheDocument();
+      expect(screen.getByText('Manager performance and training dashboard')).toBeInTheDocument();
+      expect(screen.getByRole('button', { name: /Download operations packet/i })).toBeInTheDocument();
+    });
   });
 
   // ── Header ────────────────────────────────────────────────────────────
@@ -141,7 +172,7 @@ describe('DashboardScreen', () => {
   it('renders "Today" section when today has events', async () => {
     renderDashboard();
     await waitFor(() => {
-      expect(screen.getByText('Today')).toBeTruthy();
+      expect(screen.getByRole('heading', { name: /Today/i })).toBeTruthy();
       expect(screen.getByText('Smith Wedding')).toBeTruthy();
     });
   });
@@ -172,16 +203,21 @@ describe('DashboardScreen', () => {
   });
 
   // ── Empty state ───────────────────────────────────────────────────────
-  it('renders empty state when no events exist', async () => {
+  it('renders empty state with a visible Create First Event CTA when no events exist', async () => {
     vi.mocked(sdk.events.list).mockResolvedValue(MOCK_EVENTS_EMPTY as any);
-    renderDashboard();
+    const onCreateEvent = vi.fn();
+    renderDashboard('org-1', onCreateEvent);
     await waitFor(() => {
       expect(screen.getByText('No events yet')).toBeTruthy();
+      expect(screen.getByText(/Start by creating a wedding event/i)).toBeTruthy();
     });
+    const cta = screen.getByRole('button', { name: /create first event/i });
+    fireEvent.click(cta);
+    expect(onCreateEvent).toHaveBeenCalledTimes(1);
   });
 
   // ── Intelligence snapshot ─────────────────────────────────────────────
-  it('renders Intelligence Snapshot when analytics.view permitted and enough data', async () => {
+  it('renders Intelligence Snapshot when reports.view permitted and enough data', async () => {
     renderDashboard();
     await waitFor(() => {
       expect(screen.getByText('Intelligence Snapshot')).toBeTruthy();
@@ -190,9 +226,9 @@ describe('DashboardScreen', () => {
     });
   });
 
-  it('hides Intelligence Snapshot when analytics.view not permitted', async () => {
+  it('hides Intelligence Snapshot when reports.view not permitted', async () => {
     vi.mocked(usePermission).mockImplementation((p: string) =>
-      p === 'events.create', // analytics.view NOT granted
+      p === 'events.create', // reports.view NOT granted
     );
     renderDashboard();
     await waitFor(() => {
@@ -215,7 +251,7 @@ describe('DashboardScreen', () => {
   it('sections use h2 headings', async () => {
     renderDashboard();
     await waitFor(() => {
-      expect(screen.getByText('Today')).toBeTruthy();
+      expect(screen.getByRole('heading', { name: /Today/i })).toBeTruthy();
     });
     const h2s = screen.getAllByRole('heading', { level: 2 });
     expect(h2s.length).toBeGreaterThan(0);
@@ -229,9 +265,17 @@ describe('DashboardScreen', () => {
     });
   });
 
+  it('clicking New Event calls the direct onCreateEvent callback', async () => {
+    const onCreateEvent = vi.fn();
+    renderDashboard('org-1', onCreateEvent);
+    const btn = await screen.findByRole('button', { name: /new event/i });
+    fireEvent.click(btn);
+    expect(onCreateEvent).toHaveBeenCalledTimes(1);
+  });
+
   it('hides New Event button when events.create not permitted', async () => {
     vi.mocked(usePermission).mockImplementation((p: string) =>
-      p === 'analytics.view', // events.create NOT granted
+      p === 'reports.view', // events.create NOT granted
     );
     renderDashboard();
     await waitFor(() => {
@@ -255,17 +299,17 @@ describe('DashboardScreen', () => {
     renderDashboard();
     
     // Check toggle is present
-    const toggleBtn = await screen.findByRole('button', { name: /Enable Guided Tutorial/i });
+    const toggleBtn = await screen.findByRole('button', { name: /I'm new — show me what to do/i });
     expect(toggleBtn).toBeInTheDocument();
 
     // Contextual guide should not be visible initially
-    expect(screen.queryByText(/💡 Tutorial: Customize your guest-facing welcome sheets/i)).not.toBeInTheDocument();
+    expect(screen.queryByText(/💡 This controls what owners/i)).not.toBeInTheDocument();
 
     // Click to enable tutorial
     fireEvent.click(toggleBtn);
 
     // Verify button text changes and guides appear
-    expect(screen.getByRole('button', { name: /Disable Tutorial Mode/i })).toBeInTheDocument();
-    expect(screen.getByText(/💡 Tutorial: Customize your guest-facing welcome sheets/i)).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /Hide beginner guide/i })).toBeInTheDocument();
+    expect(screen.getByText(/💡 This controls what owners/i)).toBeInTheDocument();
   });
 });

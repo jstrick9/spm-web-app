@@ -7,8 +7,7 @@
  */
 import React, { useState, useEffect } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { QrCode, Search, LogIn, LogOut, Clock, AlertCircle, Phone, Building2, UserCircle, X } from 'lucide-react';
-import { Html5QrcodeScanner } from 'html5-qrcode';
+import { QrCode, Search, LogIn, LogOut, Clock, AlertCircle, Phone, Building2, UserCircle, X, Download, Keyboard, MessageSquare, Loader2, Camera, LockKeyhole } from 'lucide-react';
 import { sdk } from '../../sdk';
 import type { CheckInStatus } from '../../sdk/checkins';
 import { useToast } from '../../ui/Toast';
@@ -26,6 +25,7 @@ export function VendorCheckInApp({ eventId, organizationId }: Props) {
   const [search, setSearch] = useState('');
   const [filter, setFilter] = useState<'all' | 'expected' | 'arrived' | 'late'>('all');
   const [scanning, setScanning] = useState(false);
+  const [kioskMode, setKioskMode] = useState(false);
   const { toast } = useToast();
   const qc = useQueryClient();
 
@@ -66,13 +66,25 @@ export function VendorCheckInApp({ eventId, organizationId }: Props) {
 
   const handleScan = (decodedText: string) => {
     setScanning(false);
-    const vendor = vendors.find(v => v.id === decodedText);
+    const vendor = vendors.find(v => v.id === decodedText || v.name.toLowerCase() === decodedText.toLowerCase());
     if (vendor) {
-      updateStatus(decodedText, 'arrived');
+      updateStatus(vendor.id, 'arrived');
       toast({ title: `${vendor.name} Checked In!`, variant: 'success' });
     } else {
-      toast({ title: 'Unknown QR Code', description: 'Could not match this pass to any vendor.', variant: 'destructive' });
+      toast({ title: 'Unknown QR Code', description: 'Could not match this pass to any vendor. Use manual search fallback below.', variant: 'destructive' });
     }
+  };
+
+  const exportReport = () => {
+    const rows = [['Vendor','Category','Contact','Phone','Status'], ...vendors.map(v => [v.name, v.category || '', v.contact_name || '', v.phone || '', statusMap[v.id] || 'expected'])];
+    const csv = rows.map(r => r.map(c => `"${String(c).replace(/"/g, '""')}"`).join(',')).join('\n');
+    const blob = new Blob([csv], { type: 'text/csv' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `vendor-checkin-report-${eventId}.csv`;
+    a.click();
+    URL.revokeObjectURL(url);
   };
 
   const filteredVendors = vendors.filter(v => {
@@ -92,17 +104,18 @@ export function VendorCheckInApp({ eventId, organizationId }: Props) {
   const arrivedCount = vendors.filter(v => ['arrived', 'setup', 'completed'].includes(statusMap[v.id])).length;
 
   return (
-    <div className="min-h-screen bg-surface-2/50 pb-20">
+    <div className={cn("min-h-screen bg-surface-2/50 pb-20", kioskMode && "bg-black text-white")}>
       <header className="bg-surface border-b border-border sticky top-0 z-20">
         <div className="max-w-4xl mx-auto px-4 py-4 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
           <div>
             <h1 className="text-xl font-bold tracking-tight">Vendor Check-In</h1>
-            <p className="text-sm text-fg-muted mt-0.5">Tablet-optimized day-of operations</p>
+            <p className="text-sm text-fg-muted mt-0.5">Day-of captain mode · tablet/mobile optimized operations</p>
+            <p className={cn("text-xs mt-1", kioskMode ? "text-white/70" : "text-fg-subtle")}>Offline mode: if WiFi drops, updates will retry when the app comes back online. Scan unavailable? Use manual vendor search and Mark Arrived fallback.</p>
           </div>
-          <div className="flex items-center gap-4 bg-surface-2 px-4 py-2 rounded-lg border border-border shadow-sm">
+          <div className="flex flex-wrap items-center gap-2"><Button variant={kioskMode ? 'default' : 'outline'} size="sm" onClick={() => setKioskMode(!kioskMode)}><LockKeyhole className="h-4 w-4" /> {kioskMode ? 'Kiosk mode on' : 'Kiosk mode'}</Button><div className="flex items-center gap-4 bg-surface-2 px-4 py-2 rounded-lg border border-border shadow-sm">
             <Clock className="w-5 h-5 text-brand" />
             <div className="font-mono text-xl font-medium tracking-tight">{format(time, 'h:mm:ss a')}</div>
-          </div>
+          </div></div>
         </div>
 
         <div className="max-w-4xl mx-auto px-4 py-3 border-t border-border/50 flex gap-2 overflow-x-auto">
@@ -134,6 +147,13 @@ export function VendorCheckInApp({ eventId, organizationId }: Props) {
           <Button variant="secondary" className="h-12 px-6 rounded-xl shadow-sm shrink-0 border border-border" onClick={() => setScanning(true)}>
             <QrCode className="w-5 h-5 mr-2" /> Scan
           </Button>
+          <Button variant="outline" className="h-12 px-4 rounded-xl shadow-sm shrink-0 border border-border" onClick={exportReport}>
+            <Download className="w-5 h-5 mr-2" /> Export
+          </Button>
+        </div>
+
+        <div className={cn("rounded-xl border border-border bg-surface p-3 text-xs text-fg-muted", kioskMode && "bg-white/10 text-white/80 border-white/20")}>
+          <strong>Scan unavailable workflow:</strong> search vendor name/category, verify contact, then tap Mark Arrived. Use Export for paper reconciliation if connectivity is unstable.
         </div>
 
         {filteredVendors.length === 0 ? (
@@ -158,9 +178,15 @@ export function VendorCheckInApp({ eventId, organizationId }: Props) {
                       </Badge>
                     </div>
 
-                    <div className="space-y-1 mb-6 text-sm">
+                    <div className="space-y-2 mb-6 text-sm">
                       {vendor.contact_name && <div className="flex items-center gap-2 text-fg-muted"><UserCircle className="w-4 h-4 opacity-50" /> {vendor.contact_name}</div>}
                       {vendor.phone && <div className="flex items-center gap-2 text-fg-muted"><Phone className="w-4 h-4 opacity-50" /> {vendor.phone}</div>}
+                      {vendor.phone && (
+                        <div className="grid grid-cols-2 gap-2 pt-2">
+                          <a href={`tel:${vendor.phone}`} className="inline-flex min-h-11 items-center justify-center gap-2 rounded-xl border border-border bg-surface text-sm font-bold text-brand"><Phone className="w-4 h-4" /> Call</a>
+                          <a href={`sms:${vendor.phone}`} className="inline-flex min-h-11 items-center justify-center gap-2 rounded-xl border border-border bg-surface text-sm font-bold text-brand"><MessageSquare className="w-4 h-4" /> SMS</a>
+                        </div>
+                      )}
                     </div>
 
                     <div className="flex flex-wrap gap-2 pt-4 border-t border-border/50">
@@ -198,27 +224,83 @@ export function VendorCheckInApp({ eventId, organizationId }: Props) {
 }
 
 function QRScannerModal({ open, onClose, onScan }: { open: boolean; onClose: () => void; onScan: (data: string) => void }) {
+  const [scannerState, setScannerState] = useState<'idle' | 'loading' | 'ready' | 'error'>('idle');
+
   useEffect(() => {
-    if (!open) return;
+    if (!open) {
+      setScannerState('idle');
+      return;
+    }
+
+    let cancelled = false;
     let scanner: any = null;
-    const timeout = setTimeout(() => {
-      scanner = new Html5QrcodeScanner("reader", { fps: 10, qrbox: { width: 250, height: 250 } }, false);
-      scanner.render((text: string) => { scanner.clear(); onScan(text); }, () => {});
+    let timeout: ReturnType<typeof setTimeout> | null = null;
+
+    setScannerState('loading');
+
+    timeout = setTimeout(() => {
+      import('html5-qrcode')
+        .then(({ Html5QrcodeScanner }) => {
+          if (cancelled) return;
+          scanner = new Html5QrcodeScanner('reader', {
+            fps: 10,
+            qrbox: { width: 250, height: 250 },
+            rememberLastUsedCamera: true,
+          }, false);
+          scanner.render(
+            (text: string) => {
+              try { void scanner?.clear(); } catch { /* scanner already closed */ }
+              onScan(text);
+            },
+            () => { /* scanner library emits decode misses continuously; keep UI quiet */ },
+          );
+          setScannerState('ready');
+        })
+        .catch(() => {
+          if (!cancelled) setScannerState('error');
+        });
     }, 100);
-    return () => { clearTimeout(timeout); if (scanner) try { scanner.clear(); } catch {} };
+
+    return () => {
+      cancelled = true;
+      if (timeout) clearTimeout(timeout);
+      if (scanner) {
+        try { void scanner.clear(); } catch { /* scanner already closed */ }
+      }
+    };
   }, [open, onScan]);
 
   if (!open) return null;
   return (
     <div className="fixed inset-0 z-50 bg-black flex flex-col items-center justify-center p-4">
-      <div className="w-full max-w-sm relative bg-white rounded-xl overflow-hidden">
+      <div className="w-full max-w-sm relative bg-surface rounded-xl overflow-hidden">
         <div className="p-4 bg-surface flex justify-between items-center border-b border-border">
-          <h3 className="font-semibold">Scan Vendor Pass</h3>
+          <h3 className="font-semibold flex items-center gap-2"><Camera className="w-4 h-4" /> Scan Vendor Pass</h3>
           <Button variant="ghost" size="icon" onClick={onClose}><X className="w-5 h-5" /></Button>
         </div>
-        <div id="reader" className="w-full bg-black min-h-[300px]" />
+        <div id="reader" className="w-full bg-black min-h-[300px] flex items-center justify-center text-sm text-fg-inverse/80">
+          {scannerState === 'loading' && (
+            <div className="flex flex-col items-center gap-2 p-6 text-center">
+              <Loader2 className="h-6 w-6 animate-spin" />
+              <span>Loading secure camera scanner…</span>
+              <span className="text-xs opacity-80">The QR scanner code is downloaded only after Scan is tapped to keep day-of check-in fast.</span>
+            </div>
+          )}
+          {scannerState === 'error' && (
+            <div className="p-6 text-center text-sm">
+              Camera scanner could not load. Use manual vendor search fallback below.
+            </div>
+          )}
+        </div>
+        <div className="p-4 border-t border-border text-sm text-fg-muted space-y-3">
+          <div>
+            <div className="flex items-center gap-2 font-semibold text-fg"><Keyboard className="w-4 h-4" /> QR scanner fallback</div>
+            <p className="text-xs mt-1">If the camera is blocked, cellular data is weak, or a QR code is damaged, use manual vendor search to mark arrival.</p>
+          </div>
+          <Button className="w-full min-h-11" variant="outline" onClick={onClose}>Use manual search fallback</Button>
+        </div>
       </div>
-      <p className="text-white/70 mt-6 text-sm">Align the QR code within the frame.</p>
+      <p className="text-fg-inverse/70 mt-6 text-sm">Align the QR code within the frame, or use manual search fallback.</p>
     </div>
   );
 }

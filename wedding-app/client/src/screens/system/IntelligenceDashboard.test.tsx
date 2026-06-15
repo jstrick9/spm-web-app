@@ -2,7 +2,7 @@
  * IntelligenceDashboard tests — Phase 32
  *
  * Covers:
- *   • RBAC gate (N3 fix): renders AccessDenied when analytics.view missing
+ *   • RBAC gate (N3 fix): renders AccessDenied when reports.view missing
  *   • Minimum data guard: shows "Building Your Intelligence" with < 5 events
  *   • Loading skeleton renders
  *   • Full render with data: all 4 stat cards, seasonal heatmap, lead source
@@ -35,6 +35,12 @@ vi.mock('./RevenueForecastCard', () => ({
 vi.mock('./RiskAlertsCard', () => ({
   RiskAlertsCard: ({ orgId }: { orgId: string }) => (
     <div data-testid="risk-alerts-card" data-org-id={orgId} />
+  ),
+}));
+
+vi.mock('./EventHealthCommandCenter', () => ({
+  EventHealthCommandCenter: ({ orgId }: { orgId: string }) => (
+    <div data-testid="health-command-center" data-org-id={orgId} />
   ),
 }));
 
@@ -103,14 +109,14 @@ function renderDashboard(orgId = 'org-1') {
 describe('IntelligenceDashboard', () => {
   beforeEach(() => {
     vi.mocked(usePermission).mockImplementation(
-      (p: string) => p === 'analytics.view'
+      (p: string) => p === 'reports.view'
     );
     vi.mocked(sdk.recommendations.get).mockResolvedValue(FULL_REC);
     vi.mocked(sdk.forecast.get).mockResolvedValue(FORECAST);
   });
 
   // ── N3: RBAC gate ──────────────────────────────────────────────────────
-  it('renders AccessDenied when analytics.view is not permitted', () => {
+  it('renders AccessDenied when reports.view is not permitted', () => {
     vi.mocked(usePermission).mockReturnValue(false as ReturnType<typeof usePermission>);
 
     renderDashboard();

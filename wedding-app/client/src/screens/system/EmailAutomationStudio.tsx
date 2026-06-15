@@ -42,6 +42,7 @@ import { Skeleton } from '../../ui/Skeleton';
 import { AccessDenied } from '../../ui/AccessDenied';
 import { EmptyState } from '../../ui/EmptyState';
 import { useToast } from '../../ui/Toast';
+import { Input } from '../../ui/Input';
 
 // ── Constants ──────────────────────────────────────────────────────────────
 
@@ -89,6 +90,10 @@ export function EmailAutomationStudio({ orgId }: Props) {
   const [expanded, setExpanded] = useState<TriggerType | null>(null);
   const [selectedTemplates, setSelectedTemplates] = useState<Partial<Record<TriggerType, string>>>({});
   const [offsetDays, setOffsetDays] = useState<Partial<Record<TriggerType, number>>>({ rsvp_reminder: 7 });
+  const [passwordResetDraft, setPasswordResetDraft] = useState({
+    subject: 'Reset your Wedding Venue Intelligence password',
+    bodyText: 'Hi {{user_name}},\n\nReset your password: {{reset_url}}\n\nThis link expires {{expires_at}}.',
+  });
 
   // ── Permission gate ──────────────────────────────────────────────────────
   if (!canViewInvites) {
@@ -149,6 +154,34 @@ export function EmailAutomationStudio({ orgId }: Props) {
     onError: () => toast({ title: 'Failed to update automation', variant: 'destructive' }),
   });
 
+  const passwordResetTemplateMutation = useMutation({
+    mutationFn: async () => {
+      const existing = (tmplData?.templates ?? []).find((t) => /password\s*reset/i.test(t.name));
+      const bodyHtml = `<p>Hi {{user_name}},</p><p><a href="{{reset_url}}">Reset your password</a></p><p>This link expires {{expires_at}}.</p>`;
+      if (existing) {
+        return sdk.intelligence.emailTemplates.update(existing.id, {
+          name: existing.name,
+          subject: passwordResetDraft.subject,
+          bodyText: passwordResetDraft.bodyText,
+          bodyHtml,
+          category: 'custom',
+        });
+      }
+      return sdk.intelligence.emailTemplates.create(orgId, {
+        name: 'Password Reset',
+        subject: passwordResetDraft.subject,
+        bodyText: passwordResetDraft.bodyText,
+        bodyHtml,
+        category: 'custom',
+      });
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['email-templates', orgId] });
+      toast({ title: 'Password reset template saved', variant: 'success' });
+    },
+    onError: (err: Error) => toast({ title: 'Could not save password reset template', description: err.message, variant: 'destructive' }),
+  });
+
   // ── Helpers ──────────────────────────────────────────────────────────────
   const automations = autoData?.automations ?? [];
   const templates = tmplData?.templates ?? [];
@@ -198,6 +231,18 @@ export function EmailAutomationStudio({ orgId }: Props) {
       />
 
       <PageBody className="space-y-4">
+        <Card className="border-brand/20">
+          <CardHeader className="pb-2">
+            <CardTitle className="text-sm">Password reset email template</CardTitle>
+            <CardDescription className="text-xs">Used by the Forgot Password flow. Merge fields: <code>{'{{user_name}}'}</code>, <code>{'{{reset_url}}'}</code>, <code>{'{{expires_at}}'}</code>.</CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-3">
+            <Input value={passwordResetDraft.subject} onChange={(e) => setPasswordResetDraft((d) => ({ ...d, subject: e.target.value }))} disabled={!canManageInvites} aria-label="Password reset subject" />
+            <textarea className="min-h-24 w-full rounded-md border border-border bg-surface p-3 text-sm" value={passwordResetDraft.bodyText} onChange={(e) => setPasswordResetDraft((d) => ({ ...d, bodyText: e.target.value }))} disabled={!canManageInvites} aria-label="Password reset text body" />
+            <Button size="sm" onClick={() => passwordResetTemplateMutation.mutate()} disabled={!canManageInvites || passwordResetTemplateMutation.isPending} isLoading={passwordResetTemplateMutation.isPending}>Save password reset template</Button>
+          </CardContent>
+        </Card>
+
         {isLoading ? (
           <div className="space-y-3" aria-label="Loading automations" aria-busy="true">
             {[1, 2, 3, 4].map((i) => (

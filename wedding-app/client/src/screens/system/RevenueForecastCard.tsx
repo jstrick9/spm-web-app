@@ -7,7 +7,7 @@
  * Pure-CSS bars (no recharts) to stay in the already-lazy Intelligence chunk.
  *
  * FIXES APPLIED:
- *   N3  — RBAC: analytics.view permission checked before rendering.
+ *   N3  — RBAC: reports.view permission checked before rendering.
  *   A11y — role="img" + aria-label on chart container.
  *   A11y — Legend uses aria-hidden decorative swatches.
  *   UX  — "Not enough history" state improved with actionable guidance.
@@ -36,8 +36,8 @@ interface Props {
 }
 
 export function RevenueForecastCard({ forecast }: Props) {
-  // N3 fix: respect analytics.view permission
-  const canViewAnalytics = usePermission('analytics.view');
+  // N3 fix: respect reports.view permission
+  const canViewAnalytics = usePermission('reports.view');
   if (!canViewAnalytics) return null;
 
   const { history, projection, trend, totals, pipeline, meta } = forecast;
