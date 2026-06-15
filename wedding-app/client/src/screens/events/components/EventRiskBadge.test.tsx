@@ -2,7 +2,7 @@
  * EventRiskBadge tests — Phase 32
  *
  * Covers:
- *   • Returns null when analytics.view not permitted
+ *   • Returns null when reports.view not permitted
  *   • Returns null when eventId not found in risk data
  *   • Compact dot: renders correct color class for each risk level
  *   • Default badge: renders correct text and variant for each risk level
@@ -45,12 +45,12 @@ function renderBadge(props: { eventId?: string; orgId?: string; compact?: boolea
 describe('EventRiskBadge', () => {
   beforeEach(() => {
     vi.mocked(usePermission).mockImplementation(
-      (p: string) => p === 'analytics.view'
+      (p: string) => p === 'reports.view'
     );
     vi.mocked(sdk.risk.forOrg).mockResolvedValue(makeRiskData(50));
   });
 
-  it('returns null when analytics.view is not permitted', () => {
+  it('returns null when reports.view is not permitted', () => {
     vi.mocked(usePermission).mockReturnValue(false as ReturnType<typeof usePermission>);
     const { container } = renderBadge();
     expect(container.firstChild).toBeNull();

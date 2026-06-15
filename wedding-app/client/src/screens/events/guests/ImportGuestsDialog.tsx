@@ -10,6 +10,7 @@ import { cn } from '../../../ui/lib/cn';
 
 interface Props {
   eventId: string;
+  existingGuests?: Array<{ full_name: string; email: string | null }>;
   open: boolean;
   onOpenChange: (open: boolean) => void;
   onImported: () => void;
@@ -20,12 +21,13 @@ type Step = 'upload' | 'map' | 'preview' | 'import';
 interface ValidationResult {
   guest: GuestInput;
   errors: Record<string, string>;
+  warnings: string[];
   isValid: boolean;
   rowIdx: number;
   originalRow: string[];
 }
 
-export function ImportGuestsDialog({ eventId, open, onOpenChange, onImported }: Props) {
+export function ImportGuestsDialog({ eventId, existingGuests = [], open, onOpenChange, onImported }: Props) {
   const [step, setStep] = useState<Step>('upload');
   const [file, setFile] = useState<File | null>(null);
   const [rows, setRows] = useState<string[][]>([]);
@@ -78,9 +80,13 @@ export function ImportGuestsDialog({ eventId, open, onOpenChange, onImported }: 
     if (!rows.length) return [];
     const dataRows = hasHeaders ? rows.slice(1) : rows;
     
+    const seenEmails = new Map<string, number>();
+    const existingEmails = new Set(existingGuests.map(g => g.email?.toLowerCase()).filter(Boolean) as string[]);
+    const existingNames = new Set(existingGuests.map(g => g.full_name?.trim().toLowerCase()).filter(Boolean));
     return dataRows.map((row, idx): ValidationResult => {
       const guest: GuestInput = { fullName: '' };
       const errors: Record<string, string> = {};
+      const warnings: string[] = [];
       let hasData = false;
 
       Object.entries(mapping).forEach(([colIdx, field]) => {
@@ -112,16 +118,24 @@ export function ImportGuestsDialog({ eventId, open, onOpenChange, onImported }: 
       if (hasData && !guest.fullName) {
         errors.fullName = 'Full Name is required';
       }
+      if (guest.email) {
+        const key = guest.email.toLowerCase();
+        if (existingEmails.has(key)) warnings.push('Duplicate email already exists in this event');
+        if (seenEmails.has(key)) warnings.push(`Duplicate email in import file (first seen row ${seenEmails.get(key)})`);
+        else seenEmails.set(key, hasHeaders ? idx + 2 : idx + 1);
+      }
+      if (guest.fullName && existingNames.has(guest.fullName.toLowerCase())) warnings.push('Possible duplicate name already exists');
       
       return {
         guest,
         errors,
+        warnings,
         isValid: Object.keys(errors).length === 0 && hasData,
         rowIdx: hasHeaders ? idx + 1 : idx,
         originalRow: row
       };
     }).filter(r => Object.keys(r.guest).length > 1 || r.guest.fullName || Object.keys(r.errors).length > 0);
-  }, [rows, hasHeaders, mapping]);
+  }, [rows, hasHeaders, mapping, existingGuests]);
 
   const handleImport = async () => {
     setStep('import');
@@ -229,6 +243,19 @@ export function ImportGuestsDialog({ eventId, open, onOpenChange, onImported }: 
 
 function UploadStep({ onFile }: { onFile: (f: File) => void }) {
   const inputRef = useRef<HTMLInputElement>(null);
+  const downloadTemplate = () => {
+    const csv = [
+      ['Full Name','Email Address','Phone Number','Party Name','RSVP Status','Table Assignment','Dietary Restrictions','Accessibility Notes'].join(','),
+      ['Jane Smith','jane@example.com','555-0100','Smith Family','pending','Table 1','Vegetarian','Wheelchair access'].join(','),
+    ].join('\n');
+    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = 'guest-import-template.csv';
+    a.click();
+    URL.revokeObjectURL(url);
+  };
   
   const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files && e.target.files[0]) {
@@ -240,9 +267,11 @@ function UploadStep({ onFile }: { onFile: (f: File) => void }) {
     <div className="flex flex-col items-center justify-center py-16 px-4 border-2 border-dashed border-border rounded-lg bg-surface">
       <UploadCloud className="w-12 h-12 text-fg-muted mb-4" />
       <h3 className="text-lg font-medium mb-1">Upload CSV</h3>
-      <p className="text-sm text-fg-muted mb-6 text-center max-w-sm">
-        Upload a .csv or .tsv file containing your guest list. You'll be able to map columns in the next step.
+      <p className="text-sm font-semibold text-brand mb-1">Beginner-friendly guest import wizard</p>
+      <p className="text-sm text-fg-muted mb-3 text-center max-w-lg">
+        Required column: <strong>Full Name</strong>. Optional columns: Email Address, Phone Number, Party Name, RSVP Status, Table Assignment, Dietary Restrictions, and Accessibility Notes.
       </p>
+      <p className="text-xs text-fg-muted mb-6 text-center max-w-lg">You will map columns, preview warnings/errors, resolve duplicate strategy, and then save.</p>
       <input 
         type="file" 
         accept=".csv,.tsv" 
@@ -251,9 +280,14 @@ function UploadStep({ onFile }: { onFile: (f: File) => void }) {
         onChange={handleChange}
         data-testid="csv-file-input"
       />
-      <Button onClick={() => inputRef.current?.click()}>
-        Select File
-      </Button>
+      <div className="flex flex-wrap justify-center gap-2">
+        <Button variant="outline" onClick={downloadTemplate}>
+          <Download className="w-4 h-4 mr-1" /> Download CSV template
+        </Button>
+        <Button onClick={() => inputRef.current?.click()}>
+          Select File
+        </Button>
+      </div>
     </div>
   );
 }
@@ -335,10 +369,12 @@ function MapStep({ rows, hasHeaders, setHasHeaders, mapping, setMapping, onNext,
 function PreviewStep({ parsedData, collisionMode, setCollisionMode, onNext, onBack }: any) {
   const numValid = parsedData.filter((r: any) => r.isValid).length;
   const numErrors = parsedData.length - numValid;
+  const warningCount = parsedData.reduce((sum: number, r: any) => sum + (r.warnings?.length ?? 0), 0);
   
   return (
     <div className="flex flex-col h-[70vh]">
-      <h3 className="text-lg font-medium mb-4">Preview & Resolve</h3>
+      <h3 className="text-lg font-medium mb-1">Preview & Resolve</h3>
+      <p className="text-sm text-fg-muted mb-4">Review warnings before saving. Duplicate warnings do not block import; choose the collision strategy below or open the merge workflow after import.</p>
       
       <div className="bg-surface p-4 rounded-lg border mb-6 flex-shrink-0">
         <h4 className="font-medium mb-2">Email Collision Strategy</h4>
@@ -383,7 +419,7 @@ function PreviewStep({ parsedData, collisionMode, setCollisionMode, onNext, onBa
         <div className="p-3 bg-surface-2 border-b font-medium text-sm flex justify-between sticky top-0">
           <span>Data Preview</span>
           <span className="text-fg-muted">
-            {numValid} valid, {numErrors > 0 ? <span className="text-danger font-semibold">{numErrors} errors</span> : '0 errors'}
+            {numValid} valid, {numErrors > 0 ? <span className="text-danger font-semibold">{numErrors} errors</span> : '0 errors'} · {warningCount > 0 ? <span className="text-warning font-semibold">{warningCount} warnings</span> : '0 warnings'}
           </span>
         </div>
         <div className="overflow-auto flex-1">
@@ -395,6 +431,7 @@ function PreviewStep({ parsedData, collisionMode, setCollisionMode, onNext, onBa
                 <th className="px-4 py-2 font-medium">Email</th>
                 <th className="px-4 py-2 font-medium">Party</th>
                 <th className="px-4 py-2 font-medium">RSVP</th>
+                <th className="px-4 py-2 font-medium">Warnings</th>
                 <th className="px-4 py-2 font-medium">Errors</th>
               </tr>
             </thead>
@@ -406,6 +443,7 @@ function PreviewStep({ parsedData, collisionMode, setCollisionMode, onNext, onBa
                   <td className="px-4 py-2">{r.guest.email || '-'}</td>
                   <td className="px-4 py-2">{r.guest.partyName || '-'}</td>
                   <td className="px-4 py-2">{r.guest.rsvpStatus || '-'}</td>
+                  <td className="px-4 py-2 text-warning text-xs">{(r.warnings ?? []).join(', ')}</td>
                   <td className="px-4 py-2 text-danger text-xs">
                     {Object.values(r.errors).join(', ')}
                   </td>
@@ -421,13 +459,16 @@ function PreviewStep({ parsedData, collisionMode, setCollisionMode, onNext, onBa
         </div>
       </div>
       
-      <div className="flex justify-between mt-6 flex-shrink-0">
+      <div className="flex justify-between mt-6 flex-shrink-0 gap-2">
         <Button variant="outline" onClick={onBack}>
           <ChevronLeft className="w-4 h-4 mr-1" /> Back
         </Button>
-        <Button onClick={onNext} disabled={numValid === 0} data-testid="start-import">
-          Import {numValid} Guests <ChevronRight className="w-4 h-4 ml-1" />
-        </Button>
+        <div className="flex gap-2">
+          {warningCount > 0 && <Button variant="outline" onClick={() => { window.location.hash = '#/guests'; }}>Open merge flow</Button>}
+          <Button onClick={onNext} disabled={numValid === 0} data-testid="start-import">
+            Import {numValid} Guests <ChevronRight className="w-4 h-4 ml-1" />
+          </Button>
+        </div>
       </div>
     </div>
   );

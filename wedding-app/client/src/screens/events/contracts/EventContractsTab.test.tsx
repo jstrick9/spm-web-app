@@ -5,11 +5,15 @@ import { EventContractsTab } from './EventContractsTab';
 
 vi.mock('../../../sdk', () => ({
   sdk: {
-    events: { get: vi.fn().mockResolvedValue({ event: { id: 'e1', title: 'Wedding' } }) },
+    events: { get: vi.fn().mockResolvedValue({ event: { id: 'e1', title: 'Wedding', metadata: '{}' } }), update: vi.fn().mockResolvedValue({ event: {} }) },
     contracts: {
+      financialLegal: vi.fn().mockResolvedValue({ financialLegal: { escalations: [], goNoGoFlags: [], obligationExtracts: [], paymentDueRisk: { overdue: 1, dueSoon: 0, pendingCents: 120000 } } }),
+      createFinancialLegalEscalation: vi.fn().mockResolvedValue({ escalation: {} }),
+      createGoNoGoFlag: vi.fn().mockResolvedValue({ flag: {} }),
+      extractObligations: vi.fn().mockResolvedValue({ extracts: [] }),
       list: vi.fn().mockResolvedValue({
         contracts: [
-          { id: 'c1', title: 'Venue Agreement', status: 'signed', recipient_name: 'Sarah', amount_cents: 1000000, sent_at: '2026-01-01', signed_at: '2026-01-05', signature: 'Sarah Smith', content: 'Agreement text', created_at: '2026-01-01' },
+          { id: 'c1', title: 'Venue Agreement', status: 'signed', recipient_name: 'Sarah', amount_cents: 1000000, sent_at: '2026-01-01', signed_at: '2026-01-05', signature: 'Sarah Smith', content: 'Load-in starts at 10am. Insurance COI required. Noise curfew and overtime fees apply.', created_at: '2026-01-01' },
           { id: 'c2', title: 'Catering Addendum', status: 'sent', recipient_name: 'Sarah', amount_cents: 850000, sent_at: '2026-01-10', signed_at: null, signature: null, content: '', created_at: '2026-01-10' },
           { id: 'c3', title: 'Photo Package', status: 'draft', recipient_name: 'Bob', amount_cents: 300000, sent_at: null, signed_at: null, signature: null, content: '', created_at: '2026-01-12' },
         ],
@@ -33,7 +37,7 @@ function wrap() {
 }
 
 describe('EventContractsTab', () => {
-  beforeEach(() => { vi.clearAllMocks(); });
+  beforeEach(() => { vi.clearAllMocks(); localStorage.clear(); });
 
   it('renders KPI tiles', async () => {
     render(<EventContractsTab eventId="e1" />, { wrapper: wrap() });
@@ -66,6 +70,17 @@ describe('EventContractsTab', () => {
     render(<EventContractsTab eventId="e1" />, { wrapper: wrap() });
     await waitFor(() => {
       expect(screen.getByText('Send')).toBeTruthy();
+    });
+  });
+
+  it('renders manager operations obligations and go-no-go checklist', async () => {
+    localStorage.setItem('wvi_registration_role', 'venue_manager');
+    render(<EventContractsTab eventId="e1" />, { wrapper: wrap() });
+    await waitFor(() => {
+      expect(screen.getByText('Manager contract operations summary')).toBeInTheDocument();
+      expect(screen.getByText('Operations obligations extractor')).toBeInTheDocument();
+      expect(screen.getByText('Legal / financial go-no-go checklist')).toBeInTheDocument();
+      expect(screen.getAllByText(/Load-in \/ strike/i).length).toBeGreaterThanOrEqual(1);
     });
   });
 

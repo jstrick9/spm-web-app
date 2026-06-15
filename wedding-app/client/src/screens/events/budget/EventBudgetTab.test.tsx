@@ -5,6 +5,12 @@ import { EventBudgetTab } from './EventBudgetTab';
 
 vi.mock('../../../sdk', () => ({
   sdk: {
+    events: { get: vi.fn().mockResolvedValue({ event: { id: 'evt1', guest_count: 100, metadata: '{}' } }), update: vi.fn().mockResolvedValue({ event: {} }) },
+    contracts: { financialLegal: vi.fn().mockResolvedValue({ financialLegal: { escalations: [], goNoGoFlags: [], obligationExtracts: [], paymentDueRisk: { overdue: 1, dueSoon: 0, pendingCents: 120000 } } }),
+      createFinancialLegalEscalation: vi.fn().mockResolvedValue({ escalation: {} }),
+      createGoNoGoFlag: vi.fn().mockResolvedValue({ flag: {} }),
+      extractObligations: vi.fn().mockResolvedValue({ extracts: [] }),
+      list: vi.fn().mockResolvedValue({ contracts: [{ id: 'c1', status: 'sent', title: 'Venue Agreement' }] }) },
     budget: {
       list: vi.fn().mockResolvedValue({
         items: [
@@ -40,7 +46,7 @@ function makeWrapper() {
 }
 
 describe('EventBudgetTab', () => {
-  beforeEach(() => { vi.clearAllMocks(); });
+  beforeEach(() => { vi.clearAllMocks(); localStorage.clear(); });
 
   it('renders KPI tiles with real totals', async () => {
     render(<EventBudgetTab eventId="evt1" organizationId="org1" />, { wrapper: makeWrapper() });
@@ -79,6 +85,15 @@ describe('EventBudgetTab', () => {
     render(<EventBudgetTab eventId="evt1" organizationId="org1" />, { wrapper: makeWrapper() });
     await waitFor(() => {
       expect(screen.getByText('Totals')).toBeTruthy();
+    });
+  });
+
+  it('renders manager-safe financial risk card in manager mode', async () => {
+    localStorage.setItem('wvi_registration_role', 'venue_manager');
+    render(<EventBudgetTab eventId="evt1" organizationId="org1" />, { wrapper: makeWrapper() });
+    await waitFor(() => {
+      expect(screen.getByText('Manager-safe financial risk card')).toBeInTheDocument();
+      expect(screen.getByText('Escalate payment/contract risk')).toBeInTheDocument();
     });
   });
 

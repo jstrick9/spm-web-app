@@ -14,17 +14,18 @@ vi.mock('../../../sdk', () => ({
     staff: {
       listTasks: vi.fn().mockResolvedValue({ 
         tasks: [
-          { id: 'task-1', title: 'Set up tables', phase: 'pre-event', status: 'not-started', priority: 'high', assigned_staff: [] },
+          { id: 'task-1', title: 'Set up tables', phase: 'pre-event', status: 'not-started', priority: 'high', assigned_staff: [], assignee_name: 'Setup Lead', assignee_phone: '555-210-1001', assignee_email: 'setup@example.com' },
           { id: 'task-2', title: 'Clear archway', phase: 'post-event', status: 'completed', priority: 'medium', assigned_staff: ['u1'] }
         ] 
       }),
       updateTask: vi.fn().mockResolvedValue({ task: {} }),
       listShifts: vi.fn().mockResolvedValue({
         shifts: [
-          { id: 'shift-1', staff_id: 'u-current', role: 'setup', starts_at: '2026-06-05T10:00:00Z', ends_at: '2026-06-05T18:00:00Z', notes: 'Setup east lawn', clocked_in_at: null, clocked_out_at: null }
+          { id: 'shift-1', staff_id: 'u-current', role: 'setup', starts_at: '2026-06-05T10:00:00Z', ends_at: '2026-06-05T18:00:00Z', notes: 'Setup east lawn', contact_name: 'Shift Lead', contact_phone: '555-3000', contact_email: 'shift@example.com', radio_channel: 'Ops 2', handoff_notes: 'Check east lawn', clocked_in_at: null, clocked_out_at: null }
         ]
       }),
       createShift: vi.fn(),
+      updateShift: vi.fn(),
       deleteShift: vi.fn(),
       clockInShift: vi.fn().mockResolvedValue({ shift: {} }),
       clockOutShift: vi.fn().mockResolvedValue({ shift: {} })
@@ -47,6 +48,8 @@ vi.mock('../../../sdk', () => ({
 describe('EventStaffTab', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    localStorage.clear();
+    queryClient.clear();
   });
 
   const TestWrapper = ({ children }: any) => (
@@ -65,6 +68,9 @@ describe('EventStaffTab', () => {
     
     expect(screen.getByText('high priority')).toBeInTheDocument();
     expect(screen.getByText('1 assigned')).toBeInTheDocument();
+    expect(screen.getByText('Day-of contact: Setup Lead')).toBeInTheDocument();
+    expect(screen.getAllByRole('link', { name: /Call/i }).some((a) => a.getAttribute('href') === 'tel:555-210-1001')).toBe(true);
+    expect(screen.getAllByRole('link', { name: /SMS/i }).some((a) => a.getAttribute('href') === 'sms:555-210-1001')).toBe(true);
   });
   
   it('allows dragging and dropping between columns', async () => {
@@ -120,9 +126,22 @@ describe('EventStaffTab', () => {
     expect(sdk.staff.updateTask).toHaveBeenCalledWith('task-1', { status: 'blocked' });
   });
 
+  it('renders venue manager staffing command center with crew contact directory', async () => {
+    localStorage.setItem('wvi_registration_role', 'venue_manager');
+    render(<EventStaffTab eventId="evt-1" organizationId="org-1" />, { wrapper: TestWrapper });
+
+    expect(await screen.findByText('Venue manager staffing command center')).toBeInTheDocument();
+    expect(screen.getByText('Crew contact directory')).toBeInTheDocument();
+    expect(screen.getByText('Radio/channel assignment tracker')).toBeInTheDocument();
+    expect(screen.getByText('Staff performance analytics')).toBeInTheDocument();
+    expect(screen.getByText('Post-event staff closeout checklist')).toBeInTheDocument();
+    expect(screen.getAllByText('Shift Lead').length).toBeGreaterThanOrEqual(1);
+  });
+
   it('renders shifts scheduler and supports clock-in/out terminal and crew roster', async () => {
     render(<EventStaffTab eventId="evt-1" organizationId="org-1" />, { wrapper: TestWrapper });
 
+    await screen.findByText('Day-of Command Center Mode');
     const schedulerTabBtn = screen.getByText(/Staff Shift & Crew Scheduler/i);
     fireEvent.click(schedulerTabBtn);
 

@@ -22,6 +22,7 @@ function harness(ui: React.ReactNode) {
 }
 
 beforeEach(() => {
+  localStorage.clear();
   setToken('test-token');
 });
 

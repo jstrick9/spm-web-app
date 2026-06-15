@@ -12,7 +12,8 @@ import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '../../../ui/Card';
 import { Input } from '../../../ui/Input';
 import { Button } from '../../../ui/Button';
-import { MessageSquare, Send, Smile, Wifi, WifiOff } from 'lucide-react';
+import { Badge } from '../../../ui/Badge';
+import { Bell, CheckCircle2, Clock, MessageSquare, Send, ShieldAlert, Smile, Users, Wifi, WifiOff } from 'lucide-react';
 import { cn } from '../../../ui/lib/cn';
 import { SdkUser } from '../../../sdk/types';
 import { getMessages, saveMessage, ChatMessage } from '../../../lib/db/chatDB';
@@ -32,6 +33,14 @@ export function ChatSystem({ eventId, currentUser }: Props) {
   const [input, setInput] = useState('');
   const [activeCategory, setActiveCategory] = useState<Category>('general');
   const [showEmoji, setShowEmoji] = useState(false);
+  const [broadcastTitle, setBroadcastTitle] = useState('');
+  const [broadcastBody, setBroadcastBody] = useState('');
+  const [broadcastAudience, setBroadcastAudience] = useState<'staff' | 'vendors' | 'guests' | 'all'>('staff');
+  const [broadcastChannel, setBroadcastChannel] = useState<'in_app' | 'sms' | 'email' | 'all'>('in_app');
+  const [broadcastSeverity, setBroadcastSeverity] = useState<'fyi' | 'action_needed' | 'urgent' | 'owner_escalation'>('action_needed');
+  const [quietHoursOverride, setQuietHoursOverride] = useState(false);
+  const [communicationAudit, setCommunicationAudit] = useState<any[]>([]);
+  const [broadcastRecipients, setBroadcastRecipients] = useState<any[]>([]);
   const [serverOnline, setServerOnline] = useState(true);
   const scrollRef = useRef<HTMLDivElement>(null);
   // True while the component is mounted. Async handlers (load + send) consult
@@ -46,6 +55,7 @@ export function ChatSystem({ eventId, currentUser }: Props) {
 
   // Build thread ID from event + category
   const threadId = `${eventId}:${activeCategory}`;
+  const managerMode = typeof window !== 'undefined' && localStorage.getItem('wvi_registration_role') === 'venue_manager';
 
   // ─── Load messages: server-first, IndexedDB fallback ──
   // `isMounted` lets the caller (the effect below) cancel state updates after
@@ -113,11 +123,20 @@ export function ChatSystem({ eventId, currentUser }: Props) {
     }
   }, [eventId, activeCategory, threadId, currentUser.id]);
 
+  const loadCommunicationAudit = useCallback(async () => {
+    try {
+      const res: any = await api.get(`/api/events/${eventId}/communications`);
+      setCommunicationAudit(res.communications?.broadcasts || []);
+      setBroadcastRecipients(res.communications?.recipients || []);
+    } catch { /* ignore when not permitted/offline */ }
+  }, [eventId]);
+
   useEffect(() => {
     let mounted = true;
     loadMessages(() => mounted);
+    if (managerMode) void loadCommunicationAudit();
     return () => { mounted = false; };
-  }, [loadMessages]);
+  }, [loadMessages, loadCommunicationAudit, managerMode]);
 
   // ─── Background Sync Loop for Unsynced Messages (N12 fix) ───
   useEffect(() => {
@@ -218,6 +237,28 @@ export function ChatSystem({ eventId, currentUser }: Props) {
     }
   };
 
+  const sendBroadcast = async () => {
+    if (!broadcastTitle.trim() || !broadcastBody.trim()) return;
+    const sensitive = broadcastSeverity === 'urgent' || broadcastSeverity === 'owner_escalation' || broadcastChannel === 'sms' || broadcastChannel === 'all';
+    if (managerMode && sensitive && !window.confirm('Confirm sensitive manager broadcast. This may notify staff/vendors/guests and will be audit logged. Continue?')) return;
+    const payload = { title: broadcastTitle.trim(), body: broadcastBody.trim(), audience: broadcastAudience, channel: broadcastChannel, severity: broadcastSeverity, quietHoursOverride, approvalRequired: broadcastSeverity === 'owner_escalation' };
+    try {
+      const res: any = await api.post(`/api/events/${eventId}/communications/broadcast`, payload);
+      setCommunicationAudit(prev => [res.broadcast, ...prev]);
+      setBroadcastRecipients(prev => [...(res.recipients || []), ...prev]);
+      setBroadcastTitle(''); setBroadcastBody(''); setQuietHoursOverride(false);
+      setActiveCategory('urgent');
+      await loadMessages();
+      await loadCommunicationAudit();
+    } catch {
+      const localAudit = { id: `local-broadcast-${Date.now()}`, ...payload, recipient_count: 0, delivery_status: 'queued', created_at: new Date().toISOString(), approval_required: payload.approvalRequired ? 1 : 0, quiet_hours_override: quietHoursOverride ? 1 : 0 };
+      setCommunicationAudit(prev => [localAudit, ...prev]);
+      await saveMessage({ id: localAudit.id, eventId, threadId: 'urgent', senderId: currentUser.id, senderName: currentUser.fullName || 'Manager', body: `[${broadcastSeverity.toUpperCase()}] ${broadcastTitle}
+${broadcastBody}`, createdAt: localAudit.created_at, isOwn: true, synced: false });
+      setServerOnline(false);
+    }
+  };
+
   // Filter messages for current thread
   const threadMessages = messages.filter(m => m.threadId === activeCategory);
 
@@ -250,6 +291,35 @@ export function ChatSystem({ eventId, currentUser }: Props) {
           ))}
         </div>
       </CardHeader>
+
+      {managerMode && (
+        <div className="border-b border-[#e1d5c9] bg-white/70 p-4 space-y-4">
+          <div className="grid gap-3 lg:grid-cols-[1.2fr_0.8fr]">
+            <div className="rounded-xl border border-border bg-[#FDFBF7] p-3 space-y-3">
+              <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+                <div><h3 className="text-sm font-bold text-brand flex items-center gap-2"><Bell className="h-4 w-4" /> Operations broadcast composer</h3><p className="text-xs text-fg-muted">Staff/vendor SMS/email/in-app workflow with severity, quiet hours, and approval rules.</p></div>
+                <Badge variant={broadcastSeverity === 'urgent' || broadcastSeverity === 'owner_escalation' ? 'danger' : broadcastSeverity === 'action_needed' ? 'warning' : 'outline'}>{broadcastSeverity.replace('_', ' ')}</Badge>
+              </div>
+              <div className="grid gap-2 sm:grid-cols-4">
+                <select value={broadcastSeverity} onChange={(e) => setBroadcastSeverity(e.target.value as any)} className="rounded-md border border-border bg-surface px-2 py-2 text-xs"><option value="fyi">FYI</option><option value="action_needed">Action needed</option><option value="urgent">Urgent</option><option value="owner_escalation">Owner escalation</option></select>
+                <select value={broadcastAudience} onChange={(e) => setBroadcastAudience(e.target.value as any)} className="rounded-md border border-border bg-surface px-2 py-2 text-xs"><option value="staff">Staff</option><option value="vendors">Vendors</option><option value="guests">Guests</option><option value="all">All</option></select>
+                <select value={broadcastChannel} onChange={(e) => setBroadcastChannel(e.target.value as any)} className="rounded-md border border-border bg-surface px-2 py-2 text-xs"><option value="in_app">In-app</option><option value="sms">SMS</option><option value="email">Email</option><option value="all">All channels</option></select>
+                <label className="flex items-center gap-2 rounded-md border border-border bg-surface px-2 py-2 text-xs font-bold"><input type="checkbox" checked={quietHoursOverride} onChange={(e) => setQuietHoursOverride(e.target.checked)} /> Event-day override</label>
+              </div>
+              <div className="grid gap-2 sm:grid-cols-[1fr_1.6fr_auto]"><Input value={broadcastTitle} onChange={(e) => setBroadcastTitle(e.target.value)} placeholder="Broadcast title" /><Input value={broadcastBody} onChange={(e) => setBroadcastBody(e.target.value)} placeholder="Message template or custom broadcast body" /><Button disabled={!broadcastTitle.trim() || !broadcastBody.trim()} onClick={sendBroadcast}><Send className="h-4 w-4" /> Broadcast</Button></div>
+              <div className="flex flex-wrap gap-2 text-xs"><Button size="xs" variant="outline" onClick={() => { setBroadcastTitle('Vendor load-in update'); setBroadcastBody('Please confirm arrival status and use the marked load-in route.'); setBroadcastAudience('vendors'); setBroadcastChannel('sms'); }}>Vendor load-in</Button><Button size="xs" variant="outline" onClick={() => { setBroadcastTitle('Staff standby'); setBroadcastBody('All staff please stand by for the next timeline cue.'); setBroadcastAudience('staff'); setBroadcastChannel('in_app'); }}>Staff standby</Button><Button size="xs" variant="outline" onClick={() => { setBroadcastTitle('Urgent owner escalation'); setBroadcastBody('Owner/admin approval is needed before proceeding.'); setBroadcastSeverity('owner_escalation'); setBroadcastAudience('all'); }}>Owner escalation</Button></div>
+            </div>
+            <div className="rounded-xl border border-border bg-[#FDFBF7] p-3">
+              <h3 className="text-sm font-bold text-brand flex items-center gap-2"><ShieldAlert className="h-4 w-4" /> Communication approval rules</h3>
+              <div className="mt-3 space-y-2 text-xs text-fg-muted"><div><strong>FYI:</strong> no approval required.</div><div><strong>Action needed:</strong> manager can send to staff/vendors.</div><div><strong>Urgent:</strong> event-day override can bypass quiet hours.</div><div><strong>Owner escalation:</strong> queued for owner/admin approval visibility.</div></div>
+            </div>
+          </div>
+          <div className="grid gap-3 md:grid-cols-2">
+            <div className="rounded-xl border border-border bg-surface p-3"><h3 className="text-xs font-bold text-brand flex items-center gap-2"><CheckCircle2 className="h-4 w-4" /> Delivery status center</h3><div className="mt-2 space-y-2">{communicationAudit.slice(0, 4).map((entry) => <div key={entry.id} className="rounded-lg border border-border bg-surface-2 p-2 text-xs"><div className="flex justify-between gap-2"><strong>{entry.title}</strong><Badge variant={entry.delivery_status === 'sent' ? 'success' : entry.delivery_status === 'failed' ? 'danger' : 'warning'}>{entry.delivery_status}</Badge></div><div className="text-fg-muted">{entry.audience} · {entry.channel} · {entry.recipient_count || 0} recipient(s)</div></div>)}{communicationAudit.length === 0 && <p className="text-xs text-fg-muted">No broadcasts logged yet.</p>}</div></div>
+            <div className="rounded-xl border border-border bg-surface p-3"><h3 className="text-xs font-bold text-brand flex items-center gap-2"><Users className="h-4 w-4" /> Who received this?</h3><div className="mt-2 space-y-2">{broadcastRecipients.slice(0, 5).map((recipient) => <div key={recipient.id || `${recipient.recipientLabel}-${recipient.channel}`} className="rounded-lg border border-border bg-surface-2 p-2 text-xs"><strong>{recipient.recipient_label || recipient.recipientLabel}</strong><div className="text-fg-muted">{recipient.recipient_type || recipient.recipientType} · {recipient.channel} · {recipient.status || 'queued'}</div></div>)}{broadcastRecipients.length === 0 && <p className="text-xs text-fg-muted">Recipients appear after the first broadcast. Use this for “who received this?” visibility.</p>}</div></div>
+          </div>
+        </div>
+      )}
 
       <CardContent className="flex-1 p-0 flex flex-col min-h-0 bg-[#FDFBF7]/30">
         <div ref={scrollRef} className="flex-1 overflow-y-auto p-4 space-y-4">

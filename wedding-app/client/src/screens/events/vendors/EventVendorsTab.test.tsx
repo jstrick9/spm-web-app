@@ -9,6 +9,9 @@ vi.mock('../../../sdk', () => ({
   sdk: {
     vendors: {
       addPayment: vi.fn(),
+      createPortalToken: vi.fn().mockResolvedValue({ token: 'secure-token', tokenId: 'tok-1', expiresAt: '2026-12-31T00:00:00.000Z' }),
+      revokePortalToken: vi.fn().mockResolvedValue(undefined),
+      listPortalTokens: vi.fn().mockResolvedValue({ tokens: [] }),
       list: vi.fn().mockResolvedValue({ 
         vendors: [
           { id: 'v1', name: 'Acme Catering', category: 'Catering', contract_amount_cents: 500000, amount_paid_cents: 100000 },
@@ -41,7 +44,7 @@ function makeWrapper() {
 }
 
 describe('EventVendorsTab', () => {
-  beforeEach(() => { vi.clearAllMocks(); });
+  beforeEach(() => { vi.clearAllMocks(); localStorage.clear(); });
 
   it('renders vendors', async () => {
     render(<EventVendorsTab eventId="evt-1" organizationId="org-1" />, { wrapper: makeWrapper() });
@@ -62,6 +65,15 @@ describe('EventVendorsTab', () => {
     fireEvent.change(searchInputs[0], { target: { value: 'Photo' } });
     // Snap Pics should still be visible (it matches "Photo" via category)
     expect(screen.getAllByText('Snap Pics').length).toBeGreaterThanOrEqual(1);
+  });
+
+  it('renders manager vendor-specific layout packet review', async () => {
+    localStorage.setItem('wvi_registration_role', 'venue_manager');
+    render(<EventVendorsTab eventId="evt-1" organizationId="org-1" />, { wrapper: makeWrapper() });
+
+    expect(await screen.findByText('Vendor-specific layout packet review')).toBeInTheDocument();
+    expect(screen.getByText(/Review vendor zones, power, load-in path/i)).toBeInTheDocument();
+    expect(screen.getByText(/No layout-sensitive vendors detected yet/i)).toBeInTheDocument();
   });
 
   it('allows logging a payment', async () => {
@@ -95,6 +107,8 @@ describe('EventVendorsTab', () => {
     
     fireEvent.click(remindBtns[0]);
 
-    expect(writeTextMock).toHaveBeenCalled();
+    await waitFor(() => {
+      expect(writeTextMock).toHaveBeenCalledWith(expect.stringContaining('token=secure-token'));
+    });
   });
 });

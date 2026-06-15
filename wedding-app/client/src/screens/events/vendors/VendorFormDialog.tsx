@@ -27,6 +27,9 @@ const formSchema = z.object({
   coiPolicyNumber: z.string().optional(),
   coiExpirationDate: z.string().optional(),
   coiCoverageAmountStr: z.string().optional(),
+  insuranceRequirements: z.string().optional(),
+  loadInRoute: z.string().optional(),
+  documentsText: z.string().optional(),
 });
 
 type FormValues = z.infer<typeof formSchema>;
@@ -63,6 +66,9 @@ export function VendorFormDialog({ open, onOpenChange, eventId, organizationId, 
       coiPolicyNumber: parsedMeta.coiPolicyNumber || '',
       coiExpirationDate: parsedMeta.coiExpirationDate || '',
       coiCoverageAmountStr: parsedMeta.coiCoverageAmount || '',
+      insuranceRequirements: parsedMeta.insuranceRequirements || 'General liability COI required; venue named as additional insured.',
+      loadInRoute: parsedMeta.loadInRoute || '',
+      documentsText: Array.isArray(parsedMeta.documents) ? parsedMeta.documents.map((d: any) => `${d.name}|${d.url}`).join('\n') : '',
     },
   });
 
@@ -84,6 +90,9 @@ export function VendorFormDialog({ open, onOpenChange, eventId, organizationId, 
         coiPolicyNumber: meta.coiPolicyNumber || '',
         coiExpirationDate: meta.coiExpirationDate || '',
         coiCoverageAmountStr: meta.coiCoverageAmount || '',
+        insuranceRequirements: meta.insuranceRequirements || 'General liability COI required; venue named as additional insured.',
+        loadInRoute: meta.loadInRoute || '',
+        documentsText: Array.isArray(meta.documents) ? meta.documents.map((d: any) => `${d.name}|${d.url}`).join('\n') : '',
       });
     } else {
       form.reset({
@@ -101,6 +110,9 @@ export function VendorFormDialog({ open, onOpenChange, eventId, organizationId, 
         coiPolicyNumber: '',
         coiExpirationDate: '',
         coiCoverageAmountStr: '',
+        insuranceRequirements: 'General liability COI required; venue named as additional insured.',
+        loadInRoute: '',
+        documentsText: '',
       });
     }
   }, [vendor, form, open]);
@@ -115,6 +127,11 @@ export function VendorFormDialog({ open, onOpenChange, eventId, organizationId, 
         }
       }
 
+      const documents = (values.documentsText || '').split('\n').map(line => line.trim()).filter(Boolean).map((line, index) => {
+        const [name, url] = line.split('|');
+        return { id: `doc-${index}`, name: name?.trim() || `Document ${index + 1}`, url: url?.trim() || name?.trim() };
+      });
+
       const meta = {
         ...parsedMeta,
         coiReceived: values.coiReceived,
@@ -122,6 +139,9 @@ export function VendorFormDialog({ open, onOpenChange, eventId, organizationId, 
         coiPolicyNumber: values.coiPolicyNumber || undefined,
         coiExpirationDate: values.coiExpirationDate || undefined,
         coiCoverageAmount: values.coiCoverageAmountStr || undefined,
+        insuranceRequirements: values.insuranceRequirements || undefined,
+        loadInRoute: values.loadInRoute || undefined,
+        documents,
       };
 
       const payload = {
@@ -183,7 +203,7 @@ export function VendorFormDialog({ open, onOpenChange, eventId, organizationId, 
                   render={({ field }) => (
                     <FormItem>
                       <FormLabel className="text-xs">Category</FormLabel>
-                      <FormControl><Input placeholder="e.g. Florist, Photographer" {...field} className="bg-white border-[#e1d5c9] h-9 text-xs" /></FormControl>
+                      <FormControl><select {...field} className="bg-white border border-[#e1d5c9] h-9 text-xs rounded-md px-2 w-full"><option value="">Select template</option><option value="catering">Catering</option><option value="florals">Florals</option><option value="photography">Photography</option><option value="entertainment">DJ / Entertainment</option><option value="rentals">Rentals</option><option value="transportation">Transportation</option><option value="officiant">Officiant</option><option value="other">Other</option></select></FormControl>
                       <FormMessage />
                     </FormItem>
                   )}
@@ -312,6 +332,19 @@ export function VendorFormDialog({ open, onOpenChange, eventId, organizationId, 
                       )}
                     />
                 </div>
+            </div>
+
+            <div className="space-y-3 pt-4 border-t border-[#e1d5c9] bg-white p-4 rounded-xl border">
+              <h4 className="text-xs font-bold uppercase tracking-wider font-serif text-brand">Vendor requirements, route & document vault</h4>
+              <FormField control={form.control} name="insuranceRequirements" render={({ field }) => (
+                <FormItem><FormLabel className="text-[10px] text-fg-subtle">Insurance requirements configuration</FormLabel><FormControl><textarea {...field} rows={2} className="w-full rounded-md border border-[#e1d5c9] bg-white p-2 text-xs" /></FormControl><FormMessage /></FormItem>
+              )} />
+              <FormField control={form.control} name="loadInRoute" render={({ field }) => (
+                <FormItem><FormLabel className="text-[10px] text-fg-subtle">Arrival / load-in route planner</FormLabel><FormControl><Input placeholder="e.g. Use north gate, loading dock B, no guest driveway" {...field} className="bg-white border-[#e1d5c9] h-8 text-xs" /></FormControl><FormMessage /></FormItem>
+              )} />
+              <FormField control={form.control} name="documentsText" render={({ field }) => (
+                <FormItem><FormLabel className="text-[10px] text-fg-subtle">Vendor document vault (one per line: Name|URL)</FormLabel><FormControl><textarea {...field} rows={3} className="w-full rounded-md border border-[#e1d5c9] bg-white p-2 text-xs" placeholder="Contract packet|https://..." /></FormControl><FormMessage /></FormItem>
+              )} />
             </div>
 
             <DialogFooter className="pt-4 mt-2 border-t border-[#e1d5c9]">

@@ -3,7 +3,7 @@
  */
 import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { FileSignature, Plus, Download, CheckCircle2, Send, Trash2 } from 'lucide-react';
+import { FileSignature, Plus, Download, CheckCircle2, Send, Trash2, AlertTriangle, ShieldAlert, ClipboardCheck, LockKeyhole, Scale, Truck, Wine, Volume2, Clock, Sparkles } from 'lucide-react';
 import { sdk } from '../../../sdk';
 import type { SdkContract } from '../../../sdk/contracts';
 import { Button } from '../../../ui/Button';
@@ -26,11 +26,40 @@ const STATUS_BADGE: Record<string, { variant: 'default' | 'warning' | 'success' 
   expired: { variant: 'danger',  label: 'Expired' },
 };
 
+type FinancialLegalEscalation = { id: string; type: 'contract' | 'payment' | 'legal'; label: string; severity: 'warning' | 'blocked'; createdAt: string; status: 'open' | 'resolved' };
+
+function parseMetadata(raw: unknown): Record<string, any> {
+  if (!raw) return {};
+  try { return typeof raw === 'string' ? JSON.parse(raw) : raw as Record<string, any>; } catch { return {}; }
+}
+
+function contractObligations(contract: SdkContract) {
+  const haystack = `${contract.title} ${contract.content || ''}`.toLowerCase();
+  const rules = [
+    { key: 'load-in', icon: Truck, label: 'Load-in / strike', terms: ['load-in', 'load in', 'loadout', 'load-out', 'strike', 'delivery', 'setup'] },
+    { key: 'insurance', icon: ShieldAlert, label: 'Insurance / COI', terms: ['insurance', 'coi', 'certificate of insurance', 'liability'] },
+    { key: 'cleanup', icon: ClipboardCheck, label: 'Cleanup / damage', terms: ['cleanup', 'clean up', 'trash', 'damage', 'deposit', 'breakdown'] },
+    { key: 'alcohol', icon: Wine, label: 'Alcohol / bar', terms: ['alcohol', 'bar', 'liquor', 'beer', 'wine', 'bartender'] },
+    { key: 'noise', icon: Volume2, label: 'Noise / music', terms: ['noise', 'music', 'dj', 'band', 'decibel', 'sound ordinance'] },
+    { key: 'overtime', icon: Clock, label: 'Overtime / curfew', terms: ['overtime', 'curfew', 'end time', 'late fee', 'extension'] },
+  ];
+  return rules.filter(rule => rule.terms.some(term => haystack.includes(term)));
+}
+
+function contractRisk(contracts: SdkContract[]) {
+  const pending = contracts.filter(c => c.status === 'sent');
+  const draft = contracts.filter(c => c.status === 'draft');
+  const expired = contracts.filter(c => c.status === 'expired');
+  const unsignedOperational = contracts.filter(c => c.status !== 'signed' && contractObligations(c).length > 0);
+  return { pending, draft, expired, unsignedOperational };
+}
+
 export function EventContractsTab({ eventId }: Props) {
   const { toast } = useToast();
   const qc = useQueryClient();
   const canManage = usePermission('contracts.manage');
   const canSign = usePermission('contracts.sign');
+  const managerMode = typeof window !== 'undefined' && localStorage.getItem('wvi_registration_role') === 'venue_manager';
   const [createOpen, setCreateOpen] = useState(false);
   const [signTarget, setSignTarget] = useState<SdkContract | null>(null);
   const [printTarget, setPrintTarget] = useState<SdkContract | null>(null);
@@ -40,11 +69,29 @@ export function EventContractsTab({ eventId }: Props) {
     queryFn: () => sdk.contracts.list(eventId),
   });
 
+  const { data: eventData } = useQuery({
+    queryKey: ['event', eventId],
+    queryFn: () => sdk.events.get(eventId),
+  });
+
+  const { data: financialLegalData } = useQuery({
+    queryKey: ['financial-legal', eventId],
+    queryFn: () => sdk.contracts.financialLegal(eventId),
+    enabled: managerMode || canManage,
+  });
+
   const contracts = data?.contracts ?? [];
   const totalActive = contracts.filter(c => c.status !== 'expired').length;
   const pending = contracts.filter(c => c.status === 'sent').length;
   const executed = contracts.filter(c => c.status === 'signed').length;
   const totalValue = contracts.reduce((s, c) => s + (c.amount_cents ?? 0), 0);
+  const risks = contractRisk(contracts);
+  const eventMetadata = parseMetadata(eventData?.event?.metadata);
+  const legacyEscalations: FinancialLegalEscalation[] = Array.isArray(eventMetadata.financialLegalEscalations) ? eventMetadata.financialLegalEscalations : [];
+  const legacyNoProceedFlags: FinancialLegalEscalation[] = Array.isArray(eventMetadata.noProceedFinancialLegalFlags) ? eventMetadata.noProceedFinancialLegalFlags : [];
+  const escalations = (financialLegalData?.financialLegal.escalations || legacyEscalations) as any[];
+  const noProceedFlags = (financialLegalData?.financialLegal.goNoGoFlags || legacyNoProceedFlags) as any[];
+  const backendExtracts = financialLegalData?.financialLegal.obligationExtracts || [];
 
   const sendMutation = useMutation({
     mutationFn: (id: string) => sdk.contracts.send(id),
@@ -67,7 +114,30 @@ export function EventContractsTab({ eventId }: Props) {
     onError: () => toast({ title: 'Could not create contract', variant: 'destructive' }),
   });
 
-  const handleCreate = (data: any) => createMutation.mutate(data);
+  const createEscalationMutation = useMutation({
+    mutationFn: ({ type, label, blocked }: { type: FinancialLegalEscalation['type']; label: string; blocked: boolean }) =>
+      sdk.contracts.createFinancialLegalEscalation(eventId, { sourceType: type, label, severity: blocked ? 'blocked' : 'warning', createGoNoGoFlag: blocked }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['financial-legal', eventId] });
+      toast({ title: 'Issue escalated', variant: 'success' });
+    },
+    onError: (e: any) => toast({ title: 'Escalation failed', description: e.message, variant: 'destructive' }),
+  });
+
+  const addEscalation = (type: FinancialLegalEscalation['type'], label: string, blocked = false) => {
+    createEscalationMutation.mutate({ type, label, blocked });
+  };
+
+  const handleCreate = (data: any) => {
+    const amount = data.amountStr ? Number(String(data.amountStr).replace(/[^0-9.]/g, '')) : undefined;
+    createMutation.mutate({
+      title: data.title,
+      recipientName: data.recipientName,
+      recipientEmail: data.recipientEmail || undefined,
+      amountCents: amount !== undefined && !Number.isNaN(amount) ? Math.round(amount * 100) : undefined,
+      content: data.content,
+    });
+  };
 
   const signMutation = useMutation({
     mutationFn: ({ contractId, signature }: { contractId: string; signature: string }) =>
@@ -87,12 +157,32 @@ export function EventContractsTab({ eventId }: Props) {
 
   return (
     <div className="space-y-6">
+      <Card className="border-brand/20 bg-brand-soft/20">
+        <CardContent className="p-4 text-sm text-fg-muted space-y-2">
+          <h2 className="font-bold text-brand">Contracts, signatures, and audit certificates</h2>
+          <p>Use the contract template wizard to draft agreements from venue, vendor, or couple templates. Signed contracts generate an e-sign audit certificate with signer, timestamp, and stored signature data.</p>
+          {pending > 0 && <div className="rounded border border-warning/30 bg-warning-soft p-2 text-warning font-semibold">Contract missing-signature alert: {pending} contract{pending === 1 ? '' : 's'} waiting for signature.</div>}
+        </CardContent>
+      </Card>
+
+      {(managerMode || !canManage) && (
+        <ManagerContractOperationsPanel
+          contracts={contracts}
+          canManage={canManage}
+          risks={risks}
+          escalations={escalations}
+          noProceedFlags={noProceedFlags}
+          backendExtracts={backendExtracts}
+          onEscalate={addEscalation}
+        />
+      )}
+
       {/* KPI tiles */}
       <div className="grid grid-cols-2 gap-2 sm:gap-3 sm:grid-cols-4">
         <StatCard label="Total Active" value={totalActive} />
         <StatCard label="Pending Signature" value={pending} />
         <StatCard label="Fully Executed" value={executed} />
-        <StatCard label="Total Value" value={totalValue > 0 ? `$${(totalValue / 100).toLocaleString()}` : '—'} />
+        <StatCard label="Total Value" value={canManage ? (totalValue > 0 ? `$${(totalValue / 100).toLocaleString()}` : '—') : 'Limited'} description={!canManage ? 'Ask owner/admin for financial detail' : undefined} />
       </div>
 
       {/* Actions */}
@@ -127,7 +217,7 @@ export function EventContractsTab({ eventId }: Props) {
                       </div>
                       <p className="text-sm text-fg-muted">
                         {c.recipient_name}
-                        {c.amount_cents != null && ` · $${(c.amount_cents / 100).toLocaleString()}`}
+                        {c.amount_cents != null && (canManage ? ` · $${(c.amount_cents / 100).toLocaleString()}` : ' · financial visibility limited')}
                       </p>
                       <div className="flex items-center gap-3 mt-2 text-[11px] text-fg-subtle">
                         {c.sent_at && <span>Sent {new Date(c.sent_at).toLocaleDateString()}</span>}
@@ -136,7 +226,9 @@ export function EventContractsTab({ eventId }: Props) {
                             <CheckCircle2 className="h-3 w-3" /> Signed {new Date(c.signed_at).toLocaleDateString()}
                           </span>
                         )}
+                        {c.status === 'signed' && <span className="text-success font-semibold">E-sign audit certificate ready</span>}
                       </div>
+                      <ContractClauseHighlights contract={c} />
                     </div>
                     <div className="flex items-center gap-1.5 shrink-0 flex-wrap">
                       {c.status === 'draft' && canManage && (
@@ -198,4 +290,86 @@ export function EventContractsTab({ eventId }: Props) {
       )}
     </div>
   );
+}
+
+
+function ManagerContractOperationsPanel({ contracts, canManage, risks, escalations, noProceedFlags, backendExtracts, onEscalate }: {
+  contracts: SdkContract[];
+  canManage: boolean;
+  risks: ReturnType<typeof contractRisk>;
+  escalations: FinancialLegalEscalation[];
+  noProceedFlags: any[];
+  backendExtracts: Array<{ contract_id: string; obligation_key: string; label: string; excerpt: string | null; confidence: string }>;
+  onEscalate: (type: FinancialLegalEscalation['type'], label: string, blocked?: boolean) => void;
+}) {
+  const signed = contracts.filter(c => c.status === 'signed').length;
+  const operationalObligations = backendExtracts.length
+    ? backendExtracts.map(extract => ({ contract: contracts.find(c => c.id === extract.contract_id), obligation: { key: extract.obligation_key, label: extract.label, icon: Scale }, excerpt: extract.excerpt, confidence: extract.confidence })).filter((row: any) => row.contract)
+    : contracts.flatMap(contract => contractObligations(contract).map(obligation => ({ contract, obligation }))); 
+  const goNoGo = [
+    { label: 'Venue/couple agreement fully executed', ok: contracts.some(c => c.status === 'signed') },
+    { label: 'No expired contracts attached to event', ok: risks.expired.length === 0 },
+    { label: 'No operational contract waiting signature', ok: risks.unsignedOperational.length === 0 },
+    { label: 'No active do-not-proceed legal/financial flag', ok: noProceedFlags.filter(f => f.status === 'open').length === 0 },
+  ];
+  return (
+    <div className="grid gap-4 lg:grid-cols-[1.1fr_0.9fr]">
+      <Card className="border-brand/20 bg-brand-soft/5">
+        <CardHeader>
+          <CardTitle className="text-base flex items-center gap-2"><Sparkles className="h-4 w-4 text-brand" /> Manager contract operations summary</CardTitle>
+          <CardDescription>Manager-safe view of legal/financial blockers and day-of obligations. Owner/admin-only fields stay protected.</CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          {!canManage && (
+            <div className="rounded-lg border border-warning/30 bg-warning-soft/20 p-3 text-sm text-warning flex gap-2">
+              <LockKeyhole className="h-4 w-4 shrink-0" /> Financial visibility limited: you can review operational status and escalation needs, but exact legal/financial editing is owner/admin only.
+            </div>
+          )}
+          <div className="grid gap-2 sm:grid-cols-4">
+            <MiniOpsMetric label="Signed" value={`${signed}/${contracts.length}`} />
+            <MiniOpsMetric label="Pending" value={risks.pending.length} />
+            <MiniOpsMetric label="Operational clauses" value={operationalObligations.length} />
+            <MiniOpsMetric label="No-go flags" value={noProceedFlags.filter(f => f.status === 'open').length} danger={noProceedFlags.some(f => f.status === 'open')} />
+          </div>
+          <div>
+            <h3 className="mb-2 text-xs font-bold uppercase tracking-wider text-fg-subtle">Operations obligations extractor</h3>
+            <div className="grid gap-2 sm:grid-cols-2">
+              {operationalObligations.slice(0, 8).map(({ contract, obligation }) => {
+                const Icon = obligation.icon;
+                return <div key={`${contract?.id || 'contract'}-${obligation.key}`} className="rounded-lg border border-border bg-surface p-2 text-xs"><div className="font-bold text-brand flex items-center gap-1"><Icon className="h-3.5 w-3.5" />{obligation.label}</div><div className="text-fg-muted">{contract?.title}</div></div>;
+              })}
+              {operationalObligations.length === 0 && <p className="rounded-lg border border-dashed border-border bg-surface p-3 text-xs text-fg-muted">No day-of operational clauses detected yet. Add contract content mentioning load-in, insurance, cleanup, alcohol, noise, or overtime.</p>}
+            </div>
+          </div>
+          <div className="flex flex-wrap gap-2">
+            {risks.pending.length > 0 && <Button size="sm" variant="outline" onClick={() => onEscalate('contract', `${risks.pending.length} contract(s) pending signature`)}><AlertTriangle className="h-4 w-4" /> Escalate pending signature</Button>}
+            {risks.expired.length > 0 && <Button size="sm" variant="destructive" onClick={() => onEscalate('legal', `${risks.expired.length} expired contract(s) block event operations`, true)}>Do not proceed</Button>}
+            {risks.unsignedOperational.length > 0 && <Button size="sm" variant="destructive" onClick={() => onEscalate('legal', 'Operational clauses exist in unsigned contracts', true)}>Block until owner approval</Button>}
+          </div>
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
+          <CardTitle className="text-base flex items-center gap-2"><Scale className="h-4 w-4 text-brand" /> Legal / financial go-no-go checklist</CardTitle>
+          <CardDescription>Manager decision support: proceed only when legal and payment blockers are cleared or owner-approved.</CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-3">
+          {goNoGo.map(item => <div key={item.label} className="flex gap-2 rounded-lg border border-border bg-surface p-2 text-sm"><span className={item.ok ? 'text-success' : 'text-danger'}>{item.ok ? '✓' : '!'}</span><span>{item.label}</span></div>)}
+          {escalations.length > 0 && <div className="rounded-lg border border-warning/30 bg-warning-soft/20 p-3 text-xs text-warning"><strong>Open escalations:</strong><ul className="mt-1 space-y-1">{escalations.filter(e => e.status === 'open').slice(0, 4).map(e => <li key={e.id}>• {e.label}</li>)}</ul></div>}
+          {noProceedFlags.length > 0 && <div className="rounded-lg border border-danger/30 bg-danger-soft p-3 text-xs text-danger font-semibold">Do not proceed without owner approval: {noProceedFlags.filter(f => f.status === 'open').map(f => f.label).join(' · ')}</div>}
+        </CardContent>
+      </Card>
+    </div>
+  );
+}
+
+function ContractClauseHighlights({ contract }: { contract: SdkContract }) {
+  const obligations = contractObligations(contract);
+  if (obligations.length === 0) return null;
+  return <div className="mt-3 flex flex-wrap gap-1.5">{obligations.map(obligation => { const Icon = obligation.icon; return <Badge key={obligation.key} variant="outline" className="text-[10px]"><Icon className="mr-1 h-3 w-3" />{obligation.label}</Badge>; })}</div>;
+}
+
+function MiniOpsMetric({ label, value, danger }: { label: string; value: string | number; danger?: boolean }) {
+  return <div className="rounded-lg border border-border bg-surface p-3"><div className="text-[10px] uppercase tracking-wider text-fg-subtle font-bold">{label}</div><div className={danger ? 'text-xl font-bold text-danger' : 'text-xl font-bold text-fg'}>{value}</div></div>;
 }

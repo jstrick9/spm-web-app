@@ -1,4 +1,4 @@
-import { Mail, Plus, Search, Upload, X } from 'lucide-react';
+import { Bell, Mail, Plus, Search, Send, Upload, X } from 'lucide-react';
 import type { SdkRsvpStatus } from '../../../sdk/types';
 import { Button } from '../../../ui/Button';
 import { Input } from '../../../ui/Input';
@@ -6,6 +6,7 @@ import { cn } from '../../../ui/lib/cn';
 import { BulkActionsMenu } from './BulkActionsMenu';
 import { RSVP_META, rsvpOrder } from './rsvpMeta';
 
+export type GuestAdvancedFilter = 'none' | 'no_email' | 'no_phone' | 'dietary' | 'accessibility' | 'not_seated' | 'no_lodging' | 'vip';
 export type GuestStatusFilter = SdkRsvpStatus | 'all';
 
 interface Props {
@@ -14,17 +15,22 @@ interface Props {
   onSearchChange: (s: string) => void;
   statusFilter: GuestStatusFilter;
   onStatusFilterChange: (s: GuestStatusFilter) => void;
+  advancedFilter?: GuestAdvancedFilter;
+  onAdvancedFilterChange?: (s: GuestAdvancedFilter) => void;
   counts?: { pending: number; attending: number; declined: number; maybe: number };
   selectedIds: string[];
   onSelectionCleared: () => void;
   onAddClick: () => void;
   onImportClick?: () => void;
   onCopyEmails?: () => void;
+  onSendReminders?: () => void;
+  onBulkMessage?: () => void;
 }
 
 export function GuestsToolbar({
   eventId, search, onSearchChange, statusFilter, onStatusFilterChange,
-  counts, selectedIds, onSelectionCleared, onAddClick, onImportClick, onCopyEmails,
+  advancedFilter = 'none', onAdvancedFilterChange,
+  counts, selectedIds, onSelectionCleared, onAddClick, onImportClick, onCopyEmails, onSendReminders, onBulkMessage,
 }: Props) {
   const total = counts ? counts.pending + counts.attending + counts.declined + counts.maybe : 0;
   return (
@@ -63,6 +69,23 @@ export function GuestsToolbar({
             {RSVP_META[s].label}
           </StatusChip>
         ))}
+        {onAdvancedFilterChange && (
+          <select
+            value={advancedFilter}
+            onChange={(e) => onAdvancedFilterChange(e.target.value as GuestAdvancedFilter)}
+            className="h-8 rounded-md border border-border bg-surface px-2 text-xs font-semibold text-fg"
+            aria-label="Guest quality filter"
+          >
+            <option value="none">All guest details</option>
+            <option value="no_email">No email</option>
+            <option value="no_phone">No phone</option>
+            <option value="dietary">Dietary restrictions</option>
+            <option value="accessibility">Accessibility notes</option>
+            <option value="not_seated">Not seated</option>
+            <option value="no_lodging">No lodging assignment</option>
+            <option value="vip">VIP tagged</option>
+          </select>
+        )}
       </div>
 
       <div className="flex items-center gap-1.5 sm:gap-2 flex-wrap">
@@ -78,9 +101,14 @@ export function GuestsToolbar({
             <Upload className="h-4 w-4" /> Import CSV
           </Button>
         )}
-        {onCopyEmails && (
-          <Button variant="outline" onClick={onCopyEmails}>
-            <Mail className="h-4 w-4" /> Copy Emails
+        {onSendReminders && (
+          <Button variant="outline" onClick={onSendReminders}>
+            <Bell className="h-4 w-4" /> Send reminders
+          </Button>
+        )}
+        {onBulkMessage && (
+          <Button variant="outline" onClick={onBulkMessage}>
+            <Send className="h-4 w-4" /> Message guests
           </Button>
         )}
         {onCopyEmails && (

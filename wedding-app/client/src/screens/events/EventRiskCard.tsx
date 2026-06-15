@@ -92,6 +92,9 @@ export function EventRiskCard({ eventId }: Props) {
                   <Badge variant={sev.variant} className="text-[10px] capitalize">{a.severity}</Badge>
                 </div>
                 <p className="text-xs text-fg-muted mt-0.5">{a.detail}</p>
+                <p className="text-[11px] text-fg-subtle mt-1">
+                  <strong>Why am I seeing this?</strong> This event health alert is based on live planning data. <strong>Recommended next step:</strong> open this linked tab and resolve the underlying setup gap.
+                </p>
               </div>
             </a>
           );

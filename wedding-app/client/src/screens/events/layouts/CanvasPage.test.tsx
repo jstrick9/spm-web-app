@@ -49,6 +49,11 @@ vi.mock('../../../sdk/layouts', () => ({
     list: vi.fn(),
     create: vi.fn(),
     save: vi.fn(),
+    ops: vi.fn().mockResolvedValue({ ops: { floorWalkChecks: [], varianceEvidence: [], rainPlan: null, vendorZoneInspections: [], setupPackets: [] } }),
+    setFloorWalkCheck: vi.fn().mockResolvedValue({ check: {} }),
+    addVarianceEvidence: vi.fn().mockResolvedValue({ evidence: {} }),
+    setRainPlan: vi.fn().mockResolvedValue({ activation: {} }),
+    createSetupPacket: vi.fn().mockResolvedValue({ packet: { token: 'signed-token', audience: 'setup_crew' }, publicUrl: '/api/public/layout-packets/signed-token' }),
     listVersions: vi.fn().mockResolvedValue({
        versions: [
          { id: 'v1', revision: 2, created_at: new Date().toISOString(), payload: JSON.stringify({ items: [] }), change_description: 'Added head table' },
@@ -81,6 +86,8 @@ vi.mock('../../../sdk', () => ({
 describe('CanvasPage', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    Object.defineProperty(window, 'innerWidth', { configurable: true, writable: true, value: 1024 });
+    window.dispatchEvent(new Event('resize'));
   });
 
   const TestWrapper = ({ children }: any) => (
@@ -211,5 +218,34 @@ describe('CanvasPage', () => {
     // Click "⚡ 120V Power Outlet" catalog add button
     const addOutletBtn = screen.getByText('⚡ 120V Power Outlet');
     fireEvent.click(addOutletBtn);
+  });
+
+  it('defaults phones to mobile review mode instead of the canvas editor', async () => {
+    Object.defineProperty(window, 'innerWidth', { configurable: true, writable: true, value: 390 });
+    (layoutsSdk.list as any).mockResolvedValue({
+      layouts: [{
+        id: 'l1',
+        name: 'Ceremony Review Layout',
+        revision: 3,
+        updated_at: new Date().toISOString(),
+        payload: { items: [
+          { id: 't1', type: 'round_table', x: 100, y: 100, label: 'Table 1' },
+          { id: 'c1', type: 'chair', x: 120, y: 120, guestName: 'Aunt Mary' },
+          { id: 'exit', type: 'fire_exit', x: 20, y: 20, label: 'Fire Exit' },
+          { id: 'ada', type: 'ada_path', x: 30, y: 30, label: 'ADA Path' },
+        ] },
+        approval_status: 'pending'
+      }]
+    });
+
+    render(<CanvasPage event={{ id: "test-event", organization_id: "org-1", title: "Test Event", guest_count: 150 } as any} />, { wrapper: TestWrapper });
+
+    expect(await screen.findByText('Mobile review mode')).toBeInTheDocument();
+    expect(screen.getByText('Layout review, readiness, and print packet')).toBeInTheDocument();
+    expect(screen.getByText('Non-canvas floorplan report')).toBeInTheDocument();
+    expect(screen.getByText('Floor walk verification mode')).toBeInTheDocument();
+    expect(screen.getByText('QR-coded physical setup packet')).toBeInTheDocument();
+    expect(screen.getByText(/Record variance\/photo evidence/i)).toBeInTheDocument();
+    expect(screen.queryByText('Layout Designer Workspace')).not.toBeInTheDocument();
   });
 });

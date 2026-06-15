@@ -1,6 +1,6 @@
 import React, { useState, useMemo, useRef } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { CheckSquare, Circle, ClipboardList, Plus, Calendar, Clock, UserCheck, ShieldAlert, Sparkles, Trash2, Shield, Eye, Settings2, SlidersHorizontal, Map, X } from 'lucide-react';
+import { CheckSquare, Circle, ClipboardList, Plus, Calendar, Clock, UserCheck, ShieldAlert, Sparkles, Trash2, Shield, Eye, Settings2, SlidersHorizontal, Map, X, Bell, Download, Smartphone, Radio, AlertTriangle, Phone, MessageSquare, Mail, Users, Printer, ClipboardCheck, BarChart3, GitBranch, MapPin } from 'lucide-react';
 import { sdk } from '../../../sdk';
 import type { SdkStaffTask } from '../../../sdk/types';
 import { Button } from '../../../ui/Button';
@@ -42,6 +42,12 @@ export function EventStaffTab({ eventId, organizationId }: Props) {
   const [createOpen, setCreateOpen] = useState(false);
   const [editTask, setEditTask] = useState<SdkStaffTask | null>(null);
   const [mapOverlayOpen, setMapOverlayOpen] = useState(false);
+  const [setupWizardOpen, setSetupWizardOpen] = useState(false);
+  const [captainMode, setCaptainMode] = useState(false);
+  const [incidentOpen, setIncidentOpen] = useState(false);
+  const [incidentText, setIncidentText] = useState('');
+  const [incidentSeverity, setIncidentSeverity] = useState<'low' | 'medium' | 'high' | 'critical'>('high');
+  const [ownerNotify, setOwnerNotify] = useState(true);
 
   // Swipe-to-Complete Gesture States and Refs for real-time synchronous tracking
   const [swipingTaskId, setSwipingTaskId] = useState<string | null>(null);
@@ -141,6 +147,11 @@ export function EventStaffTab({ eventId, organizationId }: Props) {
   const [newShiftStartsAt, setNewShiftStartsAt] = useState('');
   const [newShiftEndsAt, setNewShiftEndsAt] = useState('');
   const [newShiftNotes, setNewShiftNotes] = useState('');
+  const [newShiftContactName, setNewShiftContactName] = useState('');
+  const [newShiftContactPhone, setNewShiftContactPhone] = useState('');
+  const [newShiftContactEmail, setNewShiftContactEmail] = useState('');
+  const [newShiftRadioChannel, setNewShiftRadioChannel] = useState('Ops 1');
+  const [newShiftHandoffNotes, setNewShiftHandoffNotes] = useState('');
 
   // Queries
   const { data: tasksData, isLoading: tasksLoading, error: tasksError } = useQuery({
@@ -151,6 +162,11 @@ export function EventStaffTab({ eventId, organizationId }: Props) {
   const { data: shiftsData, isLoading: shiftsLoading } = useQuery({
     queryKey: ['staffShifts', eventId],
     queryFn: () => sdk.staff.listShifts(organizationId, { eventId }),
+  });
+
+  const { data: allShiftsData } = useQuery({
+    queryKey: ['staffShifts', organizationId, 'all-current'],
+    queryFn: () => sdk.staff.listShifts(organizationId),
   });
 
   const { data: meData } = useQuery({
@@ -185,7 +201,12 @@ export function EventStaffTab({ eventId, organizationId }: Props) {
           startsAt: newShiftStartsAt,
           endsAt: newShiftEndsAt,
           notes: newShiftNotes,
-          eventId
+          eventId,
+          contactName: newShiftContactName || undefined,
+          contactPhone: newShiftContactPhone || undefined,
+          contactEmail: newShiftContactEmail || undefined,
+          radioChannel: newShiftRadioChannel || undefined,
+          handoffNotes: newShiftHandoffNotes || undefined,
        });
     },
     onSuccess: () => {
@@ -196,6 +217,11 @@ export function EventStaffTab({ eventId, organizationId }: Props) {
        setNewShiftStartsAt('');
        setNewShiftEndsAt('');
        setNewShiftNotes('');
+       setNewShiftContactName('');
+       setNewShiftContactPhone('');
+       setNewShiftContactEmail('');
+       setNewShiftRadioChannel('Ops 1');
+       setNewShiftHandoffNotes('');
        setAddShiftOpen(false);
     },
     onError: (e: any) => {
@@ -241,6 +267,46 @@ export function EventStaffTab({ eventId, organizationId }: Props) {
     onSuccess: () => qc.invalidateQueries({ queryKey: ['staffTasks', eventId] })
   });
 
+  const applyStaffSetupTemplate = useMutation({
+    mutationFn: async (template: 'captain' | 'setup' | 'parking' | 'cleanup') => {
+      const templates: Record<typeof template, Array<{ title: string; phase: any; priority: any; description: string; tags: string[] }>> = {
+        captain: [
+          { title: 'Captain: run opening huddle', phase: 'pre-event', priority: 'critical', description: 'Confirm weather plan, radio channel, escalation path, and owner contact.', tags: ['captain','command-center'] },
+          { title: 'Captain: verify vendor arrival board', phase: 'during-event', priority: 'high', description: 'Check vendor check-in, late arrivals, and blocked setup items.', tags: ['captain','check-in'] },
+        ],
+        setup: [
+          { title: 'Setup crew: ceremony area ready', phase: 'pre-event', priority: 'high', description: 'Chairs, aisle, arch, signage, and accessibility paths verified.', tags: ['setup','ceremony'] },
+          { title: 'Setup crew: reception tables ready', phase: 'pre-event', priority: 'high', description: 'Tables, linens, place settings, and service lanes verified.', tags: ['setup','reception'] },
+        ],
+        parking: [
+          { title: 'Parking team: guest arrival plan active', phase: 'during-event', priority: 'medium', description: 'Signage, VIP parking, shuttle pickup, and emergency lane confirmed.', tags: ['parking','arrival'] },
+        ],
+        cleanup: [
+          { title: 'Cleanup crew: post-event sweep', phase: 'post-event', priority: 'medium', description: 'Trash, rentals, lost items, vendor load-out, and venue reset.', tags: ['cleanup','teardown'] },
+        ],
+      };
+      for (const task of templates[template]) await sdk.staff.createTask(organizationId, { ...task, eventId });
+    },
+    onSuccess: () => { qc.invalidateQueries({ queryKey: ['staffTasks', eventId] }); toast({ title: 'Staff setup template added', variant: 'success' }); setSetupWizardOpen(false); },
+    onError: (e: any) => toast({ title: 'Could not apply staff template', description: e.message, variant: 'destructive' }),
+  });
+
+  const createIncidentMutation = useMutation({
+    mutationFn: () => sdk.staff.createTask(organizationId, {
+      title: `Incident ${incidentSeverity.toUpperCase()}: ${incidentText.slice(0, 70) || 'New incident'}`,
+      description: `${incidentText}
+
+Severity: ${incidentSeverity}
+Owner notification rule: ${ownerNotify || incidentSeverity === 'critical' ? 'notify owner/admin' : 'captain handles unless escalated'}`,
+      phase: 'during-event',
+      priority: incidentSeverity === 'critical' ? 'critical' : incidentSeverity === 'high' ? 'high' : 'medium',
+      status: 'blocked',
+      tags: ['incident','day-of', `severity:${incidentSeverity}`, ownerNotify ? 'owner-notify' : 'captain-only'],
+      eventId
+    }),
+    onSuccess: () => { qc.invalidateQueries({ queryKey: ['staffTasks', eventId] }); toast({ title: 'Incident reported', description: `${incidentSeverity} severity workflow created${ownerNotify ? ' with owner notification rule.' : '.'}`, variant: 'success' }); setIncidentText(''); setIncidentOpen(false); },
+  });
+
   // Drag & Drop handlers
   const handleDragStart = (e: React.DragEvent, task: SdkStaffTask) => {
     e.dataTransfer.setData('text/plain', task.id);
@@ -280,7 +346,9 @@ export function EventStaffTab({ eventId, organizationId }: Props) {
 
   const tasks = tasksData?.tasks || [];
   const shifts = shiftsData?.shifts || [];
+  const allShifts = allShiftsData?.shifts || [];
   const members = (membersData as any)?.members || [];
+  const managerMode = typeof window !== 'undefined' && localStorage.getItem('wvi_registration_role') === 'venue_manager';
 
   const phases = [
     { id: 'pre-event', label: 'Pre-Event Prep' },
@@ -404,9 +472,57 @@ export function EventStaffTab({ eventId, organizationId }: Props) {
   const hasCoordinator = shifts.some(s => s.role === 'coordinator');
   const hasSetup = shifts.some(s => s.role === 'setup');
   const hasCleaning = shifts.some(s => s.role === 'cleaning');
+  const blockedTasks = tasks.filter(t => t.status === 'blocked');
+  const criticalOpenTasks = tasks.filter(t => t.priority === 'critical' && t.status !== 'completed');
+  const whatNowQueue = [...blockedTasks, ...criticalOpenTasks, ...tasks.filter(t => t.status === 'in-progress'), ...tasks.filter(t => t.status === 'not-started')]
+    .filter((task, index, arr) => arr.findIndex(t => t.id === task.id) === index)
+    .slice(0, 5);
+  const liveCrew = shifts.filter((s: any) => s.clocked_in_at && !s.clocked_out_at).length;
+  const coverageRoles = ['coordinator','setup','cleaning','parking'];
+  const coveragePct = Math.round((coverageRoles.filter(role => shifts.some((s: any) => s.role === role)).length / coverageRoles.length) * 100);
 
   return (
     <div className="space-y-6">
+      <Card className={cn('border-brand/20 bg-brand-soft/10', captainMode && 'border-danger/40 bg-danger-soft/20')}>
+        <CardContent className="p-4 space-y-4">
+          <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+            <div>
+              <h2 className="text-sm font-bold text-brand flex items-center gap-2"><Radio className="h-4 w-4" /> Day-of Command Center Mode</h2>
+              <p className="text-xs text-fg-muted mt-1">Mobile-first staff operations: what to do now, coverage heatmap, incident reporting, shift calendar, and offline/PWA guidance.</p>
+            </div>
+            <div className="flex flex-wrap gap-2">
+              <Button size="sm" variant={captainMode ? 'default' : 'outline'} onClick={() => setCaptainMode(!captainMode)}><ShieldAlert className="h-4 w-4" /> {captainMode ? 'Captain mode on' : 'Captain mode'}</Button>
+              <Button size="sm" variant="outline" onClick={() => setSetupWizardOpen(true)}><Settings2 className="h-4 w-4" /> Staff setup wizard</Button>
+              <Button size="sm" variant="outline" onClick={() => setIncidentOpen(true)}><AlertTriangle className="h-4 w-4" /> Report incident</Button>
+            </div>
+          </div>
+          <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-5">
+            <StaffMiniMetric title="What to do now" value={whatNowQueue.length} detail={whatNowQueue.length ? 'Open queued items below for priority work.' : 'No urgent tasks'} />
+            <StaffMiniMetric title="Coverage heatmap" value={`${coveragePct}%`} detail={`Active crew count: ${liveCrew}`} />
+            <StaffMiniMetric title="Shift scheduling calendar" value={shifts.length} detail="scheduled shifts" />
+            <StaffMiniMetric title="Push notifications" value="Ready" detail="Task changes broadcast live and can feed push subscriptions." />
+            <StaffMiniMetric title="Offline mode" value="PWA" detail="If WiFi drops, keep working; queued writes retry when online." />
+          </div>
+          {whatNowQueue.length > 0 && (
+            <div className="rounded-xl border border-border bg-surface p-3">
+              <div className="text-xs font-bold text-brand mb-2">What to do now staff queue</div>
+              <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-5">{whatNowQueue.map((t, idx) => <button key={t.id} onClick={() => setEditTask(t)} className="rounded-lg border border-border bg-surface-2 p-2 text-left text-xs hover:border-brand/40"><div className="font-bold text-fg line-clamp-2">Queue item {idx + 1}</div><div className="text-fg-muted mt-1">{t.priority} · {t.status}</div></button>)}</div>
+            </div>
+          )}
+        </CardContent>
+      </Card>
+
+      {managerMode && (
+        <VenueManagerStaffingCommandCenter
+          tasks={tasks}
+          shifts={shifts}
+          allShifts={allShifts}
+          members={members}
+          eventId={eventId}
+          onApplyTemplate={(template) => applyStaffSetupTemplate.mutate(template)}
+          onPrintBrief={() => window.print()}
+        />
+      )}
       
       {/* Sub tabs selector */}
       <div className="flex border-b border-[#e1d5c9] gap-2">
@@ -613,6 +729,17 @@ export function EventStaffTab({ eventId, organizationId }: Props) {
                                       <p className="text-[11px] text-fg-subtle mt-1.5 line-clamp-2 leading-relaxed font-semibold">{task.description}</p>
                                     )}
                                     
+                                    {(task.assignee_name || task.assignee_phone || task.assignee_email) && (
+                                      <div className="mt-2 rounded-lg border border-border bg-[#FDFBF7] p-2 text-[11px] text-fg-muted">
+                                        <div className="font-bold text-fg">Day-of contact: {task.assignee_name || 'Assigned contact'}</div>
+                                        <div className="mt-1 flex flex-wrap gap-1.5">
+                                          {task.assignee_phone && <a href={`tel:${task.assignee_phone}`} onClick={(e) => e.stopPropagation()} className="inline-flex min-h-8 items-center gap-1 rounded-md border border-border bg-white px-2 font-bold text-brand"><Phone className="h-3.5 w-3.5" /> Call</a>}
+                                          {task.assignee_phone && <a href={`sms:${task.assignee_phone}`} onClick={(e) => e.stopPropagation()} className="inline-flex min-h-8 items-center gap-1 rounded-md border border-border bg-white px-2 font-bold text-brand"><MessageSquare className="h-3.5 w-3.5" /> SMS</a>}
+                                          {task.assignee_email && <a href={`mailto:${task.assignee_email}`} onClick={(e) => e.stopPropagation()} className="inline-flex min-h-8 items-center gap-1 rounded-md border border-border bg-white px-2 font-bold text-brand"><Mail className="h-3.5 w-3.5" /> Email</a>}
+                                        </div>
+                                      </div>
+                                    )}
+
                                     {/* Blocked or Critical warnings on-screen */}
                                     {isBlocked && (
                                        <span className="text-[9px] text-danger font-bold mt-1.5 flex items-center gap-1">
@@ -901,6 +1028,27 @@ export function EventStaffTab({ eventId, organizationId }: Props) {
                     </div>
 
                     <div>
+                       <Label className="text-[10px] text-fg-subtle">Contact Name</Label>
+                       <Input value={newShiftContactName} onChange={e => setNewShiftContactName(e.target.value)} placeholder="Radio lead" className="h-9 mt-1 text-xs border-[#e1d5c9]" />
+                    </div>
+                    <div>
+                       <Label className="text-[10px] text-fg-subtle">Phone / SMS</Label>
+                       <Input value={newShiftContactPhone} onChange={e => setNewShiftContactPhone(e.target.value)} placeholder="555-210-1001" className="h-9 mt-1 text-xs border-[#e1d5c9]" />
+                    </div>
+                    <div>
+                       <Label className="text-[10px] text-fg-subtle">Email</Label>
+                       <Input value={newShiftContactEmail} onChange={e => setNewShiftContactEmail(e.target.value)} placeholder="lead@example.com" className="h-9 mt-1 text-xs border-[#e1d5c9]" />
+                    </div>
+                    <div>
+                       <Label className="text-[10px] text-fg-subtle">Radio Channel</Label>
+                       <Input value={newShiftRadioChannel} onChange={e => setNewShiftRadioChannel(e.target.value)} placeholder="Ops 1" className="h-9 mt-1 text-xs border-[#e1d5c9]" />
+                    </div>
+                    <div>
+                       <Label className="text-[10px] text-fg-subtle">Handoff Notes</Label>
+                       <Input value={newShiftHandoffNotes} onChange={e => setNewShiftHandoffNotes(e.target.value)} placeholder="Open blockers / owner notes" className="h-9 mt-1 text-xs border-[#e1d5c9]" />
+                    </div>
+
+                    <div>
                        <Label className="text-[10px] text-fg-subtle">Shift Starts At</Label>
                        <Input type="datetime-local" value={newShiftStartsAt} onChange={e => setNewShiftStartsAt(e.target.value)} className="h-9 mt-1 text-xs border-[#e1d5c9]" />
                     </div>
@@ -948,6 +1096,7 @@ export function EventStaffTab({ eventId, organizationId }: Props) {
                                    <span className="flex items-center gap-1 text-fg-muted"><Clock className="w-3 h-3" /> {new Date(s.starts_at).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})} – {new Date(s.ends_at).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}</span>
                                 </div>
                                 {s.notes && <p className="text-[11px] text-fg-muted font-medium mt-1 italic">"{s.notes}"</p>}
+                                {(s.contact_name || s.contact_phone || s.contact_email || s.radio_channel || s.handoff_notes) && <div className="mt-2 flex flex-wrap gap-1 text-[10px]">{s.radio_channel && <Badge variant="outline">Radio {s.radio_channel}</Badge>}{s.contact_name && <Badge variant="outline">{s.contact_name}</Badge>}{s.contact_phone && <a className="font-bold text-brand underline" href={`tel:${s.contact_phone}`}>Call</a>}{s.contact_phone && <a className="font-bold text-brand underline" href={`sms:${s.contact_phone}`}>SMS</a>}{s.contact_email && <a className="font-bold text-brand underline" href={`mailto:${s.contact_email}`}>Email</a>}{s.handoff_notes && <span className="text-fg-muted">Handoff: {s.handoff_notes}</span>}</div>}
                              </div>
                           </div>
 
@@ -1000,6 +1149,34 @@ export function EventStaffTab({ eventId, organizationId }: Props) {
          </Dialog>
       )}
 
+      {setupWizardOpen && (
+        <Dialog open={setupWizardOpen} onOpenChange={setSetupWizardOpen}>
+          <DialogContent className="max-w-2xl">
+            <DialogHeader><DialogTitle>Staff setup wizard</DialogTitle><DialogDescription>Apply role/area templates to quickly prepare the event team.</DialogDescription></DialogHeader>
+            <div className="grid gap-3 sm:grid-cols-2">
+              {([
+                ['captain', 'Day-of captain mode', 'Coordinator huddle and vendor board verification.'],
+                ['setup', 'Setup crew template', 'Ceremony and reception setup checklists.'],
+                ['parking', 'Parking/arrival template', 'Guest arrival, shuttle, VIP parking, emergency lane.'],
+                ['cleanup', 'Cleanup crew template', 'Post-event sweep, rentals, and load-out reset.'],
+              ] as const).map(([id, title, desc]) => <button key={id} onClick={() => applyStaffSetupTemplate.mutate(id)} className="rounded-lg border border-border bg-surface-2 p-3 text-left hover:border-brand/40"><div className="text-sm font-bold text-brand">{title}</div><p className="text-xs text-fg-muted mt-1">{desc}</p></button>)}
+            </div>
+            <DialogFooter><Button variant="ghost" onClick={() => setSetupWizardOpen(false)}>Close</Button></DialogFooter>
+          </DialogContent>
+        </Dialog>
+      )}
+
+      {incidentOpen && (
+        <Dialog open={incidentOpen} onOpenChange={setIncidentOpen}>
+          <DialogContent>
+            <DialogHeader><DialogTitle>Incident severity workflow</DialogTitle><DialogDescription>Create a blocked task with severity and owner notification rules.</DialogDescription></DialogHeader>
+            <div className="grid gap-3 sm:grid-cols-2"><label className="text-xs font-bold text-fg">Severity<select value={incidentSeverity} onChange={(e) => setIncidentSeverity(e.target.value as any)} className="mt-1 w-full rounded-md border border-border bg-surface p-2"><option value="low">Low</option><option value="medium">Medium</option><option value="high">High</option><option value="critical">Critical</option></select></label><label className="flex items-center gap-2 rounded-md border border-border bg-surface p-3 text-xs font-bold"><input type="checkbox" checked={ownerNotify} onChange={(e) => setOwnerNotify(e.target.checked)} /> Notify owner/admin for this incident</label></div>
+            <textarea className="min-h-28 w-full rounded-md border border-border bg-surface p-3 text-sm" value={incidentText} onChange={(e) => setIncidentText(e.target.value)} placeholder="Describe what happened, who is involved, and immediate action needed…" />
+            <DialogFooter><Button variant="ghost" onClick={() => setIncidentOpen(false)}>Cancel</Button><Button onClick={() => createIncidentMutation.mutate()} disabled={!incidentText.trim() || createIncidentMutation.isPending}>Create incident</Button></DialogFooter>
+          </DialogContent>
+        </Dialog>
+      )}
+
       {(createOpen || !!editTask) && (
         <StaffTaskFormDialog
           eventId={eventId}
@@ -1014,6 +1191,159 @@ export function EventStaffTab({ eventId, organizationId }: Props) {
           task={editTask}
         />
       )}
+    </div>
+  );
+}
+
+function VenueManagerStaffingCommandCenter({ tasks, shifts, allShifts, members, eventId, onApplyTemplate, onPrintBrief }: {
+  tasks: SdkStaffTask[];
+  shifts: any[];
+  allShifts: any[];
+  members: any[];
+  eventId: string;
+  onApplyTemplate: (template: 'captain' | 'setup' | 'parking' | 'cleanup') => void;
+  onPrintBrief: () => void;
+}) {
+  const openTasks = tasks.filter(t => t.status !== 'completed');
+  const unassignedCritical = tasks.filter(t => t.priority === 'critical' && t.status !== 'completed' && (t.assigned_staff?.length || 0) === 0 && !t.assignee_name);
+  const blocked = tasks.filter(t => t.status === 'blocked');
+  const completed = tasks.filter(t => t.status === 'completed');
+  const completionPct = tasks.length ? Math.round((completed.length / tasks.length) * 100) : 0;
+  const liveAll = allShifts.filter((s: any) => s.clocked_in_at && !s.clocked_out_at);
+  const liveHere = shifts.filter((s: any) => s.clocked_in_at && !s.clocked_out_at);
+  const contactRows = buildCrewContactRows(tasks, shifts, members);
+  const radioRows = shifts.filter((s: any) => s.radio_channel || s.contact_name || s.handoff_notes);
+  const closeoutChecks = [
+    { label: 'All critical incidents resolved or owner-notified', done: !tasks.some(t => t.tags?.includes?.('incident') && t.status !== 'completed') },
+    { label: 'Post-event teardown tasks complete', done: !tasks.some(t => t.phase === 'post-event' && t.status !== 'completed') },
+    { label: 'All on-site shifts clocked out', done: liveHere.length === 0 },
+    { label: 'Handoff notes captured for next manager', done: shifts.some((s: any) => s.handoff_notes) },
+  ];
+
+  return (
+    <div className="space-y-4 print:space-y-3">
+      <Card className="border-brand/20 bg-brand-soft/5 print:break-inside-avoid">
+        <CardHeader>
+          <CardTitle className="text-base flex items-center gap-2"><Users className="h-4 w-4 text-brand" /> Venue manager staffing command center</CardTitle>
+          <CardDescription>Roster, contacts, on-site coverage, radio channels, incidents, blockers, handoff notes, and staff completion analytics.</CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-6">
+            <StaffMiniMetric title="On site now" value={liveHere.length} detail="this event" />
+            <StaffMiniMetric title="Across current events" value={liveAll.length} detail="all active clock-ins" />
+            <StaffMiniMetric title="Unassigned critical" value={unassignedCritical.length} detail="needs manager assignment" />
+            <StaffMiniMetric title="Blocked tasks" value={blocked.length} detail="dependency / incident blockers" />
+            <StaffMiniMetric title="Completion" value={`${completionPct}%`} detail={`${completed.length}/${tasks.length} done`} />
+            <StaffMiniMetric title="Crew contacts" value={contactRows.length} detail="call/SMS/email entries" />
+          </div>
+
+          {unassignedCritical.length > 0 && (
+            <div className="rounded-lg border border-danger/30 bg-danger-soft p-3 text-sm text-danger">
+              <strong>Unassigned critical task alert:</strong> {unassignedCritical.map(t => t.title).join(' · ')}
+            </div>
+          )}
+
+          <div className="grid gap-4 lg:grid-cols-3">
+            <div className="rounded-xl border border-border bg-surface p-3">
+              <h3 className="text-xs font-bold text-brand flex items-center gap-2"><Phone className="h-4 w-4" /> Crew contact directory</h3>
+              <div className="mt-3 space-y-2 max-h-60 overflow-auto">
+                {contactRows.length ? contactRows.slice(0, 8).map(row => <CrewContactCard key={row.key} row={row} />) : <p className="text-xs text-fg-muted">Add shift or task contact fields to build the call sheet.</p>}
+              </div>
+            </div>
+
+            <div className="rounded-xl border border-border bg-surface p-3">
+              <h3 className="text-xs font-bold text-brand flex items-center gap-2"><MapPin className="h-4 w-4" /> On-site roster map</h3>
+              <div className="mt-3 grid gap-2">
+                {shifts.map((s: any) => {
+                  const name = s.contact_name || members.find((m: any) => m.userId === s.staff_id)?.fullName || members.find((m: any) => m.userId === s.staff_id)?.email || 'Crew member';
+                  const live = s.clocked_in_at && !s.clocked_out_at;
+                  return <div key={s.id} className="flex items-center justify-between rounded-lg border border-border bg-surface-2 p-2 text-xs"><span>{name}</span><Badge variant={live ? 'success' : 'outline'}>{live ? 'on site' : s.role}</Badge></div>;
+                })}
+                {shifts.length === 0 && <p className="text-xs text-fg-muted">No shifts scheduled for the roster map yet.</p>}
+              </div>
+            </div>
+
+            <div className="rounded-xl border border-border bg-surface p-3">
+              <h3 className="text-xs font-bold text-brand flex items-center gap-2"><Radio className="h-4 w-4" /> Radio/channel assignment tracker</h3>
+              <div className="mt-3 space-y-2">
+                {radioRows.length ? radioRows.map((s: any) => <div key={s.id} className="rounded-lg border border-border bg-surface-2 p-2 text-xs"><strong>{s.contact_name || 'Crew'}</strong><div className="text-fg-muted">Channel: {s.radio_channel || 'Not assigned'}{s.handoff_notes ? ` · Handoff: ${s.handoff_notes}` : ''}</div></div>) : <p className="text-xs text-fg-muted">Assign channels when scheduling shifts.</p>}
+              </div>
+            </div>
+          </div>
+
+          <div className="grid gap-4 lg:grid-cols-3">
+            <div className="rounded-xl border border-border bg-surface p-3">
+              <h3 className="text-xs font-bold text-brand flex items-center gap-2"><Settings2 className="h-4 w-4" /> Manager-facing task templates</h3>
+              <div className="mt-3 grid gap-2 sm:grid-cols-2">
+                <Button size="xs" variant="outline" onClick={() => onApplyTemplate('captain')}>Captain command</Button>
+                <Button size="xs" variant="outline" onClick={() => onApplyTemplate('setup')}>Venue setup</Button>
+                <Button size="xs" variant="outline" onClick={() => onApplyTemplate('parking')}>Parking/arrival</Button>
+                <Button size="xs" variant="outline" onClick={() => onApplyTemplate('cleanup')}>Closeout/cleanup</Button>
+              </div>
+              <p className="mt-2 text-[11px] text-fg-muted">Templates are organized by venue space, event phase, and day-of responsibility.</p>
+            </div>
+
+            <div className="rounded-xl border border-border bg-surface p-3">
+              <h3 className="text-xs font-bold text-brand flex items-center gap-2"><GitBranch className="h-4 w-4" /> Dependency / blocker tracking</h3>
+              <div className="mt-3 space-y-2">
+                {blocked.length ? blocked.slice(0, 5).map(task => <div key={task.id} className="rounded-lg border border-warning/30 bg-warning-soft/20 p-2 text-xs text-warning"><strong>{task.title}</strong><div>{task.description || 'No blocker note yet.'}</div></div>) : <p className="text-xs text-fg-muted">No blocked dependency items right now.</p>}
+              </div>
+            </div>
+
+            <div className="rounded-xl border border-border bg-surface p-3">
+              <h3 className="text-xs font-bold text-brand flex items-center gap-2"><BarChart3 className="h-4 w-4" /> Staff performance analytics</h3>
+              <div className="mt-3 space-y-2 text-xs">
+                <div className="flex justify-between"><span>Completion rate</span><strong>{completionPct}%</strong></div>
+                <div className="flex justify-between"><span>Blocked workload</span><strong>{blocked.length}</strong></div>
+                <div className="flex justify-between"><span>Open workload</span><strong>{openTasks.length}</strong></div>
+                <div className="flex justify-between"><span>Active shifts</span><strong>{liveHere.length}</strong></div>
+              </div>
+            </div>
+          </div>
+
+          <div className="grid gap-4 lg:grid-cols-2">
+            <div className="rounded-xl border border-border bg-surface p-3">
+              <h3 className="text-xs font-bold text-brand flex items-center gap-2"><Smartphone className="h-4 w-4" /> Staff briefing printout / mobile brief</h3>
+              <p className="mt-1 text-xs text-fg-muted">Print or screenshot this brief for captains: contacts, radio channels, blockers, incident rules, and closeout checks.</p>
+              <Button size="sm" variant="outline" className="mt-3" onClick={onPrintBrief}><Printer className="h-4 w-4" /> Print staff brief</Button>
+            </div>
+            <div className="rounded-xl border border-border bg-surface p-3">
+              <h3 className="text-xs font-bold text-brand flex items-center gap-2"><ClipboardCheck className="h-4 w-4" /> Post-event staff closeout checklist</h3>
+              <div className="mt-3 grid gap-2">
+                {closeoutChecks.map(check => <div key={check.label} className="flex gap-2 rounded-lg border border-border bg-surface-2 p-2 text-xs"><span className={check.done ? 'text-success' : 'text-warning'}>{check.done ? '✓' : '!'}</span><span>{check.label}</span></div>)}
+              </div>
+            </div>
+          </div>
+        </CardContent>
+      </Card>
+    </div>
+  );
+}
+
+function buildCrewContactRows(tasks: SdkStaffTask[], shifts: any[], members: any[]) {
+  const rows: Array<{ key: string; name: string; role?: string; phone?: string; email?: string; source: string }> = [];
+  for (const shift of shifts) {
+    const member = members.find((m: any) => m.userId === shift.staff_id);
+    const name = shift.contact_name || member?.fullName || member?.email || 'Crew member';
+    rows.push({ key: `shift-${shift.id}`, name, role: shift.role, phone: shift.contact_phone, email: shift.contact_email || member?.email, source: 'shift' });
+  }
+  for (const task of tasks) {
+    if (task.assignee_name || task.assignee_phone || task.assignee_email) rows.push({ key: `task-${task.id}`, name: task.assignee_name || task.title, phone: task.assignee_phone || undefined, email: task.assignee_email || undefined, source: 'task' });
+  }
+  const seen = new Set<string>();
+  return rows.filter(row => { const key = `${row.name}-${row.phone || ''}-${row.email || ''}`; if (seen.has(key)) return false; seen.add(key); return true; });
+}
+
+function CrewContactCard({ row }: { row: { name: string; role?: string; phone?: string; email?: string; source: string } }) {
+  return <div className="rounded-lg border border-border bg-surface-2 p-2 text-xs"><div className="font-bold text-fg">{row.name}</div><div className="text-fg-muted">{row.role || row.source}</div><div className="mt-2 flex flex-wrap gap-1">{row.phone && <a className="rounded-md border border-border bg-white px-2 py-1 font-bold text-brand" href={`tel:${row.phone}`}>Call</a>}{row.phone && <a className="rounded-md border border-border bg-white px-2 py-1 font-bold text-brand" href={`sms:${row.phone}`}>SMS</a>}{row.email && <a className="rounded-md border border-border bg-white px-2 py-1 font-bold text-brand" href={`mailto:${row.email}`}>Email</a>}</div></div>;
+}
+
+function StaffMiniMetric({ title, value, detail }: { title: string; value: string | number; detail: string }) {
+  return (
+    <div className="rounded-lg border border-border bg-surface p-3">
+      <div className="text-[10px] uppercase tracking-wide font-bold text-fg-subtle">{title}</div>
+      <div className="mt-1 text-xl font-black text-brand">{value}</div>
+      <p className="mt-1 text-[11px] text-fg-muted line-clamp-2">{detail}</p>
     </div>
   );
 }

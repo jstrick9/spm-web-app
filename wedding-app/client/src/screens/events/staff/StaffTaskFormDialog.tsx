@@ -18,6 +18,9 @@ const formSchema = z.object({
   phase: z.enum(['pre-event', 'during-event', 'post-event']),
   priority: z.enum(['low', 'medium', 'high', 'critical']),
   estimatedMinutesStr: z.string().optional(),
+  assigneeName: z.string().optional(),
+  assigneePhone: z.string().optional(),
+  assigneeEmail: z.string().email('Enter a valid email').optional().or(z.literal('')),
 });
 
 type FormValues = z.infer<typeof formSchema>;
@@ -43,6 +46,9 @@ export function StaffTaskFormDialog({ open, onOpenChange, eventId, organizationI
       phase: task?.phase || 'during-event',
       priority: task?.priority || 'medium',
       estimatedMinutesStr: task?.estimated_minutes ? String(task.estimated_minutes) : '',
+      assigneeName: task?.assignee_name || '',
+      assigneePhone: task?.assignee_phone || '',
+      assigneeEmail: task?.assignee_email || '',
     },
   });
 
@@ -56,6 +62,9 @@ export function StaffTaskFormDialog({ open, onOpenChange, eventId, organizationI
         phase: values.phase,
         priority: values.priority,
         estimatedMinutes,
+        assigneeName: values.assigneeName || undefined,
+        assigneePhone: values.assigneePhone || undefined,
+        assigneeEmail: values.assigneeEmail || undefined,
         eventId,
       };
 
@@ -124,6 +133,48 @@ export function StaffTaskFormDialog({ open, onOpenChange, eventId, organizationI
               )}
             />
             
+            <div className="rounded-xl border border-border bg-surface-2/40 p-3 space-y-3">
+              <div>
+                <h3 className="text-xs font-bold uppercase tracking-wider text-fg">Day-of contact</h3>
+                <p className="text-[11px] text-fg-muted mt-0.5">Optional but recommended. These fields power quick call/SMS actions on run sheets and staff command center.</p>
+              </div>
+              <div className="grid gap-3 sm:grid-cols-3">
+                <FormField
+                  control={form.control}
+                  name="assigneeName"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Contact name</FormLabel>
+                      <FormControl><Input placeholder="Setup Lead" {...field} /></FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+                <FormField
+                  control={form.control}
+                  name="assigneePhone"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Phone / SMS</FormLabel>
+                      <FormControl><Input placeholder="555-210-1001" inputMode="tel" {...field} /></FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+                <FormField
+                  control={form.control}
+                  name="assigneeEmail"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Email</FormLabel>
+                      <FormControl><Input placeholder="lead@example.com" type="email" {...field} /></FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+              </div>
+            </div>
+
             <div className="grid grid-cols-2 gap-4">
               <FormField
                 control={form.control}

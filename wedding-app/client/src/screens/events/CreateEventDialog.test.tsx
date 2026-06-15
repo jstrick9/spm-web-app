@@ -22,7 +22,7 @@ describe('CreateEventDialog', () => {
   it('renders all fields when open', () => {
     render(harness(<CreateEventDialog orgId="org-1" open onOpenChange={() => {}} />));
     expect(screen.getByLabelText(/Event title/i)).toBeInTheDocument();
-    expect(screen.getByText(/Status/i)).toBeInTheDocument();
+    expect(screen.getByText(/^Status$/i)).toBeInTheDocument();
     expect(screen.getByLabelText(/Start date/i)).toBeInTheDocument();
     expect(screen.getByLabelText(/End date/i)).toBeInTheDocument();
     expect(screen.getByLabelText(/Expected guests/i)).toBeInTheDocument();

@@ -11,6 +11,13 @@ const queryClient = new QueryClient({
 
 vi.mock('../../../sdk', () => ({
   sdk: {
+    couple: {
+      postEventReviewQueue: vi.fn().mockResolvedValue({ requests: [], openRequests: [], reviewLinks: { google: '', theKnot: '', weddingwire: '', zola: '', other: '' }, configuredReviewLinks: 0, nps: { totalResponses: 0, averageScore: null, promoters: 0, detractors: 0 }, closeoutApprovals: { lostItemsOpen: 0, testimonialsAwaitingConsent: 0, feedbackToDebrief: 0 }, privacyBoundaries: ['Keep internal notes private.'] }),
+      updatePostEventReviewLinks: vi.fn().mockResolvedValue({ reviewLinks: {}, updatedAt: 'now', updatedBy: 'test' }),
+      updateRequest: vi.fn().mockResolvedValue({ request: {} }),
+      bulkUpdatePostEventReviewQueue: vi.fn().mockResolvedValue({ updated: [], count: 1 }),
+      queuePostEventFollowUp: vi.fn().mockResolvedValue({ queued: [], count: 1, channel: 'email' }),
+    },
     feedback: {
       getPolls: vi.fn().mockResolvedValue({ 
         polls: [

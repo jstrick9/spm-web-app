@@ -9,7 +9,7 @@
  *   compact  — colored dot only (for Kanban cards, small spaces)
  *   default  — badge with icon + text (for table rows, detail headers)
  *
- * Permission: analytics.view (returns null silently if not permitted)
+ * Permission: reports.view (returns null silently if not permitted)
  */
 import { useQuery } from '@tanstack/react-query';
 import { AlertTriangle, CheckCircle2, Eye } from 'lucide-react';
@@ -53,7 +53,7 @@ const RISK_CONFIG: Record<RiskLevel, {
 };
 
 export function EventRiskBadge({ eventId, orgId, compact = false, className }: Props) {
-  const canViewAnalytics = usePermission('analytics.view');
+  const canViewAnalytics = usePermission('reports.view');
 
   // Never render if user doesn't have analytics permission
   if (!canViewAnalytics) return null;

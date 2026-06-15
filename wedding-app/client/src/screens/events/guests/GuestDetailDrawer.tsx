@@ -19,6 +19,10 @@ import { GuestFormDialog } from './GuestFormDialog';
 import { DeleteConfirmDialog } from './DeleteConfirmDialog';
 import { RsvpBadge } from './rsvpMeta';
 
+function safeGuestMetadata(raw: string | null | undefined): Record<string, any> {
+  try { return JSON.parse(raw || '{}'); } catch { return {}; }
+}
+
 interface Props {
   guest: SdkGuest | null;
   open: boolean;
@@ -39,6 +43,9 @@ export function GuestDetailDrawer({ guest, open, onOpenChange, onDeleted }: Prop
     staleTime: 30_000,
   });
   const myRsvps = (rsvpsQuery.data?.rsvps ?? []).filter((r) => r.guest_id === guest?.id);
+  const guestMeta = guest ? safeGuestMetadata(guest.metadata) : {};
+  const issueTags = Array.isArray(guestMeta.guestIssueTags) ? guestMeta.guestIssueTags : [];
+  const serviceLog = Array.isArray(guestMeta.guestServiceLog) ? guestMeta.guestServiceLog : [];
 
   async function handleDelete() {
     if (!guest) return;
@@ -116,6 +123,15 @@ export function GuestDetailDrawer({ guest, open, onOpenChange, onDeleted }: Prop
                         body={guest.accessibility_notes}
                       />
                     )}
+                  </section>
+                )}
+
+                {(issueTags.length > 0 || serviceLog.length > 0) && (
+                  <section className="space-y-3 rounded-xl border border-[#e1d5c9] bg-white p-4 shadow-sm">
+                    <h4 className="text-xs font-bold uppercase tracking-wider text-fg-subtle font-serif">Manager service log</h4>
+                    {issueTags.length > 0 && <div className="flex flex-wrap gap-1">{issueTags.map((tag: string) => <Badge key={tag} variant="warning" className="text-[10px] capitalize">{tag.replace(/_/g, ' ')}</Badge>)}</div>}
+                    <div className="space-y-1">{serviceLog.slice().reverse().slice(0, 4).map((entry: any) => <div key={entry.id || entry.at} className="rounded bg-[#FDFBF7] p-2 text-xs text-fg-muted"><strong>{entry.kind}</strong>: {entry.note}<div className="text-[10px] text-fg-subtle">{entry.at ? new Date(entry.at).toLocaleString() : ''}</div></div>)}</div>
+                    <p className="text-[10px] text-fg-subtle">Visibility: manager service notes, issue tags, and audit metadata are internal to authenticated users with guest permissions. They are not shown in the public guest portal.</p>
                   </section>
                 )}
 
@@ -221,6 +237,7 @@ function NoteCard({ icon, title, body }: { icon: React.ReactNode; title: string;
         {icon}{title}
       </div>
       <p className="text-sm text-fg whitespace-pre-wrap font-medium">{body}</p>
+      <p className="mt-2 text-[10px] text-fg-subtle">Visibility: internal venue operations only; not visible in the public guest portal.</p>
     </div>
   );
 }

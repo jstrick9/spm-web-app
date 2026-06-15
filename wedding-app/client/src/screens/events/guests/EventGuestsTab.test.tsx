@@ -46,6 +46,9 @@ function mockList(guests: SdkGuest[]) {
     http.get('/api/events/:eventId/guests', () =>
       HttpResponse.json({ guests, counts }),
     ),
+    http.get('/api/events/:eventId/guest-help-requests', () =>
+      HttpResponse.json({ requests: [], counts: { open: 0, inReview: 0, resolved: 0, closed: 0 } }),
+    ),
   );
 }
 

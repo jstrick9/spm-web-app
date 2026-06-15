@@ -3,7 +3,7 @@
  * Lets the planner take action on the whole selection in one shot.
  */
 import { useMutation, useQueryClient } from '@tanstack/react-query';
-import { ChevronDown, Loader2, Trash2, UserCheck, UserX, XCircle } from 'lucide-react';
+import { ChevronDown, Loader2, Shield, Star, Tag, Trash2, UserCheck, UserX, XCircle } from 'lucide-react';
 import { useState } from 'react';
 import { sdk } from '../../../sdk';
 import type { SdkRsvpStatus } from '../../../sdk/types';
@@ -140,6 +140,33 @@ export function BulkActionsMenu({ eventId, selectedIds, onCleared }: Props) {
               onSelect={() => bulkPatch.mutate({ allowPortalAccess: false })}
             >
               <UserX className="h-4 w-4" /> Revoke portal access
+            </DropdownMenuItem>
+            <DropdownMenuSeparator />
+            <DropdownMenuLabel>Guest intelligence</DropdownMenuLabel>
+            <DropdownMenuItem onSelect={() => bulkPatch.mutate({ metadata: { vip: true, managerAuditTrail: [{ action: 'bulk-mark-vip', at: new Date().toISOString(), actor: 'manager' }] } })}>
+              <Star className="h-4 w-4" /> Mark VIP
+            </DropdownMenuItem>
+            <DropdownMenuItem onSelect={() => bulkPatch.mutate({ metadata: { repeatGuest: true, managerAuditTrail: [{ action: 'bulk-mark-repeat-guest', at: new Date().toISOString(), actor: 'manager' }] } })}>
+              <UserCheck className="h-4 w-4" /> Mark repeat guest
+            </DropdownMenuItem>
+            <DropdownMenuSeparator />
+            <DropdownMenuLabel>Manager issue tags</DropdownMenuLabel>
+            {[
+              ['arrived_early', 'Arrived early'],
+              ['lost_item', 'Lost item'],
+              ['accessibility_assistance', 'Accessibility assistance'],
+              ['shuttle_issue', 'Shuttle issue'],
+              ['intoxication_risk', 'Intoxication risk'],
+              ['vip_request', 'VIP request'],
+            ].map(([id, label]) => (
+              <DropdownMenuItem key={id} onSelect={() => bulkPatch.mutate({ metadata: { guestIssueTags: [id], managerAuditTrail: [{ action: `bulk-tag:${id}`, at: new Date().toISOString(), actor: 'manager' }] } })}>
+                <Tag className="h-4 w-4" /> {label}
+              </DropdownMenuItem>
+            ))}
+            <DropdownMenuSeparator />
+            <DropdownMenuLabel>Manager-safe actions</DropdownMenuLabel>
+            <DropdownMenuItem disabled>
+              <Shield className="h-4 w-4" /> Audit trail is recorded in guest metadata
             </DropdownMenuItem>
             <DropdownMenuSeparator />
             <DropdownMenuItem variant="destructive" onSelect={() => setDeleteOpen(true)}>

@@ -17,7 +17,11 @@ import {
   CheckCircle2, 
   Flame, 
   Sparkles, 
-  ArrowRight 
+  ArrowRight,
+  Phone,
+  MessageSquare,
+  Smartphone,
+  Search
 } from 'lucide-react';
 import { sdk } from '../../../sdk';
 import { PageBody, PageHeader } from '../../../ui/AppShell';
@@ -34,6 +38,16 @@ interface Props {
 export function RunSheet({ eventId }: Props) {
   const qc = useQueryClient();
   const { toast } = useToast();
+  const [dayOfMode, setDayOfMode] = useState(false);
+  const [phoneSearch, setPhoneSearch] = useState('');
+  const [mobileViewport, setMobileViewport] = useState(false);
+
+  React.useEffect(() => {
+    const update = () => setMobileViewport(window.innerWidth < 768);
+    update();
+    window.addEventListener('resize', update);
+    return () => window.removeEventListener('resize', update);
+  }, []);
 
   const { data: eventData, isLoading: eventLoading } = useQuery({
     queryKey: ['event', eventId],
@@ -97,6 +111,9 @@ export function RunSheet({ eventId }: Props) {
 
   const vendors = vendorData?.vendors || [];
   const tasks = staffData?.tasks || [];
+  const phoneSearchLower = phoneSearch.trim().toLowerCase();
+  const vendorContacts = vendors.filter((vendor: any) => !phoneSearchLower || vendor.name?.toLowerCase().includes(phoneSearchLower) || vendor.category?.toLowerCase().includes(phoneSearchLower) || vendor.contact_name?.toLowerCase().includes(phoneSearchLower));
+  const staffContacts = tasks.filter((task: any) => !phoneSearchLower || task.title?.toLowerCase().includes(phoneSearchLower) || task.assigned_to?.toLowerCase?.().includes(phoneSearchLower) || task.assignee_name?.toLowerCase?.().includes(phoneSearchLower));
 
   // Parse event metadata
   const metadata = useMemo(() => {
@@ -190,14 +207,38 @@ export function RunSheet({ eventId }: Props) {
           title="Day-Of Run Sheet"
           description="Printable packet for staff and coordination."
           actions={
-            <Button onClick={handlePrint} className="font-bold">
-              <Printer className="w-4 h-4 mr-2" /> Print Packet
-            </Button>
+            <div className="flex flex-wrap gap-2">
+              <Button variant={dayOfMode ? 'default' : 'outline'} onClick={() => setDayOfMode(!dayOfMode)} className="font-bold min-h-10">
+                <Smartphone className="w-4 h-4 mr-2" /> {dayOfMode ? 'Day-of Mode On' : 'Day-of Mode'}
+              </Button>
+              <Button onClick={handlePrint} className="font-bold min-h-10">
+                <Printer className="w-4 h-4 mr-2" /> Print Packet
+              </Button>
+            </div>
           }
         />
       </div>
 
-      <PageBody className="print:p-0 print:m-0 max-w-4xl animate-in fade-in duration-200 space-y-6">
+      <PageBody className={cn("print:p-0 print:m-0 animate-in fade-in duration-200 space-y-6", dayOfMode ? "max-w-5xl" : "max-w-4xl")}>
+
+        <Card className="print:hidden border-brand/20 bg-brand/5">
+          <CardContent className="p-4 space-y-4">
+            <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+              <div>
+                <h2 className="text-base font-bold text-fg flex items-center gap-2"><Smartphone className="h-5 w-5 text-brand" /> Phone-friendly day-of command center</h2>
+                <p className="text-xs text-fg-muted mt-1">Large touch targets, quick call/SMS, offline-friendly printed packet, and active phase controls for Apple/Android phones and tablets.</p>
+              </div>
+              <Badge variant={dayOfMode ? 'success' : 'outline'}>{dayOfMode ? 'Large touch mode enabled' : 'Standard mode'}</Badge>
+            </div>
+            <div className="grid gap-2 sm:grid-cols-3">
+              <a href={`#/events/${eventId}/check-in`} target="_blank" rel="noreferrer"><Button className="min-h-14 w-full justify-start text-base"><Search className="h-5 w-5" /> QR / search check-in</Button></a>
+              <Button variant="outline" className="min-h-14 justify-start text-base" onClick={handlePrint}><Printer className="h-5 w-5" /> Phone/print run sheet</Button>
+              <Button variant="outline" className="min-h-14 justify-start text-base" onClick={() => setDayOfMode(!dayOfMode)}><Activity className="h-5 w-5" /> Toggle large controls</Button>
+            </div>
+          </CardContent>
+        </Card>
+
+        {(dayOfMode || mobileViewport) && <MobileContactLookup vendors={vendorContacts} tasks={staffContacts} search={phoneSearch} onSearchChange={setPhoneSearch} />}
 
         {/* COORDINATOR LIVE WEDDING PACE CONTROL DASHBOARD (NON-PRINT) */}
         <Card className="print:hidden bg-[#FDFBF7] border-2 border-[#e1d5c9] shadow-md rounded-2xl overflow-hidden">
@@ -257,7 +298,7 @@ export function RunSheet({ eventId }: Props) {
           {/* Header */}
           <div className="border-b-2 border-black pb-6 mb-8 flex justify-between items-start flex-wrap gap-4">
             <div>
-              <span className="text-[10px] uppercase font-bold tracking-widest text-brand">Seven Paths Manor</span>
+              <span className="text-[10px] uppercase font-bold tracking-widest text-brand">Event venue operations</span>
               <h1 className="text-3xl sm:text-4xl font-serif font-black tracking-tight mb-2 text-brand">{event?.title}</h1>
               <div className="flex gap-4 text-xs font-semibold text-fg-subtle">
                 <div className="flex items-center gap-1.5">
@@ -550,5 +591,61 @@ export function RunSheet({ eventId }: Props) {
         </div>
       </PageBody>
     </>
+  );
+}
+
+function MobileContactLookup({ vendors, tasks, search, onSearchChange }: { vendors: any[]; tasks: any[]; search: string; onSearchChange: (value: string) => void }) {
+  return (
+    <Card className="print:hidden">
+      <CardHeader>
+        <CardTitle className="text-base flex items-center gap-2"><Phone className="h-4 w-4 text-brand" /> Quick call / SMS lookup</CardTitle>
+        <CardDescription>Fast vendor and staff contact actions for day-of phones and tablets.</CardDescription>
+      </CardHeader>
+      <CardContent className="space-y-3">
+        <div className="relative">
+          <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-fg-muted" />
+          <input
+            value={search}
+            onChange={(event) => onSearchChange(event.target.value)}
+            placeholder="Search vendor, category, staff task..."
+            className="h-12 w-full rounded-xl border border-border bg-surface px-3 pl-10 text-base text-fg outline-none focus:border-brand"
+          />
+        </div>
+        <div className="grid gap-3 md:grid-cols-2">
+          {vendors.slice(0, 6).map((vendor: any) => (
+            <div key={vendor.id} className="rounded-xl border border-border bg-surface p-3">
+              <div className="flex items-start justify-between gap-2">
+                <div>
+                  <div className="font-bold text-fg">{vendor.name}</div>
+                  <div className="text-xs text-fg-muted">{vendor.category || 'Vendor'}{vendor.contact_name ? ` · ${vendor.contact_name}` : ''}</div>
+                </div>
+                <div className="flex gap-1">
+                  {vendor.phone ? <a href={`tel:${vendor.phone}`} className="rounded-lg border border-border p-2 text-brand" aria-label={`Call ${vendor.name}`}><Phone className="h-4 w-4" /></a> : null}
+                  {vendor.phone ? <a href={`sms:${vendor.phone}`} className="rounded-lg border border-border p-2 text-brand" aria-label={`Text ${vendor.name}`}><MessageSquare className="h-4 w-4" /></a> : null}
+                </div>
+              </div>
+            </div>
+          ))}
+          {tasks.slice(0, 4).map((task: any) => {
+            const phone = task.assignee_phone || task.phone;
+            return (
+              <div key={task.id} className="rounded-xl border border-border bg-surface p-3">
+                <div className="flex items-start justify-between gap-2">
+                  <div>
+                    <div className="font-bold text-fg">{task.assignee_name || task.assigned_to || 'Staff task'}</div>
+                    <div className="text-xs text-fg-muted">{task.title}</div>
+                  </div>
+                  <div className="flex gap-1">
+                    {phone ? <a href={`tel:${phone}`} className="rounded-lg border border-border p-2 text-brand" aria-label="Call staff"><Phone className="h-4 w-4" /></a> : null}
+                    {phone ? <a href={`sms:${phone}`} className="rounded-lg border border-border p-2 text-brand" aria-label="Text staff"><MessageSquare className="h-4 w-4" /></a> : null}
+                  </div>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+        {vendors.length === 0 && tasks.length === 0 && <p className="rounded-lg border border-dashed border-border bg-surface p-3 text-sm text-fg-muted">No contacts match this lookup. Use the full Vendors or Staff tab for deeper details.</p>}
+      </CardContent>
+    </Card>
   );
 }
