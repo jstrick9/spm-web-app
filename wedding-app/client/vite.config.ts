@@ -44,10 +44,9 @@ export default defineConfig({
     outDir: 'dist',
     sourcemap: true,
 
-    // The only chunk above the default 500 kB is VendorCheckInApp (bundles
-    // html5-qrcode scanner) — route-level lazy-loaded so it never blocks
-    // initial page load. Eager chunks (index + vendor splits) are well under
-    // this limit after the manualChunks split below.
+    // Heavy route/tool dependencies are lazy-loaded. html5-qrcode is now
+    // dynamically imported only after an operator taps Scan, so the day-of
+    // VendorCheckInApp route stays small and camera code is isolated.
     chunkSizeWarningLimit: 700,
 
     rollupOptions: {
@@ -139,9 +138,17 @@ export default defineConfig({
             return 'forms-vendor';
           }
 
+          // ── QR scanner ───────────────────────────────────────────────────
+          // Dynamically imported from VendorCheckInApp only after Scan is tapped.
+          // Naming the async chunk keeps production build output reviewable and
+          // proves html5-qrcode is no longer bundled into the day-of route chunk.
+          if (/[\/]node_modules[\/]html5-qrcode([\/]|$)/.test(id)) {
+            return 'qr-scanner-vendor';
+          }
+
           // Everything else stays with its importer chunk.
-          // This is deliberate: recharts, konva, html5-qrcode, and other heavy
-          // lazy-loaded packages should NOT be pulled into an eager vendor bundle.
+          // This is deliberate: recharts, konva, and other heavy lazy-loaded
+          // packages should NOT be pulled into an eagerly-loaded vendor bundle.
           return undefined;
         },
       },
