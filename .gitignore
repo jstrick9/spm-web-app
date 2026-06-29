@@ -1,48 +1,15 @@
-# Dependencies
 node_modules/
 **/node_modules/
-
-# Build output
 dist/
 build/
-**/dist/
-**/build/
-
-# Database files (keep schema, not data)
 *.db-shm
 *.db-wal
-wedding-app/server/data/*.db
-
-# Environment files (sensitive)
-.env
-.env.local
-.env.production
-**/.env
-
-# OS files
 .DS_Store
 **/.DS_Store
-Thumbs.db
-
-# Logs
-*.log
-logs/
-
-# Uploads (user generated content)
+.env
+**/.env
 wedding-app/server/uploads/
-
-# Secret keys
+wedding-app/server/data/*.db
 .webui_secret_key
-
-# IDE
-.vscode/
-.idea/
-*.swp
-
-# Coverage
+*.log
 coverage/
-.nyc_output/
-
-# Vite cache
-.vite/
-**/.vite/
