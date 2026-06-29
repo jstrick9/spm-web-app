@@ -13,3 +13,4 @@ wedding-app/server/data/*.db
 .webui_secret_key
 *.log
 coverage/
+.config/
