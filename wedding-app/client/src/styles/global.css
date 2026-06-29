@@ -5,7 +5,7 @@
  * We bind our brand tokens (defined in tokens.css) as Tailwind utilities.
  * Tailwind v4 natively handles alpha channel on space-separated rgb values.
  */
-@theme {
+@theme inline {
   --color-bg:            rgb(var(--color-bg));
   --color-surface:       rgb(var(--color-surface));
   --color-surface-2:     rgb(var(--color-surface-2));
