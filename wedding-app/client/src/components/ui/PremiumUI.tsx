@@ -263,7 +263,7 @@ export function SearchBar({
           value={value}
           onChange={(e) => onChange(e.target.value)}
           placeholder={placeholder}
-          className="w-full pl-10 pr-10 py-2.5 rounded-lg text-sm outline-none transition-shadow focus:ring-2 focus:ring-[#C9A84C40]"
+          className="w-full pl-10 pr-10 py-2.5 rounded-lg text-sm outline-none transition-shadow focus:ring-2 focus:ring-[#4A1A4E40]"
           style={{
             backgroundColor: IVORY,
             border: `1px solid ${GOLD}30`,
