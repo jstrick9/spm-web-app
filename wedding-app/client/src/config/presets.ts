@@ -15,7 +15,8 @@ export interface ThemePreset {
   name: string;
   description: string;
   /** Visual swatch shown in the picker — array of rgb triplets for chips. */
-  swatch: string[];
+  swatch: string[
+];
   config: PartialPlatformConfig;
 }
 
@@ -127,6 +128,24 @@ export const THEME_PRESETS: ReadonlyArray<ThemePreset> = [
       },
     },
   },
+  // ─── Seven Paths Manor ───────────────────────────────
+  {
+    id: 'seven-paths-manor',
+    name: 'Seven Paths Manor',
+    description: 'Rich black + deep plum. Dramatic luxury inspired by sevenpathsmanor.com.',
+    swatch: ['13 13 13', '74 26 78', '248 248 246'],
+    config: {
+      theme: {
+        brand: '74 26 78', brandStrong: '50 10 54', brandSoft: '240 228 242',
+        accent: '107 45 112', accentSoft: '232 214 235',
+        bg: '248 248 246', surface: '255 255 255', surface2: '244 240 244',
+        border: '220 210 222', fg: '13 13 13', fgMuted: '74 74 78',
+        fontDisplay: 'Playfair Display', fontBody: 'Inter', fontMono: 'JetBrains Mono',
+        density: 'comfortable', radius: 'soft', motion: 'standard', colorScheme: 'system',
+      },
+    },
+  },
+
 ];
 
 export function getPreset(id: string): ThemePreset | undefined {

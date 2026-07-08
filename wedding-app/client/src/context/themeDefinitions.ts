@@ -18,12 +18,12 @@ export interface ThemeColors {
 
 export const themePresets: Record<ThemeName, ThemeColors> = {
   'warm-romantic': {
-    primary: '#DCAE96', // Dusty Rose
+    primary: '#8B4A90', // Dusty Rose
     secondary: '#8FAF8F', // Sage Green
-    background: '#FDFAF4', // Ivory
+    background: '#F8F8F6', // Ivory
     surface: '#FFFFFF', // White
     text: '#2C2C2C', // Warm Charcoal
-    accent: '#C9A84C', // Champagne Gold
+    accent: '#4A1A4E', // Champagne Gold
     border: '#E8D5A3', // Pale Champagne
   },
   'modern-minimalist': {
@@ -36,22 +36,22 @@ export const themePresets: Record<ThemeName, ThemeColors> = {
     border: '#E5E5E5', // Light Border
   },
   'bold-editorial': {
-    primary: '#0A1628', // Deep Navy
-    secondary: '#C9A84C', // Gold
-    background: '#FDFAF4', // Ivory
+    primary: '#0D0D0D', // Deep Navy
+    secondary: '#4A1A4E', // Gold
+    background: '#F8F8F6', // Ivory
     surface: '#FFFFFF', // White
     text: '#111111', // High Contrast Black
-    accent: '#DCAE96', // Dusty Rose
-    border: '#C9A84C', // Gold Border
+    accent: '#8B4A90', // Dusty Rose
+    border: '#4A1A4E', // Gold Border
   },
   'seven-paths-manor': {
-    primary: '#0A1628',
-    secondary: '#C9A84C',
+    primary: '#0D0D0D',
+    secondary: '#4A1A4E',
     background: '#F5F0E8',
-    surface: '#FDFAF4',
-    text: '#0A1628',
-    accent: '#DCAE96',
-    border: '#C9A84C40',
+    surface: '#F8F8F6',
+    text: '#0D0D0D',
+    accent: '#8B4A90',
+    border: '#4A1A4E40',
   },
   'custom': {
     primary: '#000000',

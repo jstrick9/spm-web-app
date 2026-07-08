@@ -146,7 +146,7 @@ export const Header: React.FC<HeaderProps> = ({
             value={globalSearch}
             onChange={(e) => onGlobalSearchChange(e.target.value)}
             placeholder="Search events, guests…"
-            className="pl-9 pr-20 py-2 rounded-lg border text-sm w-56 lg:w-72 outline-none transition-all focus:w-80 focus:ring-2 focus:ring-[#C9A84C30]"
+            className="pl-9 pr-20 py-2 rounded-lg border text-sm w-56 lg:w-72 outline-none transition-all focus:w-80 focus:ring-2 focus:ring-[#4A1A4E30]"
             style={{
               backgroundColor: IVORY,
               borderColor: `${GOLD}25`,
