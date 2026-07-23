@@ -103,6 +103,10 @@ export const decorRepo = {
     return db.prepare(`SELECT * FROM decor_categories WHERE id = ?`).get(id) as DecorCategoryRow;
   },
 
+  findCategory(id: string): DecorCategoryRow | undefined {
+    return db.prepare(`SELECT * FROM decor_categories WHERE id = ?`).get(id) as DecorCategoryRow | undefined;
+  },
+
   deleteCategory(id: string): boolean {
     return db.prepare(`DELETE FROM decor_categories WHERE id = ?`).run(id).changes > 0;
   },
@@ -128,6 +132,10 @@ export const decorRepo = {
       ).run(id, orgId, input.name, stringifyJson(input.payload), input.createdBy ?? null);
     }
     return db.prepare(`SELECT * FROM decor_arrangements WHERE id = ?`).get(id) as DecorArrangementRow;
+  },
+
+  findArrangement(id: string): DecorArrangementRow | undefined {
+    return db.prepare(`SELECT * FROM decor_arrangements WHERE id = ?`).get(id) as DecorArrangementRow | undefined;
   },
 
   deleteArrangement(id: string): boolean {

@@ -97,6 +97,18 @@ describe('Staff RBAC Integration', () => {
     expect(JSON.parse(updateRes.payload).task.assignee_phone).toBe('555-210-0001');
   });
 
+  it('does not let a view-only staff member delete an organization area', async () => {
+    const { staffAreasRepo } = await import('../db/repos/index.js');
+    const area = staffAreasRepo.create(orgId, { name: 'Ceremony lawn' });
+
+    const res = await app.inject({
+      method: 'DELETE', url: `/api/staff/areas/${area.id}`,
+      headers: { authorization: `Bearer ${staffToken}` },
+    });
+    expect(res.statusCode).toBe(403);
+    expect(staffAreasRepo.findById(area.id)).toBeDefined();
+  });
+
   it('allows staff to clock in and out of their assigned shifts', async () => {
     const { staffShiftsRepo } = await import('../db/repos/index.js');
     const shift = staffShiftsRepo.create(orgId, {

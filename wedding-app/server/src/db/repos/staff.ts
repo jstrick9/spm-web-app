@@ -167,6 +167,10 @@ export const staffAreasRepo = {
     return db.prepare(`SELECT * FROM staff_areas WHERE id = ?`).get(id) as StaffAreaRow;
   },
 
+  findById(id: string): StaffAreaRow | undefined {
+    return db.prepare(`SELECT * FROM staff_areas WHERE id = ?`).get(id) as StaffAreaRow | undefined;
+  },
+
   delete(id: string): boolean {
     return db.prepare(`DELETE FROM staff_areas WHERE id = ?`).run(id).changes > 0;
   },

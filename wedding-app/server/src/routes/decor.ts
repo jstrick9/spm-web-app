@@ -46,7 +46,10 @@ export async function decorRoutes(app: FastifyInstance) {
   });
 
   app.delete('/api/decor/items/:id', { preHandler: requireAuth }, async (req, reply) => {
-    decorRepo.deleteItem((req.params as { id: string }).id);
+    const item = decorRepo.findItem((req.params as { id: string }).id);
+    if (!item) throw NotFound();
+    if (!can(req.auth!.memberships, { organizationId: item.organization_id }, 'decor.manage')) throw Forbidden();
+    decorRepo.deleteItem(item.id);
     return reply.code(204).send();
   });
 
@@ -70,7 +73,10 @@ export async function decorRoutes(app: FastifyInstance) {
   });
 
   app.delete('/api/decor/categories/:id', { preHandler: requireAuth }, async (req, reply) => {
-    decorRepo.deleteCategory((req.params as { id: string }).id);
+    const category = decorRepo.findCategory((req.params as { id: string }).id);
+    if (!category) throw NotFound();
+    if (!can(req.auth!.memberships, { organizationId: category.organization_id }, 'decor.manage')) throw Forbidden();
+    decorRepo.deleteCategory(category.id);
     return reply.code(204).send();
   });
 
@@ -94,7 +100,10 @@ export async function decorRoutes(app: FastifyInstance) {
   });
 
   app.delete('/api/decor/arrangements/:id', { preHandler: requireAuth }, async (req, reply) => {
-    decorRepo.deleteArrangement((req.params as { id: string }).id);
+    const arrangement = decorRepo.findArrangement((req.params as { id: string }).id);
+    if (!arrangement) throw NotFound();
+    if (!can(req.auth!.memberships, { organizationId: arrangement.organization_id }, 'decor.manage')) throw Forbidden();
+    decorRepo.deleteArrangement(arrangement.id);
     return reply.code(204).send();
   });
 

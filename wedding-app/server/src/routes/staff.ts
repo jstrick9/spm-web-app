@@ -112,7 +112,10 @@ export async function staffRoutes(app: FastifyInstance) {
   });
 
   app.delete('/api/staff/areas/:id', { preHandler: requireAuth }, async (req, reply) => {
-    staffAreasRepo.delete((req.params as { id: string }).id);
+    const area = staffAreasRepo.findById((req.params as { id: string }).id);
+    if (!area) throw NotFound();
+    if (!can(req.auth!.memberships, { organizationId: area.organization_id }, 'staff.manage')) throw Forbidden();
+    staffAreasRepo.delete(area.id);
     return reply.code(204).send();
   });
 
