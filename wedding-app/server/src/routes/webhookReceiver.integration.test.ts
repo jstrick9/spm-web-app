@@ -81,6 +81,21 @@ describe('Inbound webhook receiver', () => {
     expect(invalid.statusCode).toBe(401);
   });
 
+  it('does not disclose an inbound URL to a user outside the webhook organization', async () => {
+    const owner = await setupWithWebhook();
+    const outsider = await app.inject({
+      method: 'POST', url: '/api/auth/register',
+      payload: { email: `outsider-${Math.random().toString(36).slice(2)}@x.com`, password: 'testpass123', fullName: 'Outsider', orgName: 'Other org' },
+      headers: { 'content-type': 'application/json' },
+    });
+
+    const res = await app.inject({
+      method: 'GET', url: `/api/webhooks/${owner.webhookId}/inbound-url`,
+      headers: { authorization: `Bearer ${outsider.json().token}` },
+    });
+    expect(res.statusCode).toBe(403);
+  });
+
   it('logs the inbound event to audit log', async () => {
     const s = await setupWithWebhook();
     await app.inject({

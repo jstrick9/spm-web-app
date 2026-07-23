@@ -14,6 +14,9 @@ import type { FastifyInstance } from 'fastify';
 import { createHmac } from 'node:crypto';
 import { auditRepo } from '../db/repos/index.js';
 import { webhooksRepo } from '../db/repos/webhooks.js';
+import { requireAuth } from '../middleware/auth.js';
+import { can } from '../lib/rbac.js';
+import { Forbidden } from '../lib/errors.js';
 import { broadcastSSE } from './sse.js';
 
 export async function webhookReceiverRoutes(app: FastifyInstance) {
@@ -73,10 +76,13 @@ export async function webhookReceiverRoutes(app: FastifyInstance) {
   });
 
   // ─── Generate inbound URL for a webhook ───────────────
-  app.get('/api/webhooks/:id/inbound-url', { preHandler: (await import('../middleware/auth.js')).requireAuth }, async (req) => {
+  app.get('/api/webhooks/:id/inbound-url', { preHandler: requireAuth }, async (req) => {
     const { id } = req.params as { id: string };
     const webhook = webhooksRepo.findById(id);
     if (!webhook) return { url: null };
+    if (!can(req.auth!.memberships, { organizationId: webhook.organization_id }, 'integrations.view')) {
+      throw Forbidden();
+    }
 
     const baseUrl = process.env.BASE_URL ?? `${req.protocol}://${req.hostname}`;
     return { url: `${baseUrl}/api/webhooks/inbound/${id}` };
