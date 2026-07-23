@@ -96,10 +96,12 @@ describe('Webhook CRUD', () => {
     expect(listRes.json().webhooks).toHaveLength(0);
   });
 
-  it('rejects invalid URL', async () => {
+  it('rejects invalid or local webhook URLs', async () => {
     const o = await registerOwner();
-    const res = await req(o.token, 'POST', `/api/orgs/${o.orgId}/webhooks`, { url: 'not-a-url' });
-    expect(res.statusCode).toBe(400);
+    const invalid = await req(o.token, 'POST', `/api/orgs/${o.orgId}/webhooks`, { url: 'not-a-url' });
+    expect(invalid.statusCode).toBe(400);
+    const local = await req(o.token, 'POST', `/api/orgs/${o.orgId}/webhooks`, { url: 'http://127.0.0.1:3000/admin' });
+    expect(local.statusCode).toBe(400);
   });
 
   it('requires integrations.manage permission', async () => {

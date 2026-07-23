@@ -5,9 +5,10 @@ import { can } from '../lib/rbac.js';
 import { webhooksRepo } from '../db/repos/webhooks.js';
 import { BadRequest, Forbidden, NotFound } from '../lib/errors.js';
 import { auditRepo } from '../db/repos/index.js';
+import { isSafeOutboundUrl } from '../lib/outboundUrl.js';
 
 const createSchema = z.object({
-  url: z.string().url(),
+  url: z.string().url().refine(isSafeOutboundUrl, 'Webhook URL must use HTTP(S) and cannot target a local or private address'),
   secret: z.string().max(256).optional(),
   eventTypes: z.array(z.string().min(1)).optional(),
   description: z.string().max(500).optional(),

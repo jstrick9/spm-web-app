@@ -70,10 +70,16 @@ TOKEN=$(echo "$LOGIN" | python3 -c "import json,sys; print(json.load(sys.stdin)[
 AUTH="-H Authorization:Bearer\ $TOKEN"
 
 ORG=$(curl -fs -H "Authorization: Bearer $TOKEN" "$BASE/api/orgs" | python3 -c "import json,sys; print(json.load(sys.stdin)['organizations'][0]['id'])")
-# Select a real event with at least one guest. The public portal deliberately
-# hides its guest list until a guest-specific token is supplied, so the smoke
-# flow below issues a fresh token through the authenticated owner API.
-EVT=$(curl -fs -H "Authorization: Bearer $TOKEN" "$BASE/api/orgs/$ORG/events" | python3 -c "import json,sys; print(next(e['id'] for e in json.load(sys.stdin)['events'] if e['guest_count'] > 0))")
+# Select an event with an actual guest record, rather than trusting the
+# optional guest_count estimate on historical/imported events. The public
+# portal deliberately hides its guest list until a guest-specific token is
+# supplied, so the smoke flow below issues a fresh token through the owner API.
+EVT=""
+for candidate in $(curl -fs -H "Authorization: Bearer $TOKEN" "$BASE/api/orgs/$ORG/events" | python3 -c "import json,sys; print(' '.join(e['id'] for e in json.load(sys.stdin)['events']))"); do
+  guest_total=$(curl -fs -H "Authorization: Bearer $TOKEN" "$BASE/api/events/$candidate/guests" | python3 -c "import json,sys; print(len(json.load(sys.stdin)['guests']))")
+  if [ "$guest_total" -gt 0 ]; then EVT="$candidate"; break; fi
+done
+if [ -z "$EVT" ]; then echo "[smoke] no event with guests found" >&2; exit 1; fi
 
 count() {
   local url="$1" key="$2"
