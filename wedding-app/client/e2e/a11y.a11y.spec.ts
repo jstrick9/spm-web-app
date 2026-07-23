@@ -46,7 +46,9 @@ function reportViolations(label: string, violations: AxeViolation[]): void {
 test.describe('Accessibility @a11y', () => {
   test('login screen has no detectable WCAG A/AA violations', async ({ page }) => {
     await page.goto('/');
-    await expect(page.getByText('Wedding Venue Intelligence')).toBeVisible();
+    // The product name also appears in the footer; target the page heading so
+    // Playwright's strict locator mode remains deterministic.
+    await expect(page.getByRole('heading', { name: 'Wedding Venue Intelligence' })).toBeVisible();
 
     const results = await new AxeBuilder({ page }).withTags(WCAG_TAGS).analyze();
     reportViolations('login screen', results.violations as AxeViolation[]);

@@ -46,7 +46,8 @@
     /* ─── Semantic / status ────────────────────────── */
     --color-success:       16 125 86;
     --color-success-soft:  220 244 234;
-    --color-warning:       180 109 0;
+    /* Dark enough for AA text contrast on warning-soft and light surfaces. */
+    --color-warning:       146 85 0;
     --color-warning-soft:  254 243 199;
     --color-danger:        185 28 28;
     --color-danger-soft:   254 226 226;

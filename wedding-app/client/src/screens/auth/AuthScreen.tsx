@@ -267,7 +267,8 @@ export function AuthScreen({ onAuth }: { onAuth: (u: SdkUser, m?: SdkMembership[
               </ul>
             </div>
 
-            <div className="grid grid-cols-3 rounded-lg bg-surface-2 p-1 border border-border" role="tablist" aria-label="Authentication mode">
+            {/* These controls include a demo action, so this is an action group—not a tablist. */}
+            <div className="grid grid-cols-3 rounded-lg bg-surface-2 p-1 border border-border" role="group" aria-label="Authentication actions">
               <button
                 type="button"
                 onClick={() => setEntryMode('login')}

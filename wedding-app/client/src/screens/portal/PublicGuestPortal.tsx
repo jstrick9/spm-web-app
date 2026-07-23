@@ -48,7 +48,8 @@ const DEFAULT_PALETTE = {
   surface:      '#ffffff',
   border:       'rgb(var(--color-border))',
   fg:           '#2c3e2e',
-  fgMuted:      '#6b7280',
+  // AA contrast on the warm portal background (the former #6b7280 was 4.34:1).
+  fgMuted:      '#57534e',
   fgSubtle:     '#9ca3af',
   primary:      '#2c3e2e',
   primaryFg:    '#ffffff',
