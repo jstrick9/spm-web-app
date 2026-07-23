@@ -10,7 +10,11 @@ import { resolve, join, basename } from 'node:path';
 import { uuid } from './crypto.js';
 import { BadRequest } from './errors.js';
 
-const UPLOAD_DIR = resolve(import.meta.dirname, '../../uploads');
+// Docker stores this under its persistent /data volume. Keep the package-local
+// path as the development default so existing local installs remain compatible.
+const UPLOAD_DIR = process.env.WEDDING_UPLOADS_PATH
+  ? resolve(process.env.WEDDING_UPLOADS_PATH)
+  : resolve(import.meta.dirname, '../../uploads');
 
 // Ensure upload directory exists
 if (!existsSync(UPLOAD_DIR)) {

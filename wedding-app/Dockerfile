@@ -33,6 +33,7 @@ WORKDIR /app
 RUN apk add --no-cache tini
 ENV NODE_ENV=production
 ENV WEDDING_DB_PATH=/data/wedding.db
+ENV WEDDING_UPLOADS_PATH=/data/uploads
 ENV PORT=3000
 
 # Server: prod dependencies only + compiled JS

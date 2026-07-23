@@ -207,7 +207,9 @@ export async function buildApp() {
   if (existsSync(CLIENT_DIST)) {
     await app.register(fastifyStatic, { root: CLIENT_DIST, prefix: '/' });
     // Serve uploaded files (gallery images, etc.)
-    const UPLOADS_DIR = resolve(import.meta.dirname, "../../uploads");
+    const UPLOADS_DIR = process.env.WEDDING_UPLOADS_PATH
+      ? resolve(process.env.WEDDING_UPLOADS_PATH)
+      : resolve(import.meta.dirname, "../../uploads");
     if (existsSync(UPLOADS_DIR)) {
       await app.register(fastifyStatic, { root: UPLOADS_DIR, prefix: "/uploads/", decorateReply: false });
     }
