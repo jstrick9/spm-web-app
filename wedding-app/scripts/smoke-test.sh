@@ -70,7 +70,10 @@ TOKEN=$(echo "$LOGIN" | python3 -c "import json,sys; print(json.load(sys.stdin)[
 AUTH="-H Authorization:Bearer\ $TOKEN"
 
 ORG=$(curl -fs -H "Authorization: Bearer $TOKEN" "$BASE/api/orgs" | python3 -c "import json,sys; print(json.load(sys.stdin)['organizations'][0]['id'])")
-EVT=$(curl -fs -H "Authorization: Bearer $TOKEN" "$BASE/api/orgs/$ORG/events" | python3 -c "import json,sys; print(json.load(sys.stdin)['events'][0]['id'])")
+# Select a real event with at least one guest. The public portal deliberately
+# hides its guest list until a guest-specific token is supplied, so the smoke
+# flow below issues a fresh token through the authenticated owner API.
+EVT=$(curl -fs -H "Authorization: Bearer $TOKEN" "$BASE/api/orgs/$ORG/events" | python3 -c "import json,sys; print(next(e['id'] for e in json.load(sys.stdin)['events'] if e['guest_count'] > 0))")
 
 count() {
   local url="$1" key="$2"
@@ -86,13 +89,21 @@ assert "Vendors count"           "count $BASE/api/orgs/$ORG/vendors vendors"
 assert "Staff tasks count"       "count $BASE/api/orgs/$ORG/staff/tasks tasks"
 assert "Guests count"            "count $BASE/api/events/$EVT/guests guests"
 assert "Timeline count"          "count $BASE/api/events/$EVT/timeline items"
-assert "Public portal guest list" "count $BASE/api/portal/$EVT/info guests"
 
-# Submit a public RSVP and verify the guest count flips
-GUEST=$(curl -fs "$BASE/api/portal/$EVT/info" | python3 -c "import json,sys; print(json.load(sys.stdin)['guests'][0]['id'])")
+# Public portal privacy is intentional: anonymous visitors must not receive a
+# guest directory. Issue a guest-specific link as the owner, then validate the
+# authenticated guest experience and RSVP flow using that link.
+assert "Anonymous portal hides guest directory" "count $BASE/api/portal/$EVT/info guests"
+GUEST=$(curl -fs -H "Authorization: Bearer $TOKEN" "$BASE/api/events/$EVT/guests" | python3 -c "import json,sys; print(json.load(sys.stdin)['guests'][0]['id'])")
+PORTAL_TOKEN=$(curl -fs -X POST "$BASE/api/guests/$GUEST/portal-token" \
+  -H "Authorization: Bearer $TOKEN" \
+  -H 'content-type: application/json' \
+  -d '{}' | python3 -c "import json,sys; print(json.load(sys.stdin)['token'])")
+PORTAL_QUERY="guest=$GUEST&token=$PORTAL_TOKEN"
+assert "Tokenized portal guest list" "curl -fs '$BASE/api/portal/$EVT/info?$PORTAL_QUERY' | python3 -c 'import json,sys; print(len(json.load(sys.stdin)[\"guests\"]))'"
 curl -fs -X POST "$BASE/api/portal/$EVT/rsvp" \
   -H 'content-type: application/json' \
-  -d "{\"guestId\":\"$GUEST\",\"attending\":true,\"mealChoice\":\"vegan\"}" > /tmp/smoke-rsvp.json
+  -d "{\"guestId\":\"$GUEST\",\"attending\":true,\"mealChoice\":\"vegan\",\"token\":\"$PORTAL_TOKEN\"}" > /tmp/smoke-rsvp.json
 assert "Public RSVP submission OK" "python3 -c 'import json; print(json.load(open(\"/tmp/smoke-rsvp.json\"))[\"ok\"])'"
 
 assert "Owner sees RSVPs"        "count $BASE/api/events/$EVT/rsvps rsvps"
