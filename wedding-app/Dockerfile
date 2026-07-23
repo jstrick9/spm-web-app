@@ -39,6 +39,10 @@ ENV PORT=3000
 COPY server/package*.json ./server/
 RUN cd server && npm ci --omit=dev
 COPY --from=build-server /build/dist        ./server/dist
+# SQL migrations are loaded at runtime by dist/db/migrate.js. TypeScript does
+# not copy non-code assets into dist, so include them explicitly or a fresh
+# production container cannot initialize its SQLite database.
+COPY --from=build-server /build/src/db/migrations ./server/dist/db/migrations
 COPY --from=build-server /build/src/db/schema.sql ./server/src/db/schema.sql
 
 # Client: built static assets

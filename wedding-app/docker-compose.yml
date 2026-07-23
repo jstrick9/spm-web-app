@@ -8,7 +8,8 @@
 # To deploy:
 #   1. Point your domain's A record at the VPS IP
 #   2. Edit deploy/Caddyfile and replace `yourwedding.example.com`
-#   3. Set JWT_SECRET in .env (generate with: openssl rand -hex 32)
+#   3. Set JWT_SECRET and WEDDING_SECRETS_KEY in .env (generate each with:
+#      openssl rand -hex 32). The latter encrypts integration credentials.
 #   4. docker compose up -d
 #
 # That's it. Caddy gets a certificate in 30 seconds. App is live.
@@ -20,6 +21,7 @@ services:
     environment:
       NODE_ENV: production
       JWT_SECRET: ${JWT_SECRET:?JWT_SECRET must be set in .env}
+      WEDDING_SECRETS_KEY: ${WEDDING_SECRETS_KEY:?WEDDING_SECRETS_KEY must be set in .env}
       PORT: 3000
       LOG_LEVEL: info
     volumes:
