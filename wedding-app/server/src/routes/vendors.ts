@@ -2,7 +2,7 @@ import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
 import { requireAuth } from '../middleware/auth.js';
 import { can } from '../lib/rbac.js';
-import { vendorsRepo, auditRepo, orgsRepo, integrationsRepo, jobsRepo } from '../db/repos/index.js';
+import { vendorsRepo, assetsRepo, auditRepo, orgsRepo, integrationsRepo, jobsRepo } from '../db/repos/index.js';
 import { BadRequest, Forbidden, NotFound, Unauthorized } from '../lib/errors.js';
 import { assertNoPublicHoneypot, auditPublicSubmission } from '../lib/publicAbuse.js';
 import { saveDocumentDataUri, privateFilePath } from '../lib/fileStorage.js';
@@ -323,6 +323,7 @@ export async function vendorRoutes(app: FastifyInstance) {
     const parsed = coiUploadSchema.extend({ token: z.string().optional() }).safeParse(req.body);
     if (!parsed.success) throw BadRequest('invalid-input', parsed.error.issues);
     const url = saveDocumentDataUri(parsed.data.dataUri, `vendor_coi_${id}`);
+    if (privateFilePath(url)) assetsRepo.create({ organization_id: v.organization_id, event_id: v.event_id, owner_type: 'vendor_coi', owner_id: id, storage_key: url, original_filename: parsed.data.fileName, mime_type: parsed.data.mimeType, visibility: 'capability', publish_status: 'approved', created_by: null });
     const meta = parseVendorMetadata(v.metadata);
     const updated = vendorsRepo.update(id, { metadata: {
       ...meta,

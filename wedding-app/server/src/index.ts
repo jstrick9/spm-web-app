@@ -42,6 +42,7 @@ import { feedbackRoutes }       from "./routes/feedback.js";
 import { lifecycleEmailRoutes } from "./routes/lifecycleEmails.js";
 import { paymentRoutes }        from "./routes/payments.js";
 import { coupleRoutes }         from "./routes/couple.js";
+import { assetRoutes }          from "./routes/assets.js";
 
 import { db } from './db/database.js';
 import { rolesRepo } from './db/repos/index.js';
@@ -199,6 +200,7 @@ export async function buildApp() {
   await app.register(feedbackRoutes);
   await app.register(lifecycleEmailRoutes);
   await app.register(coupleRoutes);
+  await app.register(assetRoutes);
   // Payment routes register their own raw-body parser for webhook signature
   // verification; encapsulated so it doesn't affect other routes' JSON parsing.
   await app.register(paymentRoutes);

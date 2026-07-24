@@ -2,7 +2,7 @@ import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
 import { requireAuth } from '../middleware/auth.js';
 import { can } from '../lib/rbac.js';
-import { auditRepo, eventsRepo, layoutOpsRepo, layoutsRepo } from '../db/repos/index.js';
+import { auditRepo, assetsRepo, eventsRepo, layoutOpsRepo, layoutsRepo } from '../db/repos/index.js';
 import { savePrivateImageDataUri, privateFilePath } from '../lib/fileStorage.js';
 import { createReadStream, existsSync } from 'node:fs';
 import { BadRequest, Forbidden, NotFound, HttpError } from '../lib/errors.js';
@@ -172,6 +172,7 @@ export async function layoutRoutes(app: FastifyInstance) {
       photoUrl,
       actorId: req.auth!.userId,
     });
+    if (photoUrl && privateFilePath(photoUrl)) assetsRepo.create({ organization_id: layout.organization_id, event_id: layout.event_id, owner_type: 'layout_variance', owner_id: evidence.id, storage_key: photoUrl, original_filename: 'variance-evidence', mime_type: null, visibility: 'private', publish_status: 'draft', created_by: req.auth!.userId });
     return reply.code(201).send({ evidence });
   });
 

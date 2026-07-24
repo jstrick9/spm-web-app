@@ -33,6 +33,7 @@ export { contractsRepo } from './contracts.js';
 export { financialLegalOpsRepo, extractContractObligations, type FinancialLegalSource, type FinancialLegalSeverity } from './financialLegalOps.js';
 export { inventoryRepo } from './inventory.js';
 export { galleryRepo } from './gallery.js';
+export { assetsRepo, type AssetRow, type AssetCapabilityRow, type AssetAudience, type AssetVisibility, type AssetPublishStatus } from './assets.js';
 export { checkinsRepo } from './checkins.js';
 export { inviteTrackingRepo } from './inviteTracking.js';
 export { vendorRatingsRepo } from './vendorRatings.js';

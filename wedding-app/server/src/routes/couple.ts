@@ -2,7 +2,7 @@ import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
 import { requireAuth } from '../middleware/auth.js';
 import { can } from '../lib/rbac.js';
-import { auditRepo, catalogRepo, contractsRepo, coupleAppointmentsRepo, coupleDocumentsRepo, couplePlanningRepo, coupleRequestsRepo, eventsRepo, guestsRepo, layoutsRepo, inventoryRepo, jobsRepo, messagesRepo, paymentLinksRepo, portalConfigRepo, rolesRepo, subEventsRepo, timelineRepo, usersRepo, vendorsRepo, venuesRepo } from '../db/repos/index.js';
+import { auditRepo, assetsRepo, catalogRepo, contractsRepo, coupleAppointmentsRepo, coupleDocumentsRepo, couplePlanningRepo, coupleRequestsRepo, eventsRepo, guestsRepo, layoutsRepo, inventoryRepo, jobsRepo, messagesRepo, paymentLinksRepo, portalConfigRepo, rolesRepo, subEventsRepo, timelineRepo, usersRepo, vendorsRepo, venuesRepo } from '../db/repos/index.js';
 import { saveDocumentDataUri, privateFilePath } from '../lib/fileStorage.js';
 import { createReadStream, existsSync } from 'node:fs';
 import { db } from '../db/database.js';
@@ -1349,6 +1349,7 @@ export async function coupleRoutes(app: FastifyInstance) {
     const savedUrl = saveDocumentDataUri(parsed.data.dataUri, 'couple_doc');
     const extractedSummary = extractDocumentSummary({ filename: parsed.data.filename, category: parsed.data.category, notes: parsed.data.notes });
     const doc = coupleDocumentsRepo.create({ organizationId: event.organization_id, eventId, filename: parsed.data.filename, url: savedUrl, mimeType: parsed.data.mimeType, category: parsed.data.category, visibility: parsed.data.visibility, notes: parsed.data.notes, extractedSummary, uploadedBy: req.auth!.userId });
+    if (privateFilePath(savedUrl)) assetsRepo.create({ organization_id: event.organization_id, event_id: eventId, owner_type: 'couple_document', owner_id: doc.id, storage_key: savedUrl, original_filename: doc.filename, mime_type: doc.mime_type, visibility: 'private', publish_status: 'draft', created_by: req.auth!.userId });
     auditRepo.log({ organizationId: event.organization_id, actorUserId: req.auth!.userId, actorLabel: req.auth!.email, action: 'couple.document.upload', targetType: 'couple_document', targetId: doc.id, ip: req.ip, details: { eventId, category: doc.category, visibility: doc.visibility } });
     return reply.code(201).send({ document: safeDocument(doc) });
   });
