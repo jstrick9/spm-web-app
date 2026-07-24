@@ -10,6 +10,7 @@
  */
 import { createHmac } from 'node:crypto';
 import { webhooksRepo } from '../db/repos/webhooks.js';
+import { webhookRetryDecision } from './retryPolicy.js';
 
 /**
  * Record a delivery attempt, swallowing any error. Webhook delivery runs
@@ -42,6 +43,10 @@ function runNext() {
 function enqueueDelivery(fn: () => Promise<void>) {
   pendingQueue.push(fn);
   runNext();
+}
+
+class WebhookHttpError extends Error {
+  constructor(public status: number, public retryAfter: string | null) { super(`webhook delivery failed: HTTP ${status}`); }
 }
 
 interface WebhookPayload {
@@ -114,7 +119,7 @@ async function deliverWebhook(
     clearTimeout(timeout);
     const durationMs = Date.now() - startMs;
     const responseText = await res.text().catch(() => '');
-    if (!res.ok) throw new Error(`webhook delivery failed: HTTP ${res.status}`);
+    if (!res.ok) throw new WebhookHttpError(res.status, res.headers.get('retry-after'));
 
     safeRecordDelivery({
       webhookId,
@@ -126,22 +131,16 @@ async function deliverWebhook(
     });
   } catch (err) {
     const durationMs = Date.now() - startMs;
+    const httpError = err instanceof WebhookHttpError ? err : null;
+    const decision = webhookRetryDecision({ attempt, status: httpError?.status, retryAfter: httpError?.retryAfter });
     safeRecordDelivery({
-      webhookId,
-      eventType,
-      payload: data,
-      status: null,
-      error: (err as Error).message,
-      durationMs,
-      attemptCount: attempt,
-      nextRetryAt: attempt < 3 ? new Date(Date.now() + 1_000 * 2 ** (attempt - 1)).toISOString() : null,
-      terminalAt: attempt >= 3 ? new Date().toISOString() : null,
+      webhookId, eventType, payload: data, status: httpError?.status ?? null,
+      error: (err as Error).message, durationMs, attemptCount: attempt,
+      nextRetryAt: decision.retry && decision.delayMs ? new Date(Date.now() + decision.delayMs).toISOString() : null,
+      terminalAt: decision.retry ? null : new Date().toISOString(),
     });
-    // Retry transient transport failures with bounded exponential backoff.
-    // The caller never awaits this work, preserving mutation latency.
-    if (attempt < 3) {
-      const delayMs = 1_000 * 2 ** (attempt - 1);
-      setTimeout(() => enqueueDelivery(() => deliverWebhook(webhookId, url, secret, eventType, body, data, attempt + 1)), delayMs).unref();
+    if (decision.retry && decision.delayMs) {
+      setTimeout(() => enqueueDelivery(() => deliverWebhook(webhookId, url, secret, eventType, body, data, attempt + 1)), decision.delayMs).unref();
     }
   }
 }
