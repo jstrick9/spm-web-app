@@ -3,7 +3,7 @@ import { describe, it, expect, beforeAll, beforeEach } from 'vitest';
 import { db } from '../db/database.js';
 import { buildApp } from '../index.js';
 import type { FastifyInstance } from 'fastify';
-import { rolesRepo } from '../db/repos/index.js';
+import { rolesRepo, webhooksRepo } from '../db/repos/index.js';
 
 let app: FastifyInstance;
 beforeAll(async () => { app = await buildApp(); await app.ready(); });
@@ -119,6 +119,26 @@ describe('Webhook CRUD', () => {
     const delRes = await req(o.token, 'GET', `/api/webhooks/${id}/deliveries`);
     expect(delRes.statusCode).toBe(200);
     expect(delRes.json().deliveries).toHaveLength(0);
+  });
+
+  it('requeues terminal deliveries only for an authorized organization manager', async () => {
+    const o = await registerOwner();
+    const createRes = await req(o.token, 'POST', `/api/orgs/${o.orgId}/webhooks`, { url: 'https://example.com/hook' });
+    const webhookId = createRes.json().webhook.id;
+    const deliveryId = 'terminal-delivery-test';
+    db.prepare(`INSERT INTO webhook_deliveries (id, webhook_id, event_type, payload, status, attempt_count, terminal_at) VALUES (?, ?, ?, ?, ?, ?, datetime('now'))`)
+      .run(deliveryId, webhookId, 'event.created', '{}', 500, 3);
+
+    const outsider = await registerOwner();
+    const denied = await req(outsider.token, 'POST', `/api/webhooks/${webhookId}/deliveries/${deliveryId}/replay`);
+    expect(denied.statusCode).toBe(403);
+
+    const replay = await req(o.token, 'POST', `/api/webhooks/${webhookId}/deliveries/${deliveryId}/replay`);
+    expect(replay.statusCode).toBe(202);
+    expect(db.prepare(`SELECT next_retry_at, terminal_at FROM webhook_deliveries WHERE id = ?`).get(deliveryId)).toMatchObject({ next_retry_at: expect.any(String), terminal_at: null });
+    const claimed = webhooksRepo.claimDueRetries();
+    expect(claimed.map((delivery) => delivery.id)).toContain(deliveryId);
+    expect(webhooksRepo.claimDueRetries().map((delivery) => delivery.id)).not.toContain(deliveryId);
   });
 
   it('POST test dispatches a test webhook', async () => {
