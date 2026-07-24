@@ -1,5 +1,5 @@
 import { db } from '../database.js';
-import { uuid } from '../../lib/crypto.js';
+import { uuid, hashToken, verifyToken } from '../../lib/crypto.js';
 import { stringifyJson } from '../../lib/json.js';
 
 export type LayoutFloorWalkStatus = 'pending' | 'verified' | 'issue';
@@ -65,6 +65,8 @@ export interface LayoutSetupPacketRow {
   event_id: string | null;
   layout_id: string;
   token: string;
+  token_salt: string | null;
+  token_last_used_at: string | null;
   audience: LayoutPacketAudience;
   payload: string;
   expires_at: string | null;
@@ -141,19 +143,26 @@ export const layoutOpsRepo = {
   upsertSetupPacket(input: { orgId: string; eventId?: string | null; layoutId: string; audience: LayoutPacketAudience; payload?: Record<string, unknown>; expiresAt?: string | null; actorId?: string | null }): LayoutSetupPacketRow {
     const existing = db.prepare(`SELECT * FROM layout_setup_packets WHERE layout_id = ? AND audience = ?`).get(input.layoutId, input.audience) as LayoutSetupPacketRow | undefined;
     if (existing) {
-      db.prepare(`UPDATE layout_setup_packets SET payload = ?, expires_at = ?, revoked_at = NULL, created_by = ?, updated_at = datetime('now') WHERE id = ?`).run(
-        stringifyJson(input.payload ?? {}), input.expiresAt ?? existing.expires_at, input.actorId ?? existing.created_by, existing.id,
+      const plaintext = packetToken(); const tokenRecord = hashToken(plaintext);
+      db.prepare(`UPDATE layout_setup_packets SET token = ?, token_salt = ?, token_last_used_at = NULL, payload = ?, expires_at = ?, revoked_at = NULL, created_by = ?, updated_at = datetime('now') WHERE id = ?`).run(
+        tokenRecord.hash, tokenRecord.salt, stringifyJson(input.payload ?? {}), input.expiresAt ?? existing.expires_at, input.actorId ?? existing.created_by, existing.id,
       );
-      return db.prepare(`SELECT * FROM layout_setup_packets WHERE id = ?`).get(existing.id) as LayoutSetupPacketRow;
+      return { ...(db.prepare(`SELECT * FROM layout_setup_packets WHERE id = ?`).get(existing.id) as LayoutSetupPacketRow), token: plaintext };
     }
     const id = uuid();
-    db.prepare(`INSERT INTO layout_setup_packets (id, organization_id, event_id, layout_id, token, audience, payload, expires_at, created_by) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`).run(
-      id, input.orgId, input.eventId ?? null, input.layoutId, packetToken(), input.audience, stringifyJson(input.payload ?? {}), input.expiresAt ?? null, input.actorId ?? null,
+    const plaintext = packetToken();
+    const tokenRecord = hashToken(plaintext);
+    db.prepare(`INSERT INTO layout_setup_packets (id, organization_id, event_id, layout_id, token, token_salt, audience, payload, expires_at, created_by) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`).run(
+      id, input.orgId, input.eventId ?? null, input.layoutId, tokenRecord.hash, tokenRecord.salt, input.audience, stringifyJson(input.payload ?? {}), input.expiresAt ?? null, input.actorId ?? null,
     );
-    return db.prepare(`SELECT * FROM layout_setup_packets WHERE id = ?`).get(id) as LayoutSetupPacketRow;
+    // Plaintext is returned only to the caller that creates the packet.
+    return { ...(db.prepare(`SELECT * FROM layout_setup_packets WHERE id = ?`).get(id) as LayoutSetupPacketRow), token: plaintext };
   },
 
   findPacketByToken(token: string): LayoutSetupPacketRow | undefined {
-    return db.prepare(`SELECT * FROM layout_setup_packets WHERE token = ? AND revoked_at IS NULL AND (expires_at IS NULL OR expires_at > datetime('now'))`).get(token) as LayoutSetupPacketRow | undefined;
+    const rows = db.prepare(`SELECT * FROM layout_setup_packets WHERE revoked_at IS NULL AND (expires_at IS NULL OR expires_at > datetime('now'))`).all() as LayoutSetupPacketRow[];
+    const row = rows.find((packet) => packet.token_salt ? verifyToken(token, { hash: packet.token, salt: packet.token_salt }) : packet.token === token);
+    if (row) db.prepare(`UPDATE layout_setup_packets SET token_last_used_at = datetime('now') WHERE id = ?`).run(row.id);
+    return row;
   },
 };

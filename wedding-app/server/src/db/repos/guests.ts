@@ -1,5 +1,6 @@
 import { db } from '../database.js';
-import { uuid, hashToken, generateOpaqueToken } from '../../lib/crypto.js';
+import { uuid } from '../../lib/crypto.js';
+import { issueCapabilitySecret } from '../../lib/capability.js';
 import { parseJson, stringifyJson } from '../../lib/json.js';
 
 export interface GuestRow {
@@ -19,6 +20,8 @@ export interface GuestRow {
   plus_one_allowed: number;
   portal_token_hash: string | null;
   portal_token_salt: string | null;
+  portal_token_expires_at: string | null;
+  portal_token_last_used_at: string | null;
   allow_portal_access: number;
   allow_lodging_access: number;
   metadata: string;
@@ -165,13 +168,13 @@ export const guestsRepo = {
   },
 
   /** Issue a new portal token for the guest. Returns the plaintext (only chance!). */
-  rotatePortalToken(id: string): string {
-    const plaintext = generateOpaqueToken();
-    const rec = hashToken(plaintext);
+  rotatePortalToken(id: string, ttlMs = 90 * 24 * 60 * 60 * 1000): string {
+    const secret = issueCapabilitySecret();
+    const expiresAt = new Date(Date.now() + ttlMs).toISOString();
     db.prepare(
-      `UPDATE guests SET portal_token_hash = ?, portal_token_salt = ?, updated_at = datetime('now') WHERE id = ?`
-    ).run(rec.hash, rec.salt, id);
-    return plaintext;
+      `UPDATE guests SET portal_token_hash = ?, portal_token_salt = ?, portal_token_expires_at = ?, portal_token_last_used_at = NULL, updated_at = datetime('now') WHERE id = ?`
+    ).run(secret.hash, secret.salt, expiresAt, id);
+    return secret.token;
   },
 
   revokePortalToken(id: string): void {

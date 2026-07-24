@@ -5,7 +5,8 @@ import { requireAuth } from '../middleware/auth.js';
 import { can } from '../lib/rbac.js';
 import { auditRepo, eventsRepo, guestsRepo, jobsRepo, rsvpRepo, portalConfigRepo, layoutsRepo, orgsRepo, guestIdentityRepo } from '../db/repos/index.js';
 import { BadRequest, Forbidden, NotFound } from '../lib/errors.js';
-import { hashPassword, verifyPassword, verifyToken, uuid } from '../lib/crypto.js';
+import { hashPassword, verifyPassword, uuid } from '../lib/crypto.js';
+import { verifyCapabilitySecret } from '../lib/capability.js';
 import { assertNoPublicHoneypot, auditPublicSubmission } from '../lib/publicAbuse.js';
 import { db } from '../db/database.js';
 
@@ -446,7 +447,10 @@ function verifyGuestPortalToken(g: NonNullable<ReturnType<typeof guestsRepo.find
   if (!g.allow_portal_access) return 'revoked' as const;
   if (!token) return 'missing' as const;
   if (!g.portal_token_hash || !g.portal_token_salt) return 'missing' as const;
-  return verifyToken(token, { hash: g.portal_token_hash, salt: g.portal_token_salt }) ? 'valid' as const : 'invalid' as const;
+  if (g.portal_token_expires_at && g.portal_token_expires_at <= new Date().toISOString()) return 'expired' as const;
+  if (!verifyCapabilitySecret(token, { token_hash: g.portal_token_hash, token_salt: g.portal_token_salt })) return 'invalid' as const;
+  db.prepare(`UPDATE guests SET portal_token_last_used_at = datetime('now') WHERE id = ?`).run(g.id);
+  return 'valid' as const;
 }
 
 function activeSmtpIntegrationId(organizationId: string) {

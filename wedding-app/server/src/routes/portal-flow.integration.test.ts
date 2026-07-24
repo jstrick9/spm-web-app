@@ -70,6 +70,19 @@ describe('Public portal: full RSVP flow', () => {
   });
 
 
+  it('expires guest portal tokens and records successful use', async () => {
+    const s = await setupEvent();
+    const token = guestsRepo.rotatePortalToken(s.guestId1);
+    const valid = await app.inject({ method: 'GET', url: `/api/portal/${s.eventId}/info?guest=${s.guestId1}&token=${token}` });
+    expect(valid.statusCode).toBe(200);
+    expect(db.prepare('SELECT portal_token_last_used_at FROM guests WHERE id = ?').get(s.guestId1)).toMatchObject({ portal_token_last_used_at: expect.any(String) });
+    db.prepare(`UPDATE guests SET portal_token_expires_at = '2000-01-01T00:00:00.000Z' WHERE id = ?`).run(s.guestId1);
+    const expired = await app.inject({ method: 'GET', url: `/api/portal/${s.eventId}/info?guest=${s.guestId1}&token=${token}` });
+    expect(expired.statusCode).toBe(200);
+    expect(expired.json().identity.tokenStatus).toBe('expired');
+    expect(expired.json().guests).toHaveLength(0);
+  });
+
   it('1c. Portal wayfinding returns labels and personal-only seating privacy', async () => {
     const s = await setupEvent();
     const other = await app.inject({ method: 'POST', url: `/api/events/${s.eventId}/guests`,
