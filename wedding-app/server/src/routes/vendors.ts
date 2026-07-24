@@ -5,7 +5,8 @@ import { can } from '../lib/rbac.js';
 import { vendorsRepo, auditRepo, orgsRepo, integrationsRepo, jobsRepo } from '../db/repos/index.js';
 import { BadRequest, Forbidden, NotFound, Unauthorized } from '../lib/errors.js';
 import { assertNoPublicHoneypot, auditPublicSubmission } from '../lib/publicAbuse.js';
-import { saveDocumentDataUri } from '../lib/fileStorage.js';
+import { saveDocumentDataUri, privateFilePath } from '../lib/fileStorage.js';
+import { createReadStream, existsSync } from 'node:fs';
 
 const vendorSchema = z.object({
   name:                 z.string().min(1).max(200),
@@ -64,7 +65,12 @@ function publicVendorPortalView(v: NonNullable<ReturnType<typeof vendorsRepo.fin
     contract_amount_cents: v.contract_amount_cents,
     amount_paid_cents: v.amount_paid_cents,
     is_preferred: v.is_preferred,
-    metadata: parseVendorMetadata(v.metadata),
+    metadata: (() => {
+      const metadata = parseVendorMetadata(v.metadata);
+      // Never expose the backing private storage URL through portal payloads.
+      delete metadata.coiLink;
+      return metadata;
+    })(),
   };
 }
 
@@ -330,6 +336,22 @@ export async function vendorRoutes(app: FastifyInstance) {
     } });
     auditPublicSubmission(req, { organizationId: v.organization_id, action: 'vendor.coi.upload', targetType: 'vendor', targetId: id, details: { fileName: parsed.data.fileName, mimeType: parsed.data.mimeType } });
     return reply.code(201).send({ ok: true, url, vendor: updated ? publicVendorPortalView(updated) : null });
+  });
+
+  app.get('/api/portal/vendors/:id/coi', { config: { rateLimit: { max: 60, timeWindow: '1 minute' } } }, async (req, reply) => {
+    const { id } = req.params as { id: string };
+    const vendor = vendorsRepo.findById(id);
+    if (!vendor) throw NotFound();
+    assertValidVendorPortalToken(id, portalTokenFrom(req));
+    const meta = parseVendorMetadata(vendor.metadata);
+    const url = typeof meta.coiLink === 'string' ? meta.coiLink : '';
+    if (!url) throw NotFound('coi-not-found');
+    const path = privateFilePath(url);
+    if (!path) return reply.redirect(url);
+    if (!existsSync(path)) throw NotFound('coi-file-not-found');
+    reply.header('Content-Type', typeof meta.coiMimeType === 'string' ? meta.coiMimeType : 'application/octet-stream');
+    reply.header('Content-Disposition', 'inline; filename="certificate-of-insurance"');
+    return reply.send(createReadStream(path));
   });
 
   app.get('/api/portal/vendors/:id/messages', { config: { rateLimit: { max: 60, timeWindow: '1 minute' } } }, async (req) => {

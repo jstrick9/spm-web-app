@@ -54,7 +54,11 @@ describe('layout manager operations routes', () => {
     const png = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+/p9sAAAAASUVORK5CYII=';
     const evidence = await req(s.token, 'POST', `/api/layouts/${s.layoutId}/variance-evidence`, { note: 'Table 4 moved six feet.', photoDataUri: png });
     expect(evidence.statusCode).toBe(201);
-    expect(evidence.json().evidence.photo_url).toMatch(/^\/uploads\//);
+    expect(evidence.json().evidence.photo_url).toMatch(/^\/uploads\/private\//);
+    const protectedEvidence = await req(s.token, 'GET', `/api/layouts/${s.layoutId}/variance-evidence/${evidence.json().evidence.id}/content`);
+    expect(protectedEvidence.statusCode).toBe(200);
+    const anonymousEvidence = await app.inject({ method: 'GET', url: `/api/layouts/${s.layoutId}/variance-evidence/${evidence.json().evidence.id}/content` });
+    expect(anonymousEvidence.statusCode).toBe(401);
 
     const inspection = await req(s.token, 'POST', `/api/layouts/${s.layoutId}/vendor-zone-inspections`, { status: 'issue', zoneLabel: 'DJ power', note: 'Needs cable ramp.' });
     expect(inspection.statusCode).toBe(201);

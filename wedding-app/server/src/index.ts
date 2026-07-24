@@ -210,8 +210,11 @@ export async function buildApp() {
     const UPLOADS_DIR = process.env.WEDDING_UPLOADS_PATH
       ? resolve(process.env.WEDDING_UPLOADS_PATH)
       : resolve(import.meta.dirname, "../../uploads");
-    if (existsSync(UPLOADS_DIR)) {
-      await app.register(fastifyStatic, { root: UPLOADS_DIR, prefix: "/uploads/", decorateReply: false });
+    // Only the explicitly public namespace is static. Private documents are
+    // streamed through RBAC/capability-checked API routes.
+    const PUBLIC_UPLOADS_DIR = resolve(UPLOADS_DIR, 'public');
+    if (existsSync(PUBLIC_UPLOADS_DIR)) {
+      await app.register(fastifyStatic, { root: PUBLIC_UPLOADS_DIR, prefix: "/uploads/public/", decorateReply: false });
     }
     app.setNotFoundHandler((req, reply) => {
       if (req.url.startsWith('/api/')) return reply.code(404).send({ error: 'not-found' });

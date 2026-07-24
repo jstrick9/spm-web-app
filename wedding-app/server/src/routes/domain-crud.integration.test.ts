@@ -178,6 +178,19 @@ describe('Vendors: edge cases', () => {
     expect(info.json().vendor.notes).toBeUndefined();
   });
 
+  it('protects uploaded vendor COIs with the vendor capability token', async () => {
+    const s = await setup();
+    const vendor = await req(s.token, 'POST', `/api/orgs/${s.orgId}/vendors`, { name: 'Insured Vendor', eventId: s.eventId });
+    const vendorId = vendor.json().vendor.id;
+    const token = (await req(s.token, 'POST', `/api/vendors/${vendorId}/portal-token`, { expiresInDays: 7 })).json().token;
+    const png = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+/p9sAAAAASUVORK5CYII=';
+    const upload = await app.inject({ method: 'POST', url: `/api/portal/vendors/${vendorId}/coi-upload`, payload: { token, fileName: 'coi.png', mimeType: 'image/png', dataUri: png }, headers: { 'content-type': 'application/json' } });
+    expect(upload.statusCode).toBe(201);
+    expect(upload.json().url).toMatch(/^\/uploads\/private\//);
+    expect((await app.inject({ method: 'GET', url: `/api/portal/vendors/${vendorId}/coi` })).statusCode).toBe(401);
+    expect((await app.inject({ method: 'GET', url: `/api/portal/vendors/${vendorId}/coi?token=${encodeURIComponent(token)}` })).statusCode).toBe(200);
+  });
+
   it('revokes and expires vendor portal tokens', async () => {
     const s = await setup();
     const cr = await req(s.token, 'POST', `/api/orgs/${s.orgId}/vendors`, { name: 'Token Vendor', eventId: s.eventId });

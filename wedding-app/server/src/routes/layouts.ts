@@ -3,7 +3,8 @@ import { z } from 'zod';
 import { requireAuth } from '../middleware/auth.js';
 import { can } from '../lib/rbac.js';
 import { auditRepo, eventsRepo, layoutOpsRepo, layoutsRepo } from '../db/repos/index.js';
-import { saveDataUri } from '../lib/fileStorage.js';
+import { savePrivateImageDataUri, privateFilePath } from '../lib/fileStorage.js';
+import { createReadStream, existsSync } from 'node:fs';
 import { BadRequest, Forbidden, NotFound, HttpError } from '../lib/errors.js';
 
 const createSchema = z.object({
@@ -162,7 +163,7 @@ export async function layoutRoutes(app: FastifyInstance) {
     const layout = requireLayoutAccess(id, req.auth!.memberships, 'layouts.edit');
     const parsed = varianceEvidenceSchema.safeParse(req.body);
     if (!parsed.success) throw BadRequest('invalid-input', parsed.error.issues);
-    const photoUrl = parsed.data.photoDataUri ? saveDataUri(parsed.data.photoDataUri, `layout_variance_${id}`) : parsed.data.photoUrl;
+    const photoUrl = parsed.data.photoDataUri ? savePrivateImageDataUri(parsed.data.photoDataUri, `layout_variance_${id}`) : parsed.data.photoUrl;
     const evidence = layoutOpsRepo.addVarianceEvidence({
       orgId: layout.organization_id,
       eventId: layout.event_id,
@@ -172,6 +173,18 @@ export async function layoutRoutes(app: FastifyInstance) {
       actorId: req.auth!.userId,
     });
     return reply.code(201).send({ evidence });
+  });
+
+  app.get('/api/layouts/:id/variance-evidence/:evidenceId/content', { preHandler: requireAuth }, async (req, reply) => {
+    const { id, evidenceId } = req.params as { id: string; evidenceId: string };
+    requireLayoutAccess(id, req.auth!.memberships, 'layouts.view');
+    const evidence = layoutOpsRepo.listForLayout(id).varianceEvidence.find((item) => item.id === evidenceId);
+    if (!evidence?.photo_url) throw NotFound('evidence-file-not-found');
+    const path = privateFilePath(evidence.photo_url);
+    if (!path) return reply.redirect(evidence.photo_url);
+    if (!existsSync(path)) throw NotFound('evidence-file-not-found');
+    reply.header('Content-Type', 'image/*');
+    return reply.send(createReadStream(path));
   });
 
   app.post('/api/layouts/:id/rain-plan', { preHandler: requireAuth }, async (req, reply) => {

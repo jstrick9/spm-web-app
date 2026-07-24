@@ -24,7 +24,7 @@ describe('fileStorage.saveDataUri', () => {
     const png = 'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAAC0lEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg==';
     const url = saveDataUri(`data:image/png;base64,${png}`, 'test');
     created.push(url);
-    expect(url).toMatch(/^\/uploads\/test_[\w-]+\.png$/);
+    expect(url).toMatch(/^\/uploads\/public\/test_[\w-]+\.png$/);
   });
 
   it('rejects SVG (stored-XSS vector)', () => {

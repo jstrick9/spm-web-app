@@ -314,6 +314,11 @@ describe('Auth: logout', () => {
       payload: { filename: 'menu.pdf', dataUri: 'data:application/pdf;base64,JVBERi0xLjQKJcTl8uXrp/Og0MTGCg==', mimeType: 'application/pdf', category: 'menu', visibility: 'couple_venue', notes: 'Tasting menu and allergy notes' },
       headers: { authorization: `Bearer ${reg.json().token}`, 'content-type': 'application/json' } });
     expect(documentUpload.statusCode).toBe(201);
+    expect(documentUpload.json().document.url).toBe(`/api/events/${eventId}/couple-documents/${documentUpload.json().document.id}/content`);
+    const anonymousDocument = await app.inject({ method: 'GET', url: documentUpload.json().document.url });
+    expect(anonymousDocument.statusCode).toBe(401);
+    const protectedDocument = await app.inject({ method: 'GET', url: documentUpload.json().document.url, headers: { authorization: `Bearer ${reg.json().token}` } });
+    expect(protectedDocument.statusCode).toBe(200);
     expect(documentUpload.json().document.extractedSummary).toContain('menu');
     const documents = await app.inject({ method: 'GET', url: `/api/events/${eventId}/couple-documents`, headers: { authorization: `Bearer ${reg.json().token}` } });
     expect(documents.statusCode).toBe(200);

@@ -3,7 +3,8 @@ import { z } from 'zod';
 import { requireAuth } from '../middleware/auth.js';
 import { can } from '../lib/rbac.js';
 import { auditRepo, catalogRepo, contractsRepo, coupleAppointmentsRepo, coupleDocumentsRepo, couplePlanningRepo, coupleRequestsRepo, eventsRepo, guestsRepo, layoutsRepo, inventoryRepo, jobsRepo, messagesRepo, paymentLinksRepo, portalConfigRepo, rolesRepo, subEventsRepo, timelineRepo, usersRepo, vendorsRepo, venuesRepo } from '../db/repos/index.js';
-import { saveDocumentDataUri } from '../lib/fileStorage.js';
+import { saveDocumentDataUri, privateFilePath } from '../lib/fileStorage.js';
+import { createReadStream, existsSync } from 'node:fs';
 import { db } from '../db/database.js';
 import { uuid } from '../lib/crypto.js';
 import { BadRequest, Forbidden, NotFound } from '../lib/errors.js';
@@ -333,7 +334,7 @@ function safeDocument(row: ReturnType<typeof coupleDocumentsRepo.listForEvent>[n
   return {
     id: row.id,
     filename: row.filename,
-    url: row.url,
+    url: `/api/events/${row.event_id}/couple-documents/${row.id}/content`,
     mimeType: row.mime_type,
     category: row.category,
     visibility: row.visibility,
@@ -505,7 +506,11 @@ function couplePostEventSummary(input: {
   };
   const survey = postEvent.survey ?? null;
   const review = postEvent.review ?? null;
-  const galleryDocs = documents.filter((d) => d.category === 'post_event_gallery').map((d) => ({ id: d.id, filename: d.filename, url: d.url, approvalStatus: d.approval_status, notes: d.notes }));
+  // Public post-event summaries may include only explicitly guest-visible,
+  // approved gallery documents; private storage paths are never emitted.
+  const galleryDocs = documents
+    .filter((d) => d.category === 'post_event_gallery' && d.visibility === 'guest_visible' && d.approval_status === 'approved')
+    .map((d) => ({ id: d.id, filename: d.filename, url: `/api/events/${event.id}/couple-documents/${d.id}/content`, approvalStatus: d.approval_status, notes: d.notes }));
   const photoLinks = [
     ...(postEvent.photoGalleryUrl ? [{ label: 'Photo gallery', url: postEvent.photoGalleryUrl }] : []),
     ...(postEvent.memoryShareUrl ? [{ label: 'Memory/photo sharing link', url: postEvent.memoryShareUrl }] : []),
@@ -1295,6 +1300,22 @@ export async function coupleRoutes(app: FastifyInstance) {
     db.prepare(`UPDATE couple_notification_preferences SET email_enabled = COALESCE(?, email_enabled), sms_enabled = COALESCE(?, sms_enabled), in_app_enabled = COALESCE(?, in_app_enabled), digest_frequency = COALESCE(?, digest_frequency), quiet_hours = COALESCE(?, quiet_hours), decision_alerts = COALESCE(?, decision_alerts), due_task_alerts = COALESCE(?, due_task_alerts), message_alerts = COALESCE(?, message_alerts), updated_at = datetime('now') WHERE id = ?`)
       .run(p.emailEnabled === undefined ? null : Number(p.emailEnabled), p.smsEnabled === undefined ? null : Number(p.smsEnabled), p.inAppEnabled === undefined ? null : Number(p.inAppEnabled), p.digestFrequency ?? null, p.quietHours ? JSON.stringify(p.quietHours) : null, p.decisionAlerts === undefined ? null : Number(p.decisionAlerts), p.dueTaskAlerts === undefined ? null : Number(p.dueTaskAlerts), p.messageAlerts === undefined ? null : Number(p.messageAlerts), id);
     return { preferences: db.prepare(`SELECT * FROM couple_notification_preferences WHERE id = ?`).get(id) };
+  });
+
+  app.get('/api/events/:eventId/couple-documents/:documentId/content', { preHandler: requireAuth }, async (req, reply) => {
+    const { eventId, documentId } = req.params as { eventId: string; documentId: string };
+    const event = eventsRepo.findById(eventId);
+    if (!event) throw NotFound('event-not-found');
+    const orgMap = eventsRepo.orgMapForUser(req.auth!.userId);
+    if (!can(req.auth!.memberships, { eventId }, 'events.view', orgMap)) throw Forbidden();
+    const document = coupleDocumentsRepo.findById(documentId);
+    if (!document || document.event_id !== eventId) throw NotFound('document-not-found');
+    const path = privateFilePath(document.url);
+    if (!path) return reply.redirect(document.url);
+    if (!existsSync(path)) throw NotFound('document-file-not-found');
+    reply.header('Content-Type', document.mime_type || 'application/octet-stream');
+    reply.header('Content-Disposition', `inline; filename="${document.filename.replace(/[\"\\\\\r\n]/g, '_')}"`);
+    return reply.send(createReadStream(path));
   });
 
   app.get('/api/events/:eventId/couple-documents', { preHandler: requireAuth }, async (req) => {
