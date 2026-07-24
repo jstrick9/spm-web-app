@@ -88,6 +88,7 @@ async function deliverWebhook(
   eventType: string,
   body: string,
   data: Record<string, unknown>,
+  attempt = 1,
 ): Promise<void> {
   const startMs = Date.now();
   const signature = secret
@@ -113,6 +114,7 @@ async function deliverWebhook(
     clearTimeout(timeout);
     const durationMs = Date.now() - startMs;
     const responseText = await res.text().catch(() => '');
+    if (!res.ok) throw new Error(`webhook delivery failed: HTTP ${res.status}`);
 
     safeRecordDelivery({
       webhookId,
@@ -131,6 +133,15 @@ async function deliverWebhook(
       status: null,
       error: (err as Error).message,
       durationMs,
+      attemptCount: attempt,
+      nextRetryAt: attempt < 3 ? new Date(Date.now() + 1_000 * 2 ** (attempt - 1)).toISOString() : null,
+      terminalAt: attempt >= 3 ? new Date().toISOString() : null,
     });
+    // Retry transient transport failures with bounded exponential backoff.
+    // The caller never awaits this work, preserving mutation latency.
+    if (attempt < 3) {
+      const delayMs = 1_000 * 2 ** (attempt - 1);
+      setTimeout(() => enqueueDelivery(() => deliverWebhook(webhookId, url, secret, eventType, body, data, attempt + 1)), delayMs).unref();
+    }
   }
 }

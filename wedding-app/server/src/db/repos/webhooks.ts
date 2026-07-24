@@ -102,16 +102,19 @@ export const webhooksRepo = {
     response?: string;
     durationMs?: number;
     error?: string;
+    attemptCount?: number;
+    nextRetryAt?: string | null;
+    terminalAt?: string | null;
   }): void {
     const id = uuid();
     db.prepare(
-      `INSERT INTO webhook_deliveries (id, webhook_id, event_type, payload, status, response, duration_ms, error)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?)`
+      `INSERT INTO webhook_deliveries (id, webhook_id, event_type, payload, status, response, duration_ms, error, attempt_count, next_retry_at, terminal_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
     ).run(
       id, input.webhookId, input.eventType,
       stringifyJson(input.payload),
       input.status, (input.response ?? '').slice(0, 2048),
-      input.durationMs ?? null, input.error ?? null
+      input.durationMs ?? null, input.error ?? null, input.attemptCount ?? 1, input.nextRetryAt ?? null, input.terminalAt ?? null
     );
     // Update the webhook's last_triggered and status
     db.prepare(
