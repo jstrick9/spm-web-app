@@ -9,8 +9,8 @@ A complete, self-hosted operating system for modern wedding venues. Built with *
 ```bash
 cd wedding-app
 npm run install:all     # install server + client deps
-npm run migrate         # apply all 10 database migrations
-npm run seed            # create demo data (4 events, 28 guests, 5 vendors, etc.)
+npm run migrate         # apply all database migrations
+npm run seed            # create deterministic demo data
 
 # In two terminals:
 npm run dev:server      # Fastify on http://localhost:3000
@@ -65,19 +65,19 @@ Login: `owner@demo.local` / `wedding123`
 ```
 ┌────────────────────────────────────────────────────┐
 │  React (Vite + TailwindCSS + Radix UI)             │
-│  ├── 105 test files, 635 component/unit tests      │
+│  ├── 109 test files, 710 component/unit tests      │
 │  ├── PWA with service worker (offline check-ins)   │
 │  └── 6 configurable theme presets                  │
 ├────────────────────────────────────────────────────┤
 │  Fastify (Node.js 20+)                             │
 │  ├── 92+ RBAC-gated API endpoints                  │
-│  ├── 35 test files, 359 integration tests          │
+│  ├── 42 test files, 397 integration/unit tests│
 │  ├── SSE real-time event stream                    │
 │  ├── Outbound webhook dispatcher (HMAC-SHA256)     │
 │  └── Job queue + integration framework             │
 ├────────────────────────────────────────────────────┤
 │  SQLite                                            │
-│  ├── 49 tables across 10 migrations                │
+│  ├── schema managed by 34 forward-only migrations│
 │  ├── Single-file database (full control)           │
 │  └── Encrypted integration credentials (AES-GCM)  │
 └────────────────────────────────────────────────────┘
@@ -111,10 +111,10 @@ Login: `owner@demo.local` / `wedding123`
 ## Test Suite
 
 ```
-Total: 994 automated tests (0 failures)
+Total: 1,107 automated tests (latest validated suite)
 
-Server:  359 tests across 35 test files
-Client:  635 tests across 105 test files
+Server:  397 tests across 42 test files
+Client:  710 tests across 109 test files
 
 Every screen component has test coverage.
 Every API endpoint is RBAC-gated and integration-tested.
@@ -130,10 +130,11 @@ Every API endpoint is RBAC-gated and integration-tested.
 | `HOST` | `0.0.0.0` | Server bind address |
 | `JWT_SECRET` | dev default | **Must set in production** |
 | `LOG_LEVEL` | `info` | Fastify log level |
-| `CORS_ORIGIN` | `true` (allow all) | CORS origin restriction |
+| `CORS_ORIGIN` | disabled | Optional allowed CORS origin; same-origin production needs no setting |
 | `NODE_ENV` | — | Set to `production` for prod mode |
 | `VAPID_PUBLIC_KEY` | — | WebPush VAPID public key |
-| `WEDDING_SECRETS_KEY` | — | AES-256-GCM key for integration credentials |
+| `WEDDING_SECRETS_KEY` | — | AES-256-GCM key for integration credentials (required in Docker production) |
+| `WEDDING_UPLOADS_PATH` | `server/uploads` | Persistent directory for uploaded images and documents |
 
 ---
 
