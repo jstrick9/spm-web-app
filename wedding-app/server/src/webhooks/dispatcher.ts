@@ -11,6 +11,7 @@
 import { createHmac } from 'node:crypto';
 import { webhooksRepo } from '../db/repos/webhooks.js';
 import { webhookRetryDecision } from './retryPolicy.js';
+import { assertPublicWebhookTarget } from '../lib/outboundNetwork.js';
 
 /**
  * Record a delivery attempt, swallowing any error. Webhook delivery runs
@@ -101,6 +102,7 @@ async function deliverWebhook(
     : '';
 
   try {
+    await assertPublicWebhookTarget(url);
     const controller = new AbortController();
     const timeout = setTimeout(() => controller.abort(), 10_000); // 10s timeout
 
