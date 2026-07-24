@@ -143,6 +143,15 @@ export const webhooksRepo = {
     return rows;
   },
 
+  healthForOrg(orgId: string) {
+    return db.prepare(`SELECT
+      COUNT(*) AS total,
+      SUM(CASE WHEN d.next_retry_at IS NOT NULL AND d.terminal_at IS NULL THEN 1 ELSE 0 END) AS retry_backlog,
+      SUM(CASE WHEN d.terminal_at IS NOT NULL THEN 1 ELSE 0 END) AS terminal_failures,
+      AVG(CASE WHEN d.duration_ms IS NOT NULL THEN d.duration_ms END) AS avg_duration_ms
+      FROM webhook_deliveries d JOIN webhooks w ON w.id = d.webhook_id WHERE w.organization_id = ?`).get(orgId) as { total:number; retry_backlog:number|null; terminal_failures:number|null; avg_duration_ms:number|null };
+  },
+
   /** Get webhooks that match a specific event type for an org. */
   matchingHooks(orgId: string, eventType: string): WebhookRow[] {
     const active = this.listActiveForOrg(orgId);

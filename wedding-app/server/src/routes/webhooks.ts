@@ -26,6 +26,12 @@ export async function webhookRoutes(app: FastifyInstance) {
     return { webhooks: webhooksRepo.listForOrg(orgId) };
   });
 
+  app.get('/api/orgs/:orgId/webhooks/health', { preHandler: requireAuth }, async (req) => {
+    const { orgId } = req.params as { orgId: string };
+    if (!can(req.auth!.memberships, { organizationId: orgId }, 'integrations.view')) throw Forbidden();
+    return { health: webhooksRepo.healthForOrg(orgId) };
+  });
+
   // ─── Create webhook ──────────────────────────────────
   app.post('/api/orgs/:orgId/webhooks', { preHandler: requireAuth }, async (req, reply) => {
     const { orgId } = req.params as { orgId: string };

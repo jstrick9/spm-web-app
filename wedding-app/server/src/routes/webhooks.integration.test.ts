@@ -70,6 +70,16 @@ describe('Webhook CRUD', () => {
     expect(res.json().webhooks).toHaveLength(2);
   });
 
+  it('GET webhook health returns organization-scoped retry telemetry', async () => {
+    const o = await registerOwner();
+    const created = await req(o.token, 'POST', `/api/orgs/${o.orgId}/webhooks`, { url: 'https://health.example/hook' });
+    db.prepare(`INSERT INTO webhook_deliveries (id, webhook_id, event_type, payload, status, duration_ms, attempt_count, next_retry_at, terminal_at) VALUES (?, ?, ?, ?, ?, ?, ?, datetime('now'), datetime('now'))`)
+      .run('health-delivery', created.json().webhook.id, 'event.created', '{}', 500, 120, 3);
+    const health = await req(o.token, 'GET', `/api/orgs/${o.orgId}/webhooks/health`);
+    expect(health.statusCode).toBe(200);
+    expect(health.json().health).toMatchObject({ total: 1, terminal_failures: 1, avg_duration_ms: 120 });
+  });
+
   it('PATCH updates webhook url and active state', async () => {
     const o = await registerOwner();
     const createRes = await req(o.token, 'POST', `/api/orgs/${o.orgId}/webhooks`, { url: 'https://old.com/hook' });
