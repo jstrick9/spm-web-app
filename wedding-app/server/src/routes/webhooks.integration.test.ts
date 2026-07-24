@@ -78,6 +78,8 @@ describe('Webhook CRUD', () => {
     const health = await req(o.token, 'GET', `/api/orgs/${o.orgId}/webhooks/health`);
     expect(health.statusCode).toBe(200);
     expect(health.json().health).toMatchObject({ total: 1, terminal_failures: 1, avg_duration_ms: 120 });
+    db.prepare(`UPDATE webhook_deliveries SET created_at = '2000-01-01T00:00:00.000Z' WHERE id = 'health-delivery'`).run();
+    expect(webhooksRepo.pruneDeliveries(90)).toBe(1);
   });
 
   it('PATCH updates webhook url and active state', async () => {

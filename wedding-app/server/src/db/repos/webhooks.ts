@@ -143,6 +143,11 @@ export const webhooksRepo = {
     return rows;
   },
 
+  pruneDeliveries(retentionDays = 90): number {
+    return db.prepare(`DELETE FROM webhook_deliveries WHERE created_at < datetime('now', ?)`)
+      .run(`-${Math.max(1, retentionDays)} days`).changes;
+  },
+
   healthForOrg(orgId: string) {
     return db.prepare(`SELECT
       COUNT(*) AS total,

@@ -13,6 +13,7 @@
  * by simply running `node dist/jobs/worker.js` against the same DB.
  */
 import { jobsRepo, type JobRow } from '../db/repos/jobs.js';
+import { webhooksRepo } from '../db/repos/webhooks.js';
 import { runAction } from '../integrations/runtime.js';
 import { scanUpcomingDeadlines } from './lifecycleEmails.js';
 import { hostname } from 'node:os';
@@ -36,6 +37,7 @@ let tickTimer: ReturnType<typeof setTimeout> | null = null;
 let reclaimTimer: ReturnType<typeof setInterval> | null = null;
 let rsvpScanTimer: ReturnType<typeof setInterval> | null = null;
 let webhookRetryTimer: ReturnType<typeof setInterval> | null = null;
+let webhookPruneTimer: ReturnType<typeof setInterval> | null = null;
 
 export function startWorker(): void {
   if (tickTimer || reclaimTimer) return;     // already running
@@ -56,6 +58,9 @@ export function startWorker(): void {
   const replayWebhooks = () => { try { replayDueWebhookDeliveries(); } catch (e) { logErr('webhook-retry', e); } };
   webhookRetryTimer = setInterval(replayWebhooks, POLL_INTERVAL_MS);
   setTimeout(replayWebhooks, 1_000);
+  const pruneWebhooks = () => { try { webhooksRepo.pruneDeliveries(Number(process.env.WEBHOOK_DELIVERY_RETENTION_DAYS ?? 90)); } catch (e) { logErr('webhook-prune', e); } };
+  webhookPruneTimer = setInterval(pruneWebhooks, 24 * 60 * 60 * 1000);
+  setTimeout(pruneWebhooks, 10_000);
   scheduleNext();
 }
 
@@ -65,6 +70,7 @@ export function stopWorker(): void {
   if (reclaimTimer) { clearInterval(reclaimTimer); reclaimTimer = null; }
   if (rsvpScanTimer) { clearInterval(rsvpScanTimer); rsvpScanTimer = null; }
   if (webhookRetryTimer) { clearInterval(webhookRetryTimer); webhookRetryTimer = null; }
+  if (webhookPruneTimer) { clearInterval(webhookPruneTimer); webhookPruneTimer = null; }
 }
 
 function scheduleNext(): void {
