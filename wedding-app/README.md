@@ -135,6 +135,7 @@ Every API endpoint is RBAC-gated and integration-tested.
 | `VAPID_PUBLIC_KEY` | — | WebPush VAPID public key |
 | `WEDDING_SECRETS_KEY` | — | AES-256-GCM key for integration credentials (required in Docker production) |
 | `WEDDING_UPLOADS_PATH` | `server/uploads` | Persistent directory for uploaded images and documents |
+| `WEBHOOK_DELIVERY_RETENTION_DAYS` | `90` | Days to retain outbound webhook delivery history |
 
 ---
 
