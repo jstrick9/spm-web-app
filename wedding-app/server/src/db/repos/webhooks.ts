@@ -27,6 +27,9 @@ export interface WebhookDeliveryRow {
   response: string | null;
   duration_ms: number | null;
   error: string | null;
+  attempt_count: number;
+  next_retry_at: string | null;
+  terminal_at: string | null;
   created_at: string;
 }
 
@@ -128,6 +131,12 @@ export const webhooksRepo = {
     return db.prepare(
       `SELECT * FROM webhook_deliveries WHERE webhook_id = ? ORDER BY created_at DESC LIMIT ?`
     ).all(webhookId, limit) as WebhookDeliveryRow[];
+  },
+
+  claimDueRetries(limit = 20): Array<WebhookDeliveryRow & { url: string; secret: string }> {
+    const rows = db.prepare(`SELECT d.*, w.url, w.secret FROM webhook_deliveries d JOIN webhooks w ON w.id = d.webhook_id WHERE d.next_retry_at <= datetime('now') AND d.terminal_at IS NULL AND w.is_active = 1 ORDER BY d.next_retry_at LIMIT ?`).all(limit) as Array<WebhookDeliveryRow & { url: string; secret: string }>;
+    for (const row of rows) db.prepare(`UPDATE webhook_deliveries SET next_retry_at = NULL, terminal_at = datetime('now') WHERE id = ?`).run(row.id);
+    return rows;
   },
 
   /** Get webhooks that match a specific event type for an org. */

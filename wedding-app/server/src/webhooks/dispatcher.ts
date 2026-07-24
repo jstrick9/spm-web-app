@@ -60,6 +60,15 @@ interface WebhookPayload {
  * Fire webhooks for an event type. Call-and-forget — errors are logged
  * but never propagated to the caller.
  */
+export function replayDueWebhookDeliveries(): void {
+  for (const row of webhooksRepo.claimDueRetries()) {
+    let data: Record<string, unknown> = {};
+    try { data = JSON.parse(row.payload) as Record<string, unknown>; } catch { continue; }
+    const body = JSON.stringify({ eventType: row.event_type, timestamp: new Date().toISOString(), data });
+    enqueueDelivery(() => deliverWebhook(row.webhook_id, row.url, row.secret, row.event_type, body, data, row.attempt_count + 1));
+  }
+}
+
 export function broadcastWebhook(
   orgId: string,
   eventType: string,

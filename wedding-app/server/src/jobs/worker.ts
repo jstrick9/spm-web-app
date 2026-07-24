@@ -16,6 +16,7 @@ import { jobsRepo, type JobRow } from '../db/repos/jobs.js';
 import { runAction } from '../integrations/runtime.js';
 import { scanUpcomingDeadlines } from './lifecycleEmails.js';
 import { hostname } from 'node:os';
+import { replayDueWebhookDeliveries } from '../webhooks/dispatcher.js';
 
 const POLL_INTERVAL_MS = 1000;          // how often to look for new jobs
 const RECLAIM_INTERVAL_MS = 60_000;     // how often to reclaim stuck jobs
@@ -34,6 +35,7 @@ let stopped = false;
 let tickTimer: ReturnType<typeof setTimeout> | null = null;
 let reclaimTimer: ReturnType<typeof setInterval> | null = null;
 let rsvpScanTimer: ReturnType<typeof setInterval> | null = null;
+let webhookRetryTimer: ReturnType<typeof setInterval> | null = null;
 
 export function startWorker(): void {
   if (tickTimer || reclaimTimer) return;     // already running
@@ -51,6 +53,9 @@ export function startWorker(): void {
   };
   rsvpScanTimer = setInterval(runScan, RSVP_SCAN_INTERVAL_MS);
   setTimeout(runScan, 5_000); // initial scan shortly after boot
+  const replayWebhooks = () => { try { replayDueWebhookDeliveries(); } catch (e) { logErr('webhook-retry', e); } };
+  webhookRetryTimer = setInterval(replayWebhooks, POLL_INTERVAL_MS);
+  setTimeout(replayWebhooks, 1_000);
   scheduleNext();
 }
 
@@ -59,6 +64,7 @@ export function stopWorker(): void {
   if (tickTimer) { clearTimeout(tickTimer); tickTimer = null; }
   if (reclaimTimer) { clearInterval(reclaimTimer); reclaimTimer = null; }
   if (rsvpScanTimer) { clearInterval(rsvpScanTimer); rsvpScanTimer = null; }
+  if (webhookRetryTimer) { clearInterval(webhookRetryTimer); webhookRetryTimer = null; }
 }
 
 function scheduleNext(): void {
