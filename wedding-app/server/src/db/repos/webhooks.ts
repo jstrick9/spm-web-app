@@ -133,6 +133,10 @@ export const webhooksRepo = {
     ).all(webhookId, limit) as WebhookDeliveryRow[];
   },
 
+  replayTerminalDelivery(webhookId: string, deliveryId: string): boolean {
+    return db.prepare(`UPDATE webhook_deliveries SET terminal_at = NULL, next_retry_at = datetime('now') WHERE id = ? AND webhook_id = ? AND terminal_at IS NOT NULL`).run(deliveryId, webhookId).changes > 0;
+  },
+
   claimDueRetries(limit = 20): Array<WebhookDeliveryRow & { url: string; secret: string }> {
     const rows = db.prepare(`SELECT d.*, w.url, w.secret FROM webhook_deliveries d JOIN webhooks w ON w.id = d.webhook_id WHERE d.next_retry_at <= datetime('now') AND d.terminal_at IS NULL AND w.is_active = 1 ORDER BY d.next_retry_at LIMIT ?`).all(limit) as Array<WebhookDeliveryRow & { url: string; secret: string }>;
     for (const row of rows) db.prepare(`UPDATE webhook_deliveries SET next_retry_at = NULL, terminal_at = datetime('now') WHERE id = ?`).run(row.id);

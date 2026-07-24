@@ -83,6 +83,17 @@ export async function webhookRoutes(app: FastifyInstance) {
     return { deliveries: webhooksRepo.listDeliveries(id) };
   });
 
+  // ─── Replay a terminal delivery through the durable retry worker ─────────
+  app.post('/api/webhooks/:id/deliveries/:deliveryId/replay', { preHandler: requireAuth }, async (req, reply) => {
+    const { id, deliveryId } = req.params as { id: string; deliveryId: string };
+    const webhook = webhooksRepo.findById(id);
+    if (!webhook) throw NotFound();
+    if (!can(req.auth!.memberships, { organizationId: webhook.organization_id }, 'integrations.manage')) throw Forbidden();
+    if (!webhooksRepo.replayTerminalDelivery(id, deliveryId)) throw NotFound('terminal-delivery-not-found');
+    auditRepo.log({ organizationId: webhook.organization_id, actorUserId: req.auth!.userId, actorLabel: req.auth!.email, action: 'webhook.delivery.replay', targetType: 'webhook_delivery', targetId: deliveryId, ip: req.ip });
+    return reply.code(202).send({ ok: true, queued: true });
+  });
+
   // ─── Test webhook (fires a test payload) ──────────────
   app.post('/api/webhooks/:id/test', { preHandler: requireAuth }, async (req) => {
     const { id } = req.params as { id: string };
