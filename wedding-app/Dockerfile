@@ -30,7 +30,8 @@ RUN npm run build
 # ─── Stage 3: runtime ───────────────────────────────────────
 FROM node:20-alpine AS runtime
 WORKDIR /app
-RUN apk add --no-cache tini
+# sqlite CLI supports consistent online `.backup` snapshots for disaster recovery.
+RUN apk add --no-cache tini sqlite
 ENV NODE_ENV=production
 ENV WEDDING_DB_PATH=/data/wedding.db
 ENV WEDDING_UPLOADS_PATH=/data/uploads

@@ -28,6 +28,12 @@ services:
       - wedding-data:/data           # SQLite + uploads persist here
     expose:
       - "3000"                       # only Caddy talks to it
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q -O /dev/null http://127.0.0.1:3000/api/health"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 20s
 
   caddy:
     image: caddy:2-alpine
@@ -40,7 +46,8 @@ services:
       - caddy-data:/data             # cert storage
       - caddy-config:/config
     depends_on:
-      - app
+      app:
+        condition: service_healthy
 
 volumes:
   wedding-data:

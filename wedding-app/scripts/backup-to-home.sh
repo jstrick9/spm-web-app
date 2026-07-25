@@ -43,9 +43,17 @@ rsync -avz --progress \
   "${VPS_USER}@${VPS_HOST}:/var/lib/docker/volumes/wedding-poc_wedding-data/_data/wedding-snapshot.db" \
   "${LOCAL_SNAPSHOT}"
 
-# Optional: also pull uploads folder if you wire one up later
-# rsync -avz "${VPS_USER}@${VPS_HOST}:/var/lib/docker/volumes/wedding-poc_wedding-data/_data/uploads/" \
-#   "${BACKUP_DIR}/uploads/"
+# Uploads live in the same persistent volume as SQLite and must be backed up
+# alongside the database to preserve gallery images, documents, and evidence.
+rsync -avz --delete \
+  "${VPS_USER}@${VPS_HOST}:/var/lib/docker/volumes/wedding-poc_wedding-data/_data/uploads/" \
+  "${BACKUP_DIR}/uploads/"
+
+# Validate the copied snapshot before considering the backup successful.
+if ! sqlite3 "$LOCAL_SNAPSHOT" 'PRAGMA integrity_check;' | grep -qx 'ok'; then
+  echo "[backup] ERROR: SQLite integrity check failed" >&2
+  exit 1
+fi
 
 # Keep first-of-month snapshots in monthly/
 if [[ "$(date +%d)" == "01" ]]; then
