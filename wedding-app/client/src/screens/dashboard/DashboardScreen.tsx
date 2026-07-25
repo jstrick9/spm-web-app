@@ -83,15 +83,7 @@ interface Props {
   onCreateEvent?: () => void;
 }
 
-const STATUS_COLORS: Record<string, string> = {
-  lead: "bg-slate-400",
-  hold: "bg-amber-400",
-  booked: "bg-blue-500",
-  planning: "bg-violet-500",
-  completed: "bg-green-500",
-  cancelled: "bg-rose-400",
-  lost: "bg-gray-400",
-};
+import { STATUS_COLORS, getGreeting, safeJson } from './dashboardUtils';
 
 export function DashboardScreen({
   user,
@@ -1241,12 +1233,7 @@ function TodayEventCard({ event, orgId }: { event: any; orgId: string }) {
 
 // ── Greeting helper ──
 
-function getGreeting(): string {
-  const h = new Date().getHours();
-  if (h < 12) return "morning";
-  if (h < 17) return "afternoon";
-  return "evening";
-}
+
 
 // ── Live Operations Ticker ──
 
@@ -2199,15 +2186,7 @@ function ScaleIcon(props: any) {
   return <BarChart3 {...props} />;
 }
 
-function safeJson(raw: unknown): Record<string, any> {
-  if (!raw) return {};
-  if (typeof raw === "object") return raw as Record<string, any>;
-  try {
-    return JSON.parse(String(raw));
-  } catch {
-    return {};
-  }
-}
+
 
 function ManagerMetric({
   title,
