@@ -13,7 +13,7 @@
  * The server enforces this on PUT regardless.
  */
 import { Check, ExternalLink, Loader2, Palette } from 'lucide-react';
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { PageBody, PageHeader } from '../ui/AppShell';
 import { Button } from '../ui/Button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../ui/Card';
@@ -24,6 +24,7 @@ import { usePlatformConfig } from '../config/ConfigProvider';
 import { THEME_PRESETS, type ThemePreset } from '../config/presets';
 import { sdk } from '../sdk';
 import type { PartialPlatformConfig } from '../config/schema';
+import { BrandingEditor, ConfigSectionEditor } from './platformStudioEditors';
 
 interface Props {
   orgId: string;
@@ -50,6 +51,20 @@ export function PlatformStudio({ orgId, onSaved }: Props) {
     return () => { setPreviewOverride(null); };
   }, [hovered, setPreviewOverride]);
 
+  const current = useMemo(() => serverConfig ?? config, [serverConfig, config]);
+
+  async function saveConfig(next: PartialPlatformConfig, busyKey: string) {
+    setBusyId(busyKey);
+    try {
+      const r = await sdk.platformConfig.putOrg(orgId, next);
+      setServerConfig(r.config);
+      onSaved(r.config);
+      toast({ title: 'Platform settings saved', description: 'Changes are live for your organization.', variant: 'success' });
+    } catch (e) {
+      toast({ title: 'Could not save', description: (e as Error).message, variant: 'destructive' });
+    } finally { setBusyId(null); }
+  }
+
   async function apply(preset: ThemePreset) {
     setBusyId(preset.id);
     try {
@@ -61,7 +76,9 @@ export function PlatformStudio({ orgId, onSaved }: Props) {
       };
       const r = await sdk.platformConfig.putOrg(orgId, next);
       setServerConfig(r.config);
-      setPreviewOverride(null);   // commit the change for real
+      // Keep the committed theme applied immediately while the parent org
+      // layer refreshes; it is cleared on unmount or when a card is released.
+      setPreviewOverride({ theme: r.config.theme });
       onSaved(r.config);
       toast({
         title: `Applied "${preset.name}"`,
@@ -101,9 +118,9 @@ export function PlatformStudio({ orgId, onSaved }: Props) {
         <Tabs defaultValue="theme">
           <TabsList>
             <TabsTrigger value="theme">Theme</TabsTrigger>
-            <TabsTrigger value="widgets" disabled>Widgets (Day 9)</TabsTrigger>
-            <TabsTrigger value="layout" disabled>Layout (Day 9)</TabsTrigger>
-            <TabsTrigger value="branding" disabled>Branding (Day 4)</TabsTrigger>
+            <TabsTrigger value="widgets">Widgets</TabsTrigger>
+            <TabsTrigger value="layout">Layout</TabsTrigger>
+            <TabsTrigger value="branding">Branding</TabsTrigger>
           </TabsList>
 
           <TabsContent value="theme">
@@ -187,6 +204,34 @@ export function PlatformStudio({ orgId, onSaved }: Props) {
                 </Button>
               </CardContent>
             </Card>
+          </TabsContent>
+
+          <TabsContent value="widgets">
+            <ConfigSectionEditor
+              title="Widget slots"
+              description="Configure the widgets rendered in each dashboard, event, and portal slot."
+              value={current.widgets ?? {}}
+              busy={busyId === 'widgets'}
+              onSave={(widgets) => void saveConfig({ ...current, widgets }, 'widgets')}
+            />
+          </TabsContent>
+
+          <TabsContent value="layout">
+            <ConfigSectionEditor
+              title="Navigation and feature layout"
+              description="Configure navigation order, hidden items, sidebar defaults, and feature flags."
+              value={current.layout ?? {}}
+              busy={busyId === 'layout'}
+              onSave={(layout) => void saveConfig({ ...current, layout }, 'layout')}
+            />
+          </TabsContent>
+
+          <TabsContent value="branding">
+            <BrandingEditor
+              value={current.branding ?? {}}
+              busy={busyId === 'branding'}
+              onSave={(branding) => void saveConfig({ ...current, branding }, 'branding')}
+            />
           </TabsContent>
         </Tabs>
       </PageBody>
