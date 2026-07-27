@@ -305,6 +305,7 @@ export function VenueBuilder({ orgId }: Props) {
            <label className="flex items-center gap-1 text-xs">Rotate <select aria-label="Underlay rotation" value={underlayRotation} onChange={(e) => { const rotation = Number(e.target.value); setUnderlayRotation(rotation); updateUnderlay({ rotation }); }}><option value={0}>0°</option><option value={90}>90°</option><option value={180}>180°</option><option value={270}>270°</option></select></label>
          </> : null; } catch { return null; } })()}
        </div>}
+       {selectedVenue && <div className="rounded-lg border border-warning/30 bg-warning-soft/20 px-3 py-2 text-xs text-warning">{!zones.some((z) => z.type === 'exit') && <span className="mr-3">Add at least one exit.</span>}{!zones.some((z) => z.type === 'accessible_route') && <span className="mr-3">Add an accessible route.</span>}{!zones.some((z) => z.type === 'power') && <span className="mr-3">Add a power zone.</span>}{!zones.some((z) => z.type === 'loading') && <span>Add a loading zone.</span>}</div>}
        <div className="flex flex-col lg:flex-row items-start lg:items-center justify-between p-3 bg-surface border border-border rounded-lg shadow-sm gap-4">
           <div className="flex flex-wrap gap-2">
              <Button variant={mode === 'select' ? 'default' : 'secondary'} size="sm" onClick={() => { setMode('select'); setCurrentPoints([]); }}>
