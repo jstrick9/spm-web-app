@@ -33,6 +33,8 @@ export function VenueBuilder({ orgId }: Props) {
   const [currentPoints, setCurrentPoints] = useState<number[]>([]);
   const [hasChanges, setHasChanges] = useState(false);
   const [scale, setScale] = useState(1);
+  const [gridSize, setGridSize] = useState(50);
+  const [snapToGrid, setSnapToGrid] = useState(true);
   const [pos, setPos] = useState({ x: 0, y: 0 });
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const trRef = useRef<any>(null);
@@ -129,7 +131,8 @@ export function VenueBuilder({ orgId }: Props) {
 
   const handleStageClick = (e: any) => {
     const stage = e.target.getStage();
-    const pt = getRelativePointerPosition(stage);
+    const rawPt = getRelativePointerPosition(stage);
+    const pt = snapToGrid ? { x: Math.round(rawPt.x / gridSize) * gridSize, y: Math.round(rawPt.y / gridSize) * gridSize } : rawPt;
 
     if (mode === 'select') {
       if (e.target === stage || e.target.name() === 'grid') {
@@ -286,6 +289,8 @@ export function VenueBuilder({ orgId }: Props) {
              <Button variant={mode === 'add_pillar' ? 'default' : 'secondary'} size="sm" onClick={() => setMode('add_pillar')}>
                <Cylinder className="w-4 h-4 mr-1" /> Pillar
              </Button>
+             <label className="ml-2 flex items-center gap-1 text-xs text-fg-muted"><input type="checkbox" checked={snapToGrid} onChange={(e) => setSnapToGrid(e.target.checked)} /> Snap</label>
+             <select aria-label="Grid size" className="h-8 rounded border border-border bg-surface px-2 text-xs" value={gridSize} onChange={(e) => setGridSize(Number(e.target.value))}><option value={25}>Fine grid</option><option value={50}>Standard grid</option><option value={100}>Large grid</option></select>
           </div>
 
           <div className="flex flex-wrap gap-2 items-center">
@@ -326,10 +331,10 @@ export function VenueBuilder({ orgId }: Props) {
           >
             <Layer>
               <Group listening={false} name="grid">
-                {Array.from({ length: 40 }).map((_, i) => (
+                {Array.from({ length: Math.ceil(2000 / gridSize) }).map((_, i) => (
                    <React.Fragment key={i}>
-                      <Line points={[0, i * 50, 2000, i * 50]} stroke="#e5e7eb" strokeWidth={1} />
-                      <Line points={[i * 50, 0, i * 50, 2000]} stroke="#e5e7eb" strokeWidth={1} />
+                      <Line points={[0, i * gridSize, 2000, i * gridSize]} stroke="#e5e7eb" strokeWidth={1} />
+                      <Line points={[i * gridSize, 0, i * gridSize, 2000]} stroke="#e5e7eb" strokeWidth={1} />
                    </React.Fragment>
                 ))}
               </Group>
