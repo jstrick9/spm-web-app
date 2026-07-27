@@ -262,20 +262,21 @@ export function AppShell({
           </Button>
 
           {/* Brand — reads from config for white-label support */}
-          <div className="flex items-center gap-2 font-display text-lg font-medium tracking-tight">
-            <a href="#/" className="flex items-center gap-2" aria-label={`${branding.platformName} — go to dashboard`}>
-              {branding.logoUrl && <img src={branding.logoUrl} alt="" className="h-7 w-7 rounded-md object-cover" aria-hidden="true" />}
-              <span className="hidden sm:inline font-bold text-brand font-display truncate">{branding.platformName}</span>
-            </a>
-            {(branding.tagline || branding.supportEmail || branding.websiteUrl) && (
-              <span className="hidden sm:inline text-[10px] text-fg-muted truncate max-w-[420px]">
-                {branding.tagline}
-                {branding.tagline && (branding.supportEmail || branding.websiteUrl) ? ' · ' : ''}
-                {branding.supportEmail && <a className="underline hover:text-brand" href={`mailto:${branding.supportEmail}`}>{branding.supportEmail}</a>}
-                {branding.supportEmail && branding.websiteUrl ? ' · ' : ''}
-                {branding.websiteUrl && <a className="underline hover:text-brand" href={/^https?:\/\//i.test(branding.websiteUrl) ? branding.websiteUrl : `https://${branding.websiteUrl}`} target="_blank" rel="noreferrer">Website</a>}
-              </span>
-            )}
+          <div className="flex items-center gap-2 min-w-0">
+            {branding.logoUrl && <img src={branding.logoUrl} alt="" className="h-7 w-7 shrink-0 rounded-md object-cover" aria-hidden="true" />}
+            <div className="hidden sm:flex min-w-0 flex-col leading-tight">
+              <a href="#/" className="font-display text-lg font-bold text-brand truncate" aria-label={`${branding.platformName} — go to dashboard`}>{branding.platformName}</a>
+              {(branding.tagline || branding.supportEmail || branding.websiteUrl) && (
+                <span className="text-[10px] text-fg-muted truncate max-w-[420px]">
+                  {branding.tagline && <span>{branding.tagline}</span>}
+                  {branding.tagline && (branding.supportEmail || branding.websiteUrl) ? ' · ' : ''}
+                  {branding.supportEmail && <a className="underline hover:text-brand" href={`mailto:${branding.supportEmail}`}>{branding.supportEmail}</a>}
+                  {branding.supportEmail && branding.websiteUrl ? ' · ' : ''}
+                  {branding.websiteUrl && <a className="underline hover:text-brand" href={/^https?:\/\//i.test(branding.websiteUrl) ? branding.websiteUrl : `https://${branding.websiteUrl}`} target="_blank" rel="noreferrer">Website</a>}
+                </span>
+              )}
+            </div>
+            <a href="#/" className="sm:hidden" aria-label={`${branding.platformName} — go to dashboard`}>{!branding.logoUrl && <span className="font-display text-lg font-bold text-brand">{branding.platformName}</span>}</a>
           </div>
 
           <div className="flex-1" />
