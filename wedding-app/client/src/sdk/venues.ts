@@ -34,6 +34,9 @@ export const venuesSdk = {
   uploadUnderlay(venueId: string, dataUri: string): Promise<{ venue: SdkVenue }> {
     return api.post(`/api/venues/${venueId}/underlay`, { dataUri });
   },
+  createEventLayout(venueId: string, eventId: string, name?: string) {
+    return api.post(`/api/venues/${venueId}/event-layouts`, { eventId, name });
+  },
   delete(venueId: string): Promise<void> {
     return api.delete(`/api/venues/${venueId}`);
   },

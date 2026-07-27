@@ -2,7 +2,7 @@ import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
 import { requireAuth } from '../middleware/auth.js';
 import { can } from '../lib/rbac.js';
-import { venuesRepo, auditRepo } from '../db/repos/index.js';
+import { venuesRepo, layoutsRepo, auditRepo } from '../db/repos/index.js';
 import { BadRequest, Forbidden, NotFound } from '../lib/errors.js';
 import { saveDataUri } from '../lib/fileStorage.js';
 
@@ -67,6 +67,20 @@ export async function venueRoutes(app: FastifyInstance) {
     const current = (() => { try { return JSON.parse(venue.underlay || '{}'); } catch { return {}; } })();
     const updated = venuesRepo.update(id, { underlay: { ...current, url, locked: true, opacity: 0.55, scale: 1, rotation: 0 } });
     return { venue: updated };
+  });
+
+  app.post('/api/venues/:id/event-layouts', { preHandler: requireAuth }, async (req, reply) => {
+    const { id } = req.params as { id: string };
+    const venue = venuesRepo.findById(id);
+    if (!venue) throw NotFound();
+    if (venue.approval_status !== 'approved') throw BadRequest('venue-scaffold-not-approved');
+    if (!can(req.auth!.memberships, { organizationId: venue.organization_id }, 'layouts.create')) throw Forbidden();
+    const parsed = z.object({ eventId: z.string().min(1), name: z.string().min(1).max(200).optional() }).safeParse(req.body);
+    if (!parsed.success) throw BadRequest('invalid-input', parsed.error.issues);
+    const masterLayout = (() => { try { return JSON.parse(venue.master_layout || '{}'); } catch { return {}; } })();
+    const layout = layoutsRepo.create({ organizationId: venue.organization_id, eventId: parsed.data.eventId, venueId: venue.id, name: parsed.data.name ?? `${venue.name} event layout`, visibility: 'event', payload: { ...masterLayout, venueScaffoldId: venue.id, venueRevision: venue.revision }, createdBy: req.auth!.userId });
+    auditRepo.log({ organizationId: venue.organization_id, actorUserId: req.auth!.userId, actorLabel: req.auth!.email, action: 'venue.scaffold.instantiate', targetType: 'layout', targetId: layout.id, ip: req.ip, details: { venueId: venue.id, eventId: parsed.data.eventId, venueRevision: venue.revision } });
+    return reply.code(201).send({ layout });
   });
 
   app.delete('/api/venues/:id', { preHandler: requireAuth }, async (req, reply) => {
