@@ -61,7 +61,7 @@ export function ToastProvider({ children }: { children: ReactNode }) {
 
   const toast = useCallback((t: Omit<ToastData, 'id'>) => {
     const id = `t-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`;
-    setItems((prev) => [...prev, { id, durationMs: 5000, ...t }]);
+    setItems((prev) => [...prev, { id, durationMs: 1000, ...t }]);
   }, []);
   const dismiss = useCallback((id: string) => {
     setItems((prev) => prev.filter((t) => t.id !== id));
