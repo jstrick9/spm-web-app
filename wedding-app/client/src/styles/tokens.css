@@ -134,7 +134,7 @@
   /* ─── Type stack ────────────────────────────────── */
   .font-display {
     /* Editorial display (Fraunces). Falls back to system serif. */
-    font-family: 'Fraunces', 'Cambria', Georgia, serif;
+    font-family: var(--font-display, 'Fraunces'), 'Cambria', Georgia, serif;
     font-variation-settings: 'opsz' 144, 'SOFT' 50;
     letter-spacing: -0.01em;
   }

@@ -49,6 +49,11 @@ describe('ConfigProvider', () => {
     expect(screen.getByTestId('brand').textContent).toBe('5 5 5');
   });
 
+  it('does not let a user preference mask an organization-wide platform theme', () => {
+    render(<ConfigProvider org={{ theme: { brand: '5 5 5' } }} user={{ theme: { brand: '99 99 99' } }}><Probe /></ConfigProvider>);
+    expect(screen.getByTestId('brand').textContent).toBe('5 5 5');
+  });
+
   it('applies the resolved theme as CSS variables on <html>', () => {
     render(
       <ConfigProvider org={{ theme: { brand: '12 34 56' } }}>

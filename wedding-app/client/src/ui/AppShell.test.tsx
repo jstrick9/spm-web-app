@@ -119,6 +119,11 @@ describe('AppShell', () => {
     expect(eventsLink.getAttribute('aria-current')).toBe('page');
   });
 
+  it('does not leave System selected while a System child is active', () => {
+    renderShell('#/system/platform');
+    expect(screen.getByRole('link', { name: 'System' }).getAttribute('aria-current')).toBeNull();
+  });
+
   it('does not set aria-current on inactive links', () => {
     renderShell('#/');
     const eventsLink = screen.getByRole('link', { name: 'Events' });

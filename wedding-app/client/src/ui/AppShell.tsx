@@ -781,9 +781,12 @@ function Sidebar({
           const meta = NAV_ITEM_META[id];
           if (!meta) return null;
           const Icon = meta.icon;
-          const isActive =
-            meta.href === "#/"
-              ? currentPath === "#/" || currentPath === "#"
+          // System is a parent destination. Keep it inactive while a concrete
+          // System child (Platform Studio, Integrations, etc.) is active.
+          const isActive = meta.href === "#/"
+            ? currentPath === "#/" || currentPath === "#"
+            : meta.href === "#/system"
+              ? currentPath === "#/system" || currentPath === "#/system/"
               : currentPath.startsWith(meta.href);
 
           return (
