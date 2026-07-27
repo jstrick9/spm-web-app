@@ -58,6 +58,10 @@ export const layoutsSdk = {
   createSetupPacket(layoutId: string, input: { audience?: LayoutPacketAudience; payload?: Record<string, unknown>; expiresAt?: string } = {}): Promise<{ packet: { token: string; audience: LayoutPacketAudience }; publicUrl: string }> {
     return api.post(`/api/layouts/${layoutId}/setup-packet`, input);
   },
+  collaboration(layoutId: string): Promise<{ comments: any[]; reviews: any[] }> { return api.get(`/api/layouts/${layoutId}/collaboration`); },
+  addComment(layoutId: string, input: { body: string; target?: Record<string, unknown> }) { return api.post(`/api/layouts/${layoutId}/comments`, input); },
+  requestReview(layoutId: string) { return api.post(`/api/layouts/${layoutId}/review-request`); },
+  decideReview(layoutId: string, reviewId: string, input: { decision: 'approved'|'changes_requested'|'rejected'; note?: string }) { return api.post(`/api/layouts/${layoutId}/reviews/${reviewId}/decision`, input); },
   delete(layoutId: string): Promise<void> {
     return api.delete(`/api/layouts/${layoutId}`);
   },

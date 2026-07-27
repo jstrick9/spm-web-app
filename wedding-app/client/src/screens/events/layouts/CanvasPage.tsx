@@ -1116,6 +1116,7 @@ export function CanvasPage({ event }: Props) {
   return (
     <div className="flex flex-col gap-4">
       <input ref={variancePhotoInputRef} type="file" accept="image/*" className="hidden" aria-label="Upload layout variance photo evidence" onChange={handleVariancePhotoSelected} />
+      {layout?.id && <LayoutCollaborationPanel layoutId={layout.id} canApprove={true} />}
       {mobileViewport && forceCanvasOnMobile && (
         <div className="rounded-xl border border-warning/30 bg-warning-soft/20 p-3 text-sm text-warning flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
           <span><strong>Advanced canvas editor on mobile:</strong> use only when necessary. Review, readiness, reports, and print packet are optimized for phones.</span>
@@ -2768,3 +2769,4 @@ function LayoutReadinessPanel({
 }
 
 import { MiniLayoutMetric } from './MiniLayoutMetric';
+import { LayoutCollaborationPanel } from './LayoutCollaborationPanel';
