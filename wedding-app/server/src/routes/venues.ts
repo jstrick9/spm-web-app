@@ -56,6 +56,15 @@ export async function venueRoutes(app: FastifyInstance) {
     return { venue: venuesRepo.update(id, parsed.data) };
   });
 
+  app.post('/api/venues/:id/scaffold/save', { preHandler: requireAuth }, async (req) => {
+    const { id } = req.params as { id: string }; const venue = venuesRepo.findById(id);
+    if (!venue) throw NotFound(); if (!can(req.auth!.memberships, { organizationId: venue.organization_id }, 'venues.manage')) throw Forbidden();
+    const parsed = z.object({ masterLayout: z.record(z.unknown()), canvasWidth: z.number().positive().optional(), canvasHeight: z.number().positive().optional(), description: z.string().max(1000).optional() }).safeParse(req.body);
+    if (!parsed.success) throw BadRequest('invalid-input', parsed.error.issues);
+    const updated = venuesRepo.saveScaffoldRevision(id, { ...parsed.data, userId: req.auth!.userId });
+    return { venue: updated };
+  });
+
   app.post('/api/venues/:id/underlay', { preHandler: requireAuth, bodyLimit: 12 * 1024 * 1024 }, async (req) => {
     const { id } = req.params as { id: string };
     const venue = venuesRepo.findById(id);

@@ -123,6 +123,16 @@ export const venuesRepo = {
     return this.findById(id);
   },
 
+  saveScaffoldRevision(id: string, input: { masterLayout: Record<string, unknown>; canvasWidth?: number; canvasHeight?: number; userId: string; description?: string }): VenueRow | undefined {
+    const current = this.findById(id); if (!current) return undefined;
+    const revision = current.revision + 1;
+    db.transaction(() => {
+      db.prepare(`UPDATE venues SET master_layout=?, canvas_width=COALESCE(?,canvas_width), canvas_height=COALESCE(?,canvas_height), revision=?, approval_status='draft', updated_at=datetime('now') WHERE id=?`).run(stringifyJson(input.masterLayout), input.canvasWidth ?? null, input.canvasHeight ?? null, revision, id);
+      db.prepare(`INSERT INTO venue_space_versions (id,venue_id,revision,master_layout,underlay,change_description,created_by) VALUES (?,?,?,?,?,?,?)`).run(uuid(), id, revision, stringifyJson(input.masterLayout), current.underlay, input.description ?? 'scaffold revision', input.userId);
+    })();
+    return this.findById(id);
+  },
+
   softDelete(id: string): boolean {
     const res = db.prepare(
       `UPDATE venues SET deleted_at = datetime('now') WHERE id = ? AND deleted_at IS NULL`

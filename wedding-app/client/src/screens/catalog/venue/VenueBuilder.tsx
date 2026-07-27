@@ -81,7 +81,7 @@ export function VenueBuilder({ orgId }: Props) {
   const saveMutation = useMutation({
     mutationFn: async () => {
       if (selectedVenue) {
-        return venuesSdk.update(selectedVenue.id, { masterLayout: { walls: lines, doors, windows, pillars }, canvasWidth: dimensions.width, canvasHeight: dimensions.height });
+        return venuesSdk.saveScaffold(selectedVenue.id, { masterLayout: { walls: lines, doors, windows, pillars }, canvasWidth: dimensions.width, canvasHeight: dimensions.height, description: 'Canvas structural update' });
       }
       const res = await sdk.catalog.list(orgId, 'guideline' as any);
       const structural = res.items.find(i => i.name === 'Venue Structural Walls');
