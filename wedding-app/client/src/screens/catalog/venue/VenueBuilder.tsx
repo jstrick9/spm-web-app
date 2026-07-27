@@ -7,6 +7,7 @@ import { sdk } from '../../../sdk';
 import { useToast } from '../../../ui/Toast';
 import { cn } from '../../../ui/lib/cn';
 import { VenueSpaceScaffoldWizard } from './VenueSpaceScaffoldWizard';
+import { venuesSdk } from '../../../sdk/venues';
 
 interface Props {
   orgId: string;
@@ -16,6 +17,7 @@ export function VenueBuilder({ orgId }: Props) {
   const qc = useQueryClient();
   const { toast } = useToast();
   const [dimensions, setDimensions] = useState({ width: 800, height: 600 });
+  const [selectedVenue, setSelectedVenue] = useState<any | null>(null);
   const containerRef = useRef<HTMLDivElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   
@@ -57,6 +59,15 @@ export function VenueBuilder({ orgId }: Props) {
   }, [data]);
 
   useEffect(() => {
+    if (!selectedVenue) return;
+    const layout = typeof selectedVenue.master_layout === 'string' ? JSON.parse(selectedVenue.master_layout || '{}') : (selectedVenue.master_layout || {});
+    setLines((layout.walls || layout.lines || []).map((wall: any) => ({ id: wall.id, points: wall.points })));
+    setDoors(layout.doors || []); setWindows(layout.windows || []); setPillars(layout.pillars || []);
+    if (selectedVenue.canvas_width || selectedVenue.width) setDimensions({ width: selectedVenue.canvas_width || selectedVenue.width * 10, height: selectedVenue.canvas_height || selectedVenue.height * 10 });
+    setHasChanges(false);
+  }, [selectedVenue]);
+
+  useEffect(() => {
     if (selectedId && trRef.current) {
       const stage = trRef.current.getStage();
       const node = stage.findOne('#' + selectedId);
@@ -69,6 +80,9 @@ export function VenueBuilder({ orgId }: Props) {
 
   const saveMutation = useMutation({
     mutationFn: async () => {
+      if (selectedVenue) {
+        return venuesSdk.update(selectedVenue.id, { masterLayout: { walls: lines, doors, windows, pillars }, canvasWidth: dimensions.width, canvasHeight: dimensions.height });
+      }
       const res = await sdk.catalog.list(orgId, 'guideline' as any);
       const structural = res.items.find(i => i.name === 'Venue Structural Walls');
       
@@ -86,6 +100,7 @@ export function VenueBuilder({ orgId }: Props) {
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['catalog', orgId, 'guideline'] });
+      qc.invalidateQueries({ queryKey: ['venues', orgId] });
       toast({ title: 'Venue boundaries saved', variant: 'success' });
       setHasChanges(false);
     }
@@ -251,7 +266,8 @@ export function VenueBuilder({ orgId }: Props) {
 
   return (
     <div className="flex flex-col gap-4">
-       <VenueSpaceScaffoldWizard orgId={orgId} />
+       <VenueSpaceScaffoldWizard orgId={orgId} onSelectVenue={setSelectedVenue} />
+       {selectedVenue && <div className="rounded-lg border border-brand/30 bg-brand-soft/20 px-3 py-2 text-sm text-brand">Editing scaffold: <strong>{selectedVenue.name}</strong> · {selectedVenue.width}×{selectedVenue.height} · {selectedVenue.unit_system ?? 'imperial'} · {selectedVenue.approval_status ?? 'draft'}</div>}
        <div className="flex flex-col lg:flex-row items-start lg:items-center justify-between p-3 bg-surface border border-border rounded-lg shadow-sm gap-4">
           <div className="flex flex-wrap gap-2">
              <Button variant={mode === 'select' ? 'default' : 'secondary'} size="sm" onClick={() => { setMode('select'); setCurrentPoints([]); }}>
