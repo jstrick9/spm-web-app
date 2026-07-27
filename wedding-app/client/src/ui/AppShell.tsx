@@ -263,7 +263,7 @@ export function AppShell({
 
           {/* Brand — reads from config for white-label support */}
           <div className="flex items-center gap-2 min-w-0">
-            {branding.logoUrl && <img src={branding.logoUrl} alt="" className="h-7 w-7 shrink-0 rounded-md object-cover" aria-hidden="true" />}
+            {branding.logoUrl && <img src={branding.logoUrl} alt="" className="h-10 w-auto max-w-[120px] shrink-0 rounded-md border border-border bg-white p-1 object-contain" aria-hidden="true" />}
             <div className="hidden sm:flex min-w-0 flex-col leading-tight">
               <a href="#/" className="font-display text-lg font-bold text-brand truncate" aria-label={`${branding.platformName} — go to dashboard`}>{branding.platformName}</a>
               {(branding.tagline || branding.supportEmail || branding.websiteUrl) && (
