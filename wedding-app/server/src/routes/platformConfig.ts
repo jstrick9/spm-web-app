@@ -26,7 +26,8 @@ import { db } from '../db/database.js';
 import { eventsRepo, orgsRepo, auditRepo, adminChangeRequestsRepo } from '../db/repos/index.js';
 import { parseJson, stringifyJson } from '../lib/json.js';
 import { BadRequest, Forbidden, NotFound } from '../lib/errors.js';
-import { saveDataUri } from '../lib/fileStorage.js';
+import { saveDataUri, publicFilePath } from '../lib/fileStorage.js';
+import { createReadStream, existsSync } from 'node:fs';
 
 // Max payload size: 64 KB. PlatformConfig should be ~5-10 KB for most
 // installs; 64 KB is plenty of slack and prevents abuse.
@@ -88,17 +89,33 @@ export async function platformConfigRoutes(app: FastifyInstance) {
     return { config: parsed.data };
   });
 
+  app.get('/api/public/orgs/:orgId/logo', async (req, reply) => {
+    const { orgId } = req.params as { orgId: string };
+    const org = orgsRepo.findById(orgId);
+    if (!org) throw NotFound('org-not-found');
+    const settings = parseJson<Record<string, unknown>>(org.settings, {});
+    const branding = ((settings.platformConfig as Record<string, any> | undefined)?.branding ?? {}) as Record<string, any>;
+    const source = typeof branding.logoStorageUrl === 'string' ? branding.logoStorageUrl : branding.logoUrl;
+    if (typeof source !== 'string' || !source) throw NotFound('logo-not-found');
+    const path = publicFilePath(source);
+    if (!path) return reply.redirect(source);
+    if (!existsSync(path)) throw NotFound('logo-file-not-found');
+    reply.header('Cache-Control', 'public, max-age=300');
+    return reply.send(createReadStream(path));
+  });
+
   app.post('/api/orgs/:orgId/config/logo', { preHandler: requireAuth, bodyLimit: 12 * 1024 * 1024 }, async (req) => {
     const { orgId } = req.params as { orgId: string };
     assertCan(req.auth!.memberships, { organizationId: orgId }, 'roles.manage');
     const dataUri = (req.body as { dataUri?: unknown })?.dataUri;
     if (typeof dataUri !== 'string') throw BadRequest('logo-required');
-    const logoUrl = saveDataUri(dataUri, `org_logo_${orgId}`);
+    const logoStorageUrl = saveDataUri(dataUri, `org_logo_${orgId}`);
+    const logoUrl = `/api/public/orgs/${orgId}/logo`;
     const org = orgsRepo.findById(orgId);
     if (!org) throw NotFound('org-not-found');
     const settings = parseJson<Record<string, unknown>>(org.settings, {});
     const config = (settings.platformConfig as Record<string, any>) ?? {};
-    settings.platformConfig = { ...config, branding: { ...(config.branding ?? {}), logoUrl } };
+    settings.platformConfig = { ...config, branding: { ...(config.branding ?? {}), logoUrl, logoStorageUrl } };
     orgsRepo.updateSettings(orgId, settings);
     return { logoUrl, config: settings.platformConfig };
   });

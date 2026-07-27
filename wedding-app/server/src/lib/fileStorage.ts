@@ -36,5 +36,6 @@ export function saveDataUri(dataUri: string, prefix = 'img'): string { return sa
 export function savePrivateImageDataUri(dataUri: string, prefix = 'img'): string { return save(dataUri, prefix, PRIVATE_DIR, '/uploads/private', IMAGE_TYPES, 'image'); }
 /** Contracts, COIs and couple documents are always private. */
 export function saveDocumentDataUri(dataUri: string, prefix = 'doc'): string { return save(dataUri, prefix, PRIVATE_DIR, '/uploads/private', DOCUMENT_TYPES, 'document'); }
+export function publicFilePath(urlPath: string): string | null { if (!urlPath.startsWith('/uploads/public/')) return null; return join(PUBLIC_DIR, basename(urlPath)); }
 export function privateFilePath(urlPath: string): string | null { if (!urlPath.startsWith('/uploads/private/')) return null; return join(PRIVATE_DIR, basename(urlPath)); }
 export function deleteFile(urlPath: string): void { const dir = urlPath.startsWith('/uploads/private/') ? PRIVATE_DIR : urlPath.startsWith('/uploads/public/') ? PUBLIC_DIR : null; if (!dir) return; try { unlinkSync(join(dir, basename(urlPath))); } catch {} }

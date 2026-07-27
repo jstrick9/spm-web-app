@@ -67,9 +67,12 @@ describe('Org platform config', () => {
     const png = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+/p9sAAAAASUVORK5CYII=';
     const uploaded = await req(u.token, 'POST', `/api/orgs/${u.orgId}/config/logo`, { dataUri: png });
     expect(uploaded.statusCode).toBe(200);
-    expect(uploaded.json().logoUrl).toMatch(/^\/uploads\/public\/org_logo_/);
+    expect(uploaded.json().logoUrl).toBe(`/api/public/orgs/${u.orgId}/logo`);
     const get = await req(u.token, 'GET', `/api/orgs/${u.orgId}/config`);
     expect(get.json().config.branding.logoUrl).toBe(uploaded.json().logoUrl);
+    expect(get.json().config.branding.logoStorageUrl).toMatch(/^\/uploads\/public\/org_logo_/);
+    const publicLogo = await app.inject({ method: 'GET', url: uploaded.json().logoUrl });
+    expect(publicLogo.statusCode).toBe(200);
   });
 
   it('accepts a logo payload larger than the normal API body limit', async () => {
