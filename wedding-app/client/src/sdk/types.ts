@@ -158,6 +158,14 @@ export interface SdkVenue {
   capacity: number;
   width: number;
   height: number;
+  canvas_width?: number | null;
+  canvas_height?: number | null;
+  master_layout?: string;
+  underlay?: string;
+  unit_system?: 'imperial' | 'metric';
+  template_key?: string;
+  approval_status?: 'draft' | 'approved' | 'archived';
+  revision?: number;
   created_at: string;
 }
 

@@ -306,6 +306,7 @@ export function VenueBuilder({ orgId }: Props) {
        </div>
 
        <div ref={containerRef} className="w-full h-[600px] border border-border rounded-lg bg-surface relative overflow-hidden">
+          {(() => { try { const underlay = selectedVenue?.underlay ? (typeof selectedVenue.underlay === 'string' ? JSON.parse(selectedVenue.underlay) : selectedVenue.underlay) : null; return underlay?.url ? <img src={underlay.url} alt="Venue reference underlay" className="absolute inset-0 h-full w-full object-contain opacity-50 pointer-events-none" /> : null; } catch { return null; } })()}
           <Stage 
             width={dimensions.width} 
             height={dimensions.height}
