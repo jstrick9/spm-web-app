@@ -124,7 +124,7 @@
   body {
     background: rgb(var(--color-bg));
     color: rgb(var(--color-fg));
-    font-family: 'Inter', system-ui, -apple-system, sans-serif;
+    font-family: var(--font-body, 'Inter'), system-ui, -apple-system, sans-serif;
     font-feature-settings: 'cv11', 'ss01';   /* Inter alt forms */
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
@@ -134,7 +134,7 @@
   /* ─── Type stack ────────────────────────────────── */
   .font-display {
     /* Editorial display (Fraunces). Falls back to system serif. */
-    font-family: var(--font-display, 'Fraunces'), 'Cambria', Georgia, serif;
+    font-family: var(--font-display, 'Fraunces'), 'Cambria', Georgia, serif !important;
     font-variation-settings: 'opsz' 144, 'SOFT' 50;
     letter-spacing: -0.01em;
   }

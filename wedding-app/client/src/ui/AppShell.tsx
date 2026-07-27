@@ -275,8 +275,14 @@ export function AppShell({
                 aria-hidden="true"
               />
             )}
-            <span className="hidden sm:inline font-bold text-brand font-serif">
-              {branding.platformName}
+            <span className="hidden sm:flex min-w-0 flex-col leading-tight">
+              <span className="font-bold text-brand font-display truncate">{branding.platformName}</span>
+              {(branding.tagline || branding.supportEmail) && (
+                <span className="text-[10px] text-fg-muted truncate">
+                  {branding.tagline || branding.supportEmail}
+                  {branding.tagline && branding.supportEmail ? ` · ${branding.supportEmail}` : ''}
+                </span>
+              )}
             </span>
           </a>
 

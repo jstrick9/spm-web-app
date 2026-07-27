@@ -62,6 +62,16 @@ describe('Org platform config', () => {
     expect(get.json().config).toEqual(cfg);
   });
 
+  it('uploads a public organization logo and persists the branding URL', async () => {
+    const u = await register();
+    const png = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+/p9sAAAAASUVORK5CYII=';
+    const uploaded = await req(u.token, 'POST', `/api/orgs/${u.orgId}/config/logo`, { dataUri: png });
+    expect(uploaded.statusCode).toBe(200);
+    expect(uploaded.json().logoUrl).toMatch(/^\/uploads\/public\/org_logo_/);
+    const get = await req(u.token, 'GET', `/api/orgs/${u.orgId}/config`);
+    expect(get.json().config.branding.logoUrl).toBe(uploaded.json().logoUrl);
+  });
+
   it('non-admin (staff) cannot PUT', async () => {
     const owner = await register();
     const staff = await register();

@@ -39,6 +39,18 @@ describe('PlatformStudio', () => {
     }
   });
 
+  it('exposes user-friendly widgets, layout, and branding controls', async () => {
+    render(harness(<PlatformStudio orgId={ORG_ID} onSaved={() => {}} />));
+    await userEvent.click(await screen.findByRole('tab', { name: 'Widgets' }));
+    expect(screen.getByRole('heading', { name: 'Widget builder' })).toBeInTheDocument();
+    await userEvent.click(screen.getByRole('tab', { name: 'Layout' }));
+    expect(screen.getByRole('heading', { name: 'Navigation and features' })).toBeInTheDocument();
+    await userEvent.click(screen.getByRole('tab', { name: 'Branding' }));
+    expect(screen.getByLabelText('Heading font').tagName).toBe('SELECT');
+    expect(screen.getByLabelText('Body font').tagName).toBe('SELECT');
+    expect(screen.getByLabelText('Upload logo')).toHaveAttribute('accept', 'image/png,image/jpeg,image/bmp');
+  });
+
   it('PUTs the preset to the server when Apply is clicked', async () => {
     let putBody: unknown;
     server.use(
