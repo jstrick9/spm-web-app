@@ -9,7 +9,7 @@ const PUBLIC_DIR = join(UPLOAD_DIR, 'public');
 const PRIVATE_DIR = join(UPLOAD_DIR, 'private');
 for (const dir of [PUBLIC_DIR, PRIVATE_DIR]) if (!existsSync(dir)) mkdirSync(dir, { recursive: true });
 
-const IMAGE_TYPES: Record<string, string> = { 'image/jpeg':'jpg','image/jpg':'jpg','image/png':'png','image/webp':'webp','image/gif':'gif','image/avif':'avif' };
+const IMAGE_TYPES: Record<string, string> = { 'image/jpeg':'jpg','image/jpg':'jpg','image/png':'png','image/webp':'webp','image/gif':'gif','image/avif':'avif','image/bmp':'bmp' };
 const DOCUMENT_TYPES: Record<string, string> = { 'application/pdf':'pdf','image/jpeg':'jpg','image/jpg':'jpg','image/png':'png','image/webp':'webp' };
 const MAX_DECODED_BYTES = 8 * 1024 * 1024;
 

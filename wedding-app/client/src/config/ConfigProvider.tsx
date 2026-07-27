@@ -72,7 +72,10 @@ export function ConfigProvider({
     return resolveConfig({
       org,
       event,
-      user: mergePartial(user, override ?? undefined),
+      // Platform Studio themes are organization-wide. User preferences may
+      // still configure layout/widgets, but cannot silently mask an owner
+      // theme for the rest of the organization.
+      user: mergePartial(user ? { ...user, theme: undefined } : user, override ?? undefined),
     });
   }, [org, event, user, override]);
 

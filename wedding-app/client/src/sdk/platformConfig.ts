@@ -28,6 +28,9 @@ export const platformConfigSdk = {
   putOrg(orgId: string, cfg: PartialPlatformConfig): Promise<{ config: PartialPlatformConfig }> {
     return api.put(`/api/orgs/${orgId}/config`, cfg);
   },
+  uploadOrgLogo(orgId: string, dataUri: string): Promise<{ logoUrl: string; config: PartialPlatformConfig }> {
+    return api.post(`/api/orgs/${orgId}/config/logo`, { dataUri });
+  },
   listAdminChangeRequests(orgId: string): Promise<{ requests: AdminChangeRequest[] }> {
     return api.get(`/api/orgs/${orgId}/admin-change-requests`);
   },

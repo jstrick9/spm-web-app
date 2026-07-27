@@ -24,7 +24,7 @@ import { usePlatformConfig } from '../config/ConfigProvider';
 import { THEME_PRESETS, type ThemePreset } from '../config/presets';
 import { sdk } from '../sdk';
 import type { PartialPlatformConfig } from '../config/schema';
-import { BrandingEditor, ConfigSectionEditor } from './platformStudioEditors';
+import { BrandingEditor, LayoutBuilder, WidgetBuilder } from './platformStudioEditors';
 
 interface Props {
   orgId: string;
@@ -63,6 +63,22 @@ export function PlatformStudio({ orgId, onSaved }: Props) {
     } catch (e) {
       toast({ title: 'Could not save', description: (e as Error).message, variant: 'destructive' });
     } finally { setBusyId(null); }
+  }
+
+  async function uploadLogo(file: File) {
+    if (!['image/png', 'image/jpeg', 'image/bmp'].includes(file.type)) {
+      toast({ title: 'Unsupported logo type', description: 'Upload a PNG, JPEG, or BMP image.', variant: 'destructive' });
+      return;
+    }
+    if (file.size > 8 * 1024 * 1024) { toast({ title: 'Logo too large', description: 'Upload an image under 8 MB.', variant: 'destructive' }); return; }
+    setBusyId('branding');
+    try {
+      const dataUri = await new Promise<string>((resolve, reject) => { const reader = new FileReader(); reader.onload = () => resolve(String(reader.result)); reader.onerror = reject; reader.readAsDataURL(file); });
+      const r = await sdk.platformConfig.uploadOrgLogo(orgId, dataUri);
+      setServerConfig(r.config); onSaved(r.config);
+      toast({ title: 'Logo uploaded', description: 'Save branding to publish any remaining changes.', variant: 'success' });
+    } catch (e) { toast({ title: 'Logo upload failed', description: (e as Error).message, variant: 'destructive' }); }
+    finally { setBusyId(null); }
   }
 
   async function apply(preset: ThemePreset) {
@@ -207,9 +223,7 @@ export function PlatformStudio({ orgId, onSaved }: Props) {
           </TabsContent>
 
           <TabsContent value="widgets">
-            <ConfigSectionEditor
-              title="Widget slots"
-              description="Configure the widgets rendered in each dashboard, event, and portal slot."
+            <WidgetBuilder
               value={current.widgets ?? {}}
               busy={busyId === 'widgets'}
               onSave={(widgets) => void saveConfig({ ...current, widgets }, 'widgets')}
@@ -217,9 +231,7 @@ export function PlatformStudio({ orgId, onSaved }: Props) {
           </TabsContent>
 
           <TabsContent value="layout">
-            <ConfigSectionEditor
-              title="Navigation and feature layout"
-              description="Configure navigation order, hidden items, sidebar defaults, and feature flags."
+            <LayoutBuilder
               value={current.layout ?? {}}
               busy={busyId === 'layout'}
               onSave={(layout) => void saveConfig({ ...current, layout }, 'layout')}
@@ -231,6 +243,7 @@ export function PlatformStudio({ orgId, onSaved }: Props) {
               value={current.branding ?? {}}
               busy={busyId === 'branding'}
               onSave={(branding) => void saveConfig({ ...current, branding }, 'branding')}
+              onUploadLogo={(file) => void uploadLogo(file)}
             />
           </TabsContent>
         </Tabs>

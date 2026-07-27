@@ -26,6 +26,7 @@ import { db } from '../db/database.js';
 import { eventsRepo, orgsRepo, auditRepo, adminChangeRequestsRepo } from '../db/repos/index.js';
 import { parseJson, stringifyJson } from '../lib/json.js';
 import { BadRequest, Forbidden, NotFound } from '../lib/errors.js';
+import { saveDataUri } from '../lib/fileStorage.js';
 
 // Max payload size: 64 KB. PlatformConfig should be ~5-10 KB for most
 // installs; 64 KB is plenty of slack and prevents abuse.
@@ -85,6 +86,21 @@ export async function platformConfigRoutes(app: FastifyInstance) {
     });
 
     return { config: parsed.data };
+  });
+
+  app.post('/api/orgs/:orgId/config/logo', { preHandler: requireAuth }, async (req) => {
+    const { orgId } = req.params as { orgId: string };
+    assertCan(req.auth!.memberships, { organizationId: orgId }, 'roles.manage');
+    const dataUri = (req.body as { dataUri?: unknown })?.dataUri;
+    if (typeof dataUri !== 'string') throw BadRequest('logo-required');
+    const logoUrl = saveDataUri(dataUri, `org_logo_${orgId}`);
+    const org = orgsRepo.findById(orgId);
+    if (!org) throw NotFound('org-not-found');
+    const settings = parseJson<Record<string, unknown>>(org.settings, {});
+    const config = (settings.platformConfig as Record<string, any>) ?? {};
+    settings.platformConfig = { ...config, branding: { ...(config.branding ?? {}), logoUrl } };
+    orgsRepo.updateSettings(orgId, settings);
+    return { logoUrl, config: settings.platformConfig };
   });
 
   app.get('/api/orgs/:orgId/admin-change-requests', { preHandler: requireAuth }, async (req) => {
