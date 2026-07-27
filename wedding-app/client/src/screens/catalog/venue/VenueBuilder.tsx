@@ -40,6 +40,7 @@ export function VenueBuilder({ orgId }: Props) {
   const [scale, setScale] = useState(1);
   const [gridSize, setGridSize] = useState(50);
   const [snapToGrid, setSnapToGrid] = useState(true);
+  const [gridPhysical, setGridPhysical] = useState(5);
   const [pos, setPos] = useState({ x: 0, y: 0 });
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const trRef = useRef<any>(null);
@@ -70,7 +71,11 @@ export function VenueBuilder({ orgId }: Props) {
     const layout = typeof selectedVenue.master_layout === 'string' ? JSON.parse(selectedVenue.master_layout || '{}') : (selectedVenue.master_layout || {});
     setLines((layout.walls || layout.lines || []).map((wall: any) => ({ id: wall.id, points: wall.points })));
     setDoors(layout.doors || []); setWindows(layout.windows || []); setPillars(layout.pillars || []); setZones(layout.zones || []);
-    if (selectedVenue.canvas_width || selectedVenue.width) setDimensions({ width: selectedVenue.canvas_width || selectedVenue.width * 10, height: selectedVenue.canvas_height || selectedVenue.height * 10 });
+    if (selectedVenue.canvas_width || selectedVenue.width) {
+      const canvasWidth = selectedVenue.canvas_width || selectedVenue.width * 10;
+      setDimensions({ width: canvasWidth, height: selectedVenue.canvas_height || selectedVenue.height * 10 });
+      if (selectedVenue.width) setGridPhysical(Number(((selectedVenue.width / canvasWidth) * gridSize).toFixed(2)));
+    }
     const underlay = (() => { try { return typeof selectedVenue.underlay === 'string' ? JSON.parse(selectedVenue.underlay || '{}') : (selectedVenue.underlay || {}); } catch { return {}; } })();
     setUnderlayOpacity(Number(underlay.opacity ?? 0.5)); setUnderlayLocked(underlay.locked !== false); setUnderlayRotation(Number(underlay.rotation ?? 0)); setUnderlayScale(Number(underlay.scale ?? 1));
     setHasChanges(false);
@@ -324,6 +329,7 @@ export function VenueBuilder({ orgId }: Props) {
              <Button variant={mode === 'add_loading' ? 'default' : 'secondary'} size="sm" onClick={() => setMode('add_loading')}>Loading</Button>
              <label className="ml-2 flex items-center gap-1 text-xs text-fg-muted"><input type="checkbox" checked={snapToGrid} onChange={(e) => setSnapToGrid(e.target.checked)} /> Snap</label>
              <select aria-label="Grid size" className="h-8 rounded border border-border bg-surface px-2 text-xs" value={gridSize} onChange={(e) => setGridSize(Number(e.target.value))}><option value={25}>Fine grid</option><option value={50}>Standard grid</option><option value={100}>Large grid</option></select>
+             {selectedVenue && <span className="text-xs text-fg-muted">Grid ≈ {gridPhysical} {selectedVenue.unit_system === 'metric' ? 'm' : 'ft'}</span>}
           </div>
 
           <div className="flex flex-wrap gap-2 items-center">
