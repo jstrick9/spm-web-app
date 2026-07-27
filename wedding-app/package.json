@@ -13,7 +13,7 @@
     "seed": "npm --prefix server run seed",
     "reset": "bash scripts/reset-local.sh",
     "reset:win": "powershell -ExecutionPolicy Bypass -File scripts\\reset-local.ps1",
-    "dev:server": "npm --prefix server run dev",
+    "dev:server": "bash scripts/start-dev-server.sh",
     "dev:client": "npm --prefix client run dev",
     "build": "npm --prefix client run build && npm --prefix server run build",
     "test": "npm --prefix server test",
