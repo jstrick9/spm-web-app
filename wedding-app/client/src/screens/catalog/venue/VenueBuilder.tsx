@@ -269,6 +269,7 @@ export function VenueBuilder({ orgId }: Props) {
     setDoors(prev => prev.filter(d => d.id !== selectedId));
     setWindows(prev => prev.filter(w => w.id !== selectedId));
     setPillars(prev => prev.filter(p => p.id !== selectedId));
+    setZones(prev => prev.filter(zone => zone.id !== selectedId));
     setSelectedId(null);
     setHasChanges(true);
   };
@@ -398,7 +399,7 @@ export function VenueBuilder({ orgId }: Props) {
               ))}
 
               {/* Operational zones */}
-              {zones.map((zone) => <Group key={zone.id} x={zone.x} y={zone.y}><Rect width={zone.width} height={zone.height} fill={zone.type === 'exit' ? '#dcfce7' : zone.type === 'power' ? '#fef3c7' : '#dbeafe'} stroke={zone.type === 'exit' ? '#16a34a' : zone.type === 'power' ? '#d97706' : '#2563eb'} strokeWidth={2} dash={[6, 4]} /><Text text={zone.type.replace('_', ' ')} fontSize={11} fill="#374151" width={zone.width} align="center" y={zone.height / 2 - 6} /></Group>)}
+              {zones.map((zone) => <Group key={zone.id} id={zone.id} x={zone.x} y={zone.y} draggable={mode === 'select'} onClick={() => mode === 'select' && setSelectedId(zone.id)} onDragEnd={(e) => { setZones(prev => prev.map(item => item.id === zone.id ? { ...item, x: e.target.x(), y: e.target.y() } : item)); setHasChanges(true); }}><Rect width={zone.width} height={zone.height} fill={zone.type === 'exit' ? '#dcfce7' : zone.type === 'power' ? '#fef3c7' : '#dbeafe'} stroke={zone.type === 'exit' ? '#16a34a' : zone.type === 'power' ? '#d97706' : '#2563eb'} strokeWidth={2} dash={[6, 4]} /><Text text={zone.type.replace('_', ' ')} fontSize={11} fill="#374151" width={zone.width} align="center" y={zone.height / 2 - 6} /></Group>)}
 
               {/* Drawing wall preview */}
               {currentPoints.length > 0 && (
