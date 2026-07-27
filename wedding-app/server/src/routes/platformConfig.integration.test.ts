@@ -72,6 +72,13 @@ describe('Org platform config', () => {
     expect(get.json().config.branding.logoUrl).toBe(uploaded.json().logoUrl);
   });
 
+  it('accepts a logo payload larger than the normal API body limit', async () => {
+    const u = await register();
+    const dataUri = `data:image/png;base64,${'A'.repeat(3_000_000)}`;
+    const uploaded = await req(u.token, 'POST', `/api/orgs/${u.orgId}/config/logo`, { dataUri });
+    expect(uploaded.statusCode).toBe(200);
+  });
+
   it('non-admin (staff) cannot PUT', async () => {
     const owner = await register();
     const staff = await register();

@@ -20,7 +20,7 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 // ── Mocks ─────────────────────────────────────────────────────────────────
 
 vi.mock('../config/ConfigProvider', () => ({
-  useBranding: () => ({ platformName: 'Wedding Venue Intelligence', logoUrl: null }),
+  useBranding: () => ({ platformName: 'Wedding Venue Intelligence', logoUrl: null, tagline: 'Every detail intentional', supportEmail: 'support@example.com', websiteUrl: 'https://example.com' }),
   useFeatureEnabled: () => true,
   useNavItems: () => ['dashboard', 'events', 'guests', 'vendors', 'calendar', 'intelligence', 'system'],
 }));
@@ -86,9 +86,11 @@ describe('AppShell', () => {
     expect(screen.getByTestId('content')).toBeTruthy();
   });
 
-  it('renders the platform name from branding config', () => {
+  it('renders branding contact links from configuration', () => {
     renderShell();
     expect(screen.getAllByText('Wedding Venue Intelligence').length).toBeGreaterThan(0);
+    expect(screen.getByRole('link', { name: 'support@example.com' })).toHaveAttribute('href', 'mailto:support@example.com');
+    expect(screen.getByRole('link', { name: 'Website' })).toHaveAttribute('href', 'https://example.com');
   });
 
   // ── Skip link ────────────────────────────────────────────────────────────

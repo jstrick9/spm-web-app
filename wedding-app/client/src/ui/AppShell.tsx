@@ -268,7 +268,7 @@ export function AppShell({
               <span className="hidden sm:inline font-bold text-brand font-display truncate">{branding.platformName}</span>
             </a>
             {(branding.tagline || branding.supportEmail || branding.websiteUrl) && (
-              <span className="hidden lg:inline text-[10px] text-fg-muted truncate">
+              <span className="hidden sm:inline text-[10px] text-fg-muted truncate max-w-[420px]">
                 {branding.tagline}
                 {branding.tagline && (branding.supportEmail || branding.websiteUrl) ? ' · ' : ''}
                 {branding.supportEmail && <a className="underline hover:text-brand" href={`mailto:${branding.supportEmail}`}>{branding.supportEmail}</a>}

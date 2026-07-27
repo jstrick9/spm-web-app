@@ -88,7 +88,7 @@ export async function platformConfigRoutes(app: FastifyInstance) {
     return { config: parsed.data };
   });
 
-  app.post('/api/orgs/:orgId/config/logo', { preHandler: requireAuth }, async (req) => {
+  app.post('/api/orgs/:orgId/config/logo', { preHandler: requireAuth, bodyLimit: 12 * 1024 * 1024 }, async (req) => {
     const { orgId } = req.params as { orgId: string };
     assertCan(req.auth!.memberships, { organizationId: orgId }, 'roles.manage');
     const dataUri = (req.body as { dataUri?: unknown })?.dataUri;
