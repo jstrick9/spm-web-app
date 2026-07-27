@@ -31,6 +31,9 @@ export const venuesSdk = {
   update(venueId: string, patch: Partial<VenueInput>): Promise<{ venue: SdkVenue }> {
     return api.patch(`/api/venues/${venueId}`, patch);
   },
+  uploadUnderlay(venueId: string, dataUri: string): Promise<{ venue: SdkVenue }> {
+    return api.post(`/api/venues/${venueId}/underlay`, { dataUri });
+  },
   delete(venueId: string): Promise<void> {
     return api.delete(`/api/venues/${venueId}`);
   },

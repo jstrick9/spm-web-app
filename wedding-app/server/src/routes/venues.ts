@@ -4,6 +4,7 @@ import { requireAuth } from '../middleware/auth.js';
 import { can } from '../lib/rbac.js';
 import { venuesRepo, auditRepo } from '../db/repos/index.js';
 import { BadRequest, Forbidden, NotFound } from '../lib/errors.js';
+import { saveDataUri } from '../lib/fileStorage.js';
 
 const venueSchema = z.object({
   name:          z.string().min(1).max(200),
@@ -53,6 +54,19 @@ export async function venueRoutes(app: FastifyInstance) {
     const parsed = venueSchema.partial().safeParse(req.body);
     if (!parsed.success) throw BadRequest('invalid-input', parsed.error.issues);
     return { venue: venuesRepo.update(id, parsed.data) };
+  });
+
+  app.post('/api/venues/:id/underlay', { preHandler: requireAuth, bodyLimit: 12 * 1024 * 1024 }, async (req) => {
+    const { id } = req.params as { id: string };
+    const venue = venuesRepo.findById(id);
+    if (!venue) throw NotFound();
+    if (!can(req.auth!.memberships, { organizationId: venue.organization_id }, 'venues.manage')) throw Forbidden();
+    const dataUri = (req.body as { dataUri?: unknown })?.dataUri;
+    if (typeof dataUri !== 'string') throw BadRequest('underlay-required');
+    const url = saveDataUri(dataUri, `venue_underlay_${id}`);
+    const current = (() => { try { return JSON.parse(venue.underlay || '{}'); } catch { return {}; } })();
+    const updated = venuesRepo.update(id, { underlay: { ...current, url, locked: true, opacity: 0.55, scale: 1, rotation: 0 } });
+    return { venue: updated };
   });
 
   app.delete('/api/venues/:id', { preHandler: requireAuth }, async (req, reply) => {
