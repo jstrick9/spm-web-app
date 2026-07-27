@@ -85,6 +85,7 @@ export const brandingConfigSchema = z.object({
   logoUrl:      z.string().url().optional().or(z.literal('')),
   favicon:      z.string().url().optional().or(z.literal('')),
   supportEmail: z.string().email().optional().or(z.literal('')),
+  websiteUrl:   z.string().url().optional().or(z.literal('')),
   tagline:      z.string().max(140).optional(),
   
   // Custom Dynamic Google Branding parameters

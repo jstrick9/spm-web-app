@@ -83,8 +83,11 @@ export function resolveConfig(layers: ConfigLayers = {}): PlatformConfig {
   }
 
   // ─── Real-Time Dynamic Branding to Theme mapping ───
+  // An explicit Platform Studio theme must win over a legacy branding color;
+  // otherwise a saved brandColor silently masks every theme preset.
+  const explicitTheme = [layers.org, layers.event, layers.user].some((layer) => !!layer?.theme?.brand);
   if (out.branding) {
-    if ((out.branding as any).brandColor) {
+    if (!explicitTheme && (out.branding as any).brandColor) {
       const rgb = hexToRgb((out.branding as any).brandColor);
       if (rgb) {
         out.theme.brand = `${rgb.r} ${rgb.g} ${rgb.b}`;

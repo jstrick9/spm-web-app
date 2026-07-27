@@ -279,8 +279,10 @@ export function AppShell({
               <span className="font-bold text-brand font-display truncate">{branding.platformName}</span>
               {(branding.tagline || branding.supportEmail) && (
                 <span className="text-[10px] text-fg-muted truncate">
-                  {branding.tagline || branding.supportEmail}
-                  {branding.tagline && branding.supportEmail ? ` · ${branding.supportEmail}` : ''}
+                  {branding.tagline}
+                  {branding.tagline && branding.supportEmail ? ' · ' : ''}
+                  {branding.supportEmail && <a className="underline hover:text-brand" href={`mailto:${branding.supportEmail}`}>{branding.supportEmail}</a>}
+                  {branding.websiteUrl && <><span>{branding.supportEmail ? ' · ' : ''}</span><a className="underline hover:text-brand" href={branding.websiteUrl} target="_blank" rel="noreferrer">Website</a></>}
                 </span>
               )}
             </span>
