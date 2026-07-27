@@ -5,6 +5,7 @@ export { eventsRepo, subEventsRepo } from './events.js';
 export { venuesRepo } from './venues.js';
 export { catalogRepo, type CatalogKind, type CatalogItem } from './catalog.js';
 export { layoutsRepo } from './layouts.js';
+export { layoutCollaborationRepo } from './layoutCollaboration.js';
 export { layoutOpsRepo, type LayoutFloorWalkStatus, type LayoutVarianceStatus, type LayoutPacketAudience } from './layoutOps.js';
 export { guestsRepo, rsvpRepo, portalConfigRepo } from './guests.js';
 export { guestIdentityRepo, type DuplicateCluster } from './guestIdentity.js';

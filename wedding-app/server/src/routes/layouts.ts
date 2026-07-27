@@ -2,7 +2,7 @@ import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
 import { requireAuth } from '../middleware/auth.js';
 import { can } from '../lib/rbac.js';
-import { auditRepo, assetsRepo, eventsRepo, layoutOpsRepo, layoutsRepo } from '../db/repos/index.js';
+import { auditRepo, assetsRepo, eventsRepo, layoutCollaborationRepo, layoutOpsRepo, layoutsRepo } from '../db/repos/index.js';
 import { savePrivateImageDataUri, privateFilePath } from '../lib/fileStorage.js';
 import { createReadStream, existsSync } from 'node:fs';
 import { BadRequest, Forbidden, NotFound, HttpError } from '../lib/errors.js';
@@ -49,8 +49,10 @@ const setupPacketSchema = z.object({
   payload: z.record(z.unknown()).optional(),
   expiresAt: z.string().optional(),
 });
+const commentSchema = z.object({ body: z.string().min(1).max(4000), target: z.record(z.unknown()).optional() });
+const reviewDecisionSchema = z.object({ decision: z.enum(['approved','changes_requested','rejected']), note: z.string().max(2000).optional() });
 
-function requireLayoutAccess(layoutId: string, memberships: any[], permission: 'layouts.view' | 'layouts.edit') {
+function requireLayoutAccess(layoutId: string, memberships: any[], permission: 'layouts.view' | 'layouts.edit' | 'layouts.publish') {
   const layout = layoutsRepo.findById(layoutId);
   if (!layout) throw NotFound();
   if (!can(memberships, { organizationId: layout.organization_id }, permission)) throw Forbidden();
@@ -133,6 +135,34 @@ export async function layoutRoutes(app: FastifyInstance) {
     if (!layout) throw NotFound();
     if (!can(req.auth!.memberships, { organizationId: layout.organization_id }, 'layouts.view')) throw Forbidden();
     return { versions: layoutsRepo.listVersions(id) };
+  });
+
+  app.get('/api/layouts/:id/collaboration', { preHandler: requireAuth }, async (req) => {
+    const { id } = req.params as { id: string };
+    requireLayoutAccess(id, req.auth!.memberships, 'layouts.view');
+    return { comments: layoutCollaborationRepo.listComments(id), reviews: layoutCollaborationRepo.listReviews(id) };
+  });
+
+  app.post('/api/layouts/:id/comments', { preHandler: requireAuth }, async (req, reply) => {
+    const { id } = req.params as { id: string }; const layout = requireLayoutAccess(id, req.auth!.memberships, 'layouts.edit');
+    const parsed = commentSchema.safeParse(req.body); if (!parsed.success) throw BadRequest('invalid-input', parsed.error.issues);
+    return reply.code(201).send({ comment: layoutCollaborationRepo.addComment({ layoutId: id, orgId: layout.organization_id, eventId: layout.event_id, revision: layout.revision, authorUserId: req.auth!.userId, authorLabel: req.auth!.email, body: parsed.data.body, target: parsed.data.target }) });
+  });
+
+  app.post('/api/layouts/:id/review-request', { preHandler: requireAuth }, async (req, reply) => {
+    const { id } = req.params as { id: string }; const layout = requireLayoutAccess(id, req.auth!.memberships, 'layouts.edit');
+    const review = layoutCollaborationRepo.requestReview({ layoutId: id, orgId: layout.organization_id, eventId: layout.event_id, revision: layout.revision, userId: req.auth!.userId });
+    return reply.code(201).send({ review });
+  });
+
+  app.post('/api/layouts/:id/reviews/:reviewId/decision', { preHandler: requireAuth }, async (req) => {
+    const { id, reviewId } = req.params as { id: string; reviewId: string }; const layout = requireLayoutAccess(id, req.auth!.memberships, 'layouts.publish');
+    const parsed = reviewDecisionSchema.safeParse(req.body); if (!parsed.success) throw BadRequest('invalid-input', parsed.error.issues);
+    const review = layoutCollaborationRepo.decideReview(reviewId, req.auth!.userId, parsed.data.decision, parsed.data.note);
+    if (!review || (review as any).layout_id !== id) throw NotFound('review-not-found');
+    const approvalStatus = parsed.data.decision === 'approved' ? 'approved' : parsed.data.decision === 'changes_requested' ? 'draft' : 'rejected';
+    const saved = layoutsRepo.saveRevision({ layoutId: id, payload: JSON.parse(layout.payload), updatedBy: req.auth!.userId, expectedRevision: layout.revision, approvalStatus, changeDescription: parsed.data.note ?? `review ${parsed.data.decision}` });
+    return { review, layout: saved };
   });
 
   app.get('/api/layouts/:id/ops', { preHandler: requireAuth }, async (req) => {

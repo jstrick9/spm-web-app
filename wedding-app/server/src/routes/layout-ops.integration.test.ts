@@ -72,6 +72,16 @@ describe('layout manager operations routes', () => {
     expect(publicPacket.json().packet.layoutName).toBe('Main Layout');
     expect(publicPacket.json().packet.payload.seats).toBe(120);
 
+    const comment = await req(s.token, 'POST', `/api/layouts/${s.layoutId}/comments`, { body: 'Please move the dance floor closer to the head table.' });
+    expect(comment.statusCode).toBe(201);
+    const review = await req(s.token, 'POST', `/api/layouts/${s.layoutId}/review-request`);
+    expect(review.statusCode).toBe(201);
+    const decision = await req(s.token, 'POST', `/api/layouts/${s.layoutId}/reviews/${review.json().review.id}/decision`, { decision: 'approved', note: 'Operationally approved.' });
+    expect(decision.statusCode).toBe(200);
+    expect(decision.json().layout.approval_status).toBe('approved');
+    const collaboration = await req(s.token, 'GET', `/api/layouts/${s.layoutId}/collaboration`);
+    expect(collaboration.json().comments).toHaveLength(1);
+
     const list = await req(s.token, 'GET', `/api/layouts/${s.layoutId}/ops`);
     expect(list.statusCode).toBe(200);
     expect(list.json().ops.floorWalkChecks).toHaveLength(1);
