@@ -22,13 +22,14 @@ export function VenueBuilder({ orgId }: Props) {
   const fileInputRef = useRef<HTMLInputElement>(null);
   
   // Builder Modes
-  const [mode, setMode] = useState<'select' | 'draw_wall' | 'add_door' | 'add_window' | 'add_pillar'>('select');
+  const [mode, setMode] = useState<'select' | 'draw_wall' | 'add_door' | 'add_window' | 'add_pillar' | 'add_exit' | 'add_accessible_route' | 'add_power' | 'add_loading'>('select');
   
   // State
   const [lines, setLines] = useState<any[]>([]);
   const [doors, setDoors] = useState<any[]>([]);
   const [windows, setWindows] = useState<any[]>([]);
   const [pillars, setPillars] = useState<any[]>([]);
+  const [zones, setZones] = useState<any[]>([]);
   
   const [currentPoints, setCurrentPoints] = useState<number[]>([]);
   const [hasChanges, setHasChanges] = useState(false);
@@ -64,7 +65,7 @@ export function VenueBuilder({ orgId }: Props) {
     if (!selectedVenue) return;
     const layout = typeof selectedVenue.master_layout === 'string' ? JSON.parse(selectedVenue.master_layout || '{}') : (selectedVenue.master_layout || {});
     setLines((layout.walls || layout.lines || []).map((wall: any) => ({ id: wall.id, points: wall.points })));
-    setDoors(layout.doors || []); setWindows(layout.windows || []); setPillars(layout.pillars || []);
+    setDoors(layout.doors || []); setWindows(layout.windows || []); setPillars(layout.pillars || []); setZones(layout.zones || []);
     if (selectedVenue.canvas_width || selectedVenue.width) setDimensions({ width: selectedVenue.canvas_width || selectedVenue.width * 10, height: selectedVenue.canvas_height || selectedVenue.height * 10 });
     setHasChanges(false);
   }, [selectedVenue]);
@@ -83,7 +84,7 @@ export function VenueBuilder({ orgId }: Props) {
   const saveMutation = useMutation({
     mutationFn: async () => {
       if (selectedVenue) {
-        return venuesSdk.saveScaffold(selectedVenue.id, { masterLayout: { walls: lines, doors, windows, pillars }, canvasWidth: dimensions.width, canvasHeight: dimensions.height, description: 'Canvas structural update' });
+        return venuesSdk.saveScaffold(selectedVenue.id, { masterLayout: { walls: lines, doors, windows, pillars, zones }, canvasWidth: dimensions.width, canvasHeight: dimensions.height, description: 'Canvas structural update' });
       }
       const res = await sdk.catalog.list(orgId, 'guideline' as any);
       const structural = res.items.find(i => i.name === 'Venue Structural Walls');
@@ -91,7 +92,7 @@ export function VenueBuilder({ orgId }: Props) {
       const payload = {
         name: 'Venue Structural Walls',
         visible: true,
-        spec: { type: 'structural', lines, doors, windows, pillars }
+        spec: { type: 'structural', lines, doors, windows, pillars, zones }
       };
 
       if (structural) {
@@ -167,6 +168,11 @@ export function VenueBuilder({ orgId }: Props) {
       setMode('select');
     } else if (mode === 'add_pillar') {
       setPillars([...pillars, { id: `pil-${Date.now()}`, x: pt.x, y: pt.y, radius: 12 }]);
+      setHasChanges(true);
+      setMode('select');
+    } else if (mode.startsWith('add_')) {
+      const type = mode.replace('add_', '');
+      setZones([...zones, { id: `zone-${Date.now()}`, type, x: pt.x, y: pt.y, width: type === 'accessible_route' ? 120 : 60, height: type === 'accessible_route' ? 36 : 60 }]);
       setHasChanges(true);
       setMode('select');
     }
@@ -289,6 +295,10 @@ export function VenueBuilder({ orgId }: Props) {
              <Button variant={mode === 'add_pillar' ? 'default' : 'secondary'} size="sm" onClick={() => setMode('add_pillar')}>
                <Cylinder className="w-4 h-4 mr-1" /> Pillar
              </Button>
+             <Button variant={mode === 'add_exit' ? 'default' : 'secondary'} size="sm" onClick={() => setMode('add_exit')}>Exit</Button>
+             <Button variant={mode === 'add_accessible_route' ? 'default' : 'secondary'} size="sm" onClick={() => setMode('add_accessible_route')}>Accessible route</Button>
+             <Button variant={mode === 'add_power' ? 'default' : 'secondary'} size="sm" onClick={() => setMode('add_power')}>Power</Button>
+             <Button variant={mode === 'add_loading' ? 'default' : 'secondary'} size="sm" onClick={() => setMode('add_loading')}>Loading</Button>
              <label className="ml-2 flex items-center gap-1 text-xs text-fg-muted"><input type="checkbox" checked={snapToGrid} onChange={(e) => setSnapToGrid(e.target.checked)} /> Snap</label>
              <select aria-label="Grid size" className="h-8 rounded border border-border bg-surface px-2 text-xs" value={gridSize} onChange={(e) => setGridSize(Number(e.target.value))}><option value={25}>Fine grid</option><option value={50}>Standard grid</option><option value={100}>Large grid</option></select>
           </div>
@@ -386,6 +396,9 @@ export function VenueBuilder({ orgId }: Props) {
                   onTransformEnd={(e) => handleTransformEnd(e, pil.id, 'pillar')}
                 />
               ))}
+
+              {/* Operational zones */}
+              {zones.map((zone) => <Group key={zone.id} x={zone.x} y={zone.y}><Rect width={zone.width} height={zone.height} fill={zone.type === 'exit' ? '#dcfce7' : zone.type === 'power' ? '#fef3c7' : '#dbeafe'} stroke={zone.type === 'exit' ? '#16a34a' : zone.type === 'power' ? '#d97706' : '#2563eb'} strokeWidth={2} dash={[6, 4]} /><Text text={zone.type.replace('_', ' ')} fontSize={11} fill="#374151" width={zone.width} align="center" y={zone.height / 2 - 6} /></Group>)}
 
               {/* Drawing wall preview */}
               {currentPoints.length > 0 && (
