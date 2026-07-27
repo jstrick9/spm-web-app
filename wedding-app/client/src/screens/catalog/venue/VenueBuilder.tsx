@@ -6,6 +6,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { sdk } from '../../../sdk';
 import { useToast } from '../../../ui/Toast';
 import { cn } from '../../../ui/lib/cn';
+import { VenueSpaceScaffoldWizard } from './VenueSpaceScaffoldWizard';
 
 interface Props {
   orgId: string;
@@ -250,6 +251,7 @@ export function VenueBuilder({ orgId }: Props) {
 
   return (
     <div className="flex flex-col gap-4">
+       <VenueSpaceScaffoldWizard orgId={orgId} />
        <div className="flex flex-col lg:flex-row items-start lg:items-center justify-between p-3 bg-surface border border-border rounded-lg shadow-sm gap-4">
           <div className="flex flex-wrap gap-2">
              <Button variant={mode === 'select' ? 'default' : 'secondary'} size="sm" onClick={() => { setMode('select'); setCurrentPoints([]); }}>

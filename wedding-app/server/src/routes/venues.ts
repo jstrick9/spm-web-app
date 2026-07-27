@@ -19,6 +19,10 @@ const venueSchema = z.object({
   style:         z.record(z.unknown()).optional(),
   masterLayout:  z.record(z.unknown()).optional(),
   metadata:      z.record(z.unknown()).optional(),
+  unitSystem:    z.enum(['imperial','metric']).optional(),
+  templateKey:   z.enum(['custom','ceremony','cocktail','reception','outdoor_tent']).optional(),
+  approvalStatus:z.enum(['draft','approved','archived']).optional(),
+  underlay:      z.record(z.unknown()).optional(),
 });
 
 export async function venueRoutes(app: FastifyInstance) {

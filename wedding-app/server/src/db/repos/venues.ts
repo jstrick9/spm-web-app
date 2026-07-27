@@ -18,6 +18,11 @@ export interface VenueRow {
   style: string;          // JSON
   master_layout: string;  // JSON
   metadata: string;       // JSON
+  unit_system: 'imperial' | 'metric';
+  template_key: string;
+  approval_status: 'draft' | 'approved' | 'archived';
+  revision: number;
+  underlay: string; // JSON
   deleted_at: string | null;
   created_by: string | null;
   created_at: string;
@@ -37,6 +42,10 @@ export interface VenueInput {
   style?: Record<string, unknown>;
   masterLayout?: Record<string, unknown>;
   metadata?: Record<string, unknown>;
+  unitSystem?: 'imperial' | 'metric';
+  templateKey?: string;
+  approvalStatus?: 'draft' | 'approved' | 'archived';
+  underlay?: Record<string, unknown>;
 }
 
 export const venuesRepo = {
@@ -56,8 +65,8 @@ export const venuesRepo = {
       `INSERT INTO venues
          (id, organization_id, name, category, environment, description,
           capacity, width, height, canvas_width, canvas_height,
-          shape, style, master_layout, metadata, created_by)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+          shape, style, master_layout, metadata, unit_system, template_key, approval_status, underlay, created_by)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
     ).run(
       id,
       orgId,
@@ -74,6 +83,10 @@ export const venuesRepo = {
       stringifyJson(input.style ?? {}),
       stringifyJson(input.masterLayout ?? {}),
       stringifyJson(input.metadata ?? {}),
+      input.unitSystem ?? 'imperial',
+      input.templateKey ?? 'custom',
+      input.approvalStatus ?? 'draft',
+      stringifyJson(input.underlay ?? {}),
       createdBy,
     );
     return this.findById(id)!;
@@ -85,7 +98,7 @@ export const venuesRepo = {
     const scalarMap: Record<string, string> = {
       name: 'name', category: 'category', environment: 'environment',
       description: 'description', capacity: 'capacity', width: 'width', height: 'height',
-      canvasWidth: 'canvas_width', canvasHeight: 'canvas_height',
+      canvasWidth: 'canvas_width', canvasHeight: 'canvas_height', unitSystem: 'unit_system', templateKey: 'template_key', approvalStatus: 'approval_status',
     };
     for (const [k, col] of Object.entries(scalarMap)) {
       if (k in input) {
@@ -94,7 +107,7 @@ export const venuesRepo = {
       }
     }
     const jsonMap: Record<string, string> = {
-      shape: 'shape', style: 'style', masterLayout: 'master_layout', metadata: 'metadata',
+      shape: 'shape', style: 'style', masterLayout: 'master_layout', metadata: 'metadata', underlay: 'underlay',
     };
     for (const [k, col] of Object.entries(jsonMap)) {
       if (k in input) {

@@ -15,6 +15,10 @@ export interface VenueInput {
   style?: Record<string, unknown>;
   masterLayout?: Record<string, unknown>;
   metadata?: Record<string, unknown>;
+  unitSystem?: 'imperial' | 'metric';
+  templateKey?: 'custom' | 'ceremony' | 'cocktail' | 'reception' | 'outdoor_tent';
+  approvalStatus?: 'draft' | 'approved' | 'archived';
+  underlay?: Record<string, unknown>;
 }
 
 export const venuesSdk = {

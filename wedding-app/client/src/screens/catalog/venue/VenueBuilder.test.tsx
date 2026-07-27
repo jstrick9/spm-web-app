@@ -4,6 +4,10 @@ import { VenueBuilder } from './VenueBuilder';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { ToastProvider } from '../../../ui/Toast';
 
+vi.mock('../../../sdk/venues', () => ({
+  venuesSdk: { list: vi.fn().mockResolvedValue({ venues: [] }), create: vi.fn(), update: vi.fn(), delete: vi.fn() }
+}));
+
 vi.mock('../../../sdk', () => ({
   sdk: {
     catalog: {
@@ -53,5 +57,7 @@ describe('VenueBuilder', () => {
     // The toolbar has "Select" and "Wall" buttons
     expect(screen.getByRole('button', { name: /Select/i })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /Wall/i })).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: 'Create a venue space' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /Create draft scaffold/i })).toBeInTheDocument();
   });
 });
