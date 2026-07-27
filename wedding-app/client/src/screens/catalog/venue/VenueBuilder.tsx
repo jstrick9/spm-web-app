@@ -20,6 +20,8 @@ export function VenueBuilder({ orgId }: Props) {
   const [selectedVenue, setSelectedVenue] = useState<any | null>(null);
   const [underlayOpacity, setUnderlayOpacity] = useState(0.5);
   const [underlayLocked, setUnderlayLocked] = useState(true);
+  const [underlayRotation, setUnderlayRotation] = useState(0);
+  const [underlayScale, setUnderlayScale] = useState(1);
   const containerRef = useRef<HTMLDivElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   
@@ -70,7 +72,7 @@ export function VenueBuilder({ orgId }: Props) {
     setDoors(layout.doors || []); setWindows(layout.windows || []); setPillars(layout.pillars || []); setZones(layout.zones || []);
     if (selectedVenue.canvas_width || selectedVenue.width) setDimensions({ width: selectedVenue.canvas_width || selectedVenue.width * 10, height: selectedVenue.canvas_height || selectedVenue.height * 10 });
     const underlay = (() => { try { return typeof selectedVenue.underlay === 'string' ? JSON.parse(selectedVenue.underlay || '{}') : (selectedVenue.underlay || {}); } catch { return {}; } })();
-    setUnderlayOpacity(Number(underlay.opacity ?? 0.5)); setUnderlayLocked(underlay.locked !== false);
+    setUnderlayOpacity(Number(underlay.opacity ?? 0.5)); setUnderlayLocked(underlay.locked !== false); setUnderlayRotation(Number(underlay.rotation ?? 0)); setUnderlayScale(Number(underlay.scale ?? 1));
     setHasChanges(false);
   }, [selectedVenue]);
 
@@ -289,7 +291,15 @@ export function VenueBuilder({ orgId }: Props) {
   return (
     <div className="flex flex-col gap-4">
        <VenueSpaceScaffoldWizard orgId={orgId} onSelectVenue={setSelectedVenue} />
-       {selectedVenue && <div className="flex flex-wrap items-center gap-3 rounded-lg border border-brand/30 bg-brand-soft/20 px-3 py-2 text-sm text-brand"><span>Editing scaffold: <strong>{selectedVenue.name}</strong> · {selectedVenue.width}×{selectedVenue.height} · {selectedVenue.unit_system ?? 'imperial'} · {selectedVenue.approval_status ?? 'draft'}</span>{(() => { try { const u = typeof selectedVenue.underlay === 'string' ? JSON.parse(selectedVenue.underlay || '{}') : selectedVenue.underlay; return u?.url ? <><label className="flex items-center gap-1 text-xs"><input type="checkbox" checked={underlayLocked} onChange={(e) => { setUnderlayLocked(e.target.checked); updateUnderlay({ locked: e.target.checked }); }} /> Lock underlay</label><label className="flex items-center gap-1 text-xs">Underlay opacity <input aria-label="Underlay opacity" type="range" min="0.1" max="1" step="0.05" value={underlayOpacity} onChange={(e) => { const opacity = Number(e.target.value); setUnderlayOpacity(opacity); updateUnderlay({ opacity }); }} /></label></> : null; } catch { return null; } })()}</div>}
+       {selectedVenue && <div className="flex flex-wrap items-center gap-3 rounded-lg border border-brand/30 bg-brand-soft/20 px-3 py-2 text-sm text-brand">
+         <span>Editing scaffold: <strong>{selectedVenue.name}</strong> · {selectedVenue.width}×{selectedVenue.height} · {selectedVenue.unit_system ?? 'imperial'} · {selectedVenue.approval_status ?? 'draft'}</span>
+         {(() => { try { const u = typeof selectedVenue.underlay === 'string' ? JSON.parse(selectedVenue.underlay || '{}') : selectedVenue.underlay; return u?.url ? <>
+           <label className="flex items-center gap-1 text-xs"><input type="checkbox" checked={underlayLocked} onChange={(e) => { setUnderlayLocked(e.target.checked); updateUnderlay({ locked: e.target.checked }); }} /> Lock underlay</label>
+           <label className="flex items-center gap-1 text-xs">Opacity <input aria-label="Underlay opacity" type="range" min="0.1" max="1" step="0.05" value={underlayOpacity} onChange={(e) => { const opacity = Number(e.target.value); setUnderlayOpacity(opacity); updateUnderlay({ opacity }); }} /></label>
+           <label className="flex items-center gap-1 text-xs">Scale <input aria-label="Underlay scale" type="range" min="0.5" max="2" step="0.05" value={underlayScale} onChange={(e) => { const scale = Number(e.target.value); setUnderlayScale(scale); updateUnderlay({ scale }); }} /></label>
+           <label className="flex items-center gap-1 text-xs">Rotate <select aria-label="Underlay rotation" value={underlayRotation} onChange={(e) => { const rotation = Number(e.target.value); setUnderlayRotation(rotation); updateUnderlay({ rotation }); }}><option value={0}>0°</option><option value={90}>90°</option><option value={180}>180°</option><option value={270}>270°</option></select></label>
+         </> : null; } catch { return null; } })()}
+       </div>}
        <div className="flex flex-col lg:flex-row items-start lg:items-center justify-between p-3 bg-surface border border-border rounded-lg shadow-sm gap-4">
           <div className="flex flex-wrap gap-2">
              <Button variant={mode === 'select' ? 'default' : 'secondary'} size="sm" onClick={() => { setMode('select'); setCurrentPoints([]); }}>
@@ -334,7 +344,7 @@ export function VenueBuilder({ orgId }: Props) {
        </div>
 
        <div ref={containerRef} className="w-full h-[600px] border border-border rounded-lg bg-surface relative overflow-hidden">
-          {(() => { try { const underlay = selectedVenue?.underlay ? (typeof selectedVenue.underlay === 'string' ? JSON.parse(selectedVenue.underlay) : selectedVenue.underlay) : null; return underlay?.url ? <img src={underlay.url} alt="Venue reference underlay" className="absolute inset-0 h-full w-full object-contain pointer-events-none" style={{ opacity: underlayOpacity }} /> : null; } catch { return null; } })()}
+          {(() => { try { const underlay = selectedVenue?.underlay ? (typeof selectedVenue.underlay === 'string' ? JSON.parse(selectedVenue.underlay) : selectedVenue.underlay) : null; return underlay?.url ? <img src={underlay.url} alt="Venue reference underlay" className="absolute inset-0 h-full w-full object-contain pointer-events-none" style={{ opacity: underlayOpacity, transform: `scale(${underlayScale}) rotate(${underlayRotation}deg)` }} /> : null; } catch { return null; } })()}
           <Stage 
             width={dimensions.width} 
             height={dimensions.height}
