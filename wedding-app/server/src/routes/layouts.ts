@@ -53,6 +53,7 @@ const setupPacketSchema = z.object({
 });
 const commentSchema = z.object({ body: z.string().min(1).max(4000), target: z.record(z.unknown()).optional() });
 const reviewDecisionSchema = z.object({ decision: z.enum(['approved','changes_requested','rejected']), note: z.string().max(2000).optional() });
+const queueDecisionSchema = z.object({ decision: z.enum(['approved','changes_requested','rejected']), note: z.string().max(2000).optional() }).superRefine((value, ctx) => { if (value.decision !== 'approved' && !value.note?.trim()) ctx.addIssue({ code: 'custom', message: 'decision-note-required', path: ['note'] }); });
 const inventoryReservationsSchema = z.object({ reservations: z.array(z.object({ inventoryItemId: z.string().min(1), quantity: z.number().int().min(0) })).max(100), overrideReason: z.string().max(1000).optional() });
 
 function isNamedVenueManager(memberships: any[], organizationId: string): boolean {
@@ -194,6 +195,17 @@ export async function layoutRoutes(app: FastifyInstance) {
     const approvalStatus = parsed.data.decision === 'approved' ? 'approved' : parsed.data.decision === 'changes_requested' ? 'draft' : 'rejected';
     const saved = layoutsRepo.saveRevision({ layoutId: id, payload: JSON.parse(layout.payload), updatedBy: req.auth!.userId, expectedRevision: layout.revision, approvalStatus, changeDescription: parsed.data.note ?? `review ${parsed.data.decision}` });
     return { review, layout: saved };
+  });
+
+  app.post('/api/layouts/:id/queue-decision', { preHandler: requireAuth }, async (req) => {
+    const { id } = req.params as { id: string }; const layout = requireLayoutAccess(id, req.auth!.memberships, 'layouts.publish');
+    const parsed = queueDecisionSchema.safeParse(req.body); if (!parsed.success) throw BadRequest('invalid-input', parsed.error.issues);
+    const pending = layoutCollaborationRepo.listReviews(id).find((review: any) => review.decision === 'pending') as any;
+    const review = pending || layoutCollaborationRepo.requestReview({ layoutId: id, orgId: layout.organization_id, eventId: layout.event_id, revision: layout.revision, userId: req.auth!.userId });
+    const decided = layoutCollaborationRepo.decideReview((review as any).id, req.auth!.userId, parsed.data.decision, parsed.data.note);
+    const approvalStatus = parsed.data.decision === 'approved' ? 'approved' : parsed.data.decision === 'changes_requested' ? 'draft' : 'rejected';
+    const saved = layoutsRepo.saveRevision({ layoutId: id, payload: JSON.parse(layout.payload), updatedBy: req.auth!.userId, expectedRevision: layout.revision, approvalStatus, changeDescription: parsed.data.note ?? `queue ${parsed.data.decision}` });
+    return { review: decided, layout: saved };
   });
 
   app.get('/api/layouts/:id/ops', { preHandler: requireAuth }, async (req) => {

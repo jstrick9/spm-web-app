@@ -14,6 +14,7 @@ export interface LayoutOpsState {
 
 export const layoutsSdk = {
   approvalQueue(orgId: string): Promise<{ items: any[] }> { return api.get(`/api/orgs/${orgId}/layouts/approval-queue`); },
+  queueDecision(layoutId: string, input: { decision: 'approved'|'changes_requested'|'rejected'; note?: string }) { return api.post(`/api/layouts/${layoutId}/queue-decision`, input); },
   list(orgId: string, opts: { eventId?: string; template?: boolean } = {}): Promise<{ layouts: SdkLayout[] }> {
     const q = new URLSearchParams();
     if (opts.eventId !== undefined) q.set('eventId', opts.eventId);
