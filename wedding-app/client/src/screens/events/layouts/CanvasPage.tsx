@@ -138,6 +138,7 @@ export function CanvasPage({ event }: Props) {
 
   const { data: inventoryData } = useQuery({ queryKey: ['inventory', event.organization_id], queryFn: () => sdk.inventory.list(event.organization_id) });
   const { data: reservationsData } = useQuery({ queryKey: ['layout-inventory-reservations', layout?.id], queryFn: () => layoutInventorySdk.list(layout!.id), enabled: !!layout?.id });
+  const { data: sharedInventoryReview } = useQuery({ queryKey: ['layout-inventory-shared-review', layout?.id], queryFn: () => layoutInventorySdk.sharedReview(layout!.id), enabled: !!layout?.id && canApproveLayout, retry: false });
   const { data: vendorsData } = useQuery({
     queryKey: ['vendors', event.id],
     queryFn: () => vendorsSdk.list(event.organization_id, { eventId: event.id }),
@@ -1176,6 +1177,7 @@ export function CanvasPage({ event }: Props) {
   return (
     <div className="flex flex-col gap-4">
       <input ref={variancePhotoInputRef} type="file" accept="image/*" className="hidden" aria-label="Upload layout variance photo evidence" onChange={handleVariancePhotoSelected} />
+      {layout?.id && canApproveLayout && <div className="rounded-lg border border-border bg-surface p-3 text-sm"><div className="flex items-center justify-between"><strong>Shared inventory review</strong><span className="text-xs text-fg-muted">Manual same-day review</span></div>{sharedInventoryReview?.review.status === 'manual-review' && <>{sharedInventoryReview.review.conflicts.length ? <div className="mt-2 space-y-1">{Object.entries(sharedInventoryReview.review.conflicts.reduce((groups: Record<string, any[]>, conflict) => { (groups[conflict.event_title] ||= []).push(conflict); return groups; }, {})).map(([eventTitle, conflicts]) => <div key={eventTitle} className="rounded border border-warning/30 bg-warning-soft/20 p-2"><strong>{eventTitle}</strong><span className="ml-2 text-xs text-fg-muted">{(conflicts as any[]).length} shared item{(conflicts as any[]).length === 1 ? '' : 's'} · expand details in inventory review</span></div>)}</div> : <p className="mt-2 text-xs text-success">No other event reservations are recorded for {sharedInventoryReview.review.eventDate}.</p>}<p className="mt-2 text-xs text-fg-muted">Same-day reservations are shown for venue manager review; they do not automatically mean the events overlap.</p></>}{sharedInventoryReview?.review.status === 'event-date-needed' && <p className="mt-2 text-xs text-warning">Add an event date to review same-day shared inventory.</p>}</div>}
       {layout?.id && <LayoutCollaborationPanel layoutId={layout.id} canApprove={canApproveLayout} />}
       {mobileViewport && forceCanvasOnMobile && (
         <div className="rounded-xl border border-warning/30 bg-warning-soft/20 p-3 text-sm text-warning flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">

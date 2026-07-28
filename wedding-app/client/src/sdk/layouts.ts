@@ -75,4 +75,5 @@ export const layoutInventorySdk = {
   reserve(layoutId: string, reservations: Array<{ inventoryItemId: string; quantity: number }>, overrideReason?: string): Promise<{ reservations: Array<{ inventory_item_id: string; quantity: number; name: string; category: string; available_count: number }> }> {
     return api.put(`/api/layouts/${layoutId}/inventory-reservations`, { reservations, overrideReason });
   },
+  sharedReview(layoutId: string): Promise<{ review: { status: string; eventDate?: string; conflicts: Array<{ inventory_name: string; other_quantity: number; event_title: string; start_date: string }> } }> { return api.get(`/api/layouts/${layoutId}/inventory-shared-review`); },
 };
