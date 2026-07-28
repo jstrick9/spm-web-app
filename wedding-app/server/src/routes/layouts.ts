@@ -4,7 +4,7 @@ import { db } from '../db/database.js';
 import { uuid } from '../lib/crypto.js';
 import { requireAuth } from '../middleware/auth.js';
 import { can } from '../lib/rbac.js';
-import { auditRepo, assetsRepo, eventsRepo, inventoryRepo, layoutCollaborationRepo, layoutOpsRepo, layoutsRepo } from '../db/repos/index.js';
+import { auditRepo, assetsRepo, eventsRepo, inventoryRepo, layoutCollaborationRepo, sseEventsRepo, layoutOpsRepo, layoutsRepo } from '../db/repos/index.js';
 import { savePrivateImageDataUri, privateFilePath } from '../lib/fileStorage.js';
 import { createReadStream, existsSync } from 'node:fs';
 import { BadRequest, Forbidden, NotFound, HttpError } from '../lib/errors.js';
@@ -178,7 +178,7 @@ export async function layoutRoutes(app: FastifyInstance) {
     const { id, commentId } = req.params as { id: string; commentId: string }; const layout = requireLayoutAccess(id, req.auth!.memberships, 'layouts.edit');
     const comment = layoutCollaborationRepo.findComment(commentId); if (!comment || comment.layout_id !== id) throw NotFound();
     if (comment.author_user_id !== req.auth!.userId && !isNamedVenueManager(req.auth!.memberships, layout.organization_id)) throw Forbidden();
-    return { comment: layoutCollaborationRepo.resolveComment(commentId, req.auth!.userId) };
+    const resolved = layoutCollaborationRepo.resolveComment(commentId, req.auth!.userId); sseEventsRepo.publish({ organizationId: layout.organization_id, eventType: 'layout.comment.resolved', actorUserId: req.auth!.userId, payload: { layoutId: id, commentId, recipientUserId: comment.author_user_id, eventId: layout.event_id } }); return { comment: resolved };
   });
 
   app.post('/api/layouts/:id/review-request', { preHandler: requireAuth }, async (req, reply) => {
@@ -194,6 +194,7 @@ export async function layoutRoutes(app: FastifyInstance) {
     if (!review || (review as any).layout_id !== id) throw NotFound('review-not-found');
     const approvalStatus = parsed.data.decision === 'approved' ? 'approved' : parsed.data.decision === 'changes_requested' ? 'draft' : 'rejected';
     const saved = layoutsRepo.saveRevision({ layoutId: id, payload: JSON.parse(layout.payload), updatedBy: req.auth!.userId, expectedRevision: layout.revision, approvalStatus, changeDescription: parsed.data.note ?? `review ${parsed.data.decision}` });
+    sseEventsRepo.publish({ organizationId: layout.organization_id, eventType: 'layout.review.decided', actorUserId: req.auth!.userId, payload: { layoutId: id, reviewId, decision: parsed.data.decision, recipientUserId: (review as any).requested_by, eventId: layout.event_id } });
     return { review, layout: saved };
   });
 
@@ -205,6 +206,7 @@ export async function layoutRoutes(app: FastifyInstance) {
     const decided = layoutCollaborationRepo.decideReview((review as any).id, req.auth!.userId, parsed.data.decision, parsed.data.note);
     const approvalStatus = parsed.data.decision === 'approved' ? 'approved' : parsed.data.decision === 'changes_requested' ? 'draft' : 'rejected';
     const saved = layoutsRepo.saveRevision({ layoutId: id, payload: JSON.parse(layout.payload), updatedBy: req.auth!.userId, expectedRevision: layout.revision, approvalStatus, changeDescription: parsed.data.note ?? `queue ${parsed.data.decision}` });
+    sseEventsRepo.publish({ organizationId: layout.organization_id, eventType: 'layout.review.decided', actorUserId: req.auth!.userId, payload: { layoutId: id, reviewId: (review as any).id, decision: parsed.data.decision, recipientUserId: (review as any).requested_by, eventId: layout.event_id } });
     return { review: decided, layout: saved };
   });
 
