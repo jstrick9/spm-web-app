@@ -66,3 +66,13 @@ export const layoutsSdk = {
     return api.delete(`/api/layouts/${layoutId}`);
   },
 };
+
+// Event-scoped venue inventory allocations. Reservations are updated as layout quantities change.
+export const layoutInventorySdk = {
+  list(layoutId: string): Promise<{ reservations: Array<{ inventory_item_id: string; quantity: number; name: string; category: string; available_count: number }>; sharedReviewEnabled: boolean }> {
+    return api.get(`/api/layouts/${layoutId}/inventory-reservations`);
+  },
+  reserve(layoutId: string, reservations: Array<{ inventoryItemId: string; quantity: number }>, overrideReason?: string): Promise<{ reservations: Array<{ inventory_item_id: string; quantity: number; name: string; category: string; available_count: number }> }> {
+    return api.put(`/api/layouts/${layoutId}/inventory-reservations`, { reservations, overrideReason });
+  },
+};

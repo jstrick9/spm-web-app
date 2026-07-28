@@ -1,8 +1,10 @@
 import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
+import { db } from '../db/database.js';
+import { uuid } from '../lib/crypto.js';
 import { requireAuth } from '../middleware/auth.js';
 import { can } from '../lib/rbac.js';
-import { auditRepo, assetsRepo, eventsRepo, layoutCollaborationRepo, layoutOpsRepo, layoutsRepo } from '../db/repos/index.js';
+import { auditRepo, assetsRepo, eventsRepo, inventoryRepo, layoutCollaborationRepo, layoutOpsRepo, layoutsRepo } from '../db/repos/index.js';
 import { savePrivateImageDataUri, privateFilePath } from '../lib/fileStorage.js';
 import { createReadStream, existsSync } from 'node:fs';
 import { BadRequest, Forbidden, NotFound, HttpError } from '../lib/errors.js';
@@ -51,6 +53,7 @@ const setupPacketSchema = z.object({
 });
 const commentSchema = z.object({ body: z.string().min(1).max(4000), target: z.record(z.unknown()).optional() });
 const reviewDecisionSchema = z.object({ decision: z.enum(['approved','changes_requested','rejected']), note: z.string().max(2000).optional() });
+const inventoryReservationsSchema = z.object({ reservations: z.array(z.object({ inventoryItemId: z.string().min(1), quantity: z.number().int().min(0) })).max(100), overrideReason: z.string().max(1000).optional() });
 
 function requireLayoutAccess(layoutId: string, memberships: any[], permission: 'layouts.view' | 'layouts.edit' | 'layouts.publish') {
   const layout = layoutsRepo.findById(layoutId);
@@ -291,6 +294,30 @@ export async function layoutRoutes(app: FastifyInstance) {
         updatedAt: packet.updated_at,
       },
     };
+  });
+
+  app.get('/api/layouts/:id/inventory-reservations', { preHandler: requireAuth }, async (req) => {
+    const { id } = req.params as { id: string }; const layout = requireLayoutAccess(id, req.auth!.memberships, 'layouts.view');
+    return { reservations: db.prepare(`SELECT r.*, i.name, i.category, i.available_count FROM layout_inventory_reservations r JOIN inventory_items i ON i.id=r.inventory_item_id WHERE r.layout_id=? ORDER BY i.name`).all(id), sharedReviewEnabled: false, eventId: layout.event_id };
+  });
+
+  app.put('/api/layouts/:id/inventory-reservations', { preHandler: requireAuth }, async (req) => {
+    const { id } = req.params as { id: string }; const layout = requireLayoutAccess(id, req.auth!.memberships, 'layouts.edit');
+    const parsed = inventoryReservationsSchema.safeParse(req.body); if (!parsed.success) throw BadRequest('invalid-input', parsed.error.issues);
+    const requested = parsed.data.reservations.filter((item) => item.quantity > 0); const itemIds = [...new Set(requested.map((item) => item.inventoryItemId))];
+    const inventory = itemIds.map((itemId) => inventoryRepo.findById(itemId));
+    if (inventory.some((item) => !item || item.organization_id !== layout.organization_id)) throw BadRequest('invalid-inventory-item');
+    const current = db.prepare(`SELECT inventory_item_id, quantity FROM layout_inventory_reservations WHERE layout_id=?`).all(id) as Array<{ inventory_item_id: string; quantity: number }>;
+    const currentByItem = new Map(current.map((item) => [item.inventory_item_id, item.quantity]));
+    const shortages = requested.flatMap((item) => { const stock = inventoryRepo.findById(item.inventoryItemId)!; const delta = item.quantity - (currentByItem.get(item.inventoryItemId) || 0); return delta > stock.available_count ? [{ inventoryItemId: item.inventoryItemId, requested: item.quantity, available: stock.available_count + (currentByItem.get(item.inventoryItemId) || 0) }] : []; });
+    if (shortages.length && !parsed.data.overrideReason?.trim()) throw BadRequest('inventory-reservation-conflict', { shortages });
+    db.transaction(() => {
+      for (const item of current) { if (!requested.some((next) => next.inventoryItemId === item.inventory_item_id)) db.prepare(`UPDATE inventory_items SET available_count=available_count+? WHERE id=?`).run(item.quantity, item.inventory_item_id); }
+      db.prepare(`DELETE FROM layout_inventory_reservations WHERE layout_id=?`).run(id);
+      for (const item of requested) { const prior = currentByItem.get(item.inventoryItemId) || 0; const delta = item.quantity - prior; if (delta) db.prepare(`UPDATE inventory_items SET available_count=MAX(0,available_count-?) WHERE id=?`).run(delta, item.inventoryItemId); db.prepare(`INSERT INTO layout_inventory_reservations (id,layout_id,event_id,organization_id,inventory_item_id,quantity,override_reason,reserved_by) VALUES (?,?,?,?,?,?,?,?)`).run(uuid(), id, layout.event_id, layout.organization_id, item.inventoryItemId, item.quantity, parsed.data.overrideReason?.trim() || null, req.auth!.userId); }
+    })();
+    auditRepo.log({ organizationId: layout.organization_id, actorUserId: req.auth!.userId, actorLabel: req.auth!.email, action: 'layout.inventory.reserve', targetType: 'layout', targetId: id, ip: req.ip, details: { reservations: requested, override: !!parsed.data.overrideReason } });
+    return { reservations: db.prepare(`SELECT r.*, i.name, i.category, i.available_count FROM layout_inventory_reservations r JOIN inventory_items i ON i.id=r.inventory_item_id WHERE r.layout_id=? ORDER BY i.name`).all(id) };
   });
 
   app.delete('/api/layouts/:id', { preHandler: requireAuth }, async (req, reply) => {
