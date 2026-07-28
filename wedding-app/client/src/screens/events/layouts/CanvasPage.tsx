@@ -112,6 +112,7 @@ export function CanvasPage({ event }: Props) {
   const [paletteCategory, setPaletteCategory] = useState<LayoutPaletteCategory>('tables');
   const [packageGuests, setPackageGuests] = useState(Math.max(1, event.guest_count || 100));
   const [showProtectedLayers, setShowProtectedLayers] = useState(true);
+  const [serviceStyle, setServiceStyle] = useState('reception');
   const [setupGroupOpen, setSetupGroupOpen] = useState(false); const [setupGroupName, setSetupGroupName] = useState('Table setup'); const [setupGroupQuantity, setSetupGroupQuantity] = useState(10); const [setupGroupChairs, setSetupGroupChairs] = useState(8); const [setupTableId, setSetupTableId] = useState(''); const [setupChairId, setSetupChairId] = useState(''); const [setupDecorId, setSetupDecorId] = useState('');
   const [showVendorOverlay, setShowVendorOverlay] = useState(false);
   const [vendorLines, setVendorLines] = useState<any[]>([]);
@@ -159,6 +160,7 @@ export function CanvasPage({ event }: Props) {
         setItems((layout.payload as any).items);
         setVendorLines((layout.payload as any).vendorLines || []);
         setManagerLayoutOps({ ...DEFAULT_MANAGER_LAYOUT_OPS, ...((layout.payload as any).managerLayoutOps || {}) });
+        setServiceStyle((layout.payload as any).serviceStyle || 'reception');
       } else {
         setItems(DEFAULT_ITEMS);
         setManagerLayoutOps(DEFAULT_MANAGER_LAYOUT_OPS);
@@ -181,6 +183,15 @@ export function CanvasPage({ event }: Props) {
     setRedoStack([]); // Clear redo
     setItems(nextItems);
     setHasChanges(true);
+  };
+
+  const reconcileMappedInventory = (nextItems: any[]) => {
+    if (!layout) return;
+    const totals = new Map<string, number>();
+    nextItems.forEach((item) => { if (item.inventoryItemId) totals.set(item.inventoryItemId, (totals.get(item.inventoryItemId) || 0) + 1); });
+    void layoutInventorySdk.reserve(layout.id, [...totals].map(([inventoryItemId, quantity]) => ({ inventoryItemId, quantity })))
+      .then(() => { qc.invalidateQueries({ queryKey: ['inventory', event.organization_id] }); qc.invalidateQueries({ queryKey: ['layout-inventory-reservations', layout.id] }); })
+      .catch((e: any) => toast({ title: 'Inventory update needs review', description: e.message, variant: 'destructive' }));
   };
 
   const handleUndo = () => {
@@ -296,7 +307,7 @@ export function CanvasPage({ event }: Props) {
       organizationId: event.organization_id,
       eventId: event.id,
       name: 'Primary Layout',
-      payload: { items: payload, vendorLines, managerLayoutOps }
+      payload: { items: payload, vendorLines, managerLayoutOps, serviceStyle }
     }),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['layouts', event.id] });
@@ -305,7 +316,7 @@ export function CanvasPage({ event }: Props) {
   });
 
   const saveLayout = useMutation({
-    mutationFn: (payload: any) => layoutsSdk.save(layout!.id, { items: payload.items || payload, vendorLines: payload.vendorLines || vendorLines, managerLayoutOps: payload.managerLayoutOps || managerLayoutOps }, { approvalStatus: payload.approvalStatus }),
+    mutationFn: (payload: any) => layoutsSdk.save(layout!.id, { items: payload.items || payload, vendorLines: payload.vendorLines || vendorLines, managerLayoutOps: payload.managerLayoutOps || managerLayoutOps, serviceStyle: payload.serviceStyle || serviceStyle }, { approvalStatus: payload.approvalStatus }),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['layouts', event.id] });
       setHasChanges(false);
@@ -1265,7 +1276,7 @@ export function CanvasPage({ event }: Props) {
               <div className="flex flex-col gap-2">
                 <div className="rounded-lg border border-brand/20 bg-brand-soft/20 p-2.5">
                   <div className="flex items-center justify-between gap-2"><div className="text-xs font-bold text-fg">Wedding setup packages</div><label className="text-[10px] text-fg-muted">Guests <input aria-label="Package guest count" className="ml-1 w-12 rounded border border-border bg-surface px-1 py-0.5" type="number" min="1" value={packageGuests} onChange={(e) => setPackageGuests(Math.max(1, Number(e.target.value) || 1))}/></label></div>
-                  <p className="mt-0.5 text-[10px] leading-tight text-fg-muted">Add a complete editable starting proposal; venue structure stays protected.</p>
+                  <p className="mt-0.5 text-[10px] leading-tight text-fg-muted">Add a complete editable starting proposal; venue structure stays protected.</p><label className="mt-2 block text-[10px] font-semibold text-fg-muted">Event service style<select aria-label="Event service style" className="mt-1 h-7 w-full rounded border border-border bg-surface px-1 text-[10px]" value={serviceStyle} onChange={(e) => { setServiceStyle(e.target.value); setHasChanges(true); }}><option value="ceremony">Ceremony</option><option value="cocktail">Cocktail</option><option value="plated">Reception · plated</option><option value="buffet_stations">Reception · buffet/stations</option><option value="family_style">Reception · family-style</option><option value="brunch">Brunch</option><option value="after_party">After-party</option></select></label>
                   <div className="mt-2 grid grid-cols-2 gap-1">{WEDDING_LAYOUT_PACKAGES.map((item) => <button key={item.id} type="button" title={item.description} onClick={() => addWeddingPackage(item.id)} className="rounded border border-brand/20 bg-surface px-1.5 py-1 text-left text-[10px] font-semibold hover:bg-brand-soft">{item.label}</button>)}</div>
                   <Button size="xs" className="mt-2 w-full" variant="secondary" onClick={() => setSetupGroupOpen(true)}>Create independent setup group</Button>
                 </div>
@@ -1475,7 +1486,8 @@ export function CanvasPage({ event }: Props) {
                               size="xs" 
                               className="text-[10px] font-bold h-7 text-danger hover:bg-danger/10" 
                               onClick={() => {
-                                pushState(items.filter(i => i.id !== selectedId));
+                                const nextItems = items.filter(i => i.id !== selectedId);
+                                pushState(nextItems); reconcileMappedInventory(nextItems);
                                 setSelectedId(null);
                               }}
                             >
@@ -1562,7 +1574,8 @@ export function CanvasPage({ event }: Props) {
                           </div>
 
                           <Button variant="outline" size="sm" className="w-full mt-3 text-danger hover:bg-danger/10 border-danger/20 font-bold" onClick={() => {
-                             pushState(items.filter(i => i.id !== selectedId));
+                             const nextItems = items.filter(i => i.id !== selectedId);
+                             pushState(nextItems); reconcileMappedInventory(nextItems);
                              setSelectedId(null);
                           }}>Delete Wall</Button>
                        </div>
@@ -1809,7 +1822,8 @@ export function CanvasPage({ event }: Props) {
                         </div>
 
                         <Button variant="outline" size="sm" className="w-full mt-2 text-danger hover:bg-danger/10 border-danger/20 font-bold" onClick={() => {
-                           pushState(items.filter(i => i.id !== selectedId));
+                           const nextItems = items.filter(i => i.id !== selectedId);
+                           pushState(nextItems); reconcileMappedInventory(nextItems);
                            setSelectedId(null);
                         }}>Delete Item</Button>
                      </div>
