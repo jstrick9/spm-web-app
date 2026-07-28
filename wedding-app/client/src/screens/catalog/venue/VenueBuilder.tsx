@@ -1,7 +1,7 @@
 import React, { useRef, useState, useEffect } from 'react';
 import { Stage, Layer, Line, Circle, Group, Text, Arc, Rect, Transformer } from 'react-konva';
 import { Button } from '../../../ui/Button';
-import { MousePointer2, PenTool, Save, Trash2, Undo, DoorOpen, AppWindow, Cylinder, Upload } from 'lucide-react';
+import { MousePointer2, PenTool, Save, Trash2, Undo, DoorOpen, AppWindow, Cylinder, Upload, Download } from 'lucide-react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { sdk } from '../../../sdk';
 import { useToast } from '../../../ui/Toast';
@@ -284,6 +284,14 @@ export function VenueBuilder({ orgId }: Props) {
     void venuesSdk.update(selectedVenue.id, { underlay });
   };
 
+  const exportPng = () => {
+    const stage = trRef.current?.getStage?.() || containerRef.current?.querySelector('canvas');
+    const dataUrl = stage?.toDataURL?.({ pixelRatio: 2 }) || (stage instanceof HTMLCanvasElement ? stage.toDataURL('image/png') : null);
+    if (!dataUrl) { toast({ title: 'Export unavailable', description: 'Select or open a venue scaffold first.', variant: 'destructive' }); return; }
+    const link = document.createElement('a'); link.href = dataUrl; link.download = `${selectedVenue?.name || 'venue-space'}-scaffold.png`; link.click();
+    toast({ title: 'PNG exported', description: 'Share this reference with planners or your operations team.', variant: 'success' });
+  };
+
   const deleteSelected = () => {
     if (!selectedId) return;
     setDoors(prev => prev.filter(d => d.id !== selectedId));
@@ -345,6 +353,9 @@ export function VenueBuilder({ orgId }: Props) {
              <input type="file" accept=".svg" className="hidden" ref={fileInputRef} onChange={handleSVGImport} />
              <Button variant="outline" size="sm" onClick={() => fileInputRef.current?.click()}>
                <Upload className="w-4 h-4 mr-1"/> Import SVG
+             </Button>
+             <Button variant="outline" size="sm" onClick={exportPng}>
+               <Download className="w-4 h-4 mr-1" /> Export PNG
              </Button>
              <Button size="sm" disabled={!hasChanges || saveMutation.isPending} onClick={() => saveMutation.mutate()}>
                <Save className="w-4 h-4 mr-1" /> Save
