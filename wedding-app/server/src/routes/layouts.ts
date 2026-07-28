@@ -147,10 +147,10 @@ export async function layoutRoutes(app: FastifyInstance) {
 
   app.get('/api/orgs/:orgId/layouts/approval-queue', { preHandler: requireAuth }, async (req) => {
     const { orgId } = req.params as { orgId: string }; if (!can(req.auth!.memberships, { organizationId: orgId }, 'layouts.publish')) throw Forbidden();
-    const items = db.prepare(`SELECT l.id, l.name, l.event_id, l.venue_id, l.revision, l.approval_status, l.updated_at, e.title AS event_title, e.start_date,
+    const items = db.prepare(`SELECT l.id, l.name, l.event_id, l.venue_id, l.revision, l.approval_status, l.updated_at, e.title AS event_title, e.start_date, v.name AS venue_name, u.email AS requester_email,
       (SELECT COUNT(*) FROM layout_review_requests r WHERE r.layout_id=l.id AND r.decision='pending') AS pending_reviews,
       (SELECT COUNT(*) FROM layout_comments c WHERE c.layout_id=l.id AND c.status='open') AS open_comments
-      FROM layouts l LEFT JOIN events e ON e.id=l.event_id WHERE l.organization_id=? AND (l.approval_status='pending' OR EXISTS (SELECT 1 FROM layout_review_requests r WHERE r.layout_id=l.id AND r.decision='pending'))
+      FROM layouts l LEFT JOIN events e ON e.id=l.event_id LEFT JOIN venues v ON v.id=l.venue_id LEFT JOIN layout_review_requests latest_request ON latest_request.layout_id=l.id AND latest_request.decision='pending' LEFT JOIN users u ON u.id=latest_request.requested_by WHERE l.organization_id=? AND (l.approval_status='pending' OR EXISTS (SELECT 1 FROM layout_review_requests r WHERE r.layout_id=l.id AND r.decision='pending'))
       ORDER BY CASE WHEN (SELECT COUNT(*) FROM layout_comments c WHERE c.layout_id=l.id AND c.status='open') > 0 THEN 0 ELSE 1 END, CASE WHEN e.start_date IS NULL THEN 1 ELSE 0 END, e.start_date ASC, l.updated_at DESC`).all(orgId);
     return { items };
   });
