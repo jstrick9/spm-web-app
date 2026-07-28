@@ -49,7 +49,7 @@ export const NAV_ITEM_META: Record<
   },
   catalog: {
     icon: Layers,
-    label: "Catalog Studio",
+    label: "Templates & Assets",
     href: "#/system/catalog",
     permission: "platform.manage",
   },
@@ -59,11 +59,17 @@ export const NAV_ITEM_META: Record<
     href: "#/system/questions",
     permission: "platform.manage",
   },
-  venue: {
+  venueStudio: {
     icon: Home,
-    label: "Venue Builder",
+    label: "Venue Studio",
     href: "#/system/venue",
-    permission: "platform.manage",
+    permission: "venues.manage",
+  },
+  inventory: {
+    icon: Layers,
+    label: "Venue Inventory",
+    href: "#/system/inventory",
+    permission: "inventory.view",
   },
   integrations: {
     icon: Link2,
@@ -84,5 +90,7 @@ export const NAV_PERMISSION_IDS = [
   "vendors.view",
   "reports.view",
   "platform.manage",
+  "venues.manage",
+  "inventory.view",
 ] as const;
 

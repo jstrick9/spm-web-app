@@ -163,7 +163,8 @@ export function AppShell({
           ...rawNavItems,
           "catalog",
           "questions",
-          "venue",
+          "venueStudio",
+          "inventory",
           "integrations",
           "branding",
         ]

@@ -562,8 +562,8 @@ function Routes({
   if (path === '/system/venue') {
     if (!orgId) return <Loading />;
     return (
-      <RequirePermission permission="venues.manage" feature="Venue Builder">
-        <PageHeader title="Venue Builder" description="Draw your venue's structural floorplan boundaries." />
+      <RequirePermission permission="venues.manage" feature="Venue Studio">
+        <PageHeader title="Venue Studio: Spaces" description="Create approved venue spaces, reference plans, and reusable operational scaffolds." />
         <PageBody>
           <Suspense fallback={<div className="p-12 text-center text-fg-muted">Loading venue builder…</div>}>
             <VenueBuilder orgId={orgId} />

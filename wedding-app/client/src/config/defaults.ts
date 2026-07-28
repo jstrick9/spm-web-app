@@ -62,10 +62,11 @@ export const SYSTEM_DEFAULTS: PlatformConfig = {
     navItems: [
       { id: 'dashboard' },
       { id: 'events' },
-      { id: 'guests' },
+      { id: 'venueStudio' },
+      { id: 'inventory' },
       { id: 'vendors' },
       { id: 'reports' },
-      { id: 'system' },
+
     ],
     sidebarCollapsedByDefault: false,
     featureFlags: {
