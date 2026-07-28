@@ -263,3 +263,15 @@ describe('CanvasPage quick event design palette', () => {
     expect(screen.getByText('Stage / DJ area')).toBeInTheDocument();
   });
 });
+
+describe('CanvasPage wedding setup packages', () => {
+  it('adds an editable guest-count-driven reception package and exposes protected-layer visibility', async () => {
+    Object.defineProperty(window, 'innerWidth', { configurable: true, writable: true, value: 1024 });
+    (layoutsSdk.list as any).mockResolvedValue({ layouts: [{ id: 'l1', revision: 1, updated_at: new Date().toISOString(), payload: { items: [] }, approval_status: 'draft' }] });
+    render(<CanvasPage event={{ id: 'test-event', organization_id: 'org-1', title: 'Test Event', guest_count: 80 } as any} />, { wrapper: ({ children }: any) => <QueryClientProvider client={queryClient}><ToastProvider>{children}</ToastProvider></QueryClientProvider> });
+    expect(await screen.findByText('Wedding setup packages')).toBeInTheDocument();
+    expect(screen.getByRole('checkbox', { name: /Show protected layers/i })).toBeChecked();
+    fireEvent.click(screen.getByRole('button', { name: 'Reception essentials' }));
+    expect(await screen.findByText(/Reception essentials added/i)).toBeInTheDocument();
+  });
+});

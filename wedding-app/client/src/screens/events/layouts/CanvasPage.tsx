@@ -25,6 +25,7 @@ interface Props {
 
 import { DEFAULT_ITEMS, FLOOR_WALK_CHECKS, DEFAULT_MANAGER_LAYOUT_OPS, centerDistance, itemLabel, managerLayoutOpsFromBackend, type FloorWalkCheckId, type ManagerLayoutOpsState } from './layoutOpsModel';
 import { LAYOUT_OBJECT_PALETTE, LAYOUT_PALETTE_CATEGORIES, type LayoutPaletteCategory } from './layoutObjectPalette';
+import { generateWeddingPackage, WEDDING_LAYOUT_PACKAGES, type WeddingLayoutPackage } from './weddingLayoutPackages';
 
 export function CanvasPage({ event }: Props) {
   const { toast } = useToast();
@@ -108,6 +109,8 @@ export function CanvasPage({ event }: Props) {
   const trRef = useRef<any>(null);
   const [sidebarTab, setSidebarTab] = useState<'catalog' | 'guests' | 'decor' | 'layers' | 'history' | 'vendors'>('catalog');
   const [paletteCategory, setPaletteCategory] = useState<LayoutPaletteCategory>('tables');
+  const [packageGuests, setPackageGuests] = useState(Math.max(1, event.guest_count || 100));
+  const [showProtectedLayers, setShowProtectedLayers] = useState(true);
   const [showVendorOverlay, setShowVendorOverlay] = useState(false);
   const [vendorLines, setVendorLines] = useState<any[]>([]);
   const [viewingVersion, setViewingVersion] = useState<any>(null);
@@ -753,6 +756,14 @@ export function CanvasPage({ event }: Props) {
     setSelectedId(newItem.id);
   };
 
+  const addWeddingPackage = (kind: WeddingLayoutPackage) => {
+    const proposalObjects = generateWeddingPackage(kind, packageGuests, items.length);
+    pushState([...items, ...proposalObjects]);
+    if (proposalObjects.some((item) => item.type === 'vendor_zone')) setShowVendorOverlay(true);
+    setSelectedId(proposalObjects[0]?.id || null);
+    toast({ title: `${WEDDING_LAYOUT_PACKAGES.find((item) => item.id === kind)?.label} added`, description: `${proposalObjects.length} editable proposal objects were added for ${packageGuests} guests. Review and save before requesting venue approval.`, variant: 'success' });
+  };
+
   const handleRestoreVersion = (version: any) => {
     if (window.confirm('Restore this layout version? Unsaved changes will be lost.')) {
       setItems(JSON.parse(version.payload).items || []);
@@ -1206,6 +1217,7 @@ export function CanvasPage({ event }: Props) {
 
       <LayoutReadinessPanel diagnostics={layoutDiagnostics} items={items} layout={layout} event={event} hasChanges={hasChanges} selectedId={selectedId} setSelectedId={setSelectedId} nudgeItem={nudgeItem} rainPlanCompare={rainPlanCompare} setRainPlanCompare={setRainPlanCompare} vendorSpecificView={vendorSpecificView} setVendorSpecificView={setVendorSpecificView} managerOps={managerLayoutOps} onToggleFloorWalkCheck={toggleFloorWalkCheck} onRecordVarianceEvidence={recordVarianceEvidence} onSetRainPlanActive={setRainPlanActive} setupPacketUrl={setupPacketUrl} onCreateSetupPacket={createSignedSetupPacket} />
 
+      <div className="flex items-center justify-between rounded-lg border border-border bg-surface px-3 py-2 text-xs"><span><strong>Venue-owned structure & safety</strong> is protected from event edits.</span><label className="flex items-center gap-2"><input type="checkbox" checked={showProtectedLayers} onChange={(e) => setShowProtectedLayers(e.target.checked)}/> Show protected layers</label></div>
       <div className="flex w-full h-[600px] border border-[#e1d5c9] rounded-lg bg-surface overflow-hidden shadow-md">
         {/* Sidebar Catalog / Guests */}
         <div className="w-64 border-r border-[#e1d5c9] bg-[#FDFBF7] flex flex-col overflow-hidden">
@@ -1225,6 +1237,11 @@ export function CanvasPage({ event }: Props) {
           <div className="flex-1 overflow-y-auto p-4 flex flex-col gap-4 bg-[#FDFBF7]">
             {sidebarTab === 'catalog' && (
               <div className="flex flex-col gap-2">
+                <div className="rounded-lg border border-brand/20 bg-brand-soft/20 p-2.5">
+                  <div className="flex items-center justify-between gap-2"><div className="text-xs font-bold text-fg">Wedding setup packages</div><label className="text-[10px] text-fg-muted">Guests <input aria-label="Package guest count" className="ml-1 w-12 rounded border border-border bg-surface px-1 py-0.5" type="number" min="1" value={packageGuests} onChange={(e) => setPackageGuests(Math.max(1, Number(e.target.value) || 1))}/></label></div>
+                  <p className="mt-0.5 text-[10px] leading-tight text-fg-muted">Add a complete editable starting proposal; venue structure stays protected.</p>
+                  <div className="mt-2 grid grid-cols-2 gap-1">{WEDDING_LAYOUT_PACKAGES.map((item) => <button key={item.id} type="button" title={item.description} onClick={() => addWeddingPackage(item.id)} className="rounded border border-brand/20 bg-surface px-1.5 py-1 text-left text-[10px] font-semibold hover:bg-brand-soft">{item.label}</button>)}</div>
+                </div>
                 <div className="rounded-lg border border-brand/20 bg-brand-soft/20 p-2.5">
                   <div className="text-xs font-bold text-fg">Quick event design</div>
                   <p className="mt-0.5 text-[10px] leading-tight text-fg-muted">Choose an object, then drag it into place. Your changes remain a proposal until venue approval.</p>
@@ -2017,7 +2034,7 @@ export function CanvasPage({ event }: Props) {
           
           <Layer>
             {/* Structural Boundaries */}
-            <Group listening={false}>
+            {showProtectedLayers && <Group listening={false}>
               {structuralData.lines.map((line: any, i: number) => (
                 <Line
                   key={line.id || i}
@@ -2053,7 +2070,7 @@ export function CanvasPage({ event }: Props) {
                   fill="#9ca3af" stroke="#4b5563" strokeWidth={2} opacity={0.6}
                 />
               ))}
-            </Group>
+            </Group>}
 
             {/* Custom Drawn Node Walls / Boundaries */}
             {items.filter(item => item.type === 'custom_wall').map((wall: any) => (
