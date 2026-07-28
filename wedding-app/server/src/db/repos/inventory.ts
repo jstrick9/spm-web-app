@@ -12,6 +12,7 @@ export interface InventoryItemRow {
   condition: 'good' | 'fair' | 'poor' | 'maintenance';
   owner_type: 'venue' | 'vendor_rental';
   notes: string | null;
+  spec: string;
   created_by: string | null;
   created_at: string;
   updated_at: string;
@@ -31,34 +32,34 @@ export const inventoryRepo = {
   create(orgId: string, input: {
     sku?: string; name: string; category?: string;
     totalCount?: number; availableCount?: number;
-    condition?: string; ownerType?: string; notes?: string; createdBy: string;
+    condition?: string; ownerType?: string; notes?: string; spec?: Record<string, unknown>; createdBy: string;
   }): InventoryItemRow {
     const id = uuid();
     db.prepare(
-      `INSERT INTO inventory_items (id, organization_id, sku, name, category, total_count, available_count, condition, owner_type, notes, created_by)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+      `INSERT INTO inventory_items (id, organization_id, sku, name, category, total_count, available_count, condition, owner_type, notes, spec, created_by)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
     ).run(id, orgId, input.sku ?? '', input.name,
       input.category ?? 'other', input.totalCount ?? 0, input.availableCount ?? 0,
       input.condition ?? 'good', input.ownerType ?? 'venue',
-      input.notes ?? null, input.createdBy);
+      input.notes ?? null, JSON.stringify(input.spec ?? {}), input.createdBy);
     return this.findById(id)!;
   },
 
   update(id: string, patch: Partial<{
     sku: string; name: string; category: string;
     totalCount: number; availableCount: number;
-    condition: string; ownerType: string; notes: string;
+    condition: string; ownerType: string; notes: string; spec: Record<string, unknown>;
   }>): InventoryItemRow | undefined {
     const map: Record<string, string> = {
       sku: 'sku', name: 'name', category: 'category',
       totalCount: 'total_count', availableCount: 'available_count',
-      condition: 'condition', ownerType: 'owner_type', notes: 'notes',
+      condition: 'condition', ownerType: 'owner_type', notes: 'notes', spec: 'spec',
     };
     const fields: string[] = [];
     const values: unknown[] = [];
     for (const [k, v] of Object.entries(patch)) {
       const col = map[k]; if (!col) continue;
-      fields.push(`${col} = ?`); values.push(v ?? null);
+      fields.push(`${col} = ?`); values.push(k === 'spec' ? JSON.stringify(v ?? {}) : v ?? null);
     }
     if (!fields.length) return this.findById(id);
     values.push(id);

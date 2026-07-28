@@ -134,7 +134,7 @@ export function InventoryManager({ orgId }: Props) {
                           <div className="font-medium">{item.name}</div>
                           <div className="text-[10px] uppercase tracking-wider text-fg-subtle mt-0.5">
                             {item.category} · {item.owner_type.replace('_', ' ')}
-                          </div>
+                          </div>{(() => { try { const spec = JSON.parse(item.spec || '{}'); return spec.objectType === 'table' ? <div className="text-[10px] text-fg-muted">{spec.widthFeet || '?'}×{spec.depthFeet || '?'} ft · {Object.entries(spec.seatingCapacities || {}).map(([style, seats]) => `${style.replace('_', ' ')} ${seats}`).join(' · ')}</div> : null; } catch { return null; } })()}
                         </td>
                         <td className="px-4 py-3 text-center tabular-nums">{item.total_count}</td>
                         <td className="px-4 py-3 text-center tabular-nums">
@@ -175,12 +175,16 @@ function AddInventoryDialog({ orgId, open, onOpenChange }: {
   const [sku, setSku] = useState('');
   const [category, setCategory] = useState('other');
   const [totalCount, setTotalCount] = useState('0');
+  const [objectType, setObjectType] = useState<'table'|'chair'|'decor'|'fixture'|'other'>('other');
+  const [widthFeet, setWidthFeet] = useState(''); const [depthFeet, setDepthFeet] = useState('');
+  const [platedSeats, setPlatedSeats] = useState(''); const [familySeats, setFamilySeats] = useState(''); const [cocktailSeats, setCocktailSeats] = useState('');
 
   const createMutation = useMutation({
     mutationFn: () => sdk.inventory.create(orgId, {
       name, sku: sku || undefined, category,
       totalCount: parseInt(totalCount) || 0,
       availableCount: parseInt(totalCount) || 0,
+      spec: { objectType, ...(widthFeet ? { widthFeet: Number(widthFeet) } : {}), ...(depthFeet ? { depthFeet: Number(depthFeet) } : {}), ...(objectType === 'table' ? { seatingCapacities: { ...(platedSeats ? { plated: Number(platedSeats) } : {}), ...(familySeats ? { family_style: Number(familySeats) } : {}), ...(cocktailSeats ? { cocktail: Number(cocktailSeats) } : {}) } } : {}) },
     }),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['inventory', orgId] });
@@ -212,6 +216,8 @@ function AddInventoryDialog({ orgId, open, onOpenChange }: {
             </Select>
           </div>
           <div><Label>Count</Label><Input type="number" min={0} value={totalCount} onChange={e => setTotalCount(e.target.value)} className="mt-1" /></div>
+          <div><Label>Layout object type</Label><Select value={objectType} onValueChange={(value) => setObjectType(value as typeof objectType)}><SelectTrigger className="mt-1"><SelectValue /></SelectTrigger><SelectContent>{['table','chair','decor','fixture','other'].map(type => <SelectItem key={type} value={type}>{type}</SelectItem>)}</SelectContent></Select></div>
+          {objectType === 'table' && <><div className="grid grid-cols-2 gap-3"><div><Label>Width (ft)</Label><Input type="number" min="0" value={widthFeet} onChange={e => setWidthFeet(e.target.value)} className="mt-1" placeholder="6" /></div><div><Label>Depth (ft)</Label><Input type="number" min="0" value={depthFeet} onChange={e => setDepthFeet(e.target.value)} className="mt-1" placeholder="6" /></div></div><div><Label>Seating capacities by service style</Label><div className="mt-1 grid grid-cols-3 gap-2"><Input aria-label="Plated seating capacity" type="number" min="0" value={platedSeats} onChange={e => setPlatedSeats(e.target.value)} placeholder="Plated"/><Input aria-label="Family style seating capacity" type="number" min="0" value={familySeats} onChange={e => setFamilySeats(e.target.value)} placeholder="Family"/><Input aria-label="Cocktail seating capacity" type="number" min="0" value={cocktailSeats} onChange={e => setCocktailSeats(e.target.value)} placeholder="Cocktail"/></div></div></>}
         </div>
         <DialogFooter>
           <Button variant="ghost" onClick={() => onOpenChange(false)}>Cancel</Button>

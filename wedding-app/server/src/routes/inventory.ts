@@ -14,6 +14,7 @@ const itemSchema = z.object({
   condition: z.enum(['good','fair','poor','maintenance']).optional(),
   ownerType: z.enum(['venue','vendor_rental']).optional(),
   notes: z.string().max(2000).optional(),
+  spec: z.object({ objectType: z.enum(['table','chair','decor','fixture','other']).optional(), widthFeet: z.number().positive().optional(), depthFeet: z.number().positive().optional(), seatingCapacities: z.record(z.number().int().min(0).max(100)).optional() }).optional(),
 });
 
 export async function inventoryRoutes(app: FastifyInstance) {

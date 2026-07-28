@@ -11,6 +11,7 @@ export interface SdkInventoryItem {
   condition: string;
   owner_type: string;
   notes: string | null;
+  spec: string;
   created_at: string;
 }
 
@@ -27,14 +28,14 @@ export const inventorySdk = {
   create(orgId: string, input: {
     sku?: string; name: string; category?: string;
     totalCount?: number; availableCount?: number;
-    condition?: string; ownerType?: string; notes?: string;
+    condition?: string; ownerType?: string; notes?: string; spec?: { objectType?: 'table'|'chair'|'decor'|'fixture'|'other'; widthFeet?: number; depthFeet?: number; seatingCapacities?: Record<string, number> };
   }): Promise<{ item: SdkInventoryItem }> {
     return api.post(`/api/orgs/${orgId}/inventory`, input);
   },
   update(id: string, patch: Partial<{
     sku: string; name: string; category: string;
     totalCount: number; availableCount: number;
-    condition: string; notes: string;
+    condition: string; notes: string; spec: { objectType?: 'table'|'chair'|'decor'|'fixture'|'other'; widthFeet?: number; depthFeet?: number; seatingCapacities?: Record<string, number> };
   }>): Promise<{ item: SdkInventoryItem }> {
     return api.patch(`/api/inventory/${id}`, patch);
   },
