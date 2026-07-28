@@ -37,6 +37,7 @@ export const venuesSdk = {
   createEventLayout(venueId: string, eventId: string, name?: string) {
     return api.post(`/api/venues/${venueId}/event-layouts`, { eventId, name });
   },
+  scaffoldVersions(venueId: string): Promise<{ versions: Array<{ id: string; revision: number; change_description: string | null; created_at: string }> }> { return api.get(`/api/venues/${venueId}/scaffold/versions`); },
   saveScaffold(venueId: string, input: { masterLayout: Record<string, unknown>; canvasWidth?: number; canvasHeight?: number; description?: string }) {
     return api.post(`/api/venues/${venueId}/scaffold/save`, input);
   },

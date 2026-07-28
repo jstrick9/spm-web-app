@@ -5,6 +5,7 @@ import { can } from '../lib/rbac.js';
 import { venuesRepo, layoutsRepo, auditRepo } from '../db/repos/index.js';
 import { BadRequest, Forbidden, NotFound } from '../lib/errors.js';
 import { saveDataUri } from '../lib/fileStorage.js';
+import { db } from '../db/database.js';
 
 const venueSchema = z.object({
   name:          z.string().min(1).max(200),
@@ -54,6 +55,12 @@ export async function venueRoutes(app: FastifyInstance) {
     const parsed = venueSchema.partial().safeParse(req.body);
     if (!parsed.success) throw BadRequest('invalid-input', parsed.error.issues);
     return { venue: venuesRepo.update(id, parsed.data) };
+  });
+
+  app.get('/api/venues/:id/scaffold/versions', { preHandler: requireAuth }, async (req) => {
+    const { id } = req.params as { id: string }; const venue = venuesRepo.findById(id);
+    if (!venue) throw NotFound(); if (!can(req.auth!.memberships, { organizationId: venue.organization_id }, 'venues.view')) throw Forbidden();
+    return { versions: db.prepare(`SELECT * FROM venue_space_versions WHERE venue_id = ? ORDER BY revision DESC`).all(id) };
   });
 
   app.post('/api/venues/:id/scaffold/save', { preHandler: requireAuth }, async (req) => {

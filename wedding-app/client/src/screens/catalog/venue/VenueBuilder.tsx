@@ -50,6 +50,7 @@ export function VenueBuilder({ orgId }: Props) {
     queryKey: ['catalog', orgId, 'guideline'],
     queryFn: () => sdk.catalog.list(orgId, 'guideline' as any),
   });
+  const { data: scaffoldVersions } = useQuery({ queryKey: ['venue-scaffold-versions', selectedVenue?.id], queryFn: () => venuesSdk.scaffoldVersions(selectedVenue.id), enabled: !!selectedVenue?.id });
 
   useEffect(() => {
     if (data?.items && data.items.length > 0) {
@@ -305,6 +306,7 @@ export function VenueBuilder({ orgId }: Props) {
            <label className="flex items-center gap-1 text-xs">Rotate <select aria-label="Underlay rotation" value={underlayRotation} onChange={(e) => { const rotation = Number(e.target.value); setUnderlayRotation(rotation); updateUnderlay({ rotation }); }}><option value={0}>0°</option><option value={90}>90°</option><option value={180}>180°</option><option value={270}>270°</option></select></label>
          </> : null; } catch { return null; } })()}
        </div>}
+       {selectedVenue && <div className="grid gap-3 rounded-lg border border-border bg-surface p-3 text-xs md:grid-cols-3"><div><strong>Space readiness</strong><p className="text-fg-muted">{zones.length} operational zones · {selectedVenue.capacity} guest capacity</p></div><div><strong>Reference plan</strong><p className="text-fg-muted">{underlayLocked ? 'Locked' : 'Unlocked'} · {Math.round(underlayOpacity * 100)}% opacity</p></div><div><strong>Revision history</strong><p className="text-fg-muted">{scaffoldVersions?.versions?.length ?? 0} saved revision(s)</p></div></div>}
        {selectedVenue && <div className="rounded-lg border border-warning/30 bg-warning-soft/20 px-3 py-2 text-xs text-warning">{!zones.some((z) => z.type === 'exit') && <span className="mr-3">Add at least one exit.</span>}{!zones.some((z) => z.type === 'accessible_route') && <span className="mr-3">Add an accessible route.</span>}{!zones.some((z) => z.type === 'power') && <span className="mr-3">Add a power zone.</span>}{!zones.some((z) => z.type === 'loading') && <span>Add a loading zone.</span>}</div>}
        <div className="flex flex-col lg:flex-row items-start lg:items-center justify-between p-3 bg-surface border border-border rounded-lg shadow-sm gap-4">
           <div className="flex flex-wrap gap-2">
