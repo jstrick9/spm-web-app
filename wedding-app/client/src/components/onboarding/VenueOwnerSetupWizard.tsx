@@ -25,9 +25,9 @@ interface Props {
 const STEPS: Array<{ id: StepId; title: string; icon: typeof Palette }> = [
   { id: 'identity', title: 'Venue identity', icon: Palette },
   { id: 'spaces', title: 'Venue spaces', icon: Building2 },
-  { id: 'rules', title: 'Capacity & rules', icon: Settings },
-  { id: 'catalog', title: 'Catalog basics', icon: Table2 },
-  { id: 'firstEvent', title: 'First event', icon: Plus },
+  { id: 'rules', title: 'Operations & guest experience rules', icon: Settings },
+  { id: 'catalog', title: 'Venue inventory & templates', icon: Table2 },
+  { id: 'firstEvent', title: 'First booked event', icon: Plus },
 ];
 
 const EMPTY_FORM = {
@@ -408,8 +408,8 @@ function FirstEventStep({ form, update, importKind, setImportKind, importRows, i
   const inviteTeam = localStorage.getItem('wvi_post_setup_invite_team') === 'true';
   const headers = importRows?.[0] ?? [];
   const previewRows = (importRows ?? []).slice(1, 6);
-  return <div className="space-y-4"><h3 className="font-semibold text-fg">Create a first sample event or import real data</h3><div className="space-y-2">
-    <label className="flex gap-2"><input type="radio" checked={form.firstEventMode === 'sample'} onChange={() => update('firstEventMode', 'sample')} /> Create a sample wedding so I can learn the workflow</label>
+  return <div className="space-y-4"><h3 className="font-semibold text-fg">Create a first booked event or import real event data</h3><div className="space-y-2">
+    <label className="flex gap-2"><input type="radio" checked={form.firstEventMode === 'sample'} onChange={() => update('firstEventMode', 'sample')} /> Create a sample wedding only if I need a safe training event</label>
     <label className="flex gap-2"><input type="radio" checked={form.firstEventMode === 'import_later'} onChange={() => update('firstEventMode', 'import_later')} /> I’ll import or create my real events later</label>
   </div>{form.firstEventMode === 'sample' && <div className="grid gap-3 sm:grid-cols-2"><Field label="Sample event title"><Input value={form.firstEventTitle} onChange={(e) => update('firstEventTitle', e.target.value)} /></Field><Field label="Sample event date"><Input type="date" value={form.firstEventDate} onChange={(e) => update('firstEventDate', e.target.value)} /></Field></div>}
 

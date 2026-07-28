@@ -1578,9 +1578,9 @@ function OwnerSetupChecklist({ config }: { config?: any }) {
   const steps = [
     { id: "identity", label: "Venue identity", href: "#/system/platform" },
     { id: "spaces", label: "Venue spaces", href: "#/system/venue" },
-    { id: "rules", label: "Capacity & rules", href: "#/system" },
-    { id: "catalog", label: "Catalog basics", href: "#/system/catalog" },
-    { id: "firstEvent", label: "First event", href: "#/events" },
+    { id: "rules", label: "Operations & guest experience rules", href: "#/system/venue" },
+    { id: "catalog", label: "Venue inventory & templates", href: "#/system/inventory" },
+    { id: "firstEvent", label: "First booked event & couple invite", href: "#/events" },
   ];
   const count = steps.filter((s) => completed.has(s.id)).length;
   const pct =
