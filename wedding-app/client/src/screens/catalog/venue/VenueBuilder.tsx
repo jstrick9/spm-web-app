@@ -209,16 +209,22 @@ export function VenueBuilder({ orgId }: Props) {
     });
   };
 
-  const handleSVGImport = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleVectorImport = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
     const reader = new FileReader();
     reader.onload = (ev) => {
       const text = ev.target?.result as string;
+      const newLines: any[] = [];
+      if (file.name.toLowerCase().endsWith('.dxf')) {
+        const pairs = text.split(/\r?\n/); let entity: Record<string, string> = {};
+        for (let i = 0; i < pairs.length - 1; i += 2) {
+          const code = pairs[i].trim(), value = pairs[i + 1].trim();
+          if (code === '0') { if (entity.type === 'LINE') { const x1 = Number(entity['10']), y1 = Number(entity['20']), x2 = Number(entity['11']), y2 = Number(entity['21']); if ([x1,y1,x2,y2].every(Number.isFinite)) newLines.push({ id: `dxf-${Date.now()}-${i}`, points: [x1, y1, x2, y2] }); } entity = { type: value }; } else entity[code] = value;
+        }
+      } else {
       const parser = new DOMParser();
       const doc = parser.parseFromString(text, "image/svg+xml");
-      
-      const newLines: any[] = [];
       doc.querySelectorAll('line').forEach(el => {
         newLines.push({ id: `l-${Date.now()}-${Math.random()}`, points: [parseFloat(el.getAttribute('x1')||'0'), parseFloat(el.getAttribute('y1')||'0'), parseFloat(el.getAttribute('x2')||'0'), parseFloat(el.getAttribute('y2')||'0')] });
       });
@@ -236,13 +242,13 @@ export function VenueBuilder({ orgId }: Props) {
           if (coords.length > 0) newLines.push({ id: `l-${Date.now()}-${Math.random()}`, points: coords });
         }
       });
-      
+      }
       if (newLines.length > 0) {
         setLines([...lines, ...newLines]);
         setHasChanges(true);
-        toast({ title: `Imported ${newLines.length} paths from SVG`, variant: 'success' });
+        toast({ title: `Imported ${newLines.length} paths from ${file.name.toLowerCase().endsWith('.dxf') ? 'DXF' : 'SVG'}`, variant: 'success' });
       } else {
-        toast({ title: 'No valid paths found in SVG', variant: 'destructive' });
+        toast({ title: 'No supported paths found in this vector file', variant: 'destructive' });
       }
     };
     reader.readAsText(file);
@@ -360,9 +366,9 @@ export function VenueBuilder({ orgId }: Props) {
                </Button>
              )}
              <div className="w-px h-6 bg-border mx-1" />
-             <input type="file" accept=".svg" className="hidden" ref={fileInputRef} onChange={handleSVGImport} />
+             <input type="file" accept=".svg,.dxf" className="hidden" ref={fileInputRef} onChange={handleVectorImport} />
              <Button variant="outline" size="sm" onClick={() => fileInputRef.current?.click()}>
-               <Upload className="w-4 h-4 mr-1"/> Import SVG
+               <Upload className="w-4 h-4 mr-1"/> Import SVG / DXF
              </Button>
              <Button variant="outline" size="sm" onClick={exportPng}>
                <Download className="w-4 h-4 mr-1" /> Export PNG
