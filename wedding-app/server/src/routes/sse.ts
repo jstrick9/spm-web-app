@@ -52,7 +52,7 @@ export function broadcastSSE(orgId: string, eventType: string, payload: Record<s
   });
 
   for (const client of clients) {
-    if (client.orgId === orgId) {
+    if (client.orgId === orgId && (!Array.isArray((payload as any).recipientUserIds) || (payload as any).recipientUserIds.includes(client.userId))) {
       try {
         client.send(`data: ${message}\n\n`);
       } catch {

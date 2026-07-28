@@ -4,8 +4,9 @@ import { db } from '../db/database.js';
 import { uuid } from '../lib/crypto.js';
 import { requireAuth } from '../middleware/auth.js';
 import { can } from '../lib/rbac.js';
-import { auditRepo, assetsRepo, eventsRepo, inventoryRepo, layoutCollaborationRepo, sseEventsRepo, layoutOpsRepo, layoutsRepo } from '../db/repos/index.js';
+import { auditRepo, assetsRepo, eventsRepo, inventoryRepo, layoutCollaborationRepo, layoutOpsRepo, layoutsRepo } from '../db/repos/index.js';
 import { savePrivateImageDataUri, privateFilePath } from '../lib/fileStorage.js';
+import { broadcastSSE } from './sse.js';
 import { createReadStream, existsSync } from 'node:fs';
 import { BadRequest, Forbidden, NotFound, HttpError } from '../lib/errors.js';
 
@@ -56,6 +57,13 @@ const reopenRequestSchema = z.object({ note: z.string().min(3).max(2000) });
 const reviewDecisionSchema = z.object({ decision: z.enum(['approved','changes_requested','rejected']), note: z.string().max(2000).optional() });
 const queueDecisionSchema = z.object({ decision: z.enum(['approved','changes_requested','rejected']), note: z.string().max(2000).optional() }).superRefine((value, ctx) => { if (value.decision !== 'approved' && !value.note?.trim()) ctx.addIssue({ code: 'custom', message: 'decision-note-required', path: ['note'] }); });
 const inventoryReservationsSchema = z.object({ reservations: z.array(z.object({ inventoryItemId: z.string().min(1), quantity: z.number().int().min(0) })).max(100), overrideReason: z.string().max(1000).optional() });
+
+function coreReviewRecipientIds(layout: { organization_id: string; event_id: string | null }, requesterId?: string | null): string[] {
+  const ids = new Set<string>(); if (requesterId) ids.add(requesterId);
+  for (const row of db.prepare(`SELECT em.user_id FROM event_memberships em JOIN roles r ON r.id=em.role_id WHERE em.event_id=? AND em.status='active' AND r.key='planner'`).all(layout.event_id) as Array<{ user_id: string }>) ids.add(row.user_id);
+  for (const row of db.prepare(`SELECT om.user_id FROM organization_memberships om JOIN roles r ON r.id=om.role_id WHERE om.organization_id=? AND om.status='active' AND r.key IN ('owner','admin','manager')`).all(layout.organization_id) as Array<{ user_id: string }>) ids.add(row.user_id);
+  return [...ids];
+}
 
 function isNamedVenueManager(memberships: any[], organizationId: string): boolean {
   return memberships.some((membership) => membership.organizationId === organizationId && ['owner', 'admin', 'manager'].includes(String(membership.roleKey).toLowerCase()));
@@ -179,7 +187,7 @@ export async function layoutRoutes(app: FastifyInstance) {
     const { id, commentId } = req.params as { id: string; commentId: string }; const layout = requireLayoutAccess(id, req.auth!.memberships, 'layouts.edit');
     const comment = layoutCollaborationRepo.findComment(commentId); if (!comment || comment.layout_id !== id) throw NotFound();
     if (comment.author_user_id !== req.auth!.userId && !isNamedVenueManager(req.auth!.memberships, layout.organization_id)) throw Forbidden();
-    const resolved = layoutCollaborationRepo.resolveComment(commentId, req.auth!.userId); sseEventsRepo.publish({ organizationId: layout.organization_id, eventType: 'layout.comment.resolved', actorUserId: req.auth!.userId, payload: { layoutId: id, commentId, recipientUserId: comment.author_user_id, eventId: layout.event_id } }); return { comment: resolved };
+    const resolved = layoutCollaborationRepo.resolveComment(commentId, req.auth!.userId); broadcastSSE(layout.organization_id, 'layout.comment.resolved', { layoutId: id, commentId, recipientUserIds: coreReviewRecipientIds(layout, comment.author_user_id), eventId: layout.event_id }, req.auth!.userId); return { comment: resolved };
   });
 
   app.post('/api/layouts/:id/reopen-request', { preHandler: requireAuth }, async (req, reply) => {
@@ -188,7 +196,7 @@ export async function layoutRoutes(app: FastifyInstance) {
     const parsed = reopenRequestSchema.safeParse(req.body); if (!parsed.success) throw BadRequest('invalid-input', parsed.error.issues);
     const comment = layoutCollaborationRepo.addComment({ layoutId: id, orgId: layout.organization_id, eventId: layout.event_id, revision: layout.revision, authorUserId: req.auth!.userId, authorLabel: req.auth!.email, body: `Reopen request: ${parsed.data.note}`, target: { kind: 'reopen_request' } });
     const review = layoutCollaborationRepo.requestReview({ layoutId: id, orgId: layout.organization_id, eventId: layout.event_id, revision: layout.revision, userId: req.auth!.userId });
-    sseEventsRepo.publish({ organizationId: layout.organization_id, eventType: 'layout.reopen.requested', actorUserId: req.auth!.userId, payload: { layoutId: id, eventId: layout.event_id, note: parsed.data.note } });
+    broadcastSSE(layout.organization_id, 'layout.reopen.requested', { layoutId: id, eventId: layout.event_id, note: parsed.data.note, recipientUserIds: coreReviewRecipientIds(layout, req.auth!.userId) }, req.auth!.userId);
     return reply.code(201).send({ comment, review });
   });
 
@@ -196,7 +204,7 @@ export async function layoutRoutes(app: FastifyInstance) {
     const { id } = req.params as { id: string }; const layout = requireLayoutAccess(id, req.auth!.memberships, 'layouts.publish');
     if (layout.approval_status !== 'approved') throw BadRequest('layout-not-approved');
     const saved = layoutsRepo.saveRevision({ layoutId: id, payload: JSON.parse(layout.payload), updatedBy: req.auth!.userId, expectedRevision: layout.revision, approvalStatus: 'draft', changeDescription: 'Venue accepted reopen request; new proposal draft created' });
-    sseEventsRepo.publish({ organizationId: layout.organization_id, eventType: 'layout.reopen.accepted', actorUserId: req.auth!.userId, payload: { layoutId: id, eventId: layout.event_id, revision: saved.revision } });
+    broadcastSSE(layout.organization_id, 'layout.reopen.accepted', { layoutId: id, eventId: layout.event_id, revision: saved.revision, recipientUserIds: coreReviewRecipientIds(layout) }, req.auth!.userId);
     return { layout: saved };
   });
 
@@ -213,7 +221,7 @@ export async function layoutRoutes(app: FastifyInstance) {
     if (!review || (review as any).layout_id !== id) throw NotFound('review-not-found');
     const approvalStatus = parsed.data.decision === 'approved' ? 'approved' : parsed.data.decision === 'changes_requested' ? 'draft' : 'rejected';
     const saved = layoutsRepo.saveRevision({ layoutId: id, payload: JSON.parse(layout.payload), updatedBy: req.auth!.userId, expectedRevision: layout.revision, approvalStatus, changeDescription: parsed.data.note ?? `review ${parsed.data.decision}` });
-    sseEventsRepo.publish({ organizationId: layout.organization_id, eventType: 'layout.review.decided', actorUserId: req.auth!.userId, payload: { layoutId: id, reviewId, decision: parsed.data.decision, recipientUserId: (review as any).requested_by, eventId: layout.event_id } });
+    broadcastSSE(layout.organization_id, 'layout.review.decided', { layoutId: id, reviewId, decision: parsed.data.decision, recipientUserIds: coreReviewRecipientIds(layout, (review as any).requested_by), eventId: layout.event_id }, req.auth!.userId);
     return { review, layout: saved };
   });
 
@@ -225,7 +233,7 @@ export async function layoutRoutes(app: FastifyInstance) {
     const decided = layoutCollaborationRepo.decideReview((review as any).id, req.auth!.userId, parsed.data.decision, parsed.data.note);
     const approvalStatus = parsed.data.decision === 'approved' ? 'approved' : parsed.data.decision === 'changes_requested' ? 'draft' : 'rejected';
     const saved = layoutsRepo.saveRevision({ layoutId: id, payload: JSON.parse(layout.payload), updatedBy: req.auth!.userId, expectedRevision: layout.revision, approvalStatus, changeDescription: parsed.data.note ?? `queue ${parsed.data.decision}` });
-    sseEventsRepo.publish({ organizationId: layout.organization_id, eventType: 'layout.review.decided', actorUserId: req.auth!.userId, payload: { layoutId: id, reviewId: (review as any).id, decision: parsed.data.decision, recipientUserId: (review as any).requested_by, eventId: layout.event_id } });
+    broadcastSSE(layout.organization_id, 'layout.review.decided', { layoutId: id, reviewId: (review as any).id, decision: parsed.data.decision, recipientUserIds: coreReviewRecipientIds(layout, (review as any).requested_by), eventId: layout.event_id }, req.auth!.userId);
     return { review: decided, layout: saved };
   });
 
