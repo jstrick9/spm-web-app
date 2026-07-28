@@ -433,7 +433,7 @@ export function DashboardScreen({
           </div>
         )}
 
-        <OwnerCommandCenter
+        {setupIncomplete ? <VenueStudioReadiness setupPct={setupPct} canManageVenue={canManageVenue} /> : <OwnerCommandCenter
           isLoading={isLoading}
           todaysEvents={todaysEvents}
           upcomingEvents={upcomingEvents}
@@ -448,7 +448,7 @@ export function DashboardScreen({
           canInviteTeam={canInviteTeam}
           canManageVenue={canManageVenue}
           onCreateEvent={onCreateEvent}
-        />
+        />}
 
         {canViewAnalytics &&
           (healthCommandQuery.data?.commandCenter?.actions?.length ?? 0) >
@@ -819,6 +819,16 @@ export function DashboardScreen({
       </PageBody>
     </>
   );
+}
+
+function VenueStudioReadiness({ setupPct, canManageVenue }: { setupPct: number; canManageVenue: boolean }) {
+  const steps = [
+    ['Venue spaces', 'Create ceremony, cocktail, reception, and rain-plan spaces.', '#/system/venue'],
+    ['Inventory', 'Add the tables, chairs, decor, and fixtures Seven Paths Manor owns.', '#/system/inventory'],
+    ['Templates & rules', 'Approve reusable layouts, capacity, accessibility, service, and operational rules.', '#/system/venue'],
+    ['Couple experience', 'Set the brand, guest portal defaults, and invitation experience.', '#/system/platform'],
+  ];
+  return <section aria-label="Venue Studio readiness" className="space-y-4"><div className="flex items-center justify-between"><div><h2 className="text-lg font-bold text-brand">Build your Seven Paths Manor operating foundation</h2><p className="text-sm text-fg-muted">Complete Venue Studio before using the operational event dashboard.</p></div><Badge variant="brand">{setupPct}% ready</Badge></div><div className="grid gap-3 md:grid-cols-2">{steps.map(([title, detail, href]) => <a key={title} href={href} className="rounded-xl border border-brand/20 bg-brand-soft/10 p-4 hover:border-brand"><strong className="block">{title}</strong><span className="mt-1 block text-sm text-fg-muted">{detail}</span><span className="mt-3 inline-block text-sm font-semibold text-brand">Open {title} →</span></a>)}</div>{!canManageVenue && <p className="text-sm text-warning">You can review setup readiness, but a venue manager must complete space setup.</p>}</section>;
 }
 
 // ── Owner Command Center widgets ──
