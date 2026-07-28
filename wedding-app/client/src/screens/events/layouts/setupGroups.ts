@@ -4,6 +4,7 @@ export type SetupGroupInput = {
   table?: { inventoryItemId: string; label: string; width: number; depth: number; shape: 'round' | 'rect' };
   chair?: { inventoryItemId: string; label: string; count: number };
   centerpiece?: { inventoryItemId: string; label: string };
+  arrangement?: 'grid' | 'row' | 'arc';
 };
 
 export type SetupGroupResult = { items: any[]; reservations: Array<{ inventoryItemId: string; quantity: number }> };
@@ -17,7 +18,9 @@ export function createIndependentSetupGroup(input: SetupGroupInput, startX = 180
   const stamp = Date.now(); const items: any[] = []; const reservations = new Map<string, number>();
   const reserve = (inventoryItemId: string | undefined, count: number) => { if (inventoryItemId) reservations.set(inventoryItemId, (reservations.get(inventoryItemId) || 0) + count); };
   for (let index = 0; index < quantity; index++) {
-    const x = startX + (index % 4) * 140; const y = startY + Math.floor(index / 4) * 140;
+    const arrangement = input.arrangement || 'grid'; const angle = quantity > 1 ? (-Math.PI * .8) + (Math.PI * 1.6 * index) / (quantity - 1) : 0;
+    const x = arrangement === 'row' ? startX + index * 140 : arrangement === 'arc' ? startX + 270 + Math.cos(angle) * 250 : startX + (index % 4) * 140;
+    const y = arrangement === 'row' ? startY : arrangement === 'arc' ? startY + 180 + Math.sin(angle) * 150 : startY + Math.floor(index / 4) * 140;
     const table = input.table ? { id: `group-${stamp}-table-${index}`, type: input.table.shape === 'round' ? 'round_table' : 'rect_table', x, y, radius: input.table.shape === 'round' ? Math.max(24, input.table.width * 8 / 2) : undefined, width: input.table.shape === 'rect' ? input.table.width * 8 : undefined, height: input.table.shape === 'rect' ? input.table.depth * 8 : undefined, label: `${input.label} ${index + 1}`, inventoryItemId: input.table.inventoryItemId, rotation: 0 } : null;
     if (table) items.push(table);
     for (let chairIndex = 0; chairIndex < chairs; chairIndex++) { const angle = (Math.PI * 2 * chairIndex) / chairs - Math.PI / 2; const radius = (table?.radius || Math.max(table?.width || 60, table?.height || 40) / 2) + 22; items.push({ id: `group-${stamp}-chair-${index}-${chairIndex}`, type: 'chair', x: x + Math.cos(angle) * radius, y: y + Math.sin(angle) * radius, radius: 10, label: input.chair?.label || 'Chair', inventoryItemId: input.chair?.inventoryItemId }); }

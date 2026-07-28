@@ -11,3 +11,12 @@ describe('independent event setup groups', () => {
     expect(new Set(result.items.filter((item) => item.type === 'round_table').map((item) => item.id)).size).toBe(10);
   });
 });
+
+it('arranges independent copies in rows and arcs without changing inventory totals', () => {
+  const input = { label: 'Round', quantity: 3, table: { inventoryItemId: 'table', label: 'Round', width: 6, depth: 6, shape: 'round' as const } };
+  const row = createIndependentSetupGroup({ ...input, arrangement: 'row' });
+  const arc = createIndependentSetupGroup({ ...input, arrangement: 'arc' });
+  expect(row.items.filter((item) => item.type === 'round_table').map((item) => item.y)).toEqual([180, 180, 180]);
+  expect(new Set(arc.items.filter((item) => item.type === 'round_table').map((item) => item.y)).size).toBeGreaterThan(1);
+  expect(row.reservations).toEqual(arc.reservations);
+});
