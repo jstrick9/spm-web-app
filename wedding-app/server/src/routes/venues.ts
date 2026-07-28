@@ -54,6 +54,13 @@ export async function venueRoutes(app: FastifyInstance) {
     if (!can(req.auth!.memberships, { organizationId: venue.organization_id }, 'venues.manage')) throw Forbidden();
     const parsed = venueSchema.partial().safeParse(req.body);
     if (!parsed.success) throw BadRequest('invalid-input', parsed.error.issues);
+    if (parsed.data.approvalStatus === 'approved') {
+      const masterLayout = (() => { try { return JSON.parse(venue.master_layout || '{}'); } catch { return {}; } })() as { zones?: Array<{ type?: string }> };
+      const zoneTypes = new Set((masterLayout.zones || []).map((zone) => zone.type));
+      const missing = ['exit', 'accessible_route', 'power', 'loading'].filter((type) => !zoneTypes.has(type));
+      const overrideReason = typeof parsed.data.metadata?.approvalOverrideReason === 'string' ? parsed.data.metadata.approvalOverrideReason.trim() : '';
+      if (missing.length && !overrideReason) throw BadRequest('venue-readiness-override-required', { missing });
+    }
     return { venue: venuesRepo.update(id, parsed.data) };
   });
 

@@ -9,10 +9,17 @@ const mocks = vi.hoisted(() => ({ create: vi.fn().mockResolvedValue({ venue: { i
 vi.mock('../../../sdk/venues', () => ({ venuesSdk: { list: vi.fn().mockResolvedValue({ venues: [] }), create: mocks.create, update: vi.fn(), uploadUnderlay: vi.fn() } }));
 function wrap(ui: React.ReactNode) { return <QueryClientProvider client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}><ToastProvider>{ui}</ToastProvider></QueryClientProvider>; }
 describe('VenueSpaceScaffoldWizard', () => {
-  it('creates a reception scaffold with dimensions, units, capacity, and template', async () => {
-    const selected = vi.fn(); render(wrap(<VenueSpaceScaffoldWizard orgId="org-1" onSelectVenue={selected} />));
-    await userEvent.click(screen.getByRole('button', { name: /Reception/i }));
+  it('creates a measured reception scaffold with dimensions, units, footprint, and operational features', async () => {
+    render(wrap(<VenueSpaceScaffoldWizard orgId="org-1" onSelectVenue={vi.fn()} />));
+    await userEvent.click(screen.getByRole('button', { name: /Measure the space/i }));
+    await userEvent.click(screen.getByRole('button', { name: 'Continue' }));
+    await userEvent.click(screen.getByLabelText('Emergency exit'));
+    await userEvent.click(screen.getByLabelText('Accessible route'));
+    await userEvent.click(screen.getByLabelText('Power / cable point'));
+    await userEvent.click(screen.getByLabelText('Service / loading entry'));
+    await userEvent.click(screen.getByRole('button', { name: /Review setup/i }));
     await userEvent.click(screen.getByRole('button', { name: /Create draft scaffold/i }));
-    expect(mocks.create).toHaveBeenCalledWith('org-1', expect.objectContaining({ templateKey: 'reception', width: 80, height: 60, capacity: 120, unitSystem: 'imperial', approvalStatus: 'draft' }));
+    expect(mocks.create).toHaveBeenCalledWith('org-1', expect.objectContaining({ templateKey: 'custom', width: 80, height: 60, capacity: 120, unitSystem: 'imperial', approvalStatus: 'draft', shape: expect.objectContaining({ kind: 'rectangle' }) }));
+    expect(mocks.create.mock.calls[0][1].masterLayout.zones.map((zone: any) => zone.type)).toEqual(expect.arrayContaining(['exit', 'accessible_route', 'power', 'loading']));
   });
 });

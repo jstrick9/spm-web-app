@@ -261,3 +261,17 @@ describe('Venue reference plans', () => {
     expect(underlay.url).not.toBe(underlay.sourceUrl);
   });
 });
+
+describe('Venue scaffold readiness approval', () => {
+  it('requires a manager override reason when approving an incomplete scaffold', async () => {
+    const s = await register();
+    const create = await req(s.token, 'POST', `/api/orgs/${s.orgId}/venues`, { name: 'Incomplete room', masterLayout: { zones: [] } });
+    const venueId = create.json().venue.id;
+    const denied = await req(s.token, 'PATCH', `/api/venues/${venueId}`, { approvalStatus: 'approved' });
+    expect(denied.statusCode).toBe(400);
+    expect(denied.json().error).toBe('venue-readiness-override-required');
+    const approved = await req(s.token, 'PATCH', `/api/venues/${venueId}`, { approvalStatus: 'approved', metadata: { approvalOverrideReason: 'Manager confirmed a temporary operational plan.' } });
+    expect(approved.statusCode).toBe(200);
+    expect(approved.json().venue.approval_status).toBe('approved');
+  });
+});
