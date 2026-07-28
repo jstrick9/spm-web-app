@@ -9,6 +9,7 @@ import { cn } from '../../../ui/lib/cn';
 import { VenueSpaceScaffoldWizard } from './VenueSpaceScaffoldWizard';
 import { venuesSdk } from '../../../sdk/venues';
 import { extractDxfPaths } from './dxfImport';
+import { importSvgPaths } from './svgImport';
 
 interface Props {
   orgId: string;
@@ -228,25 +229,7 @@ export function VenueBuilder({ orgId }: Props) {
           toast({ title: `DXF reference: ${result.units ?? 'unspecified units'}${result.layers.length ? ` · ${result.layers.length} layer${result.layers.length === 1 ? '' : 's'}` : ''}`, variant: 'success' });
         }
       } else {
-      const parser = new DOMParser();
-      const doc = parser.parseFromString(text, "image/svg+xml");
-      doc.querySelectorAll('line').forEach(el => {
-        newLines.push({ id: `l-${Date.now()}-${Math.random()}`, points: [parseFloat(el.getAttribute('x1')||'0'), parseFloat(el.getAttribute('y1')||'0'), parseFloat(el.getAttribute('x2')||'0'), parseFloat(el.getAttribute('y2')||'0')] });
-      });
-      doc.querySelectorAll('rect').forEach(el => {
-        const x = parseFloat(el.getAttribute('x')||'0');
-        const y = parseFloat(el.getAttribute('y')||'0');
-        const w = parseFloat(el.getAttribute('width')||'0');
-        const h = parseFloat(el.getAttribute('height')||'0');
-        newLines.push({ id: `l-${Date.now()}-${Math.random()}`, points: [x, y, x+w, y, x+w, y+h, x, y+h, x, y] });
-      });
-      doc.querySelectorAll('polygon, polyline').forEach(el => {
-        const pts = el.getAttribute('points');
-        if (pts) {
-          const coords = pts.split(/[\s,]+/).map(parseFloat).filter(n => !isNaN(n));
-          if (coords.length > 0) newLines.push({ id: `l-${Date.now()}-${Math.random()}`, points: coords });
-        }
-      });
+      newLines.push(...importSvgPaths(text));
       }
       if (newLines.length > 0) {
         setLines([...lines, ...newLines]);
