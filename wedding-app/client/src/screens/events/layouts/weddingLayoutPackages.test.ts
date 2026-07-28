@@ -11,3 +11,11 @@ describe('wedding layout packages', () => {
     expect(proposal.some((item) => item.vendorName === 'Bar service')).toBe(true);
   });
 });
+
+it('adds service and operational guidance to reception, ceremony, and tent packages', () => {
+  expect(generateWeddingPackage('reception', 80, 0, 'buffet_stations').some((item) => item.vendorName === 'Buffet / stations')).toBe(true);
+  expect(generateWeddingPackage('ceremony', 40).filter((item) => item.reserved).length).toBe(8);
+  const tent = generateWeddingPackage('tent', 80);
+  expect(tent.some((item) => item.type === 'power_outlet')).toBe(true);
+  expect(tent.some((item) => item.vendorName === 'Tent loading / generator')).toBe(true);
+});

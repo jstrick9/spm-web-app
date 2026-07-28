@@ -781,7 +781,7 @@ export function CanvasPage({ event }: Props) {
   };
 
   const addWeddingPackage = (kind: WeddingLayoutPackage) => {
-    const proposalObjects = generateWeddingPackage(kind, packageGuests, items.length);
+    const proposalObjects = generateWeddingPackage(kind, packageGuests, items.length, serviceStyle);
     pushState([...items, ...proposalObjects]);
     if (proposalObjects.some((item) => item.type === 'vendor_zone')) setShowVendorOverlay(true);
     setSelectedId(proposalObjects[0]?.id || null);
