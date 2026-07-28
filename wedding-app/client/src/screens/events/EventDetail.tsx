@@ -181,6 +181,7 @@ export function EventDetail({ eventId, user }: Props & { user: any }) {
         new Set([
           ...TAB_DEFS.filter((t) => t.permission).map((t) => t.permission!),
           ...Object.values(ACTION_PERMISSIONS),
+          'events.members.invite',
         ]),
       ),
     [],
@@ -539,6 +540,7 @@ export function EventDetail({ eventId, user }: Props & { user: any }) {
                 eventId={eventId}
                 event={event}
                 counts={guestsQuery.data?.counts}
+                canInviteCouple={perms['events.members.invite'] === true}
               />
             </TabsContent>
             <TabsContent value="guests">
@@ -637,11 +639,12 @@ function OverviewTab({
   eventId,
   event,
   counts,
+  canInviteCouple,
 }: {
   eventId: string;
   event: any;
-  counts?: {
-    pending: number;
+  canInviteCouple?: boolean;
+  counts?: {    pending: number;
     attending: number;
     declined: number;
     maybe: number;
@@ -675,6 +678,8 @@ function OverviewTab({
   const [escalationText, setEscalationText] = useState("");
   const qc = useQueryClient();
   const { toast } = useToast();
+  const [coupleEmail, setCoupleEmail] = useState("");
+  const inviteCouple = useMutation({ mutationFn: () => sdk.roles.inviteEventMember(eventId, { email: coupleEmail, roleKey: 'couple' }), onSuccess: () => { setCoupleEmail(""); toast({ title: 'Couple workspace invitation sent', description: 'The couple can access only their wedding workspace and guest management.', variant: 'success' }); }, onError: (e: any) => toast({ title: 'Could not send couple invitation', description: e.message, variant: 'destructive' }) });
 
   const orgId = event.organization_id;
   const healthQuery = useQuery({
@@ -884,6 +889,7 @@ function OverviewTab({
 
   return (
     <div className="space-y-6">
+      {canInviteCouple && <Card className="border-brand/20 bg-brand-soft/10"><CardHeader><CardTitle>Invite couple to wedding workspace</CardTitle><CardDescription>Couples receive a private wedding hub to manage guests, RSVP, and permitted design proposals. Seven Paths Manor retains venue spaces, inventory, vendors, operations, and final approval.</CardDescription></CardHeader><CardContent className="flex flex-col gap-2 sm:flex-row"><Input aria-label="Couple invitation email" type="email" value={coupleEmail} onChange={(e) => setCoupleEmail(e.target.value)} placeholder="couple@email.com"/><Button disabled={!coupleEmail.trim()} isLoading={inviteCouple.isPending} onClick={() => inviteCouple.mutate()}>Send couple invitation</Button></CardContent></Card>}
       <ManagerEventWorkspaceHome
         event={event}
         counts={counts}
