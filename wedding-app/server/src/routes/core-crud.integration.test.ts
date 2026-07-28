@@ -36,7 +36,7 @@ async function register() {
   return { token: r.json().token, userId: r.json().user.id, orgId: r.json().organizationId };
 }
 
-const req = (token: string, method: 'GET'|'POST'|'PATCH'|'DELETE', url: string, payload?: unknown) =>
+const req = (token: string, method: 'GET'|'POST'|'PUT'|'PATCH'|'DELETE', url: string, payload?: unknown) =>
   app.inject({ method, url, headers: payload !== undefined
     ? { authorization: `Bearer ${token}`, 'content-type': 'application/json' }
     : { authorization: `Bearer ${token}` }, payload: payload as never });
@@ -273,5 +273,21 @@ describe('Venue scaffold readiness approval', () => {
     const approved = await req(s.token, 'PATCH', `/api/venues/${venueId}`, { approvalStatus: 'approved', metadata: { approvalOverrideReason: 'Manager confirmed a temporary operational plan.' } });
     expect(approved.statusCode).toBe(200);
     expect(approved.json().venue.approval_status).toBe('approved');
+  });
+});
+
+describe('Event layout inventory reservations', () => {
+  it('reserves immediately, releases on quantity change, and requires a manager override for shortages', async () => {
+    const s = await register();
+    const item = await req(s.token, 'POST', `/api/orgs/${s.orgId}/inventory`, { name: '60-inch round table', category: 'other', totalCount: 10, availableCount: 10 });
+    const layout = await req(s.token, 'POST', '/api/layouts', { organizationId: s.orgId, name: 'Reception', payload: { items: [] } });
+    const layoutId = layout.json().layout.id; const itemId = item.json().item.id;
+    const reserved = await req(s.token, 'PUT', `/api/layouts/${layoutId}/inventory-reservations`, { reservations: [{ inventoryItemId: itemId, quantity: 6 }] });
+    expect(reserved.statusCode).toBe(200); expect(reserved.json().reservations[0].quantity).toBe(6);
+    expect((await req(s.token, 'GET', `/api/orgs/${s.orgId}/inventory`)).json().items[0].available_count).toBe(4);
+    const conflict = await req(s.token, 'PUT', `/api/layouts/${layoutId}/inventory-reservations`, { reservations: [{ inventoryItemId: itemId, quantity: 11 }] });
+    expect(conflict.statusCode).toBe(400); expect(conflict.json().error).toBe('inventory-reservation-conflict');
+    await req(s.token, 'PUT', `/api/layouts/${layoutId}/inventory-reservations`, { reservations: [{ inventoryItemId: itemId, quantity: 2 }] });
+    expect((await req(s.token, 'GET', `/api/orgs/${s.orgId}/inventory`)).json().items[0].available_count).toBe(8);
   });
 });
