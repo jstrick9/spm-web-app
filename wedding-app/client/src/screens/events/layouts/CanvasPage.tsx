@@ -2555,6 +2555,8 @@ function MobileLayoutReview({
   const paths = items.filter((item) => ['ada_path', 'walkway', 'aisle', 'load_in_path'].includes(item.type) || /ada|access|load/i.test(itemLabel(item)));
   const assignedSeatCount = seats.filter((seat) => seat.guestName || seat.guestId).length;
   const floorWalkDone = FLOOR_WALK_CHECKS.filter(check => managerOps.floorWalkChecks?.[check.id]).length;
+  const mappedInventoryCount = items.filter((item) => item.inventoryItemId).length;
+  const mappedInventoryTypes = new Set(items.filter((item) => item.inventoryItemId).map((item) => item.inventoryItemId)).size;
 
   return (
     <div className="space-y-4 print:space-y-3">
@@ -2588,6 +2590,7 @@ function MobileLayoutReview({
           <MiniLayoutMetric label="Tables" value={tables.length} detail="Floorplan tables" />
           <MiniLayoutMetric label="Vendor zones" value={vendorZones.length} detail="Load-in/service areas" />
           <MiniLayoutMetric label="Safety marks" value={exits.length + paths.length} detail="Exits + paths" />
+          <MiniLayoutMetric label="Reserved inventory" value={mappedInventoryCount} detail={`${mappedInventoryTypes} venue item type${mappedInventoryTypes === 1 ? '' : 's'}`} />
         </div>
       </div>
 
