@@ -34,6 +34,8 @@ const EVENT_META: Record<string, { title: string; message: (p: any) => string; l
   'event.created':   { title: 'New Event Created',       message: (p) => `"${p.title || 'New event'}" was created.`, linkUrl: (p) => `/events/${p.eventId}` },
   'event.updated':   { title: 'Event Updated',           message: (p) => `"${p.title || 'An event'}" was modified.`, linkUrl: (p) => `/events/${p.eventId}` },
   'budget.updated':  { title: 'Budget Changed',          message: () => 'A budget item was updated.',             linkUrl: (p) => `/events/${p.eventId}?tab=budget` },
+  'layout.comment.resolved': { title: 'Layout Comment Resolved', message: () => 'A venue manager resolved a comment on your layout.', linkUrl: (p) => `/events/${p.eventId}?tab=layout` },
+  'layout.review.decided': { title: 'Venue Layout Decision', message: (p) => `Your layout was ${p.decision === 'changes_requested' ? 'returned for changes' : p.decision}. Open the revision review for details.`, linkUrl: (p) => `/events/${p.eventId}?tab=layout` },
   'webhook.test':    { title: 'Webhook Test',            message: () => 'A test webhook was dispatched.',         linkUrl: () => '/system/integrations' },
 };
 
