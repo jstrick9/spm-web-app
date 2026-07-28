@@ -72,17 +72,26 @@ export async function venueRoutes(app: FastifyInstance) {
     return { venue: updated };
   });
 
-  app.post('/api/venues/:id/underlay', { preHandler: requireAuth, bodyLimit: 12 * 1024 * 1024 }, async (req) => {
+  app.post('/api/venues/:id/underlay', { preHandler: requireAuth, bodyLimit: 24 * 1024 * 1024 }, async (req) => {
     const { id } = req.params as { id: string };
     const venue = venuesRepo.findById(id);
     if (!venue) throw NotFound();
     if (!can(req.auth!.memberships, { organizationId: venue.organization_id }, 'venues.manage')) throw Forbidden();
-    const dataUri = (req.body as { dataUri?: unknown })?.dataUri;
+    const body = req.body as { dataUri?: unknown; sourceDataUri?: unknown; sourceName?: unknown };
+    const dataUri = body?.dataUri;
     if (typeof dataUri !== 'string') throw BadRequest('underlay-required');
-    const isPdf = dataUri.startsWith('data:application/pdf;');
-    const url = isPdf ? savePublicDocumentDataUri(dataUri, `venue_underlay_${id}`) : saveDataUri(dataUri, `venue_underlay_${id}`);
+    const sourceDataUri = body?.sourceDataUri;
+    if (sourceDataUri !== undefined && typeof sourceDataUri !== 'string') throw BadRequest('invalid-underlay-source');
+    const sourceName = typeof body?.sourceName === 'string' ? body.sourceName.slice(0, 240) : undefined;
+    const isPdf = typeof sourceDataUri === 'string'
+      ? sourceDataUri.startsWith('data:application/pdf;')
+      : dataUri.startsWith('data:application/pdf;');
+    if (sourceDataUri && !sourceDataUri.startsWith('data:application/pdf;')) throw BadRequest('invalid-underlay-source');
+    // PDFs have a PNG preview for canvas tracing while retaining the original plan for download.
+    const url = saveDataUri(dataUri, `venue_underlay_${id}`);
+    const sourceUrl = sourceDataUri ? savePublicDocumentDataUri(sourceDataUri, `venue_underlay_source_${id}`) : (isPdf ? savePublicDocumentDataUri(dataUri, `venue_underlay_source_${id}`) : undefined);
     const current = (() => { try { return JSON.parse(venue.underlay || '{}'); } catch { return {}; } })();
-    const updated = venuesRepo.update(id, { underlay: { ...current, url, kind: isPdf ? 'pdf' : 'image', locked: true, opacity: 0.55, scale: 1, rotation: 0 } });
+    const updated = venuesRepo.update(id, { underlay: { ...current, url, kind: isPdf ? 'pdf' : 'image', ...(sourceUrl ? { sourceUrl, sourceName: sourceName || 'venue-reference.pdf', sourceKind: 'pdf' } : {}), locked: true, opacity: 0.55, scale: 1, rotation: 0 } });
     return { venue: updated };
   });
 

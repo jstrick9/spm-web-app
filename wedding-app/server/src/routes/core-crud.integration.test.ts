@@ -243,3 +243,21 @@ describe('Health check', () => {
     expect(res.json().ts).toBeTruthy();
   });
 });
+
+describe('Venue reference plans', () => {
+  it('retains the original PDF while storing its raster preview as the canvas underlay', async () => {
+    const s = await register();
+    const venueRes = await req(s.token, 'POST', `/api/orgs/${s.orgId}/venues`, { name: 'PDF plan room', width: 60, height: 40 });
+    expect(venueRes.statusCode).toBe(201);
+    const venueId = venueRes.json().venue.id;
+    const preview = 'data:image/png;base64,iVBORw0KGgo=';
+    const original = 'data:application/pdf;base64,JVBERi0xLjQK';
+    const upload = await req(s.token, 'POST', `/api/venues/${venueId}/underlay`, { dataUri: preview, sourceDataUri: original, sourceName: 'ballroom-plan.pdf' });
+    expect(upload.statusCode).toBe(200);
+    const underlay = JSON.parse(upload.json().venue.underlay);
+    expect(underlay).toMatchObject({ kind: 'pdf', sourceKind: 'pdf', sourceName: 'ballroom-plan.pdf', locked: true });
+    expect(underlay.url).toMatch(/^\/uploads\/public\/venue_underlay_/);
+    expect(underlay.sourceUrl).toMatch(/^\/uploads\/public\/venue_underlay_source_/);
+    expect(underlay.url).not.toBe(underlay.sourceUrl);
+  });
+});

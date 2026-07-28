@@ -39,8 +39,10 @@ export function VenueSpaceScaffoldWizard({ orgId, onSelectVenue }: { orgId: stri
     if (file.size > 8 * 1024 * 1024) { toast({ title: 'Underlay too large', description: 'Use a file under 8 MB.', variant: 'destructive' }); return; }
     setUploadingId(venueId);
     try {
-      let dataUri: string;
+      let dataUri: string; let originalPdf: { dataUri: string; name: string } | undefined;
       if (file.type === 'application/pdf') {
+        const sourceDataUri = await new Promise<string>((resolve, reject) => { const reader = new FileReader(); reader.onload = () => resolve(String(reader.result)); reader.onerror = reject; reader.readAsDataURL(file); });
+        originalPdf = { dataUri: sourceDataUri, name: file.name };
         const pdfjs = await import('pdfjs-dist/legacy/build/pdf.mjs');
         const pdf = await pdfjs.getDocument({ data: new Uint8Array(await file.arrayBuffer()) }).promise;
         const page = await pdf.getPage(1); const viewport = page.getViewport({ scale: 1.5 });
@@ -50,9 +52,9 @@ export function VenueSpaceScaffoldWizard({ orgId, onSelectVenue }: { orgId: stri
       } else {
         dataUri = await new Promise<string>((resolve, reject) => { const reader = new FileReader(); reader.onload = () => resolve(String(reader.result)); reader.onerror = reject; reader.readAsDataURL(file); });
       }
-      await venuesSdk.uploadUnderlay(venueId, dataUri);
+      await venuesSdk.uploadUnderlay(venueId, dataUri, originalPdf);
       qc.invalidateQueries({ queryKey: ['venues', orgId] });
-      toast({ title: 'Reference underlay uploaded', description: 'It is locked by default so structural tracing stays accurate.', variant: 'success' });
+      toast({ title: 'Reference underlay uploaded', description: file.type === 'application/pdf' ? 'The original PDF is retained for download; its first page is locked for tracing.' : 'It is locked by default so structural tracing stays accurate.', variant: 'success' });
     } catch (e: any) { toast({ title: 'Underlay upload failed', description: e.message, variant: 'destructive' }); }
     finally { setUploadingId(null); }
   }

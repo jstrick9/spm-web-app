@@ -31,8 +31,8 @@ export const venuesSdk = {
   update(venueId: string, patch: Partial<VenueInput>): Promise<{ venue: SdkVenue }> {
     return api.patch(`/api/venues/${venueId}`, patch);
   },
-  uploadUnderlay(venueId: string, dataUri: string): Promise<{ venue: SdkVenue }> {
-    return api.post(`/api/venues/${venueId}/underlay`, { dataUri });
+  uploadUnderlay(venueId: string, dataUri: string, originalPdf?: { dataUri: string; name: string }): Promise<{ venue: SdkVenue }> {
+    return api.post(`/api/venues/${venueId}/underlay`, { dataUri, ...(originalPdf ? { sourceDataUri: originalPdf.dataUri, sourceName: originalPdf.name } : {}) });
   },
   createEventLayout(venueId: string, eventId: string, name?: string) {
     return api.post(`/api/venues/${venueId}/event-layouts`, { eventId, name });
