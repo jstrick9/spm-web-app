@@ -65,6 +65,7 @@ export const layoutsSdk = {
   addComment(layoutId: string, input: { body: string; target?: Record<string, unknown> }) { return api.post(`/api/layouts/${layoutId}/comments`, input); },
   resolveComment(layoutId: string, commentId: string) { return api.post(`/api/layouts/${layoutId}/comments/${commentId}/resolve`, {}); },
   requestReview(layoutId: string) { return api.post(`/api/layouts/${layoutId}/review-request`); },
+  requestReopen(layoutId: string, note: string) { return api.post(`/api/layouts/${layoutId}/reopen-request`, { note }); },
   decideReview(layoutId: string, reviewId: string, input: { decision: 'approved'|'changes_requested'|'rejected'; note?: string }) { return api.post(`/api/layouts/${layoutId}/reviews/${reviewId}/decision`, input); },
   delete(layoutId: string): Promise<void> {
     return api.delete(`/api/layouts/${layoutId}`);

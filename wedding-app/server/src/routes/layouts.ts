@@ -52,6 +52,7 @@ const setupPacketSchema = z.object({
   expiresAt: z.string().optional(),
 });
 const commentSchema = z.object({ body: z.string().min(1).max(4000), target: z.record(z.unknown()).optional() });
+const reopenRequestSchema = z.object({ note: z.string().min(3).max(2000) });
 const reviewDecisionSchema = z.object({ decision: z.enum(['approved','changes_requested','rejected']), note: z.string().max(2000).optional() });
 const queueDecisionSchema = z.object({ decision: z.enum(['approved','changes_requested','rejected']), note: z.string().max(2000).optional() }).superRefine((value, ctx) => { if (value.decision !== 'approved' && !value.note?.trim()) ctx.addIssue({ code: 'custom', message: 'decision-note-required', path: ['note'] }); });
 const inventoryReservationsSchema = z.object({ reservations: z.array(z.object({ inventoryItemId: z.string().min(1), quantity: z.number().int().min(0) })).max(100), overrideReason: z.string().max(1000).optional() });
@@ -179,6 +180,16 @@ export async function layoutRoutes(app: FastifyInstance) {
     const comment = layoutCollaborationRepo.findComment(commentId); if (!comment || comment.layout_id !== id) throw NotFound();
     if (comment.author_user_id !== req.auth!.userId && !isNamedVenueManager(req.auth!.memberships, layout.organization_id)) throw Forbidden();
     const resolved = layoutCollaborationRepo.resolveComment(commentId, req.auth!.userId); sseEventsRepo.publish({ organizationId: layout.organization_id, eventType: 'layout.comment.resolved', actorUserId: req.auth!.userId, payload: { layoutId: id, commentId, recipientUserId: comment.author_user_id, eventId: layout.event_id } }); return { comment: resolved };
+  });
+
+  app.post('/api/layouts/:id/reopen-request', { preHandler: requireAuth }, async (req, reply) => {
+    const { id } = req.params as { id: string }; const layout = requireLayoutAccess(id, req.auth!.memberships, 'layouts.edit');
+    if (layout.approval_status !== 'approved') throw BadRequest('layout-not-approved');
+    const parsed = reopenRequestSchema.safeParse(req.body); if (!parsed.success) throw BadRequest('invalid-input', parsed.error.issues);
+    const comment = layoutCollaborationRepo.addComment({ layoutId: id, orgId: layout.organization_id, eventId: layout.event_id, revision: layout.revision, authorUserId: req.auth!.userId, authorLabel: req.auth!.email, body: `Reopen request: ${parsed.data.note}`, target: { kind: 'reopen_request' } });
+    const review = layoutCollaborationRepo.requestReview({ layoutId: id, orgId: layout.organization_id, eventId: layout.event_id, revision: layout.revision, userId: req.auth!.userId });
+    sseEventsRepo.publish({ organizationId: layout.organization_id, eventType: 'layout.reopen.requested', actorUserId: req.auth!.userId, payload: { layoutId: id, eventId: layout.event_id, note: parsed.data.note } });
+    return reply.code(201).send({ comment, review });
   });
 
   app.post('/api/layouts/:id/review-request', { preHandler: requireAuth }, async (req, reply) => {
