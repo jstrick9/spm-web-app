@@ -213,14 +213,27 @@ export function VenueBuilder({ orgId }: Props) {
     const file = e.target.files?.[0];
     if (!file) return;
     const reader = new FileReader();
-    reader.onload = (ev) => {
+    reader.onload = async (ev) => {
       const text = ev.target?.result as string;
       const newLines: any[] = [];
       if (file.name.toLowerCase().endsWith('.dxf')) {
-        const pairs = text.split(/\r?\n/); let entity: Record<string, string> = {};
-        for (let i = 0; i < pairs.length - 1; i += 2) {
-          const code = pairs[i].trim(), value = pairs[i + 1].trim();
-          if (code === '0') { if (entity.type === 'LINE') { const x1 = Number(entity['10']), y1 = Number(entity['20']), x2 = Number(entity['11']), y2 = Number(entity['21']); if ([x1,y1,x2,y2].every(Number.isFinite)) newLines.push({ id: `dxf-${Date.now()}-${i}`, points: [x1, y1, x2, y2] }); } entity = { type: value }; } else entity[code] = value;
+        const { default: DxfParser } = await import('dxf-parser');
+        const drawing = new DxfParser().parseSync(text);
+        for (const [index, entity] of (drawing.entities ?? []).entries()) {
+          if (entity.type === 'LINE' && entity.vertices?.length >= 2) {
+            const [a, b] = entity.vertices;
+            newLines.push({ id: `dxf-${Date.now()}-${index}`, points: [a.x, a.y, b.x, b.y] });
+          }
+          if ((entity.type === 'LWPOLYLINE' || entity.type === 'POLYLINE') && entity.vertices?.length >= 2) {
+            const points = entity.vertices.flatMap((vertex: any) => [vertex.x, vertex.y]);
+            if (entity.shape || entity.closed) points.push(entity.vertices[0].x, entity.vertices[0].y);
+            newLines.push({ id: `dxf-poly-${Date.now()}-${index}`, points });
+          }
+          if (entity.type === 'CIRCLE' && entity.center && entity.radius) {
+            const points: number[] = [];
+            for (let step = 0; step <= 24; step++) { const angle = (Math.PI * 2 * step) / 24; points.push(entity.center.x + Math.cos(angle) * entity.radius, entity.center.y + Math.sin(angle) * entity.radius); }
+            newLines.push({ id: `dxf-circle-${Date.now()}-${index}`, points });
+          }
         }
       } else {
       const parser = new DOMParser();
