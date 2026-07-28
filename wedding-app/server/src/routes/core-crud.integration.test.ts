@@ -109,35 +109,15 @@ describe('Event lifecycle', () => {
 
 // ════════════════════════════════════════════════════════════
 describe('Guest lifecycle', () => {
-  it('create → list → update RSVP → delete', async () => {
+  it('prevents venue owners from mutating a couple-owned guest list', async () => {
     const s = await register();
     const evt = await req(s.token, 'POST', '/api/events', { organizationId: s.orgId, title: 'GuestTest' });
     const eventId = evt.json().event.id;
-
-    // Create
-    const cr = await req(s.token, 'POST', `/api/events/${eventId}/guests`, {
-      fullName: 'Test Guest', email: 'guest@test.com', rsvpStatus: 'pending',
-    });
-    expect(cr.statusCode).toBe(201);
-    const guestId = cr.json().guest.id;
-
-    // List
-    const lr = await req(s.token, 'GET', `/api/events/${eventId}/guests`);
-    expect(lr.json().guests).toHaveLength(1);
-    expect(lr.json().counts.pending).toBe(1);
-
-    // Update RSVP
-    const ur = await req(s.token, 'PATCH', `/api/guests/${guestId}`, { rsvpStatus: 'attending' });
-    expect(ur.json().guest.rsvp_status).toBe('attending');
-
-    // Verify counts updated
-    const lr2 = await req(s.token, 'GET', `/api/events/${eventId}/guests`);
-    expect(lr2.json().counts.attending).toBe(1);
-    expect(lr2.json().counts.pending).toBe(0);
-
-    // Delete
-    const dr = await req(s.token, 'DELETE', `/api/guests/${guestId}`);
-    expect(dr.statusCode).toBe(204);
+    const cr = await req(s.token, 'POST', `/api/events/${eventId}/guests`, { fullName: 'Test Guest', email: 'guest@test.com', rsvpStatus: 'pending' });
+    expect(cr.statusCode).toBe(403);
+    const manifest = await req(s.token, 'GET', `/api/events/${eventId}/venue-guest-manifest`);
+    expect(manifest.statusCode).toBe(200);
+    expect(manifest.json().guests).toEqual([]);
   });
 });
 
@@ -198,7 +178,7 @@ describe('Public portal flow', () => {
     const evt = await req(s.token, 'POST', '/api/events', { organizationId: s.orgId, title: 'Portal Test' });
     const eventId = evt.json().event.id;
 
-    await req(s.token, 'POST', `/api/events/${eventId}/guests`, { fullName: 'Portal Guest' });
+    guestsRepo.create(s.orgId, eventId, { fullName: 'Portal Guest' });
 
     // Generic portal does not expose the full guest list by default.
     const generic = await app.inject({ method: 'GET', url: `/api/portal/${eventId}/info` });
@@ -218,8 +198,7 @@ describe('Public portal flow', () => {
     const s = await register();
     const evt = await req(s.token, 'POST', '/api/events', { organizationId: s.orgId, title: 'RSVP Test' });
     const eventId = evt.json().event.id;
-    const gr = await req(s.token, 'POST', `/api/events/${eventId}/guests`, { fullName: 'RSVP Guest' });
-    const guestId = gr.json().guest.id;
+    const guestId = guestsRepo.create(s.orgId, eventId, { fullName: 'RSVP Guest' }).id;
 
     const rr = await app.inject({ method: 'POST', url: `/api/portal/${eventId}/rsvp`,
       payload: { guestId, attending: true, mealChoice: 'vegetarian' },
