@@ -36,3 +36,8 @@ it('expands INSERT blocks into editable transformed geometry', () => {
   const result = extractDxfPaths({ blocks: { TABLE: { entities: [{ type: 'LINE', vertices: [{ x: 0, y: 0 }, { x: 10, y: 0 }] }] } }, entities: [{ type: 'INSERT', name: 'TABLE', position: { x: 5, y: 7 }, xScale: 2, yScale: 2 }] }, 'block');
   expect(result.paths[0].points).toEqual([5, 7, 25, 7]);
 });
+
+it('automatically converts DXF units to the venue unit system', () => {
+  const result = extractDxfPaths({ header: { $INSUNITS: 6 }, entities: [{ type: 'LINE', vertices: [{ x: 0, y: 0 }, { x: 3, y: 0 }] }] }, 'units', 'ft');
+  expect(result.paths[0].points[2]).toBeCloseTo(9.84252, 4);
+});
