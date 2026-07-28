@@ -24,6 +24,7 @@ interface Props {
 }
 
 import { DEFAULT_ITEMS, FLOOR_WALK_CHECKS, DEFAULT_MANAGER_LAYOUT_OPS, centerDistance, itemLabel, managerLayoutOpsFromBackend, type FloorWalkCheckId, type ManagerLayoutOpsState } from './layoutOpsModel';
+import { LAYOUT_OBJECT_PALETTE, LAYOUT_PALETTE_CATEGORIES, type LayoutPaletteCategory } from './layoutObjectPalette';
 
 export function CanvasPage({ event }: Props) {
   const { toast } = useToast();
@@ -106,6 +107,7 @@ export function CanvasPage({ event }: Props) {
   const [forceCanvasOnMobile, setForceCanvasOnMobile] = useState(false);
   const trRef = useRef<any>(null);
   const [sidebarTab, setSidebarTab] = useState<'catalog' | 'guests' | 'decor' | 'layers' | 'history' | 'vendors'>('catalog');
+  const [paletteCategory, setPaletteCategory] = useState<LayoutPaletteCategory>('tables');
   const [showVendorOverlay, setShowVendorOverlay] = useState(false);
   const [vendorLines, setVendorLines] = useState<any[]>([]);
   const [viewingVersion, setViewingVersion] = useState<any>(null);
@@ -747,6 +749,8 @@ export function CanvasPage({ event }: Props) {
     };
 
     pushState([...items, newItem]);
+    if (newItem.type === 'vendor_zone') setShowVendorOverlay(true);
+    setSelectedId(newItem.id);
   };
 
   const handleRestoreVersion = (version: any) => {
@@ -1221,6 +1225,17 @@ export function CanvasPage({ event }: Props) {
           <div className="flex-1 overflow-y-auto p-4 flex flex-col gap-4 bg-[#FDFBF7]">
             {sidebarTab === 'catalog' && (
               <div className="flex flex-col gap-2">
+                <div className="rounded-lg border border-brand/20 bg-brand-soft/20 p-2.5">
+                  <div className="text-xs font-bold text-fg">Quick event design</div>
+                  <p className="mt-0.5 text-[10px] leading-tight text-fg-muted">Choose an object, then drag it into place. Your changes remain a proposal until venue approval.</p>
+                  <div className="mt-2 flex flex-wrap gap-1" aria-label="Design object categories">{LAYOUT_PALETTE_CATEGORIES.map(category => <button key={category.id} type="button" onClick={() => setPaletteCategory(category.id)} className={cn('rounded-full px-2 py-1 text-[10px] font-semibold', paletteCategory === category.id ? 'bg-brand text-white' : 'bg-surface text-fg-muted hover:bg-surface-2')}>{category.label}</button>)}</div>
+                </div>
+                {LAYOUT_OBJECT_PALETTE.filter(item => item.category === paletteCategory).map((item) => (
+                  <button key={item.label} onClick={() => handleAddItem(item)} className="p-2 border border-brand/25 bg-surface hover:bg-brand-soft/20 rounded text-sm text-left text-fg transition-all duration-150 flex items-center gap-2 font-medium">
+                    <Plus className="w-4 h-4 text-brand" />{item.label}
+                  </button>
+                ))}
+                <div className="mt-1 text-[10px] font-semibold uppercase tracking-wider text-fg-muted">Venue inventory & utilities</div>
                 <button 
                   onClick={handleAddStickyNote}
                   className="p-2.5 border border-amber-300 bg-amber-50 hover:bg-amber-100 rounded-xl text-xs text-left text-[#92400e] transition-all duration-150 flex items-center justify-between font-bold shadow-xs"

@@ -249,3 +249,17 @@ describe('CanvasPage', () => {
     expect(screen.queryByText('Layout Designer Workspace')).not.toBeInTheDocument();
   });
 });
+
+describe('CanvasPage quick event design palette', () => {
+  it('shows a nontechnical object palette and switches categories', async () => {
+    Object.defineProperty(window, 'innerWidth', { configurable: true, writable: true, value: 1024 });
+    window.dispatchEvent(new Event('resize'));
+    (layoutsSdk.list as any).mockResolvedValue({ layouts: [{ id: 'l1', revision: 1, updated_at: new Date().toISOString(), payload: { items: [] }, approval_status: 'draft' }] });
+    render(<CanvasPage event={{ id: 'test-event', organization_id: 'org-1', title: 'Test Event', guest_count: 150 } as any} />, { wrapper: ({ children }: any) => <QueryClientProvider client={queryClient}><ToastProvider>{children}</ToastProvider></QueryClientProvider> });
+    expect(await screen.findByText('Quick event design')).toBeInTheDocument();
+    expect(screen.getByText('Round guest table')).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Service' }));
+    expect(screen.getByText('Bar service area')).toBeInTheDocument();
+    expect(screen.getByText('Stage / DJ area')).toBeInTheDocument();
+  });
+});
