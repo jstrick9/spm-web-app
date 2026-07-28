@@ -144,6 +144,16 @@ export async function layoutRoutes(app: FastifyInstance) {
     return { versions: layoutsRepo.listVersions(id) };
   });
 
+  app.get('/api/orgs/:orgId/layouts/approval-queue', { preHandler: requireAuth }, async (req) => {
+    const { orgId } = req.params as { orgId: string }; if (!can(req.auth!.memberships, { organizationId: orgId }, 'layouts.publish')) throw Forbidden();
+    const items = db.prepare(`SELECT l.id, l.name, l.event_id, l.venue_id, l.revision, l.approval_status, l.updated_at, e.title AS event_title, e.start_date,
+      (SELECT COUNT(*) FROM layout_review_requests r WHERE r.layout_id=l.id AND r.decision='pending') AS pending_reviews,
+      (SELECT COUNT(*) FROM layout_comments c WHERE c.layout_id=l.id AND c.status='open') AS open_comments
+      FROM layouts l LEFT JOIN events e ON e.id=l.event_id WHERE l.organization_id=? AND (l.approval_status='pending' OR EXISTS (SELECT 1 FROM layout_review_requests r WHERE r.layout_id=l.id AND r.decision='pending'))
+      ORDER BY CASE WHEN (SELECT COUNT(*) FROM layout_comments c WHERE c.layout_id=l.id AND c.status='open') > 0 THEN 0 ELSE 1 END, CASE WHEN e.start_date IS NULL THEN 1 ELSE 0 END, e.start_date ASC, l.updated_at DESC`).all(orgId);
+    return { items };
+  });
+
   app.get('/api/layouts/:id/revision-comparison', { preHandler: requireAuth }, async (req) => {
     const { id } = req.params as { id: string }; const layout = requireLayoutAccess(id, req.auth!.memberships, 'layouts.view');
     const approved = layoutCollaborationRepo.latestApprovedReview(id);

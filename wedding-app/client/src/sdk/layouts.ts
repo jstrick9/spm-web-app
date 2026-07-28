@@ -13,6 +13,7 @@ export interface LayoutOpsState {
 }
 
 export const layoutsSdk = {
+  approvalQueue(orgId: string): Promise<{ items: any[] }> { return api.get(`/api/orgs/${orgId}/layouts/approval-queue`); },
   list(orgId: string, opts: { eventId?: string; template?: boolean } = {}): Promise<{ layouts: SdkLayout[] }> {
     const q = new URLSearchParams();
     if (opts.eventId !== undefined) q.set('eventId', opts.eventId);
@@ -70,6 +71,8 @@ export const layoutsSdk = {
 };
 
 // Event-scoped venue inventory allocations. Reservations are updated as layout quantities change.
+export const approvalQueueSdk = { list(orgId: string): Promise<{ items: any[] }> { return api.get(`/api/orgs/${orgId}/layouts/approval-queue`); } };
+
 export const layoutInventorySdk = {
   list(layoutId: string): Promise<{ reservations: Array<{ inventory_item_id: string; quantity: number; name: string; category: string; available_count: number }>; sharedReviewEnabled: boolean }> {
     return api.get(`/api/layouts/${layoutId}/inventory-reservations`);

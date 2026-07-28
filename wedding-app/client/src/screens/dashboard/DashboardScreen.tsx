@@ -102,6 +102,7 @@ export function DashboardScreen({
   const canManageStaff = usePermission("staff.manage");
   const canViewBudget = usePermission("budget.view");
   const canViewContracts = usePermission("contracts.view");
+  const canApproveLayouts = usePermission("layouts.publish");
   const [tutorialActive, setTutorialActive] = useState<boolean>(false);
   const [demoMode, setDemoMode] = useState(
     () => localStorage.getItem("wvi_demo_mode") === "true",
@@ -219,6 +220,8 @@ export function DashboardScreen({
     roleKeys.includes("manager") ||
     localStorage.getItem("wvi_registration_role") === "venue_manager";
 
+  const approvalQueueQuery = useQuery({ queryKey: ['layout-approval-queue', orgId], queryFn: () => sdk.layouts.approvalQueue(orgId!), enabled: !!orgId && canApproveLayouts, staleTime: 30_000 });
+
   const staffTasksQuery = useQuery({
     queryKey: ["staffTasks", focusEvent?.id, "manager-dashboard"],
     queryFn: () => sdk.staff.listTasks(orgId!, { eventId: focusEvent!.id }),
@@ -284,6 +287,8 @@ export function DashboardScreen({
           />
         )}
         <OnboardingGoLiveChecklist userConfig={userConfig} orgId={orgId} />
+
+        {canApproveLayouts && <Card><CardHeader><CardTitle>Venue layout approval queue</CardTitle><CardDescription>Risk-first review requests and pending layouts, then upcoming event date.</CardDescription></CardHeader><CardContent className="space-y-2">{approvalQueueQuery.data?.items?.length ? approvalQueueQuery.data.items.map((item: any) => <div key={item.id} className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-border p-3 text-sm"><div><strong>{item.event_title || item.name}</strong><p className="text-xs text-fg-muted">{item.start_date || 'Date needed'} · {item.open_comments} open comment(s) · {item.pending_reviews} review request(s)</p></div><div className="flex gap-2"><Button size="xs" variant="outline" onClick={() => { window.location.hash = `#/events/${item.event_id}?tab=layout`; }}>Open review</Button><Button size="xs" onClick={() => { window.location.hash = `#/events/${item.event_id}?tab=layout`; }}>Decide</Button></div></div>) : <p className="text-sm text-fg-muted">No layouts awaiting venue approval.</p>}</CardContent></Card>}
 
         {isManager && (
           <>
