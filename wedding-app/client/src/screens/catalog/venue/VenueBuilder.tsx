@@ -8,6 +8,7 @@ import { useToast } from '../../../ui/Toast';
 import { cn } from '../../../ui/lib/cn';
 import { VenueSpaceScaffoldWizard } from './VenueSpaceScaffoldWizard';
 import { venuesSdk } from '../../../sdk/venues';
+import { extractDxfPaths } from './dxfImport';
 
 interface Props {
   orgId: string;
@@ -218,22 +219,10 @@ export function VenueBuilder({ orgId }: Props) {
       const newLines: any[] = [];
       if (file.name.toLowerCase().endsWith('.dxf')) {
         const { default: DxfParser } = await import('dxf-parser');
-        const drawing = new DxfParser().parseSync(text);
-        for (const [index, entity] of (drawing.entities ?? []).entries()) {
-          if (entity.type === 'LINE' && entity.vertices?.length >= 2) {
-            const [a, b] = entity.vertices;
-            newLines.push({ id: `dxf-${Date.now()}-${index}`, points: [a.x, a.y, b.x, b.y] });
-          }
-          if ((entity.type === 'LWPOLYLINE' || entity.type === 'POLYLINE') && entity.vertices?.length >= 2) {
-            const points = entity.vertices.flatMap((vertex: any) => [vertex.x, vertex.y]);
-            if (entity.shape || entity.closed) points.push(entity.vertices[0].x, entity.vertices[0].y);
-            newLines.push({ id: `dxf-poly-${Date.now()}-${index}`, points });
-          }
-          if (entity.type === 'CIRCLE' && entity.center && entity.radius) {
-            const points: number[] = [];
-            for (let step = 0; step <= 24; step++) { const angle = (Math.PI * 2 * step) / 24; points.push(entity.center.x + Math.cos(angle) * entity.radius, entity.center.y + Math.sin(angle) * entity.radius); }
-            newLines.push({ id: `dxf-circle-${Date.now()}-${index}`, points });
-          }
+        const result = extractDxfPaths(new DxfParser().parseSync(text));
+        newLines.push(...result.paths);
+        if (result.units || result.layers.length) {
+          toast({ title: `DXF reference: ${result.units ?? 'unspecified units'}${result.layers.length ? ` · ${result.layers.length} layer${result.layers.length === 1 ? '' : 's'}` : ''}`, variant: 'success' });
         }
       } else {
       const parser = new DOMParser();
