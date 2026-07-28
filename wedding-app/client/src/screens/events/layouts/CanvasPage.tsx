@@ -1610,6 +1610,7 @@ export function CanvasPage({ event }: Props) {
                               />
                            </div>
 
+                           {['round_table', 'rect_table', 'chair', 'decor'].includes(activeItem.type) && <div><label className="text-fg-subtle block mb-1">Venue inventory mapping</label><select aria-label="Venue inventory mapping" className="w-full bg-surface border border-[#e1d5c9] rounded px-2 py-1" value={activeItem.inventoryItemId || ''} onChange={(e) => { const inventoryItemId = e.target.value || undefined; const nextItems = items.map((item) => item.id === selectedId ? { ...item, inventoryItemId } : item); pushState(nextItems); reconcileMappedInventory(nextItems); }}><option value="">Not reserved from venue inventory</option>{(inventoryData?.items || []).filter((item: any) => { try { const type = JSON.parse(item.spec || '{}').objectType; return (activeItem.type.includes('table') && type === 'table') || (activeItem.type === 'chair' && type === 'chair') || (activeItem.type === 'decor' && type === 'decor'); } catch { return false; } }).map((item: any) => <option key={item.id} value={item.id}>{item.name} · {item.available_count} available</option>)}</select></div>}
                            {(activeItem.type === 'round_table' || activeItem.type === 'rect_table') && (
                               <div className="grid grid-cols-2 gap-2 mt-1">
                                  <div>
