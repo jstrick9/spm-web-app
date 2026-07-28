@@ -1,7 +1,7 @@
 import React, { useRef, useState, useEffect, useCallback, useMemo } from 'react';
 import { Stage, Layer, Rect, Circle, Text, Group, Transformer, Line, Arc } from 'react-konva';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { layoutsSdk } from '../../../sdk/layouts';
+import { layoutsSdk, layoutInventorySdk } from '../../../sdk/layouts';
 import { guestsSdk } from '../../../sdk/guests';
 import { sdk } from '../../../sdk';
 import { cn } from '../../../ui/lib/cn';
@@ -26,6 +26,7 @@ interface Props {
 import { DEFAULT_ITEMS, FLOOR_WALK_CHECKS, DEFAULT_MANAGER_LAYOUT_OPS, centerDistance, itemLabel, managerLayoutOpsFromBackend, type FloorWalkCheckId, type ManagerLayoutOpsState } from './layoutOpsModel';
 import { LAYOUT_OBJECT_PALETTE, LAYOUT_PALETTE_CATEGORIES, type LayoutPaletteCategory } from './layoutObjectPalette';
 import { generateWeddingPackage, WEDDING_LAYOUT_PACKAGES, type WeddingLayoutPackage } from './weddingLayoutPackages';
+import { createIndependentSetupGroup } from './setupGroups';
 
 export function CanvasPage({ event }: Props) {
   const { toast } = useToast();
@@ -111,6 +112,7 @@ export function CanvasPage({ event }: Props) {
   const [paletteCategory, setPaletteCategory] = useState<LayoutPaletteCategory>('tables');
   const [packageGuests, setPackageGuests] = useState(Math.max(1, event.guest_count || 100));
   const [showProtectedLayers, setShowProtectedLayers] = useState(true);
+  const [setupGroupOpen, setSetupGroupOpen] = useState(false); const [setupGroupName, setSetupGroupName] = useState('Table setup'); const [setupGroupQuantity, setSetupGroupQuantity] = useState(10); const [setupGroupChairs, setSetupGroupChairs] = useState(8); const [setupTableId, setSetupTableId] = useState(''); const [setupChairId, setSetupChairId] = useState(''); const [setupDecorId, setSetupDecorId] = useState('');
   const [showVendorOverlay, setShowVendorOverlay] = useState(false);
   const [vendorLines, setVendorLines] = useState<any[]>([]);
   const [viewingVersion, setViewingVersion] = useState<any>(null);
@@ -133,6 +135,8 @@ export function CanvasPage({ event }: Props) {
     enabled: !!layout?.id,
   });
 
+  const { data: inventoryData } = useQuery({ queryKey: ['inventory', event.organization_id], queryFn: () => sdk.inventory.list(event.organization_id) });
+  const { data: reservationsData } = useQuery({ queryKey: ['layout-inventory-reservations', layout?.id], queryFn: () => layoutInventorySdk.list(layout!.id), enabled: !!layout?.id });
   const { data: vendorsData } = useQuery({
     queryKey: ['vendors', event.id],
     queryFn: () => vendorsSdk.list(event.organization_id, { eventId: event.id }),
@@ -764,6 +768,27 @@ export function CanvasPage({ event }: Props) {
     toast({ title: `${WEDDING_LAYOUT_PACKAGES.find((item) => item.id === kind)?.label} added`, description: `${proposalObjects.length} editable proposal objects were added for ${packageGuests} guests. Review and save before requesting venue approval.`, variant: 'success' });
   };
 
+  const addSetupGroup = async () => {
+    const inventory = inventoryData?.items || [];
+    const tableItem = inventory.find((item: any) => item.id === setupTableId); const chairItem = inventory.find((item: any) => item.id === setupChairId); const decorItem = inventory.find((item: any) => item.id === setupDecorId);
+    if (!tableItem) { toast({ title: 'Choose a venue table', description: 'Create a table inventory item, then choose it for this setup group.', variant: 'destructive' }); return; }
+    let spec: any = {}; try { spec = JSON.parse(tableItem.spec || '{}'); } catch {}
+    const result = createIndependentSetupGroup({ label: setupGroupName || tableItem.name, quantity: setupGroupQuantity, table: { inventoryItemId: tableItem.id, label: tableItem.name, width: Number(spec.widthFeet || 6), depth: Number(spec.depthFeet || spec.widthFeet || 6), shape: Number(spec.widthFeet || 6) === Number(spec.depthFeet || spec.widthFeet || 6) ? 'round' : 'rect' }, ...(chairItem ? { chair: { inventoryItemId: chairItem.id, label: chairItem.name, count: setupGroupChairs } } : {}), ...(decorItem ? { centerpiece: { inventoryItemId: decorItem.id, label: decorItem.name } } : {}) });
+    const nextItems = [...items, ...result.items];
+    try {
+      if (layout) {
+        const existing = reservationsData?.reservations || []; const totals = new Map(existing.map((item: any) => [item.inventory_item_id, item.quantity]));
+        result.reservations.forEach((item) => totals.set(item.inventoryItemId, (totals.get(item.inventoryItemId) || 0) + item.quantity));
+        await layoutInventorySdk.reserve(layout.id, [...totals].map(([inventoryItemId, quantity]) => ({ inventoryItemId, quantity })));
+      } else {
+        const created = await layoutsSdk.create({ organizationId: event.organization_id, eventId: event.id, name: 'Primary Layout', payload: { items: nextItems, vendorLines, managerLayoutOps } });
+        await layoutInventorySdk.reserve(created.layout.id, result.reservations);
+      }
+      pushState(nextItems); setSetupGroupOpen(false); qc.invalidateQueries({ queryKey: ['inventory', event.organization_id] }); qc.invalidateQueries({ queryKey: ['layout-inventory-reservations'] }); qc.invalidateQueries({ queryKey: ['layouts', event.id] });
+      toast({ title: 'Independent setup group added', description: `${setupGroupQuantity} table setups and their inventory were reserved for this event.`, variant: 'success' });
+    } catch (e: any) { toast({ title: 'Inventory reservation needs review', description: e.message, variant: 'destructive' }); }
+  };
+
   const handleRestoreVersion = (version: any) => {
     if (window.confirm('Restore this layout version? Unsaved changes will be lost.')) {
       setItems(JSON.parse(version.payload).items || []);
@@ -1215,6 +1240,7 @@ export function CanvasPage({ event }: Props) {
         </div>
       </div>
 
+      <Dialog open={setupGroupOpen} onOpenChange={setSetupGroupOpen}><DialogContent><DialogHeader><DialogTitle>Create independent setup group</DialogTitle><DialogDescription>Configure one table setup, then create independent copies. Inventory reserves immediately for this event.</DialogDescription></DialogHeader><div className="space-y-3"><div><Label>Setup name</Label><Input value={setupGroupName} onChange={(e) => setSetupGroupName(e.target.value)} /></div><div className="grid grid-cols-2 gap-3"><div><Label>Number of setups</Label><Input type="number" min="1" value={setupGroupQuantity} onChange={(e) => setSetupGroupQuantity(Math.max(1, Number(e.target.value) || 1))}/></div><div><Label>Chairs per setup</Label><Input type="number" min="0" value={setupGroupChairs} onChange={(e) => setSetupGroupChairs(Math.max(0, Number(e.target.value) || 0))}/></div></div><div><Label>Venue table inventory</Label><select aria-label="Venue table inventory" className="mt-1 h-10 w-full rounded border border-border bg-surface px-2" value={setupTableId} onChange={(e) => setSetupTableId(e.target.value)}><option value="">Choose table…</option>{(inventoryData?.items || []).filter((item: any) => { try { return JSON.parse(item.spec || '{}').objectType === 'table'; } catch { return false; } }).map((item: any) => <option key={item.id} value={item.id}>{item.name} · {item.available_count} available</option>)}</select></div><div><Label>Venue chair inventory (optional)</Label><select aria-label="Venue chair inventory" className="mt-1 h-10 w-full rounded border border-border bg-surface px-2" value={setupChairId} onChange={(e) => setSetupChairId(e.target.value)}><option value="">No chairs</option>{(inventoryData?.items || []).filter((item: any) => { try { return JSON.parse(item.spec || '{}').objectType === 'chair'; } catch { return false; } }).map((item: any) => <option key={item.id} value={item.id}>{item.name} · {item.available_count} available</option>)}</select></div><div><Label>Centerpiece / decor inventory (optional)</Label><select aria-label="Venue decor inventory" className="mt-1 h-10 w-full rounded border border-border bg-surface px-2" value={setupDecorId} onChange={(e) => setSetupDecorId(e.target.value)}><option value="">No centerpiece</option>{(inventoryData?.items || []).filter((item: any) => { try { return JSON.parse(item.spec || '{}').objectType === 'decor'; } catch { return false; } }).map((item: any) => <option key={item.id} value={item.id}>{item.name} · {item.available_count} available</option>)}</select></div></div><DialogFooter><Button variant="secondary" onClick={() => setSetupGroupOpen(false)}>Cancel</Button><Button onClick={() => void addSetupGroup()}>Reserve & add group</Button></DialogFooter></DialogContent></Dialog>
       <LayoutReadinessPanel diagnostics={layoutDiagnostics} items={items} layout={layout} event={event} hasChanges={hasChanges} selectedId={selectedId} setSelectedId={setSelectedId} nudgeItem={nudgeItem} rainPlanCompare={rainPlanCompare} setRainPlanCompare={setRainPlanCompare} vendorSpecificView={vendorSpecificView} setVendorSpecificView={setVendorSpecificView} managerOps={managerLayoutOps} onToggleFloorWalkCheck={toggleFloorWalkCheck} onRecordVarianceEvidence={recordVarianceEvidence} onSetRainPlanActive={setRainPlanActive} setupPacketUrl={setupPacketUrl} onCreateSetupPacket={createSignedSetupPacket} />
 
       <div className="flex items-center justify-between rounded-lg border border-border bg-surface px-3 py-2 text-xs"><span><strong>Venue-owned structure & safety</strong> is protected from event edits.</span><label className="flex items-center gap-2"><input type="checkbox" checked={showProtectedLayers} onChange={(e) => setShowProtectedLayers(e.target.checked)}/> Show protected layers</label></div>
@@ -1241,6 +1267,7 @@ export function CanvasPage({ event }: Props) {
                   <div className="flex items-center justify-between gap-2"><div className="text-xs font-bold text-fg">Wedding setup packages</div><label className="text-[10px] text-fg-muted">Guests <input aria-label="Package guest count" className="ml-1 w-12 rounded border border-border bg-surface px-1 py-0.5" type="number" min="1" value={packageGuests} onChange={(e) => setPackageGuests(Math.max(1, Number(e.target.value) || 1))}/></label></div>
                   <p className="mt-0.5 text-[10px] leading-tight text-fg-muted">Add a complete editable starting proposal; venue structure stays protected.</p>
                   <div className="mt-2 grid grid-cols-2 gap-1">{WEDDING_LAYOUT_PACKAGES.map((item) => <button key={item.id} type="button" title={item.description} onClick={() => addWeddingPackage(item.id)} className="rounded border border-brand/20 bg-surface px-1.5 py-1 text-left text-[10px] font-semibold hover:bg-brand-soft">{item.label}</button>)}</div>
+                  <Button size="xs" className="mt-2 w-full" variant="secondary" onClick={() => setSetupGroupOpen(true)}>Create independent setup group</Button>
                 </div>
                 <div className="rounded-lg border border-brand/20 bg-brand-soft/20 p-2.5">
                   <div className="text-xs font-bold text-fg">Quick event design</div>
