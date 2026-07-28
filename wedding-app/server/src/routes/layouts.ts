@@ -156,6 +156,13 @@ export async function layoutRoutes(app: FastifyInstance) {
     return reply.code(201).send({ comment: layoutCollaborationRepo.addComment({ layoutId: id, orgId: layout.organization_id, eventId: layout.event_id, revision: layout.revision, authorUserId: req.auth!.userId, authorLabel: req.auth!.email, body: parsed.data.body, target: parsed.data.target }) });
   });
 
+  app.post('/api/layouts/:id/comments/:commentId/resolve', { preHandler: requireAuth }, async (req) => {
+    const { id, commentId } = req.params as { id: string; commentId: string }; const layout = requireLayoutAccess(id, req.auth!.memberships, 'layouts.edit');
+    const comment = layoutCollaborationRepo.findComment(commentId); if (!comment || comment.layout_id !== id) throw NotFound();
+    if (comment.author_user_id !== req.auth!.userId && !isNamedVenueManager(req.auth!.memberships, layout.organization_id)) throw Forbidden();
+    return { comment: layoutCollaborationRepo.resolveComment(commentId, req.auth!.userId) };
+  });
+
   app.post('/api/layouts/:id/review-request', { preHandler: requireAuth }, async (req, reply) => {
     const { id } = req.params as { id: string }; const layout = requireLayoutAccess(id, req.auth!.memberships, 'layouts.edit');
     const review = layoutCollaborationRepo.requestReview({ layoutId: id, orgId: layout.organization_id, eventId: layout.event_id, revision: layout.revision, userId: req.auth!.userId });
