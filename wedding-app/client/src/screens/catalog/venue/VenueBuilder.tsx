@@ -23,6 +23,8 @@ export function VenueBuilder({ orgId }: Props) {
   const [underlayLocked, setUnderlayLocked] = useState(true);
   const [underlayRotation, setUnderlayRotation] = useState(0);
   const [underlayScale, setUnderlayScale] = useState(1);
+  const [calibrationPixels, setCalibrationPixels] = useState('');
+  const [calibrationDistance, setCalibrationDistance] = useState('');
   const containerRef = useRef<HTMLDivElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   
@@ -79,6 +81,7 @@ export function VenueBuilder({ orgId }: Props) {
       if (selectedVenue.width) setGridPhysical(Number(((selectedVenue.width / canvasWidth) * gridSize).toFixed(2)));
     }
     const underlay = (() => { try { return typeof selectedVenue.underlay === 'string' ? JSON.parse(selectedVenue.underlay || '{}') : (selectedVenue.underlay || {}); } catch { return {}; } })();
+    setCalibrationPixels(underlay.calibrationPixels ? String(underlay.calibrationPixels) : ''); setCalibrationDistance(underlay.calibrationDistance ? String(underlay.calibrationDistance) : '');
     setUnderlayOpacity(Number(underlay.opacity ?? 0.5)); setUnderlayLocked(underlay.locked !== false); setUnderlayRotation(Number(underlay.rotation ?? 0)); setUnderlayScale(Number(underlay.scale ?? 1));
     setHasChanges(false);
   }, [selectedVenue]);
@@ -331,9 +334,10 @@ export function VenueBuilder({ orgId }: Props) {
            <label className="flex items-center gap-1 text-xs">Scale <input aria-label="Underlay scale" type="range" min="0.5" max="2" step="0.05" value={underlayScale} onChange={(e) => { const scale = Number(e.target.value); setUnderlayScale(scale); updateUnderlay({ scale }); }} /></label>
            <label className="flex items-center gap-1 text-xs">Rotate <select aria-label="Underlay rotation" value={underlayRotation} onChange={(e) => { const rotation = Number(e.target.value); setUnderlayRotation(rotation); updateUnderlay({ rotation }); }}><option value={0}>0°</option><option value={90}>90°</option><option value={180}>180°</option><option value={270}>270°</option></select></label>
            {typeof u.sourceUrl === 'string' && <a className="text-xs font-semibold underline" href={u.sourceUrl} target="_blank" rel="noreferrer">Open original {u.sourceName || 'PDF'}</a>}
+           <span className="flex items-center gap-1 rounded border border-brand/20 bg-surface px-2 py-1 text-xs"><strong>Calibrate</strong><input aria-label="Known line pixels" className="w-14 border rounded px-1" type="number" min="1" value={calibrationPixels} onChange={(e) => setCalibrationPixels(e.target.value)} placeholder="px"/><span>px =</span><input aria-label="Known line distance" className="w-14 border rounded px-1" type="number" min="0.1" value={calibrationDistance} onChange={(e) => setCalibrationDistance(e.target.value)} placeholder={selectedVenue.unit_system === 'metric' ? 'm' : 'ft'}/><Button size="xs" variant="outline" onClick={() => { const pixels = Number(calibrationPixels); const distance = Number(calibrationDistance); if (!pixels || !distance) { toast({ title: 'Enter a known line', description: 'Measure a line on the reference plan in pixels and enter its real-world distance.', variant: 'destructive' }); return; } updateUnderlay({ calibrationPixels: pixels, calibrationDistance: distance, pixelsPerUnit: pixels / distance, calibrationMethod: 'known_line' }); toast({ title: 'Reference calibrated', description: `${pixels / distance} pixels per ${selectedVenue.unit_system === 'metric' ? 'meter' : 'foot'}.`, variant: 'success' }); }}>Save scale</Button></span>
          </> : null; } catch { return null; } })()}
        </div>}
-       {selectedVenue && <div className="grid gap-3 rounded-lg border border-border bg-surface p-3 text-xs md:grid-cols-3"><div><strong>Space readiness</strong><p className="text-fg-muted">{zones.length} operational zones · {selectedVenue.capacity} guest capacity</p></div><div><strong>Reference plan</strong><p className="text-fg-muted">{underlayLocked ? 'Locked' : 'Unlocked'} · {Math.round(underlayOpacity * 100)}% opacity</p></div><div><strong>Revision history</strong><p className="text-fg-muted">{scaffoldVersions?.versions?.length ?? 0} saved revision(s)</p></div></div>}
+       {selectedVenue && <div className="grid gap-3 rounded-lg border border-border bg-surface p-3 text-xs md:grid-cols-3"><div><strong>Space readiness</strong><p className="text-fg-muted">{zones.length} operational zones · {selectedVenue.capacity} guest capacity</p></div><div><strong>Reference plan</strong><p className="text-fg-muted">{underlayLocked ? 'Locked' : 'Unlocked'} · {Math.round(underlayOpacity * 100)}% opacity · {selectedVenue.width}×{selectedVenue.height} {selectedVenue.unit_system === 'metric' ? 'm' : 'ft'} overall fit</p></div><div><strong>Revision history</strong><p className="text-fg-muted">{scaffoldVersions?.versions?.length ?? 0} saved revision(s)</p></div></div>}
        {selectedVenue && <div className="rounded-lg border border-warning/30 bg-warning-soft/20 px-3 py-2 text-xs text-warning">{!zones.some((z) => z.type === 'exit') && <span className="mr-3">Add at least one exit.</span>}{!zones.some((z) => z.type === 'accessible_route') && <span className="mr-3">Add an accessible route.</span>}{!zones.some((z) => z.type === 'power') && <span className="mr-3">Add a power zone.</span>}{!zones.some((z) => z.type === 'loading') && <span>Add a loading zone.</span>}</div>}
        <div className="flex flex-col lg:flex-row items-start lg:items-center justify-between p-3 bg-surface border border-border rounded-lg shadow-sm gap-4">
           <div className="flex flex-wrap gap-2">
