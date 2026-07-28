@@ -31,3 +31,8 @@ describe('extractDxfPaths', () => {
     expect(arc[arc.length - 1]).toBeCloseTo(1.736, 2);
   });
 });
+
+it('expands INSERT blocks into editable transformed geometry', () => {
+  const result = extractDxfPaths({ blocks: { TABLE: { entities: [{ type: 'LINE', vertices: [{ x: 0, y: 0 }, { x: 10, y: 0 }] }] } }, entities: [{ type: 'INSERT', name: 'TABLE', position: { x: 5, y: 7 }, xScale: 2, yScale: 2 }] }, 'block');
+  expect(result.paths[0].points).toEqual([5, 7, 25, 7]);
+});

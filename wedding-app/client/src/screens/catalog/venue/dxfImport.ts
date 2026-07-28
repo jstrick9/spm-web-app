@@ -31,10 +31,11 @@ function arcPoints(center: { x: number; y: number }, radius: number, start: numb
 }
 
 /** Converts supported DXF reference geometry into canvas paths without changing its coordinates. */
-export function extractDxfPaths(drawing: { entities?: any[]; header?: Record<string, any> }, idPrefix = `dxf-${Date.now()}`): DxfImportResult {
+export function extractDxfPaths(drawing: { entities?: any[]; blocks?: Record<string, any>; header?: Record<string, any> }, idPrefix = `dxf-${Date.now()}`): DxfImportResult {
   const paths: ImportedDxfPath[] = [];
   const layers = new Set<string>();
-  for (const [index, entity] of (drawing.entities ?? []).entries()) {
+  const expanded = (drawing.entities ?? []).flatMap((entity: any) => { if (entity.type !== 'INSERT') return [entity]; const block = drawing.blocks?.[entity.name]; if (!block?.entities) return []; const sx = entity.xScale ?? 1; const sy = entity.yScale ?? sx; const rotation = (entity.rotation ?? 0) * Math.PI / 180; const origin = entity.position ?? { x: 0, y: 0 }; return block.entities.map((child: any) => ({ ...child, layer: child.layer || entity.layer, vertices: child.vertices?.map((v: any) => ({ x: origin.x + (v.x * sx * Math.cos(rotation) - v.y * sy * Math.sin(rotation)), y: origin.y + (v.x * sx * Math.sin(rotation) + v.y * sy * Math.cos(rotation)) })), center: child.center ? { x: origin.x + (child.center.x * sx * Math.cos(rotation) - child.center.y * sy * Math.sin(rotation)), y: origin.y + (child.center.x * sx * Math.sin(rotation) + child.center.y * sy * Math.cos(rotation)) } : child.center, radius: child.radius ? child.radius * Math.max(Math.abs(sx), Math.abs(sy)) : child.radius })); });
+  for (const [index, entity] of expanded.entries()) {
     const layer = entity.layer || undefined;
     if (layer) layers.add(layer);
     const common = { id: `${idPrefix}-${index}`, source: 'dxf' as const, layer, color: entity.color };
