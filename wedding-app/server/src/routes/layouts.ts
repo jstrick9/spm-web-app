@@ -192,6 +192,14 @@ export async function layoutRoutes(app: FastifyInstance) {
     return reply.code(201).send({ comment, review });
   });
 
+  app.post('/api/layouts/:id/reopen-accept', { preHandler: requireAuth }, async (req) => {
+    const { id } = req.params as { id: string }; const layout = requireLayoutAccess(id, req.auth!.memberships, 'layouts.publish');
+    if (layout.approval_status !== 'approved') throw BadRequest('layout-not-approved');
+    const saved = layoutsRepo.saveRevision({ layoutId: id, payload: JSON.parse(layout.payload), updatedBy: req.auth!.userId, expectedRevision: layout.revision, approvalStatus: 'draft', changeDescription: 'Venue accepted reopen request; new proposal draft created' });
+    sseEventsRepo.publish({ organizationId: layout.organization_id, eventType: 'layout.reopen.accepted', actorUserId: req.auth!.userId, payload: { layoutId: id, eventId: layout.event_id, revision: saved.revision } });
+    return { layout: saved };
+  });
+
   app.post('/api/layouts/:id/review-request', { preHandler: requireAuth }, async (req, reply) => {
     const { id } = req.params as { id: string }; const layout = requireLayoutAccess(id, req.auth!.memberships, 'layouts.edit');
     const review = layoutCollaborationRepo.requestReview({ layoutId: id, orgId: layout.organization_id, eventId: layout.event_id, revision: layout.revision, userId: req.auth!.userId });

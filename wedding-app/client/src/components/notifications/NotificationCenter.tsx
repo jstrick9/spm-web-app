@@ -35,6 +35,7 @@ const EVENT_META: Record<string, { title: string; message: (p: any) => string; l
   'event.updated':   { title: 'Event Updated',           message: (p) => `"${p.title || 'An event'}" was modified.`, linkUrl: (p) => `/events/${p.eventId}` },
   'budget.updated':  { title: 'Budget Changed',          message: () => 'A budget item was updated.',             linkUrl: (p) => `/events/${p.eventId}?tab=budget` },
   'layout.comment.resolved': { title: 'Layout Comment Resolved', message: () => 'A venue manager resolved a comment on your layout.', linkUrl: (p) => `/events/${p.eventId}?tab=layout` },
+  'layout.reopen.accepted': { title: 'Layout Reopened', message: () => 'The venue created a new editable proposal draft from the approved layout.', linkUrl: (p) => `/events/${p.eventId}?tab=layout` },
   'layout.reopen.requested': { title: 'Layout Reopen Requested', message: () => 'A planner or couple requested changes to an approved layout.', linkUrl: (p) => `/events/${p.eventId}?tab=layout` },
   'layout.review.decided': { title: 'Venue Layout Decision', message: (p) => `Your layout was ${p.decision === 'changes_requested' ? 'returned for changes' : p.decision}. Open the revision review for details.`, linkUrl: (p) => `/events/${p.eventId}?tab=layout` },
   'webhook.test':    { title: 'Webhook Test',            message: () => 'A test webhook was dispatched.',         linkUrl: () => '/system/integrations' },
