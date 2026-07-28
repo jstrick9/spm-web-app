@@ -144,6 +144,13 @@ export async function layoutRoutes(app: FastifyInstance) {
     return { versions: layoutsRepo.listVersions(id) };
   });
 
+  app.get('/api/layouts/:id/revision-comparison', { preHandler: requireAuth }, async (req) => {
+    const { id } = req.params as { id: string }; const layout = requireLayoutAccess(id, req.auth!.memberships, 'layouts.view');
+    const approved = layoutCollaborationRepo.latestApprovedReview(id);
+    const baseline = approved ? layoutsRepo.getVersion(id, approved.revision) : layout.approval_status === 'approved' ? { revision: layout.revision, payload: layout.payload } : undefined;
+    return { current: { revision: layout.revision, payload: layout.payload }, baseline: baseline ? { revision: baseline.revision, payload: baseline.payload } : null };
+  });
+
   app.get('/api/layouts/:id/collaboration', { preHandler: requireAuth }, async (req) => {
     const { id } = req.params as { id: string };
     requireLayoutAccess(id, req.auth!.memberships, 'layouts.view');

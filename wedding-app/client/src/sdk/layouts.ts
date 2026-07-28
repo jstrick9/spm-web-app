@@ -58,6 +58,7 @@ export const layoutsSdk = {
   createSetupPacket(layoutId: string, input: { audience?: LayoutPacketAudience; payload?: Record<string, unknown>; expiresAt?: string } = {}): Promise<{ packet: { token: string; audience: LayoutPacketAudience }; publicUrl: string }> {
     return api.post(`/api/layouts/${layoutId}/setup-packet`, input);
   },
+  revisionComparison(layoutId: string): Promise<{ current: { revision: number; payload: string }; baseline: { revision: number; payload: string } | null }> { return api.get(`/api/layouts/${layoutId}/revision-comparison`); },
   collaboration(layoutId: string): Promise<{ comments: any[]; reviews: any[] }> { return api.get(`/api/layouts/${layoutId}/collaboration`); },
   addComment(layoutId: string, input: { body: string; target?: Record<string, unknown> }) { return api.post(`/api/layouts/${layoutId}/comments`, input); },
   resolveComment(layoutId: string, commentId: string) { return api.post(`/api/layouts/${layoutId}/comments/${commentId}/resolve`, {}); },
