@@ -292,6 +292,16 @@ export function VenueBuilder({ orgId }: Props) {
     toast({ title: 'PNG exported', description: 'Share this reference with planners or your operations team.', variant: 'success' });
   };
 
+  const exportPdf = () => {
+    const stage = trRef.current?.getStage?.() || containerRef.current?.querySelector('canvas');
+    const dataUrl = stage?.toDataURL?.({ pixelRatio: 2 }) || (stage instanceof HTMLCanvasElement ? stage.toDataURL('image/png') : null);
+    if (!dataUrl) { toast({ title: 'Export unavailable', variant: 'destructive' }); return; }
+    const popup = window.open('', '_blank'); if (!popup) return;
+    const title = String(selectedVenue?.name || 'Venue scaffold').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c] || c));
+    popup.document.write(`<!doctype html><title>${title}</title><style>body{font-family:system-ui;padding:24px}img{max-width:100%;height:auto}</style><h1>${title}</h1><p>${selectedVenue?.width || ''} × ${selectedVenue?.height || ''} ${selectedVenue?.unit_system === 'metric' ? 'm' : 'ft'} · revision ${selectedVenue?.revision || 1}</p><img src="${dataUrl}" onload="window.print()">`);
+    popup.document.close();
+  };
+
   const deleteSelected = () => {
     if (!selectedId) return;
     setDoors(prev => prev.filter(d => d.id !== selectedId));
@@ -356,6 +366,9 @@ export function VenueBuilder({ orgId }: Props) {
              </Button>
              <Button variant="outline" size="sm" onClick={exportPng}>
                <Download className="w-4 h-4 mr-1" /> Export PNG
+             </Button>
+             <Button variant="outline" size="sm" onClick={exportPdf}>
+               <Download className="w-4 h-4 mr-1" /> Print / Save PDF
              </Button>
              <Button size="sm" disabled={!hasChanges || saveMutation.isPending} onClick={() => saveMutation.mutate()}>
                <Save className="w-4 h-4 mr-1" /> Save
