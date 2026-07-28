@@ -4,7 +4,7 @@ import { requireAuth } from '../middleware/auth.js';
 import { can } from '../lib/rbac.js';
 import { venuesRepo, layoutsRepo, auditRepo } from '../db/repos/index.js';
 import { BadRequest, Forbidden, NotFound } from '../lib/errors.js';
-import { saveDataUri } from '../lib/fileStorage.js';
+import { saveDataUri, savePublicDocumentDataUri } from '../lib/fileStorage.js';
 import { db } from '../db/database.js';
 
 const venueSchema = z.object({
@@ -79,9 +79,10 @@ export async function venueRoutes(app: FastifyInstance) {
     if (!can(req.auth!.memberships, { organizationId: venue.organization_id }, 'venues.manage')) throw Forbidden();
     const dataUri = (req.body as { dataUri?: unknown })?.dataUri;
     if (typeof dataUri !== 'string') throw BadRequest('underlay-required');
-    const url = saveDataUri(dataUri, `venue_underlay_${id}`);
+    const isPdf = dataUri.startsWith('data:application/pdf;');
+    const url = isPdf ? savePublicDocumentDataUri(dataUri, `venue_underlay_${id}`) : saveDataUri(dataUri, `venue_underlay_${id}`);
     const current = (() => { try { return JSON.parse(venue.underlay || '{}'); } catch { return {}; } })();
-    const updated = venuesRepo.update(id, { underlay: { ...current, url, locked: true, opacity: 0.55, scale: 1, rotation: 0 } });
+    const updated = venuesRepo.update(id, { underlay: { ...current, url, kind: isPdf ? 'pdf' : 'image', locked: true, opacity: 0.55, scale: 1, rotation: 0 } });
     return { venue: updated };
   });
 

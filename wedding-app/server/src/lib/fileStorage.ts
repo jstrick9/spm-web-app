@@ -34,6 +34,8 @@ function save(dataUri: string, prefix: string, dir: string, urlPrefix: string, t
 export function saveDataUri(dataUri: string, prefix = 'img'): string { return save(dataUri, prefix, PUBLIC_DIR, '/uploads/public', IMAGE_TYPES, 'image'); }
 /** Non-public images such as operational variance evidence. */
 export function savePrivateImageDataUri(dataUri: string, prefix = 'img'): string { return save(dataUri, prefix, PRIVATE_DIR, '/uploads/private', IMAGE_TYPES, 'image'); }
+/** Public reference plans are served only through the venue underlay workflow. */
+export function savePublicDocumentDataUri(dataUri: string, prefix = 'reference'): string { return save(dataUri, prefix, PUBLIC_DIR, '/uploads/public', { ...IMAGE_TYPES, 'application/pdf': 'pdf' }, 'reference'); }
 /** Contracts, COIs and couple documents are always private. */
 export function saveDocumentDataUri(dataUri: string, prefix = 'doc'): string { return save(dataUri, prefix, PRIVATE_DIR, '/uploads/private', DOCUMENT_TYPES, 'document'); }
 export function publicFilePath(urlPath: string): string | null { if (!urlPath.startsWith('/uploads/public/')) return null; return join(PUBLIC_DIR, basename(urlPath)); }
