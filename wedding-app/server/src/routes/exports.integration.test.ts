@@ -4,7 +4,7 @@ import { db } from '../db/database.js';
 import { buildApp } from '../index.js';
 import type { FastifyInstance } from 'fastify';
 import { inflateRawSync } from 'node:zlib';
-import { layoutsRepo, rolesRepo } from '../db/repos/index.js';
+import { guestsRepo, layoutsRepo, rolesRepo } from '../db/repos/index.js';
 
 let app: FastifyInstance;
 beforeAll(async () => { app = await buildApp(); await app.ready(); });
@@ -35,9 +35,7 @@ async function setup() {
     payload: { organizationId: orgId, title: 'Export Test' },
     headers: { authorization: `Bearer ${token}`, 'content-type': 'application/json' } });
   const eventId = e.json().event.id;
-  await app.inject({ method: 'POST', url: `/api/events/${eventId}/guests`,
-    payload: { fullName: 'Alice', email: 'alice@test.com', rsvpStatus: 'attending' },
-    headers: { authorization: `Bearer ${token}`, 'content-type': 'application/json' } });
+  guestsRepo.create(orgId, eventId, { fullName: 'Alice', email: 'alice@test.com', rsvpStatus: 'attending' });
   await app.inject({ method: 'POST', url: `/api/orgs/${orgId}/vendors`,
     payload: { name: 'DJ Test', category: 'music', contactName: 'Dee Jay', phone: '555-0112', contractAmountCents: 100000, eventId, metadata: { arrivalTime: '14:00', loadInRoute: 'Dock A' } },
     headers: { authorization: `Bearer ${token}`, 'content-type': 'application/json' } });
