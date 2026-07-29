@@ -700,6 +700,12 @@ function OverviewTab({
     enabled: !!orgId,
     staleTime: 30_000,
   });
+  const venueGuestManifestQuery = useQuery({
+    queryKey: ["venue-guest-manifest", eventId],
+    queryFn: () => sdk.guests.venueManifest(eventId),
+    enabled: !!eventId,
+    staleTime: 30_000,
+  });
   const layoutsQuery = useQuery({
     queryKey: ["layouts", eventId, "manager-home"],
     queryFn: () => sdk.layouts.list(orgId, { eventId }),
@@ -890,6 +896,7 @@ function OverviewTab({
   return (
     <div className="space-y-6">
       {canInviteCouple && <Card className="border-brand/20 bg-brand-soft/10"><CardHeader><CardTitle>Invite couple to wedding workspace</CardTitle><CardDescription>Couples receive a private wedding hub to manage guests, RSVP, and permitted design proposals. Seven Paths Manor retains venue spaces, inventory, vendors, operations, and final approval.</CardDescription></CardHeader><CardContent className="flex flex-col gap-2 sm:flex-row"><Input aria-label="Couple invitation email" type="email" value={coupleEmail} onChange={(e) => setCoupleEmail(e.target.value)} placeholder="couple@email.com"/><Button disabled={!coupleEmail.trim()} isLoading={inviteCouple.isPending} onClick={() => inviteCouple.mutate()}>Send couple invitation</Button></CardContent></Card>}
+      <Card><CardHeader><CardTitle>Guest operations summary</CardTitle><CardDescription>Read-only guest details supplied by the couple for Seven Paths Manor operations. Guest records, invitations, and RSVPs remain couple-managed.</CardDescription></CardHeader><CardContent>{venueGuestManifestQuery.data?.guests?.length ? <div className="space-y-2">{venueGuestManifestQuery.data.guests.slice(0, 8).map((guest: any) => <div key={guest.id} className="flex flex-wrap items-center justify-between gap-2 rounded border border-border p-2 text-sm"><span><strong>{guest.fullName}</strong>{guest.relationship ? ` · ${guest.relationship}` : ''}{guest.bridalParty ? ' · Bridal party' : ''}</span><span className="text-xs text-fg-muted">{guest.tableAssignment ? `Table ${guest.tableAssignment}` : 'Table pending'}{guest.seatAssignment ? ` · Seat ${guest.seatAssignment}` : ''}</span></div>)}<p className="text-xs text-fg-muted">{venueGuestManifestQuery.data.counts?.attending ?? venueGuestManifestQuery.data.guests.length} attending guests · View only</p></div> : <p className="text-sm text-fg-muted">The couple has not shared attending guest details yet.</p>}</CardContent></Card>
       <ManagerEventWorkspaceHome
         event={event}
         counts={counts}

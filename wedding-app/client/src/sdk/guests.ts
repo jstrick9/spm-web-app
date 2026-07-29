@@ -82,6 +82,8 @@ export const guestsSdk = {
     return api.get(`/api/events/${eventId}/guests`);
   },
 
+  venueManifest(eventId: string): Promise<{ guests: Array<{ id: string; fullName: string; relationship: string | null; bridalParty: boolean; tableAssignment: string | null; seatAssignment: string | null }>; counts: SdkGuestCounts }> { return api.get(`/api/events/${eventId}/venue-guest-manifest`); },
+
   guestHelpRequests(eventId: string): Promise<{ requests: Array<{ id: string; kind: string; name: string | null; email: string | null; message: string | null; status: string; assignedTo: string | null; resolutionNote: string | null; slaDueAt?: string | null; slaStatus?: string; lastReplyAt?: string | null; lastReplyChannel?: string | null; lastReplyJobId?: string | null; lastReplyStatus?: string | null; createdAt: string; updatedAt: string }>; counts: Record<string, number> }> {
     return api.get(`/api/events/${eventId}/guest-help-requests`);
   },
