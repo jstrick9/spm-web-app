@@ -38,15 +38,11 @@ async function setupEvent() {
     headers: { authorization: `Bearer ${token}`, 'content-type': 'application/json' } });
   const eventId = e.json().event.id;
 
-  // Add guests
-  const g1 = await app.inject({ method: 'POST', url: `/api/events/${eventId}/guests`,
-    payload: { fullName: 'Alice Johnson', email: 'alice@test.com', partyName: 'Johnson Household', tableAssignment: 'Table 1' },
-    headers: { authorization: `Bearer ${token}`, 'content-type': 'application/json' } });
-  const g2 = await app.inject({ method: 'POST', url: `/api/events/${eventId}/guests`,
-    payload: { fullName: 'Bob Williams', email: 'bob@test.com', partyName: 'Johnson Household' },
-    headers: { authorization: `Bearer ${token}`, 'content-type': 'application/json' } });
+  // Portal setup is venue seed data; couple mutation is covered in auth invitation tests.
+  const g1 = guestsRepo.create(orgId, eventId, { fullName: 'Alice Johnson', email: 'alice@test.com', partyName: 'Johnson Household', tableAssignment: 'Table 1' });
+  const g2 = guestsRepo.create(orgId, eventId, { fullName: 'Bob Williams', email: 'bob@test.com', partyName: 'Johnson Household' });
 
-  return { token, orgId, eventId, guestId1: g1.json().guest.id, guestId2: g2.json().guest.id };
+  return { token, orgId, eventId, guestId1: g1.id, guestId2: g2.id };
 }
 
 describe('Public portal: full RSVP flow', () => {
@@ -85,13 +81,11 @@ describe('Public portal: full RSVP flow', () => {
 
   it('1c. Portal wayfinding returns labels and personal-only seating privacy', async () => {
     const s = await setupEvent();
-    const other = await app.inject({ method: 'POST', url: `/api/events/${s.eventId}/guests`,
-      payload: { fullName: 'Charlie Guest', email: 'charlie@test.com', tableAssignment: 'Table 9' },
-      headers: { authorization: `Bearer ${s.token}`, 'content-type': 'application/json' } });
+    const other = guestsRepo.create(s.orgId, s.eventId, { fullName: 'Charlie Guest', email: 'charlie@test.com', tableAssignment: 'Table 9' });
     db.prepare(`INSERT INTO layouts (id, organization_id, event_id, name, payload) VALUES (?, ?, ?, ?, ?)`)
       .run('layout-wayfinding', s.orgId, s.eventId, 'Guest layout', JSON.stringify({ items: [
         { id: 'chair-active', type: 'chair', x: 10, y: 20, label: '', radius: 10, guestId: s.guestId1, guestInitials: 'AJ' },
-        { id: 'chair-other', type: 'chair', x: 40, y: 20, label: '', radius: 10, guestId: other.json().guest.id, guestInitials: 'CG' },
+        { id: 'chair-other', type: 'chair', x: 40, y: 20, label: '', radius: 10, guestId: other.id, guestInitials: 'CG' },
         { id: 'table-1', type: 'round_table', x: 20, y: 20, label: 'Table 1', radius: 35 },
       ] }));
     const cfg = await app.inject({ method: 'PUT', url: `/api/events/${s.eventId}/portal-config`,
@@ -108,7 +102,7 @@ describe('Public portal: full RSVP flow', () => {
     expect(res.json().guestWayfinding.seatingPrivacyMode).toBe('personal_only');
     expect(res.json().guestWayfinding.labels.some((l: any) => l.type === 'parking' && l.details === 'West lot')).toBe(true);
     expect(res.json().layout.privacyMode).toBe('personal_only');
-    expect(res.json().layout.items.some((i: any) => i.guestId === other.json().guest.id || i.guestInitials === 'CG')).toBe(false);
+    expect(res.json().layout.items.some((i: any) => i.guestId === other.id || i.guestInitials === 'CG')).toBe(false);
     expect(res.json().layout.items.some((i: any) => i.guestId === s.guestId1 && i.guestInitials === 'AJ')).toBe(true);
   });
 

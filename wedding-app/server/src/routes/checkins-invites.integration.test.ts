@@ -3,7 +3,7 @@ import { describe, it, expect, beforeAll, beforeEach } from 'vitest';
 import { db } from '../db/database.js';
 import { buildApp } from '../index.js';
 import type { FastifyInstance } from 'fastify';
-import { rolesRepo } from '../db/repos/index.js';
+import { guestsRepo, rolesRepo } from '../db/repos/index.js';
 
 let app: FastifyInstance;
 beforeAll(async () => { app = await buildApp(); await app.ready(); });
@@ -39,10 +39,7 @@ async function setup() {
     payload: { name: 'DJ Test', category: 'music', eventId },
     headers: { authorization: `Bearer ${token}`, 'content-type': 'application/json' } });
   const vendorId = v.json().vendor.id;
-  const g = await app.inject({ method: 'POST', url: `/api/events/${eventId}/guests`,
-    payload: { fullName: 'Test Guest' },
-    headers: { authorization: `Bearer ${token}`, 'content-type': 'application/json' } });
-  const guestId = g.json().guest.id;
+  const guestId = guestsRepo.create(orgId, eventId, { fullName: 'Test Guest' }).id;
   return { token, orgId, eventId, vendorId, guestId };
 }
 
