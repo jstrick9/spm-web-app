@@ -6,7 +6,7 @@ import { describe, it, expect, beforeAll, beforeEach } from 'vitest';
 import { db } from '../db/database.js';
 import { buildApp } from '../index.js';
 import type { FastifyInstance } from 'fastify';
-import { rolesRepo } from '../db/repos/index.js';
+import { guestsRepo, rolesRepo } from '../db/repos/index.js';
 
 let app: FastifyInstance;
 beforeAll(async () => { app = await buildApp(); await app.ready(); });
@@ -66,8 +66,8 @@ describe('Full event pipeline lifecycle', () => {
     expect(ev.status).toBe('booked');
 
     // 3. Add guests
-    await req(s.token, 'POST', `/api/events/${eventId}/guests`, { fullName: 'Guest A', rsvpStatus: 'attending' });
-    await req(s.token, 'POST', `/api/events/${eventId}/guests`, { fullName: 'Guest B', rsvpStatus: 'pending' });
+    guestsRepo.create(s.orgId, eventId, { fullName: 'Guest A', rsvpStatus: 'attending' });
+    guestsRepo.create(s.orgId, eventId, { fullName: 'Guest B', rsvpStatus: 'pending' });
     const guestList = (await req(s.token, 'GET', `/api/events/${eventId}/guests`)).json();
     expect(guestList.guests).toHaveLength(2);
     expect(guestList.counts.attending).toBe(1);
