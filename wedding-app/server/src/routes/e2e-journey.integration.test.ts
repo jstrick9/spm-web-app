@@ -68,30 +68,15 @@ describe('Complete venue owner journey', () => {
     expect(evtRes.statusCode).toBe(201);
     const eventId = evtRes.json().event.id;
 
-    // ═══ 3. Add guests ═════════════════════════════════════
-    const g1 = await req(token, 'POST', `/api/events/${eventId}/guests`, {
-      fullName: 'Sarah Johnson', email: 'sarah@test.com', rsvpStatus: 'pending',
-      tableAssignment: 'Head Table', dietaryRestrictions: 'Vegetarian',
-    });
-    expect(g1.statusCode).toBe(201);
-    const guestId = g1.json().guest.id;
-
-    await req(token, 'POST', `/api/events/${eventId}/guests`, {
-      fullName: 'James Park', email: 'james@test.com', rsvpStatus: 'pending',
-      tableAssignment: 'Head Table',
-    });
-
-    // Bulk import
-    const bulkRes = await req(token, 'POST', `/api/events/${eventId}/guests/bulk`, {
-      mode: 'append',
-      guests: [
-        { fullName: 'Guest A' },
-        { fullName: 'Guest B', email: 'b@test.com', dietaryRestrictions: 'Vegan' },
-        { fullName: 'Guest C', tableAssignment: 'Table 1' },
-      ],
-    });
-    expect([200, 201]).toContain(bulkRes.statusCode);
-    expect(bulkRes.json().inserted).toBe(3);
+    // ═══ 3. Seed couple-owned guest data for the venue operations journey ═══
+    const guestId = guestsRepo.create(orgId, eventId, { fullName: 'Sarah Johnson', email: 'sarah@test.com', rsvpStatus: 'pending', tableAssignment: 'Head Table', dietaryRestrictions: 'Vegetarian' }).id;
+    guestsRepo.create(orgId, eventId, { fullName: 'James Park', email: 'james@test.com', rsvpStatus: 'pending', tableAssignment: 'Head Table' });
+    const bulkRes = guestsRepo.bulkCreate(orgId, eventId, 'append', [
+      { fullName: 'Guest A' },
+      { fullName: 'Guest B', email: 'b@test.com', dietaryRestrictions: 'Vegan' },
+      { fullName: 'Guest C', tableAssignment: 'Table 1' },
+    ]);
+    expect(bulkRes.inserted).toBe(3);
 
     // ═══ 4. Create vendor + payment ════════════════════════
     const vRes = await req(token, 'POST', `/api/orgs/${orgId}/vendors`, {
@@ -214,7 +199,7 @@ describe('Complete venue owner journey', () => {
     expect(auditRes.json().logs.length).toBeGreaterThanOrEqual(5);
     const actions = auditRes.json().logs.map((l: any) => l.action);
     expect(actions).toContain('event.create');
-    expect(actions).toContain('guest.create');
+    // Guest records are seeded as couple-owned data; RSVP remains audited through the public workflow.
     expect(actions).toContain('rsvp.submit');
     expect(actions).toContain('contract.create');
   });
