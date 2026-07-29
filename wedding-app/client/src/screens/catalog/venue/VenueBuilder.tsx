@@ -27,6 +27,7 @@ export function VenueBuilder({ orgId }: Props) {
   const [calibrationPixels, setCalibrationPixels] = useState('');
   const [calibrationDistance, setCalibrationDistance] = useState('');
   const [dxfLayers, setDxfLayers] = useState<string[]>([]); const [hiddenDxfLayers, setHiddenDxfLayers] = useState<Set<string>>(new Set());
+  const [templateName, setTemplateName] = useState(''); const [templateMoment, setTemplateMoment] = useState('reception'); const [templateService, setTemplateService] = useState('plated');
   const containerRef = useRef<HTMLDivElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   
@@ -215,6 +216,8 @@ export function VenueBuilder({ orgId }: Props) {
     });
   };
 
+  const templateMutation = useMutation({ mutationFn: () => { if (!selectedVenue) throw new Error('Select an approved venue space first'); return sdk.catalog.create(orgId, 'template', { name: templateName || `${selectedVenue.name} ${templateMoment} template`, visible: true, spec: { venueId: selectedVenue.id, weddingMoment: templateMoment, serviceStyle: templateService, minGuests: 1, maxGuests: selectedVenue.capacity, masterLayout: { walls: lines, doors, windows, pillars, zones }, allowedObjectCategories: ['tables','chairs','decor','service','ceremony'] } }); }, onSuccess: () => { setTemplateName(''); toast({ title: 'Venue template published', description: 'Couples can now use this approved template as an editable proposal.', variant: 'success' }); }, onError: (e: any) => toast({ title: 'Could not publish template', description: e.message, variant: 'destructive' }) });
+
   const handleVectorImport = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
@@ -357,6 +360,7 @@ export function VenueBuilder({ orgId }: Props) {
                  <Trash2 className="w-4 h-4 mr-1"/> Delete Selected
                </Button>
              )}
+             <div className="flex flex-wrap items-center gap-1 rounded border border-border p-1"><input aria-label="Template name" className="h-7 w-32 rounded border border-border px-1 text-xs" value={templateName} onChange={(e) => setTemplateName(e.target.value)} placeholder="Template name"/><select aria-label="Template moment" className="h-7 rounded border border-border text-xs" value={templateMoment} onChange={(e) => setTemplateMoment(e.target.value)}><option value="ceremony">Ceremony</option><option value="cocktail">Cocktail</option><option value="reception">Reception</option><option value="outdoor_tent">Outdoor/tent</option><option value="rain_plan">Rain plan</option></select><select aria-label="Template service style" className="h-7 rounded border border-border text-xs" value={templateService} onChange={(e) => setTemplateService(e.target.value)}><option value="plated">Plated</option><option value="buffet_stations">Buffet/stations</option><option value="family_style">Family-style</option><option value="cocktail">Cocktail</option><option value="brunch">Brunch</option></select><Button size="xs" variant="outline" disabled={!selectedVenue} isLoading={templateMutation.isPending} onClick={() => templateMutation.mutate()}>Save as template</Button></div>
              <div className="w-px h-6 bg-border mx-1" />
              <input type="file" accept=".svg,.dxf" className="hidden" ref={fileInputRef} onChange={handleVectorImport} />
              <Button variant="outline" size="sm" onClick={() => fileInputRef.current?.click()}>
