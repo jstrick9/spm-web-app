@@ -3,9 +3,9 @@ import { render, screen } from '@testing-library/react';
 import { STATUS_META, statusOrder, StatusBadge } from './statusMeta';
 
 describe('statusMeta', () => {
-  it('defines metadata for all 7 event statuses', () => {
-    expect(Object.keys(STATUS_META)).toHaveLength(7);
-    for (const key of ['lead', 'hold', 'booked', 'planning', 'completed', 'cancelled', 'lost']) {
+  it('defines metadata for all 8 event statuses', () => {
+    expect(Object.keys(STATUS_META)).toHaveLength(8);
+    for (const key of ['lead', 'hold', 'booked', 'planning', 'final_review', 'completed', 'cancelled', 'lost']) {
       expect(STATUS_META[key as keyof typeof STATUS_META]).toBeDefined();
       expect(STATUS_META[key as keyof typeof STATUS_META].label).toBeTruthy();
       expect(STATUS_META[key as keyof typeof STATUS_META].dotColor).toBeTruthy();
@@ -13,7 +13,7 @@ describe('statusMeta', () => {
   });
 
   it('statusOrder contains all 7 statuses', () => {
-    expect(statusOrder).toHaveLength(7);
+    expect(statusOrder).toHaveLength(8);
     expect(statusOrder).toContain('lead');
     expect(statusOrder).toContain('completed');
   });
