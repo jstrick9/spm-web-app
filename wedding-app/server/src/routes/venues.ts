@@ -36,6 +36,20 @@ export async function venueRoutes(app: FastifyInstance) {
     return { templates, spaces, guestCount: event.guest_count };
   });
 
+  app.post('/api/events/:eventId/venue-templates/:templateId/apply', { preHandler: requireAuth }, async (req, reply) => {
+    const { eventId, templateId } = req.params as { eventId: string; templateId: string }; const event = eventsRepo.findById(eventId); if (!event) throw NotFound();
+    const orgMap = eventsRepo.orgMapForUser(req.auth!.userId); if (!can(req.auth!.memberships, { eventId }, 'layouts.create', orgMap)) throw Forbidden();
+    const template = catalogRepo.findById(templateId) as any; if (!template || template.organization_id !== event.organization_id || template.kind !== 'template' || !template.visible) throw NotFound('venue-template-not-found');
+    let spec: any = {}; try { spec = JSON.parse(template.spec || '{}'); } catch {}
+    const venue = spec.venueId ? venuesRepo.findById(spec.venueId) : venuesRepo.listForOrg(event.organization_id).find((item) => item.approval_status === 'approved');
+    if (!venue || venue.approval_status !== 'approved') throw BadRequest('approved-venue-space-required');
+    const scaffold = (() => { try { return JSON.parse(venue.master_layout || '{}'); } catch { return {}; } })();
+    const payload = { ...scaffold, ...(spec.payload || spec.masterLayout || {}), venueScaffoldId: venue.id, venueRevision: venue.revision, templateId: template.id, templateName: template.name, serviceStyle: spec.serviceStyle || null };
+    const layout = layoutsRepo.create({ organizationId: event.organization_id, eventId, venueId: venue.id, name: `${template.name} proposal`, visibility: 'event', payload, createdBy: req.auth!.userId });
+    auditRepo.log({ organizationId: event.organization_id, actorUserId: req.auth!.userId, actorLabel: req.auth!.email, action: 'venue.template.apply', targetType: 'layout', targetId: layout.id, ip: req.ip, details: { eventId, templateId, venueId: venue.id } });
+    return reply.code(201).send({ layout });
+  });
+
   app.get('/api/orgs/:orgId/venues', { preHandler: requireAuth }, async (req) => {
     const { orgId } = req.params as { orgId: string };
     if (!can(req.auth!.memberships, { organizationId: orgId }, 'venues.view')) throw Forbidden();

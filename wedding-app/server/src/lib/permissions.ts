@@ -417,7 +417,7 @@ export const SYSTEM_ROLE_DEFINITIONS: ReadonlyArray<SystemRoleDefinition> = [
     permissions: [
       'events.view',
       'venues.view',
-      'layouts.view',
+      'layouts.view','layouts.create','layouts.edit',
       'guests.view','guests.manage','guests.assign','guests.import','guests.export',
       'rsvp.view','rsvp.submit',
       'portal.guest.view',

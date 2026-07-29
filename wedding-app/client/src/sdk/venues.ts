@@ -22,6 +22,7 @@ export interface VenueInput {
 }
 
 export const venuesSdk = {
+  applyEventTemplate(eventId: string, templateId: string): Promise<{ layout: any }> { return api.post(`/api/events/${eventId}/venue-templates/${templateId}/apply`, {}); },
   eventTemplates(eventId: string): Promise<{ templates: Array<{ id: string; name: string; spec: Record<string, any> }>; spaces: Array<{ id: string; name: string; category: string; capacity: number; templateKey: string }>; guestCount: number }> { return api.get(`/api/events/${eventId}/venue-templates`); },
   list(orgId: string): Promise<{ venues: SdkVenue[] }> {
     return api.get(`/api/orgs/${orgId}/venues`);

@@ -22,6 +22,7 @@ import {
   Users,
 } from 'lucide-react';
 import { sdk } from '../../sdk';
+import { venuesSdk } from '../../sdk/venues';
 import { Badge } from '../../ui/Badge';
 import { Button } from '../../ui/Button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../../ui/Card';
@@ -75,6 +76,7 @@ export function CoupleEventHub({ eventId }: { eventId: string }) {
   const designQuery = useQuery({ queryKey: ['couple-design', eventId], queryFn: () => sdk.couple.design(eventId), enabled: !!eventId });
   const financeQuery = useQuery({ queryKey: ['couple-finance', eventId], queryFn: () => sdk.couple.finance(eventId), enabled: !!eventId });
   const timelineQuery = useQuery({ queryKey: ['couple-timeline', eventId], queryFn: () => sdk.timeline.list(eventId), enabled: !!eventId });
+  const venueTemplatesQuery = useQuery({ queryKey: ['couple-venue-templates', eventId], queryFn: () => venuesSdk.eventTemplates(eventId), enabled: !!eventId });
   const layoutsQuery = useQuery({ queryKey: ['couple-layouts', event?.organization_id, eventId], queryFn: () => sdk.layouts.list(event!.organization_id, { eventId }), enabled: !!event?.organization_id });
   const requestsQuery = useQuery({ queryKey: ['couple-requests', eventId], queryFn: () => sdk.couple.listRequests(eventId), enabled: !!eventId });
   const profileQuery = useQuery({ queryKey: ['couple-profile', eventId], queryFn: () => sdk.couple.getProfile(eventId), enabled: !!eventId });
@@ -465,6 +467,7 @@ export function CoupleEventHub({ eventId }: { eventId: string }) {
       />
       <PageBody>
         <div className={`space-y-5 pb-24 md:pb-0 ${largeTextMode ? 'text-lg' : ''} ${accessibilityMode ? 'contrast-more' : ''}`} onInputCapture={() => setHasUnsavedDraft(true)}>
+          <Card className="border-brand/20 bg-brand-soft/10"><CardHeader><CardTitle>Choose your venue-approved starting plan</CardTitle><CardDescription>Templates are approved by Seven Paths Manor. We recommend options that fit your current guest count; you can still view any option with a capacity note.</CardDescription></CardHeader><CardContent className="grid gap-3 md:grid-cols-2">{venueTemplatesQuery.data?.templates?.length ? venueTemplatesQuery.data.templates.map((template) => { const spec = template.spec || {}; const min = spec.minGuests ?? 0; const max = spec.maxGuests ?? Infinity; const warning = venueTemplatesQuery.data!.guestCount && (venueTemplatesQuery.data!.guestCount < min || venueTemplatesQuery.data!.guestCount > max); return <div key={template.id} className="rounded-lg border border-border bg-surface p-3"><strong>{template.name}</strong><p className="mt-1 text-xs text-fg-muted">{spec.weddingMoment || 'Wedding layout'} · {spec.serviceStyle || 'Flexible service'}{Number.isFinite(max) ? ` · designed for ${min}-${max} guests` : ''}</p>{warning && <p className="mt-2 text-xs text-warning">Your current guest count may need venue review for this template.</p>}<Button className="mt-3" size="sm" onClick={async () => { try { await venuesSdk.applyEventTemplate(eventId, template.id); qc.invalidateQueries({ queryKey: ['couple-layouts'] }); toast({ title: 'Template applied as your layout proposal', description: 'You can now customize permitted layout objects before venue review.', variant: 'success' }); } catch (err: any) { toast({ title: 'Could not apply template', description: err.message, variant: 'destructive' }); } }}>Use this template</Button></div>; }) : <p className="text-sm text-fg-muted">Seven Paths Manor has not published a template for this event yet. Ask your venue coordinator for options.</p>}</CardContent></Card>
           <Card className="overflow-hidden border-brand/20 bg-gradient-to-br from-brand-soft/50 to-surface">
             <CardContent className="grid gap-5 p-5 sm:p-6 lg:grid-cols-[1.1fr_0.9fr] lg:items-center">
               <div>
