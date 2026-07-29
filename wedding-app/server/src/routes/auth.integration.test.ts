@@ -263,6 +263,8 @@ describe('Auth: logout', () => {
     expect(reg.statusCode).toBe(201);
     expect(reg.json().eventId).toBe(eventId);
     expect(reg.json().redirectTo).toBe(`/couple/events/${eventId}`);
+    const coupleGuest = await app.inject({ method: 'POST', url: `/api/events/${eventId}/guests`, payload: { fullName: 'Couple Added Guest', rsvpStatus: 'pending' }, headers: { authorization: `Bearer ${reg.json().token}`, 'content-type': 'application/json' } });
+    expect(coupleGuest.statusCode).toBe(201);
 
     const me = await app.inject({ method: 'GET', url: '/api/auth/me', headers: { authorization: `Bearer ${reg.json().token}` } });
     expect(me.statusCode).toBe(200);
