@@ -71,6 +71,10 @@ function validatePermissions(ids: string[]): PermissionId[] {
   return ids as PermissionId[];
 }
 
+function isVenueOwnerOrManager(memberships: any[], organizationId: string) {
+  return memberships.some((membership) => membership.organizationId === organizationId && ['owner', 'manager'].includes(String(membership.roleKey).toLowerCase()));
+}
+
 export async function roleRoutes(app: FastifyInstance) {
   // ─── Catalog: every permission id known to the app ────
   // Used by the admin UI to render the role editor checkboxes.
@@ -235,6 +239,7 @@ export async function roleRoutes(app: FastifyInstance) {
       if (!event) throw NotFound('event-not-found');
       const orgMap = eventsRepo.orgMapForUser(req.auth!.userId);
       assertCan(req.auth!.memberships, { eventId }, 'events.members.invite', orgMap);
+      if (!isVenueOwnerOrManager(req.auth!.memberships, event.organization_id)) throw Forbidden();
       const parsed = inviteEventMemberSchema.safeParse(req.body);
       if (!parsed.success) throw BadRequest('invalid-input', parsed.error.issues);
 
