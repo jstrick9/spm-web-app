@@ -38,9 +38,9 @@ describe('rbac.resolvePermissions', () => {
   it('couple event-membership grants client-safe event-scoped permissions', () => {
     const m: Membership[] = [{ eventId: 'evt1', roleId: COUPLE }];
     expect(can(m, { eventId: 'evt1' }, 'guests.view')).toBe(true);
-    expect(can(m, { eventId: 'evt1' }, 'guests.manage')).toBe(false);
-    expect(can(m, { eventId: 'evt1' }, 'guests.import')).toBe(false);
-    expect(can(m, { eventId: 'evt1' }, 'guests.export')).toBe(false);
+    expect(can(m, { eventId: 'evt1' }, 'guests.manage')).toBe(true);
+    expect(can(m, { eventId: 'evt1' }, 'guests.import')).toBe(true);
+    expect(can(m, { eventId: 'evt1' }, 'guests.export')).toBe(true);
     expect(can(m, { eventId: 'evt1' }, 'org.manage')).toBe(false);
   });
 
@@ -82,7 +82,7 @@ describe('rbac.resolvePermissions', () => {
     ];
     const orgMap = { evt1: 'org1' };
     expect(can(m, { eventId: 'evt1' }, 'guests.view', orgMap)).toBe(true);
-    expect(can(m, { eventId: 'evt1' }, 'guests.manage', orgMap)).toBe(false);
+    expect(can(m, { eventId: 'evt1' }, 'guests.manage', orgMap)).toBe(true);
     expect(can(m, { eventId: 'evt1' }, 'staff.view', orgMap)).toBe(true);
   });
 
