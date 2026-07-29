@@ -147,6 +147,7 @@ export function CanvasPage({ event }: Props) {
     queryFn: () => vendorsSdk.list(event.organization_id, { eventId: event.id }),
   });
   const vendors = vendorsData?.vendors || [];
+  const allowedTemplateCategories = useMemo(() => { try { const payload = typeof layout?.payload === 'string' ? JSON.parse(layout.payload) : layout?.payload; return Array.isArray(payload?.allowedObjectCategories) ? new Set(payload.allowedObjectCategories) : null; } catch { return null; } }, [layout?.payload]);
   const selectedSetupTable = useMemo(() => (inventoryData?.items || []).find((item: any) => item.id === setupTableId), [inventoryData?.items, setupTableId]);
   const selectedSetupCapacity = useMemo(() => {
     try {
@@ -766,6 +767,8 @@ export function CanvasPage({ event }: Props) {
 
   const handleAddItem = (catalogItem: any) => {
     if (layout?.approval_status === 'approved' && !canApproveLayout) { toast({ title: 'Approved layout is locked', description: 'Ask the venue to reopen a new proposal revision for changes.', variant: 'destructive' }); return; }
+    const templateCategory = catalogItem.category || (catalogItem.type === 'decor' ? 'decor' : catalogItem.type?.includes('table') ? 'tables' : catalogItem.type === 'chair' ? 'chairs' : 'service');
+    if (allowedTemplateCategories && !allowedTemplateCategories.has(templateCategory)) { toast({ title: 'Not included in this venue template', description: 'Ask Seven Paths Manor to add this object category to your approved template.', variant: 'destructive' }); return; }
     const viewCenterX = (-pos.x + dimensions.width / 2) / scale;
     const viewCenterY = (-pos.y + dimensions.height / 2) / scale;
     
@@ -1299,9 +1302,9 @@ export function CanvasPage({ event }: Props) {
                 <div className="rounded-lg border border-brand/20 bg-brand-soft/20 p-2.5">
                   <div className="text-xs font-bold text-fg">Quick event design</div>
                   <p className="mt-0.5 text-[10px] leading-tight text-fg-muted">Choose an object, then drag it into place. Your changes remain a proposal until venue approval.</p>
-                  <div className="mt-2 flex flex-wrap gap-1" aria-label="Design object categories">{LAYOUT_PALETTE_CATEGORIES.map(category => <button key={category.id} type="button" onClick={() => setPaletteCategory(category.id)} className={cn('rounded-full px-2 py-1 text-[10px] font-semibold', paletteCategory === category.id ? 'bg-brand text-white' : 'bg-surface text-fg-muted hover:bg-surface-2')}>{category.label}</button>)}</div>
+                  <div className="mt-2 flex flex-wrap gap-1" aria-label="Design object categories">{LAYOUT_PALETTE_CATEGORIES.filter(category => !allowedTemplateCategories || allowedTemplateCategories.has(category.id)).map(category => <button key={category.id} type="button" onClick={() => setPaletteCategory(category.id)} className={cn('rounded-full px-2 py-1 text-[10px] font-semibold', paletteCategory === category.id ? 'bg-brand text-white' : 'bg-surface text-fg-muted hover:bg-surface-2')}>{category.label}</button>)}</div>
                 </div>
-                {LAYOUT_OBJECT_PALETTE.filter(item => item.category === paletteCategory).map((item) => (
+                {LAYOUT_OBJECT_PALETTE.filter(item => item.category === paletteCategory && (!allowedTemplateCategories || allowedTemplateCategories.has(item.category))).map((item) => (
                   <button key={item.label} onClick={() => handleAddItem(item)} className="p-2 border border-brand/25 bg-surface hover:bg-brand-soft/20 rounded text-sm text-left text-fg transition-all duration-150 flex items-center gap-2 font-medium">
                     <Plus className="w-4 h-4 text-brand" />{item.label}
                   </button>
