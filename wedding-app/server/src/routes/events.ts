@@ -157,6 +157,34 @@ export async function eventRoutes(app: FastifyInstance) {
     return { event };
   });
 
+  app.get('/api/events/:eventId/final-review/change-requests', { preHandler: requireAuth }, async (req) => {
+    const { eventId } = req.params as { eventId: string }; const event = eventsRepo.findById(eventId); if (!event) throw NotFound();
+    const orgMap = eventsRepo.orgMapForUser(req.auth!.userId); if (!can(req.auth!.memberships, { eventId }, 'events.view', orgMap)) throw Forbidden();
+    return { requests: db.prepare(`SELECT id, requested_role, detail, status, manager_note, decided_at, created_at FROM final_review_change_requests WHERE event_id = ? ORDER BY created_at DESC`).all(eventId) };
+  });
+
+  app.post('/api/events/:eventId/final-review/change-requests', { preHandler: requireAuth }, async (req, reply) => {
+    const { eventId } = req.params as { eventId: string }; const event = eventsRepo.findById(eventId); if (!event) throw NotFound();
+    const detail = z.object({ detail: z.string().min(3).max(2000) }).safeParse(req.body); if (!detail.success) throw BadRequest('invalid-input', detail.error.issues);
+    const membership = req.auth!.memberships.find((item: any) => item.eventId === eventId && ['couple', 'planner'].includes(String(item.roleKey).toLowerCase()));
+    const isManager = req.auth!.memberships.some((item: any) => item.organizationId === event.organization_id && ['owner', 'manager'].includes(String(item.roleKey).toLowerCase()));
+    if (!membership && !isManager) throw Forbidden();
+    const requestedRole = isManager ? 'manager' : String(membership!.roleKey).toLowerCase(); const id = crypto.randomUUID();
+    db.prepare(`INSERT INTO final_review_change_requests (id, organization_id, event_id, requested_by, requested_role, detail) VALUES (?, ?, ?, ?, ?, ?)`).run(id, event.organization_id, eventId, req.auth!.userId, requestedRole, detail.data.detail);
+    auditRepo.log({ organizationId: event.organization_id, actorUserId: req.auth!.userId, actorLabel: req.auth!.email, action: 'event.final_review.change_requested', targetType: 'event', targetId: eventId, ip: req.ip, details: { requestId: id, requestedRole } });
+    return reply.code(201).send({ request: db.prepare(`SELECT * FROM final_review_change_requests WHERE id = ?`).get(id) });
+  });
+
+  app.patch('/api/events/:eventId/final-review/change-requests/:requestId', { preHandler: requireAuth }, async (req) => {
+    const { eventId, requestId } = req.params as { eventId: string; requestId: string }; const event = eventsRepo.findById(eventId); if (!event) throw NotFound();
+    const isManager = req.auth!.memberships.some((item: any) => item.organizationId === event.organization_id && ['owner', 'manager'].includes(String(item.roleKey).toLowerCase())); if (!isManager) throw Forbidden();
+    const parsed = z.object({ status: z.enum(['accepted', 'declined', 'resolved']), managerNote: z.string().max(2000).optional() }).safeParse(req.body); if (!parsed.success) throw BadRequest('invalid-input', parsed.error.issues);
+    const existing = db.prepare(`SELECT id FROM final_review_change_requests WHERE id = ? AND event_id = ?`).get(requestId, eventId); if (!existing) throw NotFound('final-review-change-request-not-found');
+    db.prepare(`UPDATE final_review_change_requests SET status = ?, manager_note = ?, decided_by = ?, decided_at = datetime('now'), updated_at = datetime('now') WHERE id = ?`).run(parsed.data.status, parsed.data.managerNote ?? null, req.auth!.userId, requestId);
+    auditRepo.log({ organizationId: event.organization_id, actorUserId: req.auth!.userId, actorLabel: req.auth!.email, action: 'event.final_review.change_decided', targetType: 'event', targetId: eventId, ip: req.ip, details: { requestId, status: parsed.data.status } });
+    return { request: db.prepare(`SELECT * FROM final_review_change_requests WHERE id = ?`).get(requestId) };
+  });
+
   app.get('/api/events/:eventId/final-review', { preHandler: requireAuth }, async (req) => {
     const { eventId } = req.params as { eventId: string }; const event = eventsRepo.findById(eventId); if (!event) throw NotFound();
     const orgMap = eventsRepo.orgMapForUser(req.auth!.userId); if (!can(req.auth!.memberships, { eventId }, 'events.view', orgMap)) throw Forbidden();
