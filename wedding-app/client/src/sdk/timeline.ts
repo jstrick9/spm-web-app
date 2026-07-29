@@ -111,6 +111,7 @@ export const timelineSdk = {
     return api.get(`/api/events/${eventId}/readiness`);
   },
   setupPacket(eventId: string): Promise<{ packet: { event: { title: string; startDate: string | null; guestCount: number }; layout: { id: string; name: string; revision: number } | null; timeline: Array<{ id: string; title: string; starts_at: string; location: string | null; vendor_name: string | null }>; vendorLoadIn: Array<{ id: string; name: string; category: string; loadIn: string | null }>; staffing: Array<{ full_name: string; role_key: string }> } }> { return api.get(`/api/events/${eventId}/setup-packet`); },
+  coupleSchedule(eventId: string): Promise<{ schedule: Array<{ title: string; category: string; starts_at: string; ends_at: string | null; location: string | null }>; message: string }> { return api.get(`/api/events/${eventId}/couple-schedule`); },
   ops(eventId: string): Promise<{ ops: TimelineOpsState }> {
     return api.get(`/api/events/${eventId}/timeline-ops`);
   },
