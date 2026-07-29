@@ -39,8 +39,8 @@ export async function venueRoutes(app: FastifyInstance) {
   app.post('/api/events/:eventId/venue-templates/:templateId/apply', { preHandler: requireAuth }, async (req, reply) => {
     const { eventId, templateId } = req.params as { eventId: string; templateId: string }; const event = eventsRepo.findById(eventId); if (!event) throw NotFound();
     const orgMap = eventsRepo.orgMapForUser(req.auth!.userId); if (!can(req.auth!.memberships, { eventId }, 'layouts.create', orgMap)) throw Forbidden();
-    const template = catalogRepo.findById(templateId) as any; if (!template || template.organization_id !== event.organization_id || template.kind !== 'template' || !template.visible) throw NotFound('venue-template-not-found');
-    let spec: any = {}; try { spec = JSON.parse(template.spec || '{}'); } catch {}
+    const template = catalogRepo.findById(templateId) as any; if (!template || (template.organizationId ?? template.organization_id) !== event.organization_id || template.kind !== 'template' || !template.visible) throw NotFound('venue-template-not-found');
+    let spec: any = {}; try { spec = typeof template.spec === 'string' ? JSON.parse(template.spec || '{}') : (template.spec || {}); } catch {}
     const venue = spec.venueId ? venuesRepo.findById(spec.venueId) : venuesRepo.listForOrg(event.organization_id).find((item) => item.approval_status === 'approved');
     if (!venue || venue.approval_status !== 'approved') throw BadRequest('approved-venue-space-required');
     const scaffold = (() => { try { return JSON.parse(venue.master_layout || '{}'); } catch { return {}; } })();
