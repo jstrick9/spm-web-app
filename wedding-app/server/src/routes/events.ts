@@ -157,6 +157,18 @@ export async function eventRoutes(app: FastifyInstance) {
     return { event };
   });
 
+  app.post('/api/events/:eventId/final-review/checks', { preHandler: requireAuth }, async (req) => {
+    const { eventId } = req.params as { eventId: string }; const event = eventsRepo.findById(eventId); if (!event) throw NotFound();
+    const isManager = req.auth!.memberships.some((item: any) => item.organizationId === event.organization_id && ['owner', 'manager'].includes(String(item.roleKey).toLowerCase())); if (!isManager) throw Forbidden();
+    const parsed = z.object({ key: z.enum(['confirmed_guest_count', 'staffing_readiness', 'inventory_readiness', 'accessibility_checks', 'rain_plan_checks']), complete: z.boolean() }).safeParse(req.body); if (!parsed.success) throw BadRequest('invalid-input', parsed.error.issues);
+    const metadata = (() => { try { return JSON.parse(event.metadata || '{}'); } catch { return {}; } })() as Record<string, any>;
+    const metadataKey: Record<string, string> = { confirmed_guest_count: 'finalGuestCountConfirmed', staffing_readiness: 'staffingReady', inventory_readiness: 'inventoryReady', accessibility_checks: 'accessibilityChecked', rain_plan_checks: 'rainPlanChecked' };
+    metadata[metadataKey[parsed.data.key]] = parsed.data.complete;
+    const updated = eventsRepo.update(eventId, { metadata });
+    auditRepo.log({ organizationId: event.organization_id, actorUserId: req.auth!.userId, actorLabel: req.auth!.email, action: 'event.final_review.check_updated', targetType: 'event', targetId: eventId, ip: req.ip, details: parsed.data });
+    return { event: updated, finalReview: finalReviewReadiness(updated) };
+  });
+
   app.get('/api/events/:eventId/final-review/change-requests', { preHandler: requireAuth }, async (req) => {
     const { eventId } = req.params as { eventId: string }; const event = eventsRepo.findById(eventId); if (!event) throw NotFound();
     const orgMap = eventsRepo.orgMapForUser(req.auth!.userId); if (!can(req.auth!.memberships, { eventId }, 'events.view', orgMap)) throw Forbidden();

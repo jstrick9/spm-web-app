@@ -19,6 +19,9 @@ describe('Final Review stage gate', () => {
     const readiness = await app.inject({ method: 'GET', url: `/api/events/${eventId}/final-review`, headers: { authorization: `Bearer ${token}` } });
     expect(readiness.statusCode).toBe(200);
     expect(readiness.json().finalReview.ready).toBe(false);
+    const confirmedCount = await app.inject({ method: 'POST', url: `/api/events/${eventId}/final-review/checks`, headers: { authorization: `Bearer ${token}`, 'content-type': 'application/json' }, payload: { key: 'confirmed_guest_count', complete: true } });
+    expect(confirmedCount.statusCode).toBe(200);
+    expect(confirmedCount.json().event.metadata).toContain('finalGuestCountConfirmed');
     expect(readiness.json().finalReview.checks.map((check: any) => check.key)).toEqual(expect.arrayContaining(['approved_layout', 'confirmed_guest_count', 'reviewed_timeline', 'vendor_assignments', 'staffing_readiness', 'setup_packet', 'inventory_readiness', 'accessibility_checks', 'rain_plan_checks']));
     const blocked = await app.inject({ method: 'POST', url: `/api/events/${eventId}/stage`, headers: { authorization: `Bearer ${token}`, 'content-type': 'application/json' }, payload: { status: 'final_review' } });
     expect(blocked.statusCode).toBe(400);
