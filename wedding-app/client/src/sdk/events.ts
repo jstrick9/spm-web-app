@@ -58,6 +58,9 @@ export const eventsSdk = {
 
   transitionStage(eventId: string, status: SdkEvent['status']): Promise<{ event: SdkEvent }> { return api.post(`/api/events/${eventId}/stage`, { status }); },
   finalReview(eventId: string): Promise<{ finalReview: { ready: boolean; checks: Array<{ key: string; label: string; complete: boolean }> } }> { return api.get(`/api/events/${eventId}/final-review`); },
+  finalReviewChangeRequests(eventId: string): Promise<{ requests: Array<{ id: string; requested_role: string; detail: string; status: string; manager_note: string | null; created_at: string }> }> { return api.get(`/api/events/${eventId}/final-review/change-requests`); },
+  requestFinalReviewChange(eventId: string, detail: string): Promise<{ request: Record<string, unknown> }> { return api.post(`/api/events/${eventId}/final-review/change-requests`, { detail }); },
+  decideFinalReviewChange(eventId: string, requestId: string, status: 'accepted' | 'declined' | 'resolved', managerNote?: string): Promise<{ request: Record<string, unknown> }> { return api.patch(`/api/events/${eventId}/final-review/change-requests/${requestId}`, { status, managerNote }); },
   update(eventId: string, patch: UpdateEventInput): Promise<{ event: SdkEvent }> {
     return api.patch(`/api/events/${eventId}`, patch);
   },
