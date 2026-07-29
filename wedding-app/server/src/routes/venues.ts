@@ -2,7 +2,7 @@ import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
 import { requireAuth } from '../middleware/auth.js';
 import { can } from '../lib/rbac.js';
-import { venuesRepo, layoutsRepo, auditRepo } from '../db/repos/index.js';
+import { venuesRepo, layoutsRepo, auditRepo, catalogRepo, eventsRepo } from '../db/repos/index.js';
 import { BadRequest, Forbidden, NotFound } from '../lib/errors.js';
 import { saveDataUri, savePublicDocumentDataUri } from '../lib/fileStorage.js';
 import { db } from '../db/database.js';
@@ -28,6 +28,14 @@ const venueSchema = z.object({
 });
 
 export async function venueRoutes(app: FastifyInstance) {
+  app.get('/api/events/:eventId/venue-templates', { preHandler: requireAuth }, async (req) => {
+    const { eventId } = req.params as { eventId: string }; const event = eventsRepo.findById(eventId); if (!event) throw NotFound();
+    const orgMap = eventsRepo.orgMapForUser(req.auth!.userId); if (!can(req.auth!.memberships, { eventId }, 'events.view', orgMap)) throw Forbidden();
+    const templates = catalogRepo.listForOrg(event.organization_id, 'template').filter((item: any) => item.visible).map((item: any) => ({ id: item.id, name: item.name, spec: item.spec }));
+    const spaces = venuesRepo.listForOrg(event.organization_id).filter((venue) => venue.approval_status === 'approved').map((venue) => ({ id: venue.id, name: venue.name, category: venue.category, capacity: venue.capacity, templateKey: venue.template_key }));
+    return { templates, spaces, guestCount: event.guest_count };
+  });
+
   app.get('/api/orgs/:orgId/venues', { preHandler: requireAuth }, async (req) => {
     const { orgId } = req.params as { orgId: string };
     if (!can(req.auth!.memberships, { organizationId: orgId }, 'venues.view')) throw Forbidden();
