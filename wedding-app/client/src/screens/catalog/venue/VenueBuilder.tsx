@@ -27,7 +27,14 @@ export function VenueBuilder({ orgId }: Props) {
   const [calibrationPixels, setCalibrationPixels] = useState('');
   const [calibrationDistance, setCalibrationDistance] = useState('');
   const [dxfLayers, setDxfLayers] = useState<string[]>([]); const [hiddenDxfLayers, setHiddenDxfLayers] = useState<Set<string>>(new Set());
-  const [templateName, setTemplateName] = useState(''); const [templateMoment, setTemplateMoment] = useState('reception'); const [templateService, setTemplateService] = useState('plated');
+  const [templateEditorOpen, setTemplateEditorOpen] = useState(false);
+  const [templateName, setTemplateName] = useState('');
+  const [templateMoment, setTemplateMoment] = useState('reception');
+  const [templateService, setTemplateService] = useState('plated');
+  const [templateMinGuests, setTemplateMinGuests] = useState('1');
+  const [templateMaxGuests, setTemplateMaxGuests] = useState('');
+  const [templateCategories, setTemplateCategories] = useState<string[]>(['tables', 'chairs', 'decor', 'service', 'ceremony']);
+  const [templateInventoryIds, setTemplateInventoryIds] = useState<string[]>([]);
   const containerRef = useRef<HTMLDivElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   
@@ -55,6 +62,11 @@ export function VenueBuilder({ orgId }: Props) {
   const { data, isLoading } = useQuery({
     queryKey: ['catalog', orgId, 'guideline'],
     queryFn: () => sdk.catalog.list(orgId, 'guideline' as any),
+  });
+  const { data: venueInventory } = useQuery({
+    queryKey: ['inventory', orgId],
+    queryFn: () => sdk.inventory.list(orgId),
+    enabled: templateEditorOpen,
   });
   const { data: scaffoldVersions } = useQuery({ queryKey: ['venue-scaffold-versions', selectedVenue?.id], queryFn: () => venuesSdk.scaffoldVersions(selectedVenue.id), enabled: !!selectedVenue?.id });
 
@@ -216,7 +228,30 @@ export function VenueBuilder({ orgId }: Props) {
     });
   };
 
-  const templateMutation = useMutation({ mutationFn: () => { if (!selectedVenue) throw new Error('Select an approved venue space first'); return sdk.catalog.create(orgId, 'template', { name: templateName || `${selectedVenue.name} ${templateMoment} template`, visible: true, spec: { venueId: selectedVenue.id, weddingMoment: templateMoment, serviceStyle: templateService, minGuests: 1, maxGuests: selectedVenue.capacity, masterLayout: { walls: lines, doors, windows, pillars, zones }, allowedObjectCategories: ['tables','chairs','decor','service','ceremony'] } }); }, onSuccess: () => { setTemplateName(''); toast({ title: 'Venue template published', description: 'Couples can now use this approved template as an editable proposal.', variant: 'success' }); }, onError: (e: any) => toast({ title: 'Could not publish template', description: e.message, variant: 'destructive' }) });
+  const templateMutation = useMutation({
+    mutationFn: () => {
+      if (!selectedVenue) throw new Error('Select an approved venue space first');
+      const minGuests = Number(templateMinGuests);
+      const maxGuests = Number(templateMaxGuests || selectedVenue.capacity);
+      if (!Number.isInteger(minGuests) || minGuests < 1 || !Number.isInteger(maxGuests) || maxGuests < minGuests) throw new Error('Enter a valid guest range.');
+      if (!templateCategories.length) throw new Error('Choose at least one object category.');
+      return sdk.catalog.create(orgId, 'template', {
+        name: templateName.trim() || `${selectedVenue.name} ${templateMoment} template`, visible: true,
+        spec: { venueId: selectedVenue.id, weddingMoment: templateMoment, serviceStyle: templateService, minGuests, maxGuests,
+          masterLayout: { walls: lines, doors, windows, pillars, zones }, allowedObjectCategories: templateCategories,
+          allowedInventoryItemIds: templateInventoryIds.length ? templateInventoryIds : null }
+      });
+    },
+    onSuccess: () => { setTemplateName(''); setTemplateInventoryIds([]); setTemplateEditorOpen(false); toast({ title: 'Venue template published', description: 'Couples can now use this approved template as an editable proposal.', variant: 'success' }); },
+    onError: (e: any) => toast({ title: 'Could not publish template', description: e.message, variant: 'destructive' })
+  });
+
+  const openTemplateEditor = () => {
+    if (!selectedVenue || selectedVenue.approval_status !== 'approved') { toast({ title: 'Choose an approved venue space', description: 'Templates are always connected to an approved venue space.', variant: 'destructive' }); return; }
+    setTemplateMaxGuests(String(selectedVenue.capacity || ''));
+    setTemplateEditorOpen(true);
+  };
+  const toggleTemplateChoice = (value: string, setter: React.Dispatch<React.SetStateAction<string[]>>) => setter(current => current.includes(value) ? current.filter(item => item !== value) : [...current, value]);
 
   const handleVectorImport = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -360,7 +395,7 @@ export function VenueBuilder({ orgId }: Props) {
                  <Trash2 className="w-4 h-4 mr-1"/> Delete Selected
                </Button>
              )}
-             <div className="flex flex-wrap items-center gap-1 rounded border border-border p-1"><input aria-label="Template name" className="h-7 w-32 rounded border border-border px-1 text-xs" value={templateName} onChange={(e) => setTemplateName(e.target.value)} placeholder="Template name"/><select aria-label="Template moment" className="h-7 rounded border border-border text-xs" value={templateMoment} onChange={(e) => setTemplateMoment(e.target.value)}><option value="ceremony">Ceremony</option><option value="cocktail">Cocktail</option><option value="reception">Reception</option><option value="outdoor_tent">Outdoor/tent</option><option value="rain_plan">Rain plan</option></select><select aria-label="Template service style" className="h-7 rounded border border-border text-xs" value={templateService} onChange={(e) => setTemplateService(e.target.value)}><option value="plated">Plated</option><option value="buffet_stations">Buffet/stations</option><option value="family_style">Family-style</option><option value="cocktail">Cocktail</option><option value="brunch">Brunch</option></select><Button size="xs" variant="outline" disabled={!selectedVenue} isLoading={templateMutation.isPending} onClick={() => templateMutation.mutate()}>Save as template</Button></div>
+             <Button size="sm" variant="outline" disabled={!selectedVenue || selectedVenue.approval_status !== 'approved'} onClick={openTemplateEditor}>Save layout as template</Button>
              <div className="w-px h-6 bg-border mx-1" />
              <input type="file" accept=".svg,.dxf" className="hidden" ref={fileInputRef} onChange={handleVectorImport} />
              <Button variant="outline" size="sm" onClick={() => fileInputRef.current?.click()}>
@@ -377,6 +412,14 @@ export function VenueBuilder({ orgId }: Props) {
              </Button>
           </div>
        </div>
+
+       {templateEditorOpen && <section aria-label="Venue template editor" className="rounded-lg border border-primary/30 bg-primary/5 p-4 shadow-sm">
+         <div className="mb-3 flex items-start justify-between gap-3"><div><h3 className="font-semibold">Publish venue template</h3><p className="text-sm text-fg-muted">This captures the current structural space. Couples can edit only the object types and inventory you allow.</p></div><Button size="xs" variant="ghost" onClick={() => setTemplateEditorOpen(false)}>Close</Button></div>
+         <div className="grid gap-3 md:grid-cols-3"><label className="text-sm">Template name<input aria-label="Template name" className="mt-1 h-9 w-full rounded border border-border bg-surface px-2" value={templateName} onChange={(e) => setTemplateName(e.target.value)} placeholder={`${selectedVenue?.name || 'Venue'} template`}/></label><label className="text-sm">Wedding moment<select aria-label="Template moment" className="mt-1 h-9 w-full rounded border border-border bg-surface px-2" value={templateMoment} onChange={(e) => setTemplateMoment(e.target.value)}><option value="ceremony">Ceremony</option><option value="cocktail">Cocktail hour</option><option value="reception">Reception</option><option value="outdoor_tent">Outdoor / tent</option><option value="rain_plan">Rain plan</option></select></label><label className="text-sm">Service style<select aria-label="Template service style" className="mt-1 h-9 w-full rounded border border-border bg-surface px-2" value={templateService} onChange={(e) => setTemplateService(e.target.value)}><option value="plated">Plated</option><option value="buffet_stations">Buffet / stations</option><option value="family_style">Family-style</option><option value="cocktail">Cocktail reception</option><option value="brunch">Brunch</option></select></label><label className="text-sm">Minimum guests<input aria-label="Minimum guests" type="number" min="1" className="mt-1 h-9 w-full rounded border border-border bg-surface px-2" value={templateMinGuests} onChange={(e) => setTemplateMinGuests(e.target.value)}/></label><label className="text-sm">Maximum guests<input aria-label="Maximum guests" type="number" min="1" className="mt-1 h-9 w-full rounded border border-border bg-surface px-2" value={templateMaxGuests} onChange={(e) => setTemplateMaxGuests(e.target.value)}/></label></div>
+         <fieldset className="mt-4"><legend className="text-sm font-medium">Couple-editable object categories</legend><div className="mt-2 flex flex-wrap gap-3">{['tables','chairs','decor','service','ceremony'].map(category => <label key={category} className="flex items-center gap-1 text-sm"><input type="checkbox" checked={templateCategories.includes(category)} onChange={() => toggleTemplateChoice(category, setTemplateCategories)}/>{category}</label>)}</div></fieldset>
+         <fieldset className="mt-4"><legend className="text-sm font-medium">Approved inventory overrides <span className="font-normal text-fg-muted">(optional; leave empty to allow compatible inventory)</span></legend><div className="mt-2 flex flex-wrap gap-3">{venueInventory?.items?.length ? venueInventory.items.map((item: any) => <label key={item.id} className="flex items-center gap-1 text-sm"><input type="checkbox" checked={templateInventoryIds.includes(item.id)} onChange={() => toggleTemplateChoice(item.id, setTemplateInventoryIds)}/>{item.name}</label>) : <p className="text-sm text-fg-muted">No venue inventory is available to restrict yet.</p>}</div></fieldset>
+         <div className="mt-4 flex justify-end gap-2"><Button variant="outline" onClick={() => setTemplateEditorOpen(false)}>Cancel</Button><Button isLoading={templateMutation.isPending} onClick={() => templateMutation.mutate()}>Publish template</Button></div>
+       </section>}
 
        <div ref={containerRef} className="w-full h-[600px] border border-border rounded-lg bg-surface relative overflow-hidden">
           {(() => { try { const underlay = selectedVenue?.underlay ? (typeof selectedVenue.underlay === 'string' ? JSON.parse(selectedVenue.underlay) : selectedVenue.underlay) : null; return underlay?.url ? <img src={underlay.url} alt="Venue reference underlay" className="absolute inset-0 h-full w-full object-contain pointer-events-none" style={{ opacity: underlayOpacity, transform: `scale(${underlayScale}) rotate(${underlayRotation}deg)` }} /> : null; } catch { return null; } })()}
