@@ -53,7 +53,7 @@ describe('forecastRepo (model)', () => {
   it('projects rising revenue from a clear upward trend', async () => {
     const s = await setup();
     // 12 months of steadily-growing completed events.
-    for (let i = 12; i >= 1; i--) {
+    for (let i = 13; i >= 1; i--) {
       eventsRepo.create({
         organizationId: s.orgId, title: `Wedding ${i}`, status: 'completed',
         startDate: monthsAgo(i), budgetCents: (13 - i) * 100000, // grows as i→1
