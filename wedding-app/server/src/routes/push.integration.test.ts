@@ -3,6 +3,7 @@ import { describe, it, expect, beforeAll, beforeEach } from 'vitest';
 import { db } from '../db/database.js';
 import { buildApp } from '../index.js';
 import type { FastifyInstance } from 'fastify';
+import { guestsRepo } from '../db/repos/index.js';
 
 let app: FastifyInstance;
 beforeAll(async () => { app = await buildApp(); await app.ready(); });
@@ -143,12 +144,8 @@ describe('Cross-org guest listing', () => {
     const eventId = evtRes.json().event.id;
 
     // Create two guests
-    await req(u.token, 'POST', `/api/events/${eventId}/guests`, {
-      fullName: 'Guest One', email: 'one@test.com',
-    });
-    await req(u.token, 'POST', `/api/events/${eventId}/guests`, {
-      fullName: 'Guest Two', email: 'two@test.com', rsvpStatus: 'attending',
-    });
+    guestsRepo.create(u.orgId, eventId, { fullName: 'Guest One', email: 'one@test.com' });
+    guestsRepo.create(u.orgId, eventId, { fullName: 'Guest Two', email: 'two@test.com', rsvpStatus: 'attending' });
 
     const res = await req(u.token, 'GET', `/api/orgs/${u.orgId}/guests`);
     expect(res.statusCode).toBe(200);
@@ -165,12 +162,8 @@ describe('Cross-org guest listing', () => {
       organizationId: u.orgId, title: 'Search Test',
     });
     const eventId = evtRes.json().event.id;
-    await req(u.token, 'POST', `/api/events/${eventId}/guests`, {
-      fullName: 'Alice Wonderland',
-    });
-    await req(u.token, 'POST', `/api/events/${eventId}/guests`, {
-      fullName: 'Bob Builder',
-    });
+    guestsRepo.create(u.orgId, eventId, { fullName: 'Alice Wonderland' });
+    guestsRepo.create(u.orgId, eventId, { fullName: 'Bob Builder' });
 
     const res = await req(u.token, 'GET', `/api/orgs/${u.orgId}/guests?search=Alice`);
     expect(res.statusCode).toBe(200);
@@ -184,12 +177,8 @@ describe('Cross-org guest listing', () => {
       organizationId: u.orgId, title: 'RSVP Test',
     });
     const eventId = evtRes.json().event.id;
-    await req(u.token, 'POST', `/api/events/${eventId}/guests`, {
-      fullName: 'Pending Pat', rsvpStatus: 'pending',
-    });
-    await req(u.token, 'POST', `/api/events/${eventId}/guests`, {
-      fullName: 'Attending Ann', rsvpStatus: 'attending',
-    });
+    guestsRepo.create(u.orgId, eventId, { fullName: 'Pending Pat', rsvpStatus: 'pending' });
+    guestsRepo.create(u.orgId, eventId, { fullName: 'Attending Ann', rsvpStatus: 'attending' });
 
     const res = await req(u.token, 'GET', `/api/orgs/${u.orgId}/guests?rsvpStatus=attending`);
     expect(res.statusCode).toBe(200);
@@ -203,9 +192,7 @@ describe('Cross-org guest listing', () => {
       organizationId: u.orgId, title: 'Garden Party',
     });
     const eventId = evtRes.json().event.id;
-    await req(u.token, 'POST', `/api/events/${eventId}/guests`, {
-      fullName: 'Test Guest',
-    });
+    guestsRepo.create(u.orgId, eventId, { fullName: 'Test Guest' });
 
     const res = await req(u.token, 'GET', `/api/orgs/${u.orgId}/guests`);
     expect(res.json().guests[0].event_title).toBe('Garden Party');
