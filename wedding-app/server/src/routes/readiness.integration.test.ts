@@ -3,7 +3,7 @@ import { describe, it, expect, beforeAll, beforeEach } from 'vitest';
 import { db } from '../db/database.js';
 import { buildApp } from '../index.js';
 import type { FastifyInstance } from 'fastify';
-import { rolesRepo } from '../db/repos/index.js';
+import { guestsRepo, rolesRepo } from '../db/repos/index.js';
 
 let app: FastifyInstance;
 beforeAll(async () => { app = await buildApp(); await app.ready(); });
@@ -40,8 +40,8 @@ describe('Event readiness route', () => {
     const s = await setup();
     const vendor = await req(s.token, 'POST', `/api/orgs/${s.orgId}/vendors`, { name: 'DJ', eventId: s.eventId });
     const vendorId = vendor.json().vendor.id;
-    await req(s.token, 'POST', `/api/events/${s.eventId}/guests`, { fullName: 'A', rsvpStatus: 'attending' });
-    await req(s.token, 'POST', `/api/events/${s.eventId}/guests`, { fullName: 'B', rsvpStatus: 'attending' });
+    guestsRepo.create(s.orgId, s.eventId, { fullName: 'A', rsvpStatus: 'attending' });
+    guestsRepo.create(s.orgId, s.eventId, { fullName: 'B', rsvpStatus: 'attending' });
 
     await req(s.token, 'POST', `/api/events/${s.eventId}/timeline`, { title: 'Ceremony', category: 'ceremony', startsAt: '2026-09-12T16:00:00.000Z', durationMin: 60 });
     await req(s.token, 'POST', `/api/events/${s.eventId}/timeline`, { title: 'Photos', category: 'photos', startsAt: '2026-09-12T16:30:00.000Z', durationMin: 30 });
