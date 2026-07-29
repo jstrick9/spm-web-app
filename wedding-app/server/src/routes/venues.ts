@@ -44,9 +44,11 @@ export async function venueRoutes(app: FastifyInstance) {
     const venue = spec.venueId ? venuesRepo.findById(spec.venueId) : venuesRepo.listForOrg(event.organization_id).find((item) => item.approval_status === 'approved');
     if (!venue || venue.approval_status !== 'approved') throw BadRequest('approved-venue-space-required');
     const scaffold = (() => { try { return JSON.parse(venue.master_layout || '{}'); } catch { return {}; } })();
-    const payload = { ...scaffold, ...(spec.payload || spec.masterLayout || {}), venueScaffoldId: venue.id, venueRevision: venue.revision, templateId: template.id, templateName: template.name, serviceStyle: spec.serviceStyle || null };
+    const minGuests = Number(spec.minGuests ?? 0); const maxGuests = Number(spec.maxGuests ?? Infinity);
+    const capacityWarning = event.guest_count > 0 && (event.guest_count < minGuests || event.guest_count > maxGuests);
+    const payload = { ...scaffold, ...(spec.payload || spec.masterLayout || {}), venueScaffoldId: venue.id, venueRevision: venue.revision, templateId: template.id, templateName: template.name, serviceStyle: spec.serviceStyle || null, allowedObjectCategories: spec.allowedObjectCategories || null, allowedInventoryItemIds: spec.allowedInventoryItemIds || null, templateCapacityWarning: capacityWarning ? { guestCount: event.guest_count, minGuests, maxGuests } : null };
     const layout = layoutsRepo.create({ organizationId: event.organization_id, eventId, venueId: venue.id, name: `${template.name} proposal`, visibility: 'event', payload, createdBy: req.auth!.userId });
-    auditRepo.log({ organizationId: event.organization_id, actorUserId: req.auth!.userId, actorLabel: req.auth!.email, action: 'venue.template.apply', targetType: 'layout', targetId: layout.id, ip: req.ip, details: { eventId, templateId, venueId: venue.id } });
+    auditRepo.log({ organizationId: event.organization_id, actorUserId: req.auth!.userId, actorLabel: req.auth!.email, action: 'venue.template.apply', targetType: 'layout', targetId: layout.id, ip: req.ip, details: { eventId, templateId, venueId: venue.id, capacityWarning } });
     return reply.code(201).send({ layout });
   });
 
