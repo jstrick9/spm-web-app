@@ -26,4 +26,19 @@ describe('Event-week packets', () => {
     const ownerSchedule = await app.inject({ method: 'GET', url: `/api/events/${eventId}/couple-schedule`, headers: { authorization: `Bearer ${token}` } });
     expect(ownerSchedule.statusCode).toBe(403);
   });
+  it('gives couples a simplified schedule and blocks the detailed operations packet', async () => {
+    const owner = await app.inject({ method: 'POST', url: '/api/auth/register', payload: { email: `packet-owner-${Math.random()}@test.com`, password: 'password123', fullName: 'Owner', orgName: 'Seven Paths Manor' } });
+    const ownerToken = owner.json().token; const orgId = owner.json().organizationId;
+    const event = await app.inject({ method: 'POST', url: '/api/events', headers: { authorization: `Bearer ${ownerToken}`, 'content-type': 'application/json' }, payload: { organizationId: orgId, title: 'Couple Schedule Wedding' } });
+    const eventId = event.json().event.id;
+    await app.inject({ method: 'POST', url: `/api/events/${eventId}/timeline`, headers: { authorization: `Bearer ${ownerToken}`, 'content-type': 'application/json' }, payload: { title: 'Ceremony', startsAt: '2026-10-01T16:00:00.000Z', location: 'Garden Lawn', notes: 'Internal load-in details' } });
+    const couple = await app.inject({ method: 'POST', url: '/api/auth/register', payload: { email: `packet-couple-${Math.random()}@test.com`, password: 'password123', fullName: 'Couple', orgName: 'Temporary' } });
+    const coupleId = couple.json().user.id; const coupleRole = db.prepare(`SELECT id FROM roles WHERE key = 'couple' AND is_system = 1`).get() as { id: string };
+    db.prepare(`INSERT INTO event_memberships (id, event_id, user_id, role_id, status) VALUES ('couple-packet', ?, ?, ?, 'active')`).run(eventId, coupleId, coupleRole.id);
+    const schedule = await app.inject({ method: 'GET', url: `/api/events/${eventId}/couple-schedule`, headers: { authorization: `Bearer ${couple.json().token}` } });
+    expect(schedule.statusCode).toBe(200); expect(schedule.json().schedule[0]).toMatchObject({ title: 'Ceremony', location: 'Garden Lawn' }); expect(schedule.json().schedule[0].notes).toBeUndefined();
+    const blocked = await app.inject({ method: 'GET', url: `/api/events/${eventId}/setup-packet`, headers: { authorization: `Bearer ${couple.json().token}` } });
+    expect(blocked.statusCode).toBe(403);
+  });
+
 });
