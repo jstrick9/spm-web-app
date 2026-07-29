@@ -28,3 +28,21 @@ describe('Final Review stage gate', () => {
     expect(blocked.json().error).toBe('final-review-not-ready');
   });
 });
+
+  it('allows Final Review only after every operational check is complete', async () => {
+    const registration = await app.inject({ method: 'POST', url: '/api/auth/register', payload: { email: `ready-review-${Math.random()}@test.com`, password: 'password123', fullName: 'Manager', orgName: 'Seven Paths Manor' } });
+    const token = registration.json().token; const orgId = registration.json().organizationId;
+    const created = await app.inject({ method: 'POST', url: '/api/events', headers: { authorization: `Bearer ${token}`, 'content-type': 'application/json' }, payload: { organizationId: orgId, title: 'Ready Review Wedding', status: 'planning', guestCount: 75, metadata: { finalGuestCountConfirmed: true, staffingReady: true, inventoryReady: true, accessibilityChecked: true, rainPlanRequired: true, rainPlanChecked: true } } });
+    const eventId = created.json().event.id;
+    const manager = db.prepare(`SELECT id FROM users WHERE email = ?`).get(registration.json().user.email) as { id: string };
+    const staffRole = db.prepare(`SELECT id FROM roles WHERE key = 'staff' AND is_system = 1`).get() as { id: string };
+    db.prepare(`INSERT INTO event_memberships (id, event_id, user_id, role_id, status) VALUES ('staff-review', ?, ?, ?, 'active')`).run(eventId, manager.id, staffRole.id);
+    db.prepare(`INSERT INTO layouts (id, organization_id, event_id, name, payload, approval_status, created_by) VALUES ('layout-review', ?, ?, 'Approved plan', ?, 'approved', ?)`).run(orgId, eventId, JSON.stringify({ zones: [{ type: 'accessible_route' }] }), manager.id);
+    db.prepare(`INSERT INTO layout_setup_packets (id, organization_id, event_id, layout_id, token, audience, payload, created_by) VALUES ('packet-review', ?, ?, 'layout-review', 'packet-token-review', 'setup_crew', '{}', ?)`).run(orgId, eventId, manager.id);
+    db.prepare(`INSERT INTO vendors (id, organization_id, event_id, name, category) VALUES ('vendor-review', ?, ?, 'Catering', 'catering')`).run(orgId, eventId);
+    db.prepare(`INSERT INTO timeline_events (id, organization_id, event_id, title, starts_at) VALUES ('timeline-review', ?, ?, 'Ceremony', '2027-01-01T16:00:00.000Z')`).run(orgId, eventId);
+    db.prepare(`INSERT INTO timeline_approvals (id, organization_id, event_id, role, status, approved_by) VALUES ('approval-review', ?, ?, 'manager', 'approved', ?)`).run(orgId, eventId, manager.id);
+    const transitioned = await app.inject({ method: 'POST', url: `/api/events/${eventId}/stage`, headers: { authorization: `Bearer ${token}`, 'content-type': 'application/json' }, payload: { status: 'final_review' } });
+    expect(transitioned.statusCode).toBe(200);
+    expect(transitioned.json().event.status).toBe('final_review');
+  });
