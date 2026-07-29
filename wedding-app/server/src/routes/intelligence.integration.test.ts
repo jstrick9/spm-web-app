@@ -3,7 +3,7 @@ import { describe, it, expect, beforeAll, beforeEach } from 'vitest';
 import { db } from '../db/database.js';
 import { buildApp } from '../index.js';
 import type { FastifyInstance } from 'fastify';
-import { rolesRepo } from '../db/repos/index.js';
+import { guestsRepo, rolesRepo } from '../db/repos/index.js';
 
 let app: FastifyInstance;
 beforeAll(async () => { app = await buildApp(); await app.ready(); });
@@ -195,9 +195,9 @@ describe('Intelligence — Event Health Command Center', () => {
       .run(soon, overdue, 1000000, s.eventId);
 
     // RSVP lag + guest identity duplicate cluster.
-    await req(s.token, 'POST', `/api/events/${s.eventId}/guests`, { fullName: 'Alex Guest', email: 'alex@example.com' });
-    await req(s.token, 'POST', `/api/events/${s.eventId}/guests`, { fullName: 'Alex Guest', email: 'alex@example.com' });
-    await req(s.token, 'POST', `/api/events/${s.eventId}/guests`, { fullName: 'Pending Guest 3' });
+    guestsRepo.create(s.orgId, s.eventId, { fullName: 'Alex Guest', email: 'alex@example.com' });
+    guestsRepo.create(s.orgId, s.eventId, { fullName: 'Alex Guest', email: 'alex@example.com' });
+    guestsRepo.create(s.orgId, s.eventId, { fullName: 'Pending Guest 3' });
 
     // Low vendor reliability.
     const vendorRes = await req(s.token, 'POST', `/api/orgs/${s.orgId}/vendors`, {
