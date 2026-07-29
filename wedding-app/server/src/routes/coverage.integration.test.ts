@@ -20,6 +20,7 @@ import '../test/setup.js';
 import { describe, it, expect, beforeAll, afterAll } from 'vitest';
 import { buildApp } from '../index.js';
 import type { FastifyInstance } from 'fastify';
+import { guestsRepo } from '../db/repos/index.js';
 
 let app: FastifyInstance;
 let token: string;
@@ -60,22 +61,9 @@ beforeAll(async () => {
   });
   eventId = evRes.json().event?.id;
 
-  // Create two guests with matching email (duplicate candidates)
-  const g1 = await app.inject({
-    method: 'POST',
-    url: `/api/events/${eventId}/guests`,
-    headers: { authorization: `Bearer ${token}` },
-    payload: { fullName: 'Alice Smith', email: 'alice@coverage.test' },
-  });
-  guestId1 = g1.json().guest?.id;
-
-  const g2 = await app.inject({
-    method: 'POST',
-    url: `/api/events/${eventId}/guests`,
-    headers: { authorization: `Bearer ${token}` },
-    payload: { fullName: 'Alice Smith', email: 'alice@coverage.test' },
-  });
-  guestId2 = g2.json().guest?.id;
+  // Venue operational fixtures do not impersonate couple guest mutations.
+  guestId1 = guestsRepo.create(orgId, eventId, { fullName: 'Alice Smith', email: 'alice@coverage.test' }).id;
+  guestId2 = guestsRepo.create(orgId, eventId, { fullName: 'Alice Smith', email: 'alice@coverage.test' }).id;
 });
 
 afterAll(async () => {
@@ -133,37 +121,12 @@ describe('POST /api/orgs/:orgId/guests/merge', () => {
       headers: authed(),
       payload: { primaryId: guestId1, duplicateIds: [] },
     });
-    expect(res.statusCode).toBe(400);
+    expect(res.statusCode).toBe(403);
   });
 
-  it('successfully merges duplicate guests', async () => {
-    // Re-create guests since we might have merged them already in prior runs
-    // (integration tests share state within the same run but not across)
-    const g3 = await app.inject({
-      method: 'POST',
-      url: `/api/events/${eventId}/guests`,
-      headers: authed(),
-      payload: { fullName: 'Bob Jones', email: 'bob@coverage.test' },
-    });
-    const g4 = await app.inject({
-      method: 'POST',
-      url: `/api/events/${eventId}/guests`,
-      headers: authed(),
-      payload: { fullName: 'Bob Jones', email: 'bob@coverage.test' },
-    });
-    const id3 = g3.json().guest?.id;
-    const id4 = g4.json().guest?.id;
-
-    const res = await app.inject({
-      method: 'POST',
-      url: `/api/orgs/${orgId}/guests/merge`,
-      headers: authed(),
-      payload: { primaryId: id3, duplicateIds: [id4] },
-    });
-    expect(res.statusCode).toBe(200);
-    expect(res.json()).toHaveProperty('primary');
-    expect(res.json()).toHaveProperty('mergedCount');
-    expect(res.json().mergedCount).toBe(1);
+  it('does not expose venue owner guest merging as a normal workflow', async () => {
+    const res = await app.inject({ method: 'POST', url: `/api/orgs/${orgId}/guests/merge`, headers: authed(), payload: { primaryId: guestId1, duplicateIds: [guestId2] } });
+    expect(res.statusCode).toBe(403);
   });
 
   it('returns 400 for IDs from another org', async () => {
@@ -173,7 +136,7 @@ describe('POST /api/orgs/:orgId/guests/merge', () => {
       headers: authed(),
       payload: { primaryId: 'nonexistent-id', duplicateIds: ['also-nonexistent'] },
     });
-    expect(res.statusCode).toBe(400);
+    expect(res.statusCode).toBe(403);
   });
 });
 

@@ -748,25 +748,10 @@ export async function guestRoutes(app: FastifyInstance) {
     return { clusters: guestIdentityRepo.findDuplicates(orgId) };
   });
 
-  // ─── Merge duplicate guests into a primary (human-confirmed) ──
-  app.post("/api/orgs/:orgId/guests/merge", { preHandler: requireAuth }, async (req) => {
-    const { orgId } = req.params as { orgId: string };
-    if (!can(req.auth!.memberships, { organizationId: orgId }, "guests.manage")) throw Forbidden();
-    const parsed = z.object({
-      primaryId: z.string().min(1),
-      duplicateIds: z.array(z.string().min(1)).min(1).max(50),
-    }).safeParse(req.body);
-    if (!parsed.success) throw BadRequest("invalid-input", parsed.error.issues);
-
-    const result = guestIdentityRepo.merge(orgId, parsed.data.primaryId, parsed.data.duplicateIds);
-    if ("error" in result) throw BadRequest(result.error);
-
-    auditRepo.log({
-      organizationId: orgId, actorUserId: req.auth!.userId, actorLabel: req.auth!.email,
-      action: "guest.merge", targetType: "guest", targetId: parsed.data.primaryId,
-      details: { mergedCount: result.mergedCount, duplicateIds: parsed.data.duplicateIds }, ip: req.ip,
-    });
-    return { primary: result.primary, mergedCount: result.mergedCount };
+  // ─── Cross-event guest merge retired ──────────────────────
+  app.post("/api/orgs/:orgId/guests/merge", { preHandler: requireAuth }, async () => {
+    // Couples manage guest identity within their own event; venue-wide merge is intentionally unavailable.
+    throw Forbidden();
   });
 
   
