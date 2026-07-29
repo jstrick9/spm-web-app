@@ -55,6 +55,7 @@ export const eventsSdk = {
     return api.post('/api/events', input);
   },
 
+  transitionStage(eventId: string, status: SdkEvent['status']): Promise<{ event: SdkEvent }> { return api.post(`/api/events/${eventId}/stage`, { status }); },
   update(eventId: string, patch: UpdateEventInput): Promise<{ event: SdkEvent }> {
     return api.patch(`/api/events/${eventId}`, patch);
   },

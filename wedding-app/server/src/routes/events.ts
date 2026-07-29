@@ -133,6 +133,16 @@ export async function eventRoutes(app: FastifyInstance) {
     return { event };
   });
 
+  app.post('/api/events/:eventId/stage', { preHandler: requireAuth }, async (req) => {
+    const { eventId } = req.params as { eventId: string }; const event = eventsRepo.findById(eventId); if (!event) throw NotFound();
+    const roleKeys = req.auth!.memberships.filter((membership: any) => membership.organizationId === event.organization_id).map((membership: any) => String(membership.roleKey).toLowerCase());
+    if (!roleKeys.some((key: string) => ['owner','manager'].includes(key))) throw Forbidden();
+    const parsed = z.object({ status: z.enum(['lead','hold','booked','planning','completed','cancelled','lost']) }).safeParse(req.body); if (!parsed.success) throw BadRequest('invalid-input', parsed.error.issues);
+    const updated = eventsRepo.update(eventId, { status: parsed.data.status });
+    auditRepo.log({ organizationId: event.organization_id, actorUserId: req.auth!.userId, actorLabel: req.auth!.email, action: 'event.stage.transition', targetType: 'event', targetId: eventId, ip: req.ip, details: { from: event.status, to: parsed.data.status } });
+    return { event: updated };
+  });
+
   app.patch('/api/events/:eventId', { preHandler: requireAuth }, async (req) => {
     const { eventId } = req.params as { eventId: string };
     const event = eventsRepo.findById(eventId);
