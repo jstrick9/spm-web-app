@@ -230,6 +230,13 @@ export async function roleRoutes(app: FastifyInstance) {
     },
   );
 
+  app.get('/api/events/:eventId/couple-invitations', { preHandler: requireAuth }, async (req) => {
+    const { eventId } = req.params as { eventId: string }; const event = eventsRepo.findById(eventId); if (!event) throw NotFound('event-not-found');
+    const orgMap = eventsRepo.orgMapForUser(req.auth!.userId); assertCan(req.auth!.memberships, { eventId }, 'events.members.invite', orgMap); if (!isVenueOwnerOrManager(req.auth!.memberships, event.organization_id)) throw Forbidden();
+    const invitations = teamInvitationsRepo.listForEvent(eventId).filter((invite) => invite.invitation_type === 'event').map((invite) => ({ id: invite.id, email: invite.email, expiresAt: invite.expires_at, acceptedAt: invite.accepted_at, revokedAt: invite.revoked_at, createdAt: invite.created_at }));
+    return { invitations };
+  });
+
   app.post(
     '/api/events/:eventId/couple-invitations',
     { preHandler: requireAuth, config: { rateLimit: { max: 20, timeWindow: '1 minute' } } },

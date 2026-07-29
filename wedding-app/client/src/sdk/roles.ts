@@ -47,6 +47,8 @@ export const rolesSdk = {
     return api.post(`/api/orgs/${orgId}/team-invitations`, input);
   },
 
+  listCoupleInvitations(eventId: string): Promise<{ invitations: Array<{ id: string; email: string; expiresAt: string; acceptedAt: string | null; revokedAt: string | null; createdAt: string }> }> { return api.get(`/api/events/${eventId}/couple-invitations`); },
+
   inviteEventMember(eventId: string, input: { email: string; roleId?: string; roleKey?: 'couple' | 'planner' }): Promise<{ ok: boolean; status: string; eventId: string; roleKey: string; invitation?: any; token?: string }> {
     return api.post(`/api/events/${eventId}/couple-invitations`, input);
   },
