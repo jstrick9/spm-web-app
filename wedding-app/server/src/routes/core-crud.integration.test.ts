@@ -118,6 +118,9 @@ describe('Guest lifecycle', () => {
     const manifest = await req(s.token, 'GET', `/api/events/${eventId}/venue-guest-manifest`);
     expect(manifest.statusCode).toBe(200);
     expect(manifest.json().guests).toEqual([]);
+    guestsRepo.create(s.orgId, eventId, { fullName: 'Bridal Party Guest', rsvpStatus: 'attending', partyName: 'Smith family', tableAssignment: '4', seatAssignment: '2', metadata: { relationship: 'Sibling', bridalParty: true } });
+    const populated = await req(s.token, 'GET', `/api/events/${eventId}/venue-guest-manifest`);
+    expect(populated.json().guests).toEqual([expect.objectContaining({ fullName: 'Bridal Party Guest', relationship: 'Sibling', bridalParty: true, tableAssignment: '4', seatAssignment: '2' })]);
   });
 });
 
