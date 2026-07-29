@@ -72,15 +72,27 @@ export function applyAllMigrations(opts: { quiet?: boolean } = {}): void {
   for (const mig of pending) {
     if (!opts.quiet) console.log(`[migrate] applying ${mig.version} ${mig.name}...`);
     const sql = readFileSync(mig.path, 'utf8');
-    const tx = db.transaction(() => {
-      db.exec(sql);
-      db.prepare('INSERT OR IGNORE INTO schema_version (version) VALUES (?)').run(mig.version);
-    });
+    // SQLite cannot change foreign_keys inside a transaction. A table-rebuild
+    // migration explicitly opts in with this pragma; pause enforcement before
+    // its statements so populated production databases can rebuild safely.
+    const pausesForeignKeys = /PRAGMA\s+foreign_keys\s*=\s*OFF/i.test(sql);
     try {
-      tx();
+      if (pausesForeignKeys) {
+        db.pragma('foreign_keys = OFF');
+        db.exec(sql);
+        db.prepare('INSERT OR IGNORE INTO schema_version (version) VALUES (?)').run(mig.version);
+      } else {
+        const tx = db.transaction(() => {
+          db.exec(sql);
+          db.prepare('INSERT OR IGNORE INTO schema_version (version) VALUES (?)').run(mig.version);
+        });
+        tx();
+      }
     } catch (err) {
       console.error(`[migrate] FAILED at migration ${mig.version}:`, err);
       throw err;
+    } finally {
+      if (pausesForeignKeys) db.pragma('foreign_keys = ON');
     }
   }
   if (!opts.quiet) console.log(`[migrate] applied ${pending.length} migration(s).`);
