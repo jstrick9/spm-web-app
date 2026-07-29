@@ -1,5 +1,6 @@
 import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
+import { db } from '../db/database.js';
 import { requireAuth } from '../middleware/auth.js';
 import { can } from '../lib/rbac.js';
 import { timelineRepo, timelineOpsRepo, eventsRepo, eventReadinessRepo } from '../db/repos/index.js';
@@ -62,7 +63,32 @@ function assertTimelineItemBelongsToEvent(timelineItemId: string | null | undefi
   if (!item || item.event_id !== eventId) throw BadRequest('invalid-timeline-item');
 }
 
+function hasOperationsPacketAccess(memberships: any[], organizationId: string, eventId: string) {
+  return memberships.some((membership) => (membership.organizationId === organizationId || membership.eventId === eventId) && ['owner', 'admin', 'manager', 'staff', 'planner'].includes(String(membership.roleKey).toLowerCase()));
+}
+
+function isCoupleForEvent(memberships: any[], eventId: string) {
+  return memberships.some((membership) => membership.eventId === eventId && String(membership.roleKey).toLowerCase() === 'couple');
+}
+
 export async function timelineRoutes(app: FastifyInstance) {
+  app.get('/api/events/:eventId/setup-packet', { preHandler: requireAuth }, async (req) => {
+    const { eventId } = req.params as { eventId: string }; const event = eventsRepo.findById(eventId); if (!event) throw NotFound();
+    if (!hasOperationsPacketAccess(req.auth!.memberships, event.organization_id, eventId)) throw Forbidden();
+    const layout = db.prepare(`SELECT id, name, revision, payload FROM layouts WHERE event_id = ? AND approval_status = 'approved' ORDER BY updated_at DESC LIMIT 1`).get(eventId) as any;
+    const timeline = db.prepare(`SELECT t.id, t.title, t.category, t.starts_at, t.ends_at, t.location, t.notes, v.name AS vendor_name FROM timeline_events t LEFT JOIN vendors v ON v.id = t.vendor_id WHERE t.event_id = ? ORDER BY t.starts_at`).all(eventId);
+    const vendors = db.prepare(`SELECT id, name, category, notes, metadata FROM vendors WHERE event_id = ? AND deleted_at IS NULL ORDER BY name`).all(eventId) as any[];
+    const staffing = db.prepare(`SELECT u.full_name, r.key AS role_key FROM event_memberships em JOIN users u ON u.id = em.user_id JOIN roles r ON r.id = em.role_id WHERE em.event_id = ? AND em.status = 'active' AND r.key IN ('staff','planner') ORDER BY r.key, u.full_name`).all(eventId);
+    return { packet: { event: { id: event.id, title: event.title, startDate: event.start_date, guestCount: event.guest_count }, layout: layout ? { id: layout.id, name: layout.name, revision: layout.revision, payload: JSON.parse(layout.payload || '{}') } : null, timeline, vendorLoadIn: vendors.map((vendor) => ({ id: vendor.id, name: vendor.name, category: vendor.category, loadIn: (() => { try { const meta = JSON.parse(vendor.metadata || '{}'); return meta.loadIn || meta.load_in || null; } catch { return null; } })(), notes: vendor.notes })), staffing } };
+  });
+
+  app.get('/api/events/:eventId/couple-schedule', { preHandler: requireAuth }, async (req) => {
+    const { eventId } = req.params as { eventId: string }; const event = eventsRepo.findById(eventId); if (!event) throw NotFound();
+    if (!isCoupleForEvent(req.auth!.memberships, eventId)) throw Forbidden();
+    const schedule = db.prepare(`SELECT title, category, starts_at, ends_at, location FROM timeline_events WHERE event_id = ? ORDER BY starts_at`).all(eventId);
+    return { schedule, message: 'Your wedding-day schedule. Venue staffing, vendor load-in, and setup instructions remain with the operations team.' };
+  });
+
   app.get('/api/events/:eventId/timeline', { preHandler: requireAuth }, async (req) => {
     const { eventId } = req.params as { eventId: string };
     const orgMap = eventsRepo.orgMapForUser(req.auth!.userId);
