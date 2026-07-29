@@ -3,7 +3,7 @@ import { uuid } from '../../lib/crypto.js';
 import { parseJson, stringifyJson } from '../../lib/json.js';
 import { slugifyUnique } from '../../lib/slug.js';
 
-export type EventStatus = 'lead' | 'hold' | 'booked' | 'planning' | 'completed' | 'cancelled' | 'lost';
+export type EventStatus = 'lead' | 'hold' | 'booked' | 'planning' | 'final_review' | 'completed' | 'cancelled' | 'lost';
 
 export interface EventRow {
   id: string;
@@ -155,7 +155,7 @@ export const eventsRepo = {
        GROUP BY status`
     ).all(orgId) as Array<{ status: EventStatus; n: number }>;
     const out: Record<EventStatus, number> = {
-      lead: 0, hold: 0, booked: 0, planning: 0,
+      lead: 0, hold: 0, booked: 0, planning: 0, final_review: 0,
       completed: 0, cancelled: 0, lost: 0,
     };
     for (const r of rows) out[r.status] = r.n;

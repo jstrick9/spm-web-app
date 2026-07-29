@@ -35,7 +35,7 @@ import {
 
 const settingsSchema = z.object({
   title: z.string().min(1, 'Title is required').max(200),
-  status: z.enum(['lead', 'hold', 'booked', 'planning', 'completed', 'cancelled', 'lost']),
+  status: z.enum(['lead', 'hold', 'booked', 'planning', 'final_review', 'completed', 'cancelled', 'lost']),
   startDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'Use YYYY-MM-DD format').or(z.literal('')),
   endDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'Use YYYY-MM-DD format').or(z.literal('')),
   guestCount: z.number().int().min(0, 'Must be 0 or more'),

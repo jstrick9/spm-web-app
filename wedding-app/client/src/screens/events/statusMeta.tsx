@@ -50,6 +50,11 @@ export const STATUS_META: Record<EventStatus, StatusMeta> = {
     dotColor: 'rgb(var(--chart-4))',
     badgeVariant: 'info',
   },
+  final_review: {
+    label: 'Final Review', description: 'Operational sign-off',
+    ownerDefinition: 'The venue is validating the approved layout, final count, timeline, vendors, staffing, packet, inventory, accessibility, and any rain plan.',
+    nextStep: 'Resolve any change requests before moving to completed.', dotColor: 'rgb(var(--chart-6))', badgeVariant: 'warning',
+  },
   completed: {
     label: 'Completed',
     description: 'Event has happened',
@@ -77,7 +82,7 @@ export const STATUS_META: Record<EventStatus, StatusMeta> = {
 };
 
 export const statusOrder: EventStatus[] = [
-  'lead', 'hold', 'booked', 'planning', 'completed', 'cancelled', 'lost',
+  'lead', 'hold', 'booked', 'planning', 'final_review', 'completed', 'cancelled', 'lost',
 ];
 
 export function StatusBadge({ status }: { status: EventStatus }) {

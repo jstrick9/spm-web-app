@@ -31,6 +31,7 @@ export interface EventListFilters {
 
 export interface EventStatusCounts {
   lead: number; hold: number; booked: number; planning: number;
+  final_review: number;
   completed: number; cancelled: number; lost: number;
 }
 
@@ -56,6 +57,7 @@ export const eventsSdk = {
   },
 
   transitionStage(eventId: string, status: SdkEvent['status']): Promise<{ event: SdkEvent }> { return api.post(`/api/events/${eventId}/stage`, { status }); },
+  finalReview(eventId: string): Promise<{ finalReview: { ready: boolean; checks: Array<{ key: string; label: string; complete: boolean }> } }> { return api.get(`/api/events/${eventId}/final-review`); },
   update(eventId: string, patch: UpdateEventInput): Promise<{ event: SdkEvent }> {
     return api.patch(`/api/events/${eventId}`, patch);
   },

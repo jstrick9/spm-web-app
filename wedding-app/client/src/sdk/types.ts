@@ -65,7 +65,7 @@ export interface SdkPermissionDef {
 
 // ─── Events ─────────────────────────────────────────
 export type SdkEventStatus =
-  | 'lead' | 'hold' | 'booked' | 'planning' | 'completed' | 'cancelled' | 'lost';
+  | 'lead' | 'hold' | 'booked' | 'planning' | 'final_review' | 'completed' | 'cancelled' | 'lost';
 
 export interface SdkEvent {
   id: string;

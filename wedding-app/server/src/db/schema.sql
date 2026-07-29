@@ -263,7 +263,7 @@ CREATE TABLE IF NOT EXISTS events (
   title                    TEXT NOT NULL,
   slug                     TEXT NOT NULL,
   status                   TEXT NOT NULL DEFAULT 'planning'
-                           CHECK (status IN ('lead','hold','booked','planning','completed','cancelled','lost')),
+                           CHECK (status IN ('lead','hold','booked','planning','final_review','completed','cancelled','lost')),
   start_date               TEXT,
   end_date                 TEXT,
   guest_count              INTEGER NOT NULL DEFAULT 0 CHECK (guest_count >= 0),
