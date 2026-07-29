@@ -4,6 +4,10 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { ToastProvider } from '../../ui/Toast';
 import { CoupleEventHub } from './CoupleEventHub';
 
+vi.mock('../../sdk/venues', () => ({
+  venuesSdk: { eventTemplates: vi.fn().mockResolvedValue({ templates: [], spaces: [], guestCount: 100 }), applyEventTemplate: vi.fn() },
+}));
+
 vi.mock('../../sdk', () => ({
   sdk: {
     events: { get: vi.fn().mockResolvedValue({ event: { id: 'e1', organization_id: 'org1', title: 'Taylor & Morgan Wedding', start_date: '2026-09-12', guest_count: 100, metadata: JSON.stringify({ ceremonySpace: 'Garden Lawn', receptionSpace: 'Grand Ballroom', ceremonyTime: '4:30 PM', venueContactName: 'Avery Coordinator' }) } }) },
