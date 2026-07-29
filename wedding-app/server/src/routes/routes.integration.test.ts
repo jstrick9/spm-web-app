@@ -113,9 +113,7 @@ describe('Org isolation (the big-deal RBAC test)', () => {
     const ev = (await authedRequest(a.token, 'POST', '/api/events', {
       organizationId: a.orgId, title: 'A event',
     })).json().event;
-    const guest = (await authedRequest(a.token, 'POST', `/api/events/${ev.id}/guests`, {
-      fullName: 'Aunt Mary',
-    })).json().guest;
+    const guest = guestsRepo.create(a.orgId, ev.id, { fullName: 'Aunt Mary' });
 
     // B should get 403 trying to patch A's guest
     const res = await authedRequest(b.token, 'PATCH', `/api/guests/${guest.id}`, { rsvpStatus: 'attending' });
@@ -157,9 +155,7 @@ describe('Guests + RSVP (the wedding-critical flow)', () => {
     })).json().event;
 
     // Add a guest
-    const guest = (await authedRequest(u.token, 'POST', `/api/events/${evt.id}/guests`, {
-      fullName: 'Aunt Mary', email: 'aunt@example.com',
-    })).json().guest;
+    const guest = guestsRepo.create(u.orgId, evt.id, { fullName: 'Aunt Mary', email: 'aunt@example.com' });
 
     // Counts: 1 pending
     const list = await authedRequest(u.token, 'GET', `/api/events/${evt.id}/guests`);
@@ -198,10 +194,8 @@ describe('Guests + RSVP (the wedding-critical flow)', () => {
     const evt = (await authedRequest(u.token, 'POST', '/api/events', {
       organizationId: u.orgId, title: 'X',
     })).json().event;
-    const guest = (await authedRequest(u.token, 'POST', `/api/events/${evt.id}/guests`, {
-      fullName: 'Stranger',
-    })).json().guest;
-    await authedRequest(u.token, 'DELETE', `/api/guests/${guest.id}/portal-token`);
+    const guest = guestsRepo.create(u.orgId, evt.id, { fullName: 'Stranger' });
+    guestsRepo.revokePortalToken(guest.id);
 
     const submit = await app.inject({
       method: 'POST', url: `/api/portal/${evt.id}/rsvp`,
@@ -219,9 +213,7 @@ describe('Guests + RSVP (the wedding-critical flow)', () => {
     const e2 = (await authedRequest(u.token, 'POST', '/api/events', {
       organizationId: u.orgId, title: 'E2',
     })).json().event;
-    const g = (await authedRequest(u.token, 'POST', `/api/events/${e1.id}/guests`, {
-      fullName: 'Guest',
-    })).json().guest;
+    const g = guestsRepo.create(u.orgId, e1.id, { fullName: 'Guest' });
 
     // Try to RSVP guest from e1 against e2
     const res = await app.inject({
