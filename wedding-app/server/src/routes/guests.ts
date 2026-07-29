@@ -822,7 +822,7 @@ export async function guestRoutes(app: FastifyInstance) {
     const { id } = req.params as { id: string };
     const guest = guestsRepo.findById(id);
     if (!guest) throw NotFound();
-    if (!can(req.auth!.memberships, { organizationId: guest.organization_id }, 'guests.manage')) throw Forbidden(); requireCoupleGuestManager(req.auth!.memberships, guest.event_id);
+    const orgMap = eventsRepo.orgMapForUser(req.auth!.userId); if (!can(req.auth!.memberships, { eventId: guest.event_id }, 'guests.manage', orgMap)) throw Forbidden(); requireCoupleGuestManager(req.auth!.memberships, guest.event_id);
     const token = guestsRepo.rotatePortalToken(id);
     return { token };
   });
@@ -831,7 +831,7 @@ export async function guestRoutes(app: FastifyInstance) {
     const { id } = req.params as { id: string };
     const guest = guestsRepo.findById(id);
     if (!guest) throw NotFound();
-    if (!can(req.auth!.memberships, { organizationId: guest.organization_id }, 'guests.manage')) throw Forbidden(); requireCoupleGuestManager(req.auth!.memberships, guest.event_id);
+    const orgMap = eventsRepo.orgMapForUser(req.auth!.userId); if (!can(req.auth!.memberships, { eventId: guest.event_id }, 'guests.manage', orgMap)) throw Forbidden(); requireCoupleGuestManager(req.auth!.memberships, guest.event_id);
     guestsRepo.revokePortalToken(id);
     return reply.code(204).send();
   });

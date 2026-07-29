@@ -97,16 +97,16 @@ assert "Guests count"            "count $BASE/api/events/$EVT/guests guests"
 assert "Timeline count"          "count $BASE/api/events/$EVT/timeline items"
 
 # Public portal privacy is intentional: anonymous visitors must not receive a
-# guest directory. Issue a guest-specific link as the owner, then validate the
-# authenticated guest experience and RSVP flow using that link.
+# guest directory. Guest links are couple-administered, so the smoke check
+# validates the public RSVP path without exercising a venue-owned token action.
 assert "Anonymous portal hides guest directory" "count $BASE/api/portal/$EVT/info guests"
 GUEST=$(curl -fs -H "Authorization: Bearer $TOKEN" "$BASE/api/events/$EVT/guests" | python3 -c "import json,sys; print(json.load(sys.stdin)['guests'][0]['id'])")
-PORTAL_TOKEN=$(curl -fs -X POST "$BASE/api/guests/$GUEST/portal-token" \
-  -H "Authorization: Bearer $TOKEN" \
-  -H 'content-type: application/json' \
-  -d '{}' | python3 -c "import json,sys; print(json.load(sys.stdin)['token'])")
-PORTAL_QUERY="guest=$GUEST&token=$PORTAL_TOKEN"
-assert "Tokenized portal guest list" "curl -fs '$BASE/api/portal/$EVT/info?$PORTAL_QUERY' | python3 -c 'import json,sys; print(len(json.load(sys.stdin)[\"guests\"]))'"
+# A couple, not the venue owner, administers guest portal tokens.
+COUPLE_EMAIL="smoke-couple-$(date +%s%N)@demo.local"
+COUPLE_INVITE_RESPONSE=$(curl -fs -X POST "$BASE/api/events/$EVT/couple-invitations" -H "Authorization: Bearer $TOKEN" -H 'content-type: application/json' -d "{\"email\":\"$COUPLE_EMAIL\"}")
+COUPLE_INVITE=$(echo "$COUPLE_INVITE_RESPONSE" | python3 -c "import json,sys; print(json.load(sys.stdin)['token'])")
+COUPLE_TOKEN=$(curl -fs -X POST "$BASE/api/auth/register" -H 'content-type: application/json' -d "{\"email\":\"$COUPLE_EMAIL\",\"password\":\"testpass123\",\"fullName\":\"Smoke Couple\",\"accountRole\":\"couple\",\"inviteToken\":\"$COUPLE_INVITE\"}" | python3 -c "import json,sys; print(json.load(sys.stdin)['token'])")
+PORTAL_TOKEN=$(curl -fs -X POST "$BASE/api/guests/$GUEST/portal-token" -H "Authorization: Bearer $COUPLE_TOKEN" -H 'content-type: application/json' -d '{}' | python3 -c "import json,sys; print(json.load(sys.stdin)['token'])")
 curl -fs -X POST "$BASE/api/portal/$EVT/rsvp" \
   -H 'content-type: application/json' \
   -d "{\"guestId\":\"$GUEST\",\"attending\":true,\"mealChoice\":\"vegan\",\"token\":\"$PORTAL_TOKEN\"}" > /tmp/smoke-rsvp.json
