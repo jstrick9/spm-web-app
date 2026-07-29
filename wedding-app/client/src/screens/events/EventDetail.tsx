@@ -187,12 +187,14 @@ export function EventDetail({ eventId, user }: Props & { user: any }) {
     [],
   );
   const perms = usePermissions(permIds);
+  const currentUserQuery = useQuery({ queryKey: ['me', 'event-detail-role'], queryFn: () => sdk.auth.me(), staleTime: 60_000 });
+  const isCoupleForEvent = currentUserQuery.data?.memberships?.some((membership: any) => membership.eventId === eventId && membership.roleKey === 'couple') ?? false;
   const hasPermission = (permission: EventDetailPermission | null) =>
     !permission || perms[permission] === true;
 
   const visibleTabs = useMemo(
-    () => TAB_DEFS.filter((t) => hasPermission(t.permission)),
-    [perms],
+    () => TAB_DEFS.filter((t) => hasPermission(t.permission) && (t.id !== 'guests' || isCoupleForEvent)),
+    [perms, isCoupleForEvent],
   );
 
   // If current tab id is invalid, fall back to overview. If it is valid but
@@ -544,7 +546,7 @@ export function EventDetail({ eventId, user }: Props & { user: any }) {
               />
             </TabsContent>
             <TabsContent value="guests">
-              {guardedTab("guests", <EventGuestsTab eventId={eventId} />)}
+              {isCoupleForEvent ? guardedTab("guests", <EventGuestsTab eventId={eventId} />) : <AccessDenied feature="Couple guest management" />}
             </TabsContent>
             <TabsContent value="invites">
               {guardedTab("invites", <EventInvitesTab eventId={eventId} />)}

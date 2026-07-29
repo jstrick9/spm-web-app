@@ -129,7 +129,7 @@ describe('EventDetail', () => {
     render(<EventDetail eventId="e1" user={{ id: 'u1', email: 'test@x.com' }} />, { wrapper: wrap() });
     await waitFor(() => {
       expect(screen.getByText('Overview')).toBeTruthy();
-      expect(screen.getByText('Guests')).toBeTruthy();
+      expect(screen.queryByText('Guests')).toBeNull();
       expect(screen.getByText('Budget')).toBeTruthy();
       expect(screen.getByText('Settings')).toBeTruthy();
     });
