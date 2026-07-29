@@ -135,21 +135,19 @@ describe('guest identity routes', () => {
     expect(res.json().clusters).toHaveLength(1);
   });
 
-  it('POST /guests/merge merges and audits', async () => {
+  it('POST /guests/merge is unavailable to venue workflows', async () => {
     const s = await setup();
     const p = guestsRepo.create(s.orgId, s.e1, { fullName: 'Merge Me' });
     const d = guestsRepo.create(s.orgId, s.e2, { fullName: 'Merge Me', email: 'm@x.com' });
     const res = await req(s.token, 'POST', `/api/orgs/${s.orgId}/guests/merge`, { primaryId: p.id, duplicateIds: [d.id] });
-    expect(res.statusCode).toBe(200);
-    expect(res.json().mergedCount).toBe(1);
-    expect(res.json().primary.email).toBe('m@x.com');
+    expect(res.statusCode).toBe(403);
   });
 
-  it('merge with no valid duplicates → 400', async () => {
+  it('merge with no valid duplicates is also unavailable to venue workflows', async () => {
     const s = await setup();
     const p = guestsRepo.create(s.orgId, s.e1, { fullName: 'Solo' });
     const res = await req(s.token, 'POST', `/api/orgs/${s.orgId}/guests/merge`, { primaryId: p.id, duplicateIds: ['nope'] });
-    expect(res.statusCode).toBe(400);
+    expect(res.statusCode).toBe(403);
   });
 
   it('blocks cross-org duplicate listing', async () => {
