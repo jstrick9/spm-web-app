@@ -31,8 +31,14 @@ export async function venueRoutes(app: FastifyInstance) {
   app.get('/api/events/:eventId/venue-templates', { preHandler: requireAuth }, async (req) => {
     const { eventId } = req.params as { eventId: string }; const event = eventsRepo.findById(eventId); if (!event) throw NotFound();
     const orgMap = eventsRepo.orgMapForUser(req.auth!.userId); if (!can(req.auth!.memberships, { eventId }, 'events.view', orgMap)) throw Forbidden();
-    const templates = catalogRepo.listForOrg(event.organization_id, 'template').filter((item: any) => item.visible).map((item: any) => ({ id: item.id, name: item.name, spec: item.spec }));
-    const spaces = venuesRepo.listForOrg(event.organization_id).filter((venue) => venue.approval_status === 'approved').map((venue) => ({ id: venue.id, name: venue.name, category: venue.category, capacity: venue.capacity, templateKey: venue.template_key }));
+    const approvedVenues = venuesRepo.listForOrg(event.organization_id).filter((venue) => venue.approval_status === 'approved');
+    const approvedVenueIds = new Set(approvedVenues.map((venue) => venue.id));
+    const templates = catalogRepo.listForOrg(event.organization_id, 'template').filter((item: any) => {
+      if (!item.visible) return false;
+      const spec = typeof item.spec === 'string' ? (() => { try { return JSON.parse(item.spec); } catch { return {}; } })() : (item.spec || {});
+      return typeof spec.venueId === 'string' && approvedVenueIds.has(spec.venueId);
+    }).map((item: any) => ({ id: item.id, name: item.name, spec: item.spec }));
+    const spaces = approvedVenues.map((venue) => ({ id: venue.id, name: venue.name, category: venue.category, capacity: venue.capacity, templateKey: venue.template_key }));
     return { templates, spaces, guestCount: event.guest_count };
   });
 

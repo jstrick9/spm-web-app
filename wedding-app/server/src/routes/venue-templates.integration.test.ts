@@ -19,8 +19,9 @@ describe('Venue-approved templates', () => {
     await app.inject({ method: 'PATCH', url: `/api/venues/${venueId}`, headers: { authorization: `Bearer ${token}`, 'content-type': 'application/json' }, payload: { approvalStatus: 'approved', metadata: { approvalOverrideReason: 'Operational review complete.' } } });
     const template = await app.inject({ method: 'POST', url: `/api/orgs/${orgId}/catalog/template`, headers: { authorization: `Bearer ${token}`, 'content-type': 'application/json' }, payload: { name: 'Plated Reception', visible: true, spec: { venueId, weddingMoment: 'reception', serviceStyle: 'plated', minGuests: 20, maxGuests: 80, allowedObjectCategories: ['tables', 'chairs'] } } });
     const templateId = template.json().item.id;
+    await app.inject({ method: 'POST', url: `/api/orgs/${orgId}/catalog/template`, headers: { authorization: `Bearer ${token}`, 'content-type': 'application/json' }, payload: { name: 'Unapproved-space template', visible: true, spec: { venueId: 'not-an-approved-space' } } });
     const catalog = await app.inject({ method: 'GET', url: `/api/events/${eventId}/venue-templates`, headers: { authorization: `Bearer ${token}` } });
-    expect(catalog.statusCode).toBe(200); expect(catalog.json().templates.map((item: any) => item.id)).toContain(templateId);
+    expect(catalog.statusCode).toBe(200); expect(catalog.json().templates.map((item: any) => item.id)).toEqual([templateId]);
     const applied = await app.inject({ method: 'POST', url: `/api/events/${eventId}/venue-templates/${templateId}/apply`, headers: { authorization: `Bearer ${token}` } });
     expect(applied.statusCode).toBe(201);
     expect(JSON.parse(applied.json().layout.payload)).toMatchObject({ templateId, serviceStyle: 'plated', allowedObjectCategories: ['tables', 'chairs'], templateCapacityWarning: { guestCount: 120, minGuests: 20, maxGuests: 80 } });
