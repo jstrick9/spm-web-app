@@ -90,6 +90,12 @@ export async function staffRoutes(app: FastifyInstance) {
     return reply.code(201).send({ availability: db.prepare(`SELECT * FROM staff_weekly_availability WHERE id=?`).get(id) });
   });
 
+  app.delete('/api/staff/availability/:id', { preHandler: requireAuth }, async (req, reply) => {
+    const { id } = req.params as { id: string }; const slot = db.prepare(`SELECT * FROM staff_weekly_availability WHERE id=?`).get(id) as any; if (!slot) throw NotFound();
+    if (slot.staff_id !== req.auth!.userId && !can(req.auth!.memberships, { organizationId: slot.organization_id }, 'staff.manage')) throw Forbidden();
+    db.prepare(`DELETE FROM staff_weekly_availability WHERE id=?`).run(id); return reply.code(204).send();
+  });
+
   app.get('/api/orgs/:orgId/staff/coverage', { preHandler: requireAuth }, async (req) => {
     const { orgId } = req.params as { orgId: string };
     if (!can(req.auth!.memberships, { organizationId: orgId }, 'staff.view')) throw Forbidden();
