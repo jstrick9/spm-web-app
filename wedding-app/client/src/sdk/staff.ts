@@ -21,6 +21,9 @@ export interface TaskInput {
 }
 
 export const staffSdk = {
+  coverage(orgId: string): Promise<{ coverage: { events: Array<{ eventId: string | null; eventTitle: string; shifts: any[]; staffCount: number }>; conflicts: string[]; totalShifts: number } }> {
+    return api.get(`/api/orgs/${orgId}/staff/coverage`);
+  },
   listTasks(orgId: string, opts: { eventId?: string; status?: string } = {}): Promise<{ tasks: SdkStaffTask[] }> {
     const q = new URLSearchParams();
     if (opts.eventId) q.set('eventId', opts.eventId);
