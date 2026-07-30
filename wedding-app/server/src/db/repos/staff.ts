@@ -194,6 +194,7 @@ export interface StaffShiftRow {
   handoff_notes: string | null;
   clocked_in_at: string | null;
   clocked_out_at: string | null;
+  availability_override_reason?: string | null;
 }
 
 export const staffShiftsRepo = {
@@ -213,16 +214,16 @@ export const staffShiftsRepo = {
     staffId: string; areaId?: string; role?: StaffShiftRow['role'];
     startsAt: string; endsAt: string; notes?: string; eventId?: string;
     contactName?: string; contactPhone?: string; contactEmail?: string;
-    radioChannel?: string; handoffNotes?: string;
+    radioChannel?: string; handoffNotes?: string; availabilityOverrideReason?: string;
   }): StaffShiftRow {
     const id = uuid();
     db.prepare(
-      `INSERT INTO staff_shifts (id, organization_id, event_id, staff_id, area_id, role, starts_at, ends_at, notes, contact_name, contact_phone, contact_email, radio_channel, handoff_notes, clocked_in_at, clocked_out_at)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NULL, NULL)`
+      `INSERT INTO staff_shifts (id, organization_id, event_id, staff_id, area_id, role, starts_at, ends_at, notes, contact_name, contact_phone, contact_email, radio_channel, handoff_notes, availability_override_reason, clocked_in_at, clocked_out_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NULL, NULL)`
     ).run(id, orgId, input.eventId ?? null, input.staffId, input.areaId ?? null,
           input.role ?? 'other', input.startsAt, input.endsAt, input.notes ?? null,
           input.contactName ?? null, input.contactPhone ?? null, input.contactEmail ?? null,
-          input.radioChannel ?? null, input.handoffNotes ?? null);
+          input.radioChannel ?? null, input.handoffNotes ?? null, input.availabilityOverrideReason ?? null);
     return this.findById(id)!;
   },
 

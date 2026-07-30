@@ -60,6 +60,7 @@ const shiftSchema = z.object({
   contactEmail: z.string().email().optional().or(z.literal('')),
   radioChannel: z.string().max(80).optional(),
   handoffNotes: z.string().max(4000).optional(),
+  availabilityOverrideReason: z.string().min(3).max(2000).optional(),
 });
 
 function staffingCoverage(orgId: string) {
@@ -173,6 +174,10 @@ export async function staffRoutes(app: FastifyInstance) {
     if (!can(req.auth!.memberships, { organizationId: orgId }, 'staff.manage')) throw Forbidden();
     const parsed = shiftSchema.safeParse(req.body);
     if (!parsed.success) throw BadRequest('invalid-input', parsed.error.issues);
+    const start = new Date(parsed.data.startsAt); const end = new Date(parsed.data.endsAt); const day = start.getUTCDay(); const startTime = start.toISOString().slice(11, 16); const endTime = end.toISOString().slice(11, 16);
+    const availability = db.prepare(`SELECT starts_at, ends_at FROM staff_weekly_availability WHERE organization_id=? AND staff_id=? AND day_of_week=?`).all(orgId, parsed.data.staffId, day) as Array<{ starts_at: string; ends_at: string }>;
+    const withinAvailability = availability.some((slot) => startTime >= slot.starts_at && endTime <= slot.ends_at && start.toISOString().slice(0, 10) === end.toISOString().slice(0, 10));
+    if (availability.length > 0 && !withinAvailability && !parsed.data.availabilityOverrideReason?.trim()) throw BadRequest('staff-availability-override-required', { staffId: parsed.data.staffId, dayOfWeek: day, startTime, endTime });
     const shift = staffShiftsRepo.create(orgId, parsed.data);
     broadcastSSE(orgId, 'staff.shift_created', { shiftId: shift.id, staffId: shift.staff_id, role: shift.role }, req.auth!.userId);
     return reply.code(201).send({ shift });
