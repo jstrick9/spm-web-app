@@ -57,9 +57,11 @@ const shiftSchema = z.object({
 function staffingCoverage(orgId: string) {
   const shifts = db.prepare(`SELECT s.id, s.event_id, s.staff_id, s.role, s.starts_at, s.ends_at, e.title AS event_title, u.full_name AS staff_name FROM staff_shifts s LEFT JOIN events e ON e.id=s.event_id LEFT JOIN users u ON u.id=s.staff_id WHERE s.organization_id=? ORDER BY s.starts_at`).all(orgId) as any[];
   const conflicts = shifts.filter((shift, index) => shifts.some((other, otherIndex) => otherIndex > index && shift.staff_id === other.staff_id && shift.starts_at < other.ends_at && other.starts_at < shift.ends_at)).map((shift) => shift.id);
+  const taskRows = db.prepare(`SELECT event_id, COUNT(*) AS task_count, SUM(CASE WHEN status='blocked' THEN 1 ELSE 0 END) AS blocked_count FROM staff_tasks WHERE organization_id=? GROUP BY event_id`).all(orgId) as Array<{ event_id: string | null; task_count: number; blocked_count: number }>;
+  const taskMap = new Map(taskRows.map((task) => [task.event_id || 'unassigned', task]));
   const eventMap = new Map<string, any>(); const staffMap = new Map<string, any>();
   for (const shift of shifts) { const key = shift.event_id || 'unassigned'; const group = eventMap.get(key) || { eventId: shift.event_id, eventTitle: shift.event_title || 'Unassigned', shifts: [], staffIds: new Set<string>() }; group.shifts.push(shift); group.staffIds.add(shift.staff_id); eventMap.set(key, group); const staff = staffMap.get(shift.staff_id) || { staffId: shift.staff_id, staffName: shift.staff_name || 'Unassigned staff', shiftCount: 0, eventIds: new Set<string>(), conflictCount: 0 }; staff.shiftCount += 1; if (shift.event_id) staff.eventIds.add(shift.event_id); if (conflicts.includes(shift.id)) staff.conflictCount += 1; staffMap.set(shift.staff_id, staff); }
-  return { events: [...eventMap.values()].map((group) => ({ ...group, staffCount: group.staffIds.size, staffIds: undefined })), staff: [...staffMap.values()].map((staff) => ({ ...staff, eventCount: staff.eventIds.size, eventIds: undefined })), conflicts, totalShifts: shifts.length };
+  return { events: [...eventMap.values()].map((group) => ({ ...group, staffCount: group.staffIds.size, taskCount: taskMap.get(group.eventId || 'unassigned')?.task_count || 0, blockedTaskCount: taskMap.get(group.eventId || 'unassigned')?.blocked_count || 0, staffIds: undefined })), staff: [...staffMap.values()].map((staff) => ({ ...staff, eventCount: staff.eventIds.size, eventIds: undefined })), conflicts, totalShifts: shifts.length };
 }
 
 export async function staffRoutes(app: FastifyInstance) {
