@@ -23,6 +23,8 @@ export interface TaskInput {
 export interface WeeklyAvailability { id: string; staff_id: string; day_of_week: number; starts_at: string; ends_at: string; }
 
 export const staffSdk = {
+  staffingRequirements(eventId: string): Promise<{ requiredRoles: Array<'coordinator' | 'setup' | 'cleaning' | 'parking' | 'other'> }> { return api.get(`/api/events/${eventId}/staffing-requirements`); },
+  setStaffingRequirements(eventId: string, requiredRoles: Array<'coordinator' | 'setup' | 'cleaning' | 'parking' | 'other'>): Promise<{ requiredRoles: string[] }> { return api.put(`/api/events/${eventId}/staffing-requirements`, { requiredRoles }); },
   calendar(orgId: string, startsAt: string, endsAt: string): Promise<{ calendar: { startsAt: string; endsAt: string; events: Array<{ id: string; title: string; start_date: string; end_date: string | null; status: string }>; shifts: any[] } }> {
     return api.get(`/api/orgs/${orgId}/staff/calendar?startsAt=${encodeURIComponent(startsAt)}&endsAt=${encodeURIComponent(endsAt)}`);
   },
