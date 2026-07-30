@@ -151,7 +151,9 @@ export async function eventRoutes(app: FastifyInstance) {
   app.get('/api/orgs/:orgId/portfolio-readiness', { preHandler: requireAuth }, async (req) => {
     const { orgId } = req.params as { orgId: string }; if (!can(req.auth!.memberships, { organizationId: orgId }, 'events.view')) throw Forbidden();
     const events = eventsRepo.listForOrg(orgId, { status: ['booked','planning','final_review'] as any });
-    return { events: events.map((event) => { const readiness = eventReadinessRepo.forEvent(event.id); return { id: event.id, title: event.title, status: event.status, startDate: event.start_date, guestCount: event.guest_count, readinessScore: readiness?.score ?? 0, criticalIssues: readiness?.issues.filter((issue) => issue.severity === 'critical').length ?? 0, warningIssues: readiness?.issues.filter((issue) => issue.severity === 'warning').length ?? 0, nextIssue: readiness?.issues[0] ? { title: readiness.issues[0].title, detail: readiness.issues[0].detail, href: readiness.issues[0].href } : null }; }) };
+    const summary = events.map((event) => { const readiness = eventReadinessRepo.forEvent(event.id); return { id: event.id, title: event.title, status: event.status, startDate: event.start_date, guestCount: event.guest_count, readinessScore: readiness?.score ?? 0, criticalIssues: readiness?.issues.filter((issue) => issue.severity === 'critical').length ?? 0, warningIssues: readiness?.issues.filter((issue) => issue.severity === 'warning').length ?? 0, nextIssue: readiness?.issues[0] ? { title: readiness.issues[0].title, detail: readiness.issues[0].detail, href: readiness.issues[0].href } : null }; });
+    summary.sort((a, b) => b.criticalIssues - a.criticalIssues || b.warningIssues - a.warningIssues || a.readinessScore - b.readinessScore || String(a.startDate || '').localeCompare(String(b.startDate || '')));
+    return { events: summary };
   });
 
   app.get('/api/events/:eventId', { preHandler: requireAuth }, async (req) => {
