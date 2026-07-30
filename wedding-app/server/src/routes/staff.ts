@@ -1,6 +1,7 @@
 import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
 import { db } from '../db/database.js';
+import { uuid } from '../lib/crypto.js';
 import { requireAuth } from '../middleware/auth.js';
 import { can } from '../lib/rbac.js';
 import {
@@ -39,6 +40,13 @@ const areaSchema = z.object({
   assignedStaff:  z.array(z.string()).optional(),
 });
 
+const availabilitySchema = z.object({
+  staffId: z.string().min(1),
+  dayOfWeek: z.number().int().min(0).max(6),
+  startsAt: z.string().regex(/^\d{2}:\d{2}$/),
+  endsAt: z.string().regex(/^\d{2}:\d{2}$/),
+}).refine((value) => value.startsAt < value.endsAt, { message: 'availability-end-must-follow-start', path: ['endsAt'] });
+
 const shiftSchema = z.object({
   staffId:  z.string().min(1),
   areaId:   z.string().optional(),
@@ -65,6 +73,22 @@ function staffingCoverage(orgId: string) {
 }
 
 export async function staffRoutes(app: FastifyInstance) {
+  app.get('/api/orgs/:orgId/staff/availability', { preHandler: requireAuth }, async (req) => {
+    const { orgId } = req.params as { orgId: string }; if (!can(req.auth!.memberships, { organizationId: orgId }, 'staff.view')) throw Forbidden();
+    const { staffId } = req.query as { staffId?: string }; const isManager = can(req.auth!.memberships, { organizationId: orgId }, 'staff.manage');
+    if (staffId && staffId !== req.auth!.userId && !isManager) throw Forbidden();
+    const params = staffId ? [orgId, staffId] : [orgId]; const where = staffId ? 'organization_id=? AND staff_id=?' : 'organization_id=?';
+    return { availability: db.prepare(`SELECT * FROM staff_weekly_availability WHERE ${where} ORDER BY staff_id, day_of_week, starts_at`).all(...params) };
+  });
+
+  app.post('/api/orgs/:orgId/staff/availability', { preHandler: requireAuth }, async (req, reply) => {
+    const { orgId } = req.params as { orgId: string }; if (!can(req.auth!.memberships, { organizationId: orgId }, 'staff.view')) throw Forbidden();
+    const parsed = availabilitySchema.safeParse(req.body); if (!parsed.success) throw BadRequest('invalid-input', parsed.error.issues);
+    if (parsed.data.staffId !== req.auth!.userId && !can(req.auth!.memberships, { organizationId: orgId }, 'staff.manage')) throw Forbidden();
+    const id = uuid(); db.prepare(`INSERT INTO staff_weekly_availability (id, organization_id, staff_id, day_of_week, starts_at, ends_at, created_by) VALUES (?, ?, ?, ?, ?, ?, ?)`).run(id, orgId, parsed.data.staffId, parsed.data.dayOfWeek, parsed.data.startsAt, parsed.data.endsAt, req.auth!.userId);
+    return reply.code(201).send({ availability: db.prepare(`SELECT * FROM staff_weekly_availability WHERE id=?`).get(id) });
+  });
+
   app.get('/api/orgs/:orgId/staff/coverage', { preHandler: requireAuth }, async (req) => {
     const { orgId } = req.params as { orgId: string };
     if (!can(req.auth!.memberships, { organizationId: orgId }, 'staff.view')) throw Forbidden();
