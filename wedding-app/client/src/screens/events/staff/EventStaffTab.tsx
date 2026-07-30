@@ -152,6 +152,7 @@ export function EventStaffTab({ eventId, organizationId }: Props) {
   const [newShiftContactEmail, setNewShiftContactEmail] = useState('');
   const [newShiftRadioChannel, setNewShiftRadioChannel] = useState('Ops 1');
   const [newShiftHandoffNotes, setNewShiftHandoffNotes] = useState('');
+  const [newShiftAvailabilityOverrideReason, setNewShiftAvailabilityOverrideReason] = useState('');
   const [availabilityDay, setAvailabilityDay] = useState('1');
   const [availabilityStart, setAvailabilityStart] = useState('09:00');
   const [availabilityEnd, setAvailabilityEnd] = useState('17:00');
@@ -223,6 +224,7 @@ export function EventStaffTab({ eventId, organizationId }: Props) {
           contactEmail: newShiftContactEmail || undefined,
           radioChannel: newShiftRadioChannel || undefined,
           handoffNotes: newShiftHandoffNotes || undefined,
+          availabilityOverrideReason: newShiftAvailabilityOverrideReason || undefined,
        });
     },
     onSuccess: () => {
@@ -1066,6 +1068,7 @@ Owner notification rule: ${ownerNotify || incidentSeverity === 'critical' ? 'not
                     <div>
                        <Label className="text-[10px] text-fg-subtle">Handoff Notes</Label>
                        <Input value={newShiftHandoffNotes} onChange={e => setNewShiftHandoffNotes(e.target.value)} placeholder="Open blockers / owner notes" className="h-9 mt-1 text-xs border-[#e1d5c9]" />
+                       <Input value={newShiftAvailabilityOverrideReason} onChange={e => setNewShiftAvailabilityOverrideReason(e.target.value)} placeholder="Availability override reason (required if outside hours)" className="h-9 mt-1 text-xs border-[#e1d5c9]" />
                     </div>
 
                     <div>

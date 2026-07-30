@@ -52,7 +52,7 @@ export const staffSdk = {
     const qs = opts.eventId ? `?eventId=${encodeURIComponent(opts.eventId)}` : '';
     return api.get(`/api/orgs/${orgId}/staff/shifts${qs}`);
   },
-  createShift(orgId: string, input: { staffId: string; areaId?: string; role?: string; startsAt: string; endsAt: string; notes?: string; eventId?: string; contactName?: string; contactPhone?: string; contactEmail?: string; radioChannel?: string; handoffNotes?: string }): Promise<{ shift: any }> {
+  createShift(orgId: string, input: { staffId: string; areaId?: string; role?: string; startsAt: string; endsAt: string; notes?: string; eventId?: string; contactName?: string; contactPhone?: string; contactEmail?: string; radioChannel?: string; handoffNotes?: string; availabilityOverrideReason?: string }): Promise<{ shift: any }> {
     return api.post(`/api/orgs/${orgId}/staff/shifts`, input);
   },
   updateShift(shiftId: string, patch: { contactName?: string; contactPhone?: string; contactEmail?: string; radioChannel?: string; handoffNotes?: string; notes?: string }): Promise<{ shift: any }> {
