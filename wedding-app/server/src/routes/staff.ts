@@ -1,5 +1,6 @@
 import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
+import { db } from '../db/database.js';
 import { requireAuth } from '../middleware/auth.js';
 import { can } from '../lib/rbac.js';
 import {
@@ -53,7 +54,21 @@ const shiftSchema = z.object({
   handoffNotes: z.string().max(4000).optional(),
 });
 
+function staffingCoverage(orgId: string) {
+  const shifts = db.prepare(`SELECT s.id, s.event_id, s.staff_id, s.role, s.starts_at, s.ends_at, e.title AS event_title, u.full_name AS staff_name FROM staff_shifts s LEFT JOIN events e ON e.id=s.event_id LEFT JOIN users u ON u.id=s.staff_id WHERE s.organization_id=? ORDER BY s.starts_at`).all(orgId) as any[];
+  const conflicts = shifts.filter((shift, index) => shifts.some((other, otherIndex) => otherIndex > index && shift.staff_id === other.staff_id && shift.starts_at < other.ends_at && other.starts_at < shift.ends_at)).map((shift) => shift.id);
+  const eventMap = new Map<string, any>();
+  for (const shift of shifts) { const key = shift.event_id || 'unassigned'; const group = eventMap.get(key) || { eventId: shift.event_id, eventTitle: shift.event_title || 'Unassigned', shifts: [], staffIds: new Set<string>() }; group.shifts.push(shift); group.staffIds.add(shift.staff_id); eventMap.set(key, group); }
+  return { events: [...eventMap.values()].map((group) => ({ ...group, staffCount: group.staffIds.size, staffIds: undefined })), conflicts, totalShifts: shifts.length };
+}
+
 export async function staffRoutes(app: FastifyInstance) {
+  app.get('/api/orgs/:orgId/staff/coverage', { preHandler: requireAuth }, async (req) => {
+    const { orgId } = req.params as { orgId: string };
+    if (!can(req.auth!.memberships, { organizationId: orgId }, 'staff.view')) throw Forbidden();
+    return { coverage: staffingCoverage(orgId) };
+  });
+
   // ─── Tasks ─────────────────────────────────────────────
   app.get('/api/orgs/:orgId/staff/tasks', { preHandler: requireAuth }, async (req) => {
     const { orgId } = req.params as { orgId: string };
