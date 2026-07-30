@@ -240,10 +240,11 @@ export function EventStaffTab({ eventId, organizationId }: Props) {
        setNewShiftContactEmail('');
        setNewShiftRadioChannel('Ops 1');
        setNewShiftHandoffNotes('');
+       setNewShiftAvailabilityOverrideReason('');
        setAddShiftOpen(false);
     },
     onError: (e: any) => {
-       toast({ title: 'Failed to schedule shift', description: e.message, variant: 'destructive' });
+       toast({ title: e?.code === 'staff-availability-override-required' ? 'Availability override required' : 'Failed to schedule shift', description: e?.code === 'staff-availability-override-required' ? 'This shift is outside the staff member’s recurring hours. Add a manager override reason to continue.' : e.message, variant: 'destructive' });
     }
   });
 
