@@ -96,6 +96,15 @@ export async function staffRoutes(app: FastifyInstance) {
     db.prepare(`DELETE FROM staff_weekly_availability WHERE id=?`).run(id); return reply.code(204).send();
   });
 
+  app.get('/api/orgs/:orgId/staff/calendar', { preHandler: requireAuth }, async (req) => {
+    const { orgId } = req.params as { orgId: string }; if (!can(req.auth!.memberships, { organizationId: orgId }, 'staff.view')) throw Forbidden();
+    const { startsAt, endsAt } = req.query as { startsAt?: string; endsAt?: string }; const start = startsAt || new Date().toISOString(); const end = endsAt || new Date(Date.now() + 31 * 86400000).toISOString();
+    if (Number.isNaN(Date.parse(start)) || Number.isNaN(Date.parse(end)) || start >= end) throw BadRequest('invalid-calendar-range');
+    const shifts = db.prepare(`SELECT s.*, e.title AS event_title, u.full_name AS staff_name FROM staff_shifts s LEFT JOIN events e ON e.id=s.event_id LEFT JOIN users u ON u.id=s.staff_id WHERE s.organization_id=? AND s.starts_at < ? AND s.ends_at > ? ORDER BY s.starts_at`).all(orgId, end, start);
+    const events = db.prepare(`SELECT id, title, start_date, end_date, status FROM events WHERE organization_id=? AND deleted_at IS NULL AND start_date <= ? AND COALESCE(end_date, start_date) >= ? ORDER BY start_date`).all(orgId, end.slice(0, 10), start.slice(0, 10));
+    return { calendar: { startsAt: start, endsAt: end, events, shifts } };
+  });
+
   app.get('/api/orgs/:orgId/staff/coverage', { preHandler: requireAuth }, async (req) => {
     const { orgId } = req.params as { orgId: string };
     if (!can(req.auth!.memberships, { organizationId: orgId }, 'staff.view')) throw Forbidden();
