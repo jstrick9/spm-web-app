@@ -63,6 +63,10 @@ export function VenueBuilder({ orgId }: Props) {
     queryKey: ['catalog', orgId, 'guideline'],
     queryFn: () => sdk.catalog.list(orgId, 'guideline' as any),
   });
+  const { data: venueTemplates } = useQuery({
+    queryKey: ['catalog', orgId, 'template'],
+    queryFn: () => sdk.catalog.list(orgId, 'template' as any),
+  });
   const { data: venueInventory } = useQuery({
     queryKey: ['inventory', orgId],
     queryFn: () => sdk.inventory.list(orgId),
@@ -246,6 +250,12 @@ export function VenueBuilder({ orgId }: Props) {
     onError: (e: any) => toast({ title: 'Could not publish template', description: e.message, variant: 'destructive' })
   });
 
+  const archiveTemplateMutation = useMutation({
+    mutationFn: (template: any) => sdk.catalog.update(template.id, { visible: false }),
+    onSuccess: () => { qc.invalidateQueries({ queryKey: ['catalog', orgId, 'template'] }); toast({ title: 'Template archived', description: 'It is no longer available to couples.', variant: 'success' }); },
+    onError: (e: any) => toast({ title: 'Could not archive template', description: e.message, variant: 'destructive' }),
+  });
+
   const openTemplateEditor = () => {
     if (!selectedVenue || selectedVenue.approval_status !== 'approved') { toast({ title: 'Choose an approved venue space', description: 'Templates are always connected to an approved venue space.', variant: 'destructive' }); return; }
     setTemplateMaxGuests(String(selectedVenue.capacity || ''));
@@ -420,6 +430,8 @@ export function VenueBuilder({ orgId }: Props) {
          <fieldset className="mt-4"><legend className="text-sm font-medium">Approved inventory overrides <span className="font-normal text-fg-muted">(optional; leave empty to allow compatible inventory)</span></legend><div className="mt-2 flex flex-wrap gap-3">{venueInventory?.items?.length ? venueInventory.items.map((item: any) => <label key={item.id} className="flex items-center gap-1 text-sm"><input type="checkbox" checked={templateInventoryIds.includes(item.id)} onChange={() => toggleTemplateChoice(item.id, setTemplateInventoryIds)}/>{item.name}</label>) : <p className="text-sm text-fg-muted">No venue inventory is available to restrict yet.</p>}</div></fieldset>
          <div className="mt-4 flex justify-end gap-2"><Button variant="outline" onClick={() => setTemplateEditorOpen(false)}>Cancel</Button><Button isLoading={templateMutation.isPending} onClick={() => templateMutation.mutate()}>Publish template</Button></div>
        </section>}
+
+       <section aria-label="Venue template library" className="rounded-lg border border-border bg-surface p-4"><div className="flex items-baseline justify-between gap-3"><div><h3 className="font-semibold">Venue template library</h3><p className="text-sm text-fg-muted">Only active templates linked to approved spaces appear in the couple gallery.</p></div><span className="text-sm text-fg-muted">{venueTemplates?.items?.filter((template: any) => template.visible).length ?? 0} active</span></div><div className="mt-3 grid gap-2 md:grid-cols-2">{venueTemplates?.items?.length ? venueTemplates.items.map((template: any) => { const spec = typeof template.spec === 'string' ? (() => { try { return JSON.parse(template.spec); } catch { return {}; } })() : (template.spec || {}); return <div key={template.id} className="flex items-center justify-between gap-3 rounded border border-border p-3 text-sm"><div><strong>{template.name}</strong><p className="text-fg-muted">{spec.weddingMoment || 'Wedding layout'} · {spec.serviceStyle || 'Flexible service'} · {spec.minGuests ?? '—'}–{spec.maxGuests ?? '—'} guests</p><p className="text-xs text-fg-muted">{template.visible ? 'Active in couple gallery' : 'Archived'}</p></div>{template.visible && <Button size="xs" variant="outline" isLoading={archiveTemplateMutation.isPending} onClick={() => archiveTemplateMutation.mutate(template)}>Archive</Button>}</div>; }) : <p className="text-sm text-fg-muted">Save an approved layout as a template to start your gallery.</p>}</div></section>
 
        <div ref={containerRef} className="w-full h-[600px] border border-border rounded-lg bg-surface relative overflow-hidden">
           {(() => { try { const underlay = selectedVenue?.underlay ? (typeof selectedVenue.underlay === 'string' ? JSON.parse(selectedVenue.underlay) : selectedVenue.underlay) : null; return underlay?.url ? <img src={underlay.url} alt="Venue reference underlay" className="absolute inset-0 h-full w-full object-contain pointer-events-none" style={{ opacity: underlayOpacity, transform: `scale(${underlayScale}) rotate(${underlayRotation}deg)` }} /> : null; } catch { return null; } })()}
