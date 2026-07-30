@@ -35,7 +35,7 @@ export const staffSdk = {
     return api.post(`/api/orgs/${orgId}/staff/availability`, input);
   },
   deleteAvailability(id: string): Promise<void> { return api.delete(`/api/staff/availability/${id}`); },
-  coverage(orgId: string): Promise<{ coverage: { events: Array<{ eventId: string | null; eventTitle: string; shifts: any[]; staffCount: number; taskCount: number; blockedTaskCount: number; missingRoles: string[] }>; staff: Array<{ staffId: string; staffName: string; shiftCount: number; eventCount: number; conflictCount: number }>; conflicts: string[]; totalShifts: number } }> {
+  coverage(orgId: string): Promise<{ coverage: { events: Array<{ eventId: string | null; eventTitle: string; shifts: any[]; staffCount: number; taskCount: number; blockedTaskCount: number; missingRoles: string[] }>; staff: Array<{ staffId: string; staffName: string; shiftCount: number; eventCount: number; conflictCount: number }>; conflicts: string[]; conflictDetails: Array<{ shiftId: string; conflictingShiftId: string; staffName: string; eventId: string | null; eventTitle: string; conflictingEventId: string | null; conflictingEventTitle: string }>; totalShifts: number } }> {
     return api.get(`/api/orgs/${orgId}/staff/coverage`);
   },
   listTasks(orgId: string, opts: { eventId?: string; status?: string } = {}): Promise<{ tasks: SdkStaffTask[] }> {
