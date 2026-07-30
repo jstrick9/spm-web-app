@@ -230,6 +230,13 @@ export function DashboardScreen({
     staleTime: 30_000,
   });
 
+  const staffingCoverageQuery = useQuery({
+    queryKey: ['staff-coverage', orgId],
+    queryFn: () => sdk.staff.coverage(orgId!),
+    enabled: !!orgId && isManager && canViewStaff,
+    staleTime: 30_000,
+  });
+
   const managerVendorsQuery = useQuery({
     queryKey: ["vendors", focusEvent?.id, "manager-dashboard"],
     queryFn: () => sdk.vendors.list(orgId!, { eventId: focusEvent!.id }),
@@ -293,6 +300,7 @@ export function DashboardScreen({
 
         {isManager && (
           <>
+          <Card className="border-brand/20"><CardHeader><CardTitle className="flex items-center gap-2"><Users className="h-5 w-5 text-brand" /> Staffing coverage</CardTitle><CardDescription>Cross-event coverage for Seven Paths Manor. Resolve overlaps before event week.</CardDescription></CardHeader><CardContent>{staffingCoverageQuery.isLoading ? <p className="text-sm text-fg-muted">Loading staffing coverage…</p> : <div className="space-y-2">{staffingCoverageQuery.data?.coverage.conflicts.length ? <p className="flex items-center gap-1 text-sm text-warning"><AlertTriangle className="h-4 w-4" /> {staffingCoverageQuery.data.coverage.conflicts.length} overlapping shift{staffingCoverageQuery.data.coverage.conflicts.length === 1 ? '' : 's'} need attention.</p> : <p className="text-sm text-success">No overlapping staff shifts detected.</p>}{staffingCoverageQuery.data?.coverage.events.map((coverage) => <div key={coverage.eventId || 'unassigned'} className="flex items-center justify-between rounded border border-border p-2 text-sm"><span><strong>{coverage.eventTitle}</strong><span className="ml-2 text-fg-muted">{coverage.shifts.length} shift{coverage.shifts.length === 1 ? '' : 's'}</span></span><span className="text-fg-muted">{coverage.staffCount} staff</span></div>) || <p className="text-sm text-fg-muted">No staffing shifts are scheduled yet.</p>}</div>}</CardContent></Card>
           <ManagerCommandCenter
             events={managerEvents}
             focusEvent={focusEvent}
