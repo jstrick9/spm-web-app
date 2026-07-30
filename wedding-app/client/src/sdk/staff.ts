@@ -23,6 +23,9 @@ export interface TaskInput {
 export interface WeeklyAvailability { id: string; staff_id: string; day_of_week: number; starts_at: string; ends_at: string; }
 
 export const staffSdk = {
+  calendar(orgId: string, startsAt: string, endsAt: string): Promise<{ calendar: { startsAt: string; endsAt: string; events: Array<{ id: string; title: string; start_date: string; end_date: string | null; status: string }>; shifts: any[] } }> {
+    return api.get(`/api/orgs/${orgId}/staff/calendar?startsAt=${encodeURIComponent(startsAt)}&endsAt=${encodeURIComponent(endsAt)}`);
+  },
   availability(orgId: string, staffId?: string): Promise<{ availability: WeeklyAvailability[] }> {
     return api.get(`/api/orgs/${orgId}/staff/availability${staffId ? `?staffId=${encodeURIComponent(staffId)}` : ''}`);
   },
