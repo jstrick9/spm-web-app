@@ -5,7 +5,7 @@ import { db } from '../db/database.js';
 import { requireAuth } from '../middleware/auth.js';
 import { can } from '../lib/rbac.js';
 import {
-  auditRepo, eventsRepo, orgsRepo, subEventsRepo,
+  auditRepo, eventsRepo, orgsRepo, subEventsRepo, eventReadinessRepo,
 } from '../db/repos/index.js';
 import { Forbidden, NotFound, BadRequest } from '../lib/errors.js';
 import { runTrigger } from '../jobs/lifecycleEmails.js';
@@ -146,6 +146,12 @@ export async function eventRoutes(app: FastifyInstance) {
     });
     broadcastSSE(parsed.data.organizationId, "event.created", { eventId: event.id, title: event.title }, req.auth!.userId);
     return reply.code(201).send({ event });
+  });
+
+  app.get('/api/orgs/:orgId/portfolio-readiness', { preHandler: requireAuth }, async (req) => {
+    const { orgId } = req.params as { orgId: string }; if (!can(req.auth!.memberships, { organizationId: orgId }, 'events.view')) throw Forbidden();
+    const events = eventsRepo.listForOrg(orgId, { status: ['booked','planning','final_review'] as any });
+    return { events: events.map((event) => { const readiness = eventReadinessRepo.forEvent(event.id); return { id: event.id, title: event.title, status: event.status, startDate: event.start_date, guestCount: event.guest_count, readinessScore: readiness?.score ?? 0, criticalIssues: readiness?.issues.filter((issue) => issue.severity === 'critical').length ?? 0, warningIssues: readiness?.issues.filter((issue) => issue.severity === 'warning').length ?? 0, nextIssue: readiness?.issues[0] ? { title: readiness.issues[0].title, detail: readiness.issues[0].detail, href: readiness.issues[0].href } : null }; }) };
   });
 
   app.get('/api/events/:eventId', { preHandler: requireAuth }, async (req) => {
