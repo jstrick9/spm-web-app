@@ -20,7 +20,15 @@ export interface TaskInput {
   eventId?: string | null;
 }
 
+export interface WeeklyAvailability { id: string; staff_id: string; day_of_week: number; starts_at: string; ends_at: string; }
+
 export const staffSdk = {
+  availability(orgId: string, staffId?: string): Promise<{ availability: WeeklyAvailability[] }> {
+    return api.get(`/api/orgs/${orgId}/staff/availability${staffId ? `?staffId=${encodeURIComponent(staffId)}` : ''}`);
+  },
+  createAvailability(orgId: string, input: { staffId: string; dayOfWeek: number; startsAt: string; endsAt: string }): Promise<{ availability: WeeklyAvailability }> {
+    return api.post(`/api/orgs/${orgId}/staff/availability`, input);
+  },
   coverage(orgId: string): Promise<{ coverage: { events: Array<{ eventId: string | null; eventTitle: string; shifts: any[]; staffCount: number; taskCount: number; blockedTaskCount: number }>; staff: Array<{ staffId: string; staffName: string; shiftCount: number; eventCount: number; conflictCount: number }>; conflicts: string[]; totalShifts: number } }> {
     return api.get(`/api/orgs/${orgId}/staff/coverage`);
   },
