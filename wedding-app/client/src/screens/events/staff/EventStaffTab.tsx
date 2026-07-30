@@ -152,6 +152,9 @@ export function EventStaffTab({ eventId, organizationId }: Props) {
   const [newShiftContactEmail, setNewShiftContactEmail] = useState('');
   const [newShiftRadioChannel, setNewShiftRadioChannel] = useState('Ops 1');
   const [newShiftHandoffNotes, setNewShiftHandoffNotes] = useState('');
+  const [availabilityDay, setAvailabilityDay] = useState('1');
+  const [availabilityStart, setAvailabilityStart] = useState('09:00');
+  const [availabilityEnd, setAvailabilityEnd] = useState('17:00');
 
   // Queries
   const { data: tasksData, isLoading: tasksLoading, error: tasksError } = useQuery({
@@ -174,6 +177,12 @@ export function EventStaffTab({ eventId, organizationId }: Props) {
     queryFn: () => sdk.auth.me(),
   });
 
+  const { data: availabilityData } = useQuery({
+    queryKey: ['staffAvailability', organizationId, meData?.user?.id],
+    queryFn: () => sdk.staff.availability(organizationId, meData!.user.id),
+    enabled: !!meData?.user?.id,
+  });
+
   const { data: membersData } = useQuery({
     queryKey: ['members', organizationId],
     queryFn: () => sdk.roles.listMembers(organizationId),
@@ -183,6 +192,12 @@ export function EventStaffTab({ eventId, organizationId }: Props) {
   const { data: layoutsData } = useQuery({
     queryKey: ['layouts', eventId],
     queryFn: () => sdk.layouts.list(organizationId, { eventId }),
+  });
+
+  const availabilityMutation = useMutation({
+    mutationFn: () => sdk.staff.createAvailability(organizationId, { staffId: meData!.user.id, dayOfWeek: Number(availabilityDay), startsAt: availabilityStart, endsAt: availabilityEnd }),
+    onSuccess: () => { qc.invalidateQueries({ queryKey: ['staffAvailability', organizationId] }); toast({ title: 'Weekly availability added', variant: 'success' }); },
+    onError: (error: any) => toast({ title: 'Could not save availability', description: error?.message || 'Please check the time range.', variant: 'destructive' }),
   });
 
   // Mutations
@@ -483,6 +498,7 @@ Owner notification rule: ${ownerNotify || incidentSeverity === 'critical' ? 'not
 
   return (
     <div className="space-y-6">
+      <Card><CardHeader><CardTitle>My weekly availability</CardTitle><CardDescription>Set your normal recurring hours. Venue managers can use these hours when assigning event shifts.</CardDescription></CardHeader><CardContent className="space-y-3"><div className="flex flex-wrap gap-2">{availabilityData?.availability?.map((slot) => <Badge key={slot.id} variant="outline">{['Sun','Mon','Tue','Wed','Thu','Fri','Sat'][slot.day_of_week]} {slot.starts_at}–{slot.ends_at}</Badge>) || <span className="text-sm text-fg-muted">No recurring hours set.</span>}</div><div className="flex flex-wrap items-end gap-2"><label className="text-sm">Day<select aria-label="Availability day" className="ml-1 h-9 rounded border border-border bg-surface px-2" value={availabilityDay} onChange={(e) => setAvailabilityDay(e.target.value)}>{['Sun','Mon','Tue','Wed','Thu','Fri','Sat'].map((day, index) => <option key={day} value={index}>{day}</option>)}</select></label><label className="text-sm">Start<Input aria-label="Availability start" type="time" className="ml-1 inline-flex w-28" value={availabilityStart} onChange={(e) => setAvailabilityStart(e.target.value)} /></label><label className="text-sm">End<Input aria-label="Availability end" type="time" className="ml-1 inline-flex w-28" value={availabilityEnd} onChange={(e) => setAvailabilityEnd(e.target.value)} /></label><Button size="sm" isLoading={availabilityMutation.isPending} onClick={() => availabilityMutation.mutate()}><Plus className="h-4 w-4" /> Add hours</Button></div></CardContent></Card>
       <Card className={cn('border-brand/20 bg-brand-soft/10', captainMode && 'border-danger/40 bg-danger-soft/20')}>
         <CardContent className="p-4 space-y-4">
           <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
