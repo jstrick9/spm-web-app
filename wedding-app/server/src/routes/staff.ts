@@ -5,7 +5,7 @@ import { uuid } from '../lib/crypto.js';
 import { requireAuth } from '../middleware/auth.js';
 import { can } from '../lib/rbac.js';
 import {
-  staffTasksRepo, staffAreasRepo, staffShiftsRepo,
+  staffTasksRepo, staffAreasRepo, staffShiftsRepo, auditRepo,
 } from '../db/repos/index.js';
 import { BadRequest, Forbidden, NotFound } from '../lib/errors.js';
 import { broadcastSSE } from './sse.js';
@@ -179,6 +179,7 @@ export async function staffRoutes(app: FastifyInstance) {
     const withinAvailability = availability.some((slot) => startTime >= slot.starts_at && endTime <= slot.ends_at && start.toISOString().slice(0, 10) === end.toISOString().slice(0, 10));
     if (availability.length > 0 && !withinAvailability && !parsed.data.availabilityOverrideReason?.trim()) throw BadRequest('staff-availability-override-required', { staffId: parsed.data.staffId, dayOfWeek: day, startTime, endTime });
     const shift = staffShiftsRepo.create(orgId, parsed.data);
+    if (parsed.data.availabilityOverrideReason?.trim()) auditRepo.log({ organizationId: orgId, actorUserId: req.auth!.userId, actorLabel: req.auth!.email, action: 'staff.shift.availability_override', targetType: 'staff_shift', targetId: shift.id, ip: req.ip, details: { staffId: parsed.data.staffId, startsAt: parsed.data.startsAt, endsAt: parsed.data.endsAt, reason: parsed.data.availabilityOverrideReason } });
     broadcastSSE(orgId, 'staff.shift_created', { shiftId: shift.id, staffId: shift.staff_id, role: shift.role }, req.auth!.userId);
     return reply.code(201).send({ shift });
   });
