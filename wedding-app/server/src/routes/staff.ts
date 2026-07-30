@@ -5,7 +5,7 @@ import { uuid } from '../lib/crypto.js';
 import { requireAuth } from '../middleware/auth.js';
 import { can } from '../lib/rbac.js';
 import {
-  staffTasksRepo, staffAreasRepo, staffShiftsRepo, auditRepo,
+  staffTasksRepo, staffAreasRepo, staffShiftsRepo, auditRepo, eventsRepo,
 } from '../db/repos/index.js';
 import { BadRequest, Forbidden, NotFound } from '../lib/errors.js';
 import { broadcastSSE } from './sse.js';
@@ -94,6 +94,16 @@ export async function staffRoutes(app: FastifyInstance) {
     const { id } = req.params as { id: string }; const slot = db.prepare(`SELECT * FROM staff_weekly_availability WHERE id=?`).get(id) as any; if (!slot) throw NotFound();
     if (slot.staff_id !== req.auth!.userId && !can(req.auth!.memberships, { organizationId: slot.organization_id }, 'staff.manage')) throw Forbidden();
     db.prepare(`DELETE FROM staff_weekly_availability WHERE id=?`).run(id); return reply.code(204).send();
+  });
+
+  app.get('/api/events/:eventId/staffing-requirements', { preHandler: requireAuth }, async (req) => {
+    const { eventId } = req.params as { eventId: string }; const event = eventsRepo.findById(eventId); if (!event) throw NotFound(); if (!can(req.auth!.memberships, { organizationId: event.organization_id }, 'staff.view')) throw Forbidden();
+    const metadata = (() => { try { return JSON.parse(event.metadata || '{}'); } catch { return {}; } })(); return { requiredRoles: Array.isArray(metadata.staffingRequiredRoles) ? metadata.staffingRequiredRoles : ['coordinator', 'setup'] };
+  });
+  app.put('/api/events/:eventId/staffing-requirements', { preHandler: requireAuth }, async (req) => {
+    const { eventId } = req.params as { eventId: string }; const event = eventsRepo.findById(eventId); if (!event) throw NotFound(); if (!can(req.auth!.memberships, { organizationId: event.organization_id }, 'staff.manage')) throw Forbidden();
+    const parsed = z.object({ requiredRoles: z.array(z.enum(['coordinator','setup','cleaning','parking','other'])).min(1).max(5) }).safeParse(req.body); if (!parsed.success) throw BadRequest('invalid-input', parsed.error.issues);
+    const metadata = (() => { try { return JSON.parse(event.metadata || '{}'); } catch { return {}; } })(); const updated = eventsRepo.update(eventId, { metadata: { ...metadata, staffingRequiredRoles: parsed.data.requiredRoles } }); return { event: updated, requiredRoles: parsed.data.requiredRoles };
   });
 
   app.get('/api/orgs/:orgId/staff/calendar', { preHandler: requireAuth }, async (req) => {
