@@ -21,7 +21,7 @@ export interface TaskInput {
 }
 
 export const staffSdk = {
-  coverage(orgId: string): Promise<{ coverage: { events: Array<{ eventId: string | null; eventTitle: string; shifts: any[]; staffCount: number }>; staff: Array<{ staffId: string; staffName: string; shiftCount: number; eventCount: number; conflictCount: number }>; conflicts: string[]; totalShifts: number } }> {
+  coverage(orgId: string): Promise<{ coverage: { events: Array<{ eventId: string | null; eventTitle: string; shifts: any[]; staffCount: number; taskCount: number; blockedTaskCount: number }>; staff: Array<{ staffId: string; staffName: string; shiftCount: number; eventCount: number; conflictCount: number }>; conflicts: string[]; totalShifts: number } }> {
     return api.get(`/api/orgs/${orgId}/staff/coverage`);
   },
   listTasks(orgId: string, opts: { eventId?: string; status?: string } = {}): Promise<{ tasks: SdkStaffTask[] }> {
