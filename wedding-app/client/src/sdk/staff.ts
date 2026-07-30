@@ -29,6 +29,7 @@ export const staffSdk = {
   createAvailability(orgId: string, input: { staffId: string; dayOfWeek: number; startsAt: string; endsAt: string }): Promise<{ availability: WeeklyAvailability }> {
     return api.post(`/api/orgs/${orgId}/staff/availability`, input);
   },
+  deleteAvailability(id: string): Promise<void> { return api.delete(`/api/staff/availability/${id}`); },
   coverage(orgId: string): Promise<{ coverage: { events: Array<{ eventId: string | null; eventTitle: string; shifts: any[]; staffCount: number; taskCount: number; blockedTaskCount: number }>; staff: Array<{ staffId: string; staffName: string; shiftCount: number; eventCount: number; conflictCount: number }>; conflicts: string[]; totalShifts: number } }> {
     return api.get(`/api/orgs/${orgId}/staff/coverage`);
   },
