@@ -154,6 +154,13 @@ export async function eventRoutes(app: FastifyInstance) {
     const id = crypto.randomUUID(); db.prepare(`INSERT INTO event_week_updates (id, organization_id, event_id, template_id, title, body, category, critical, published_by) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`).run(id, event.organization_id, eventId, parsed.data.templateId || null, parsed.data.title, parsed.data.body, parsed.data.category, parsed.data.critical ? 1 : 0, req.auth!.userId);
     return reply.code(201).send({ update: db.prepare(`SELECT * FROM event_week_updates WHERE id=?`).get(id) });
   });
+  app.get('/api/events/:eventId/couple-updates/summary', { preHandler: requireAuth }, async (req) => {
+    const { eventId } = req.params as { eventId: string }; const event = eventsRepo.findById(eventId); if (!event) throw NotFound(); if (!can(req.auth!.memberships, { organizationId: event.organization_id }, 'events.view')) throw Forbidden();
+    const coupleCount = Number((db.prepare(`SELECT COUNT(*) AS count FROM event_memberships em JOIN roles r ON r.id=em.role_id WHERE em.event_id=? AND em.status='active' AND r.key='couple'`).get(eventId) as any).count);
+    const updates = db.prepare(`SELECT u.id, u.title, u.category, u.critical, u.published_at, COUNT(a.user_id) AS viewed_count, SUM(CASE WHEN a.acknowledged_at IS NOT NULL THEN 1 ELSE 0 END) AS acknowledged_count FROM event_week_updates u LEFT JOIN event_week_update_acknowledgments a ON a.update_id=u.id WHERE u.event_id=? GROUP BY u.id ORDER BY u.published_at DESC`).all(eventId);
+    return { coupleCount, updates };
+  });
+
   app.get('/api/events/:eventId/couple-updates', { preHandler: requireAuth }, async (req) => {
     const { eventId } = req.params as { eventId: string }; const event = eventsRepo.findById(eventId); if (!event) throw NotFound(); const isCouple = req.auth!.memberships.some((membership: any) => membership.eventId === eventId && String(membership.roleKey).toLowerCase() === 'couple'); if (!isCouple) throw Forbidden();
     const updates = db.prepare(`SELECT u.*, a.viewed_at, a.acknowledged_at FROM event_week_updates u LEFT JOIN event_week_update_acknowledgments a ON a.update_id=u.id AND a.user_id=? WHERE u.event_id=? ORDER BY u.published_at DESC`).all(req.auth!.userId, eventId); return { updates };
