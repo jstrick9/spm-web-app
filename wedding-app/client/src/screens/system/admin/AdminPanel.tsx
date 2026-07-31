@@ -814,8 +814,11 @@ function BackupManager({ orgId }: { orgId: string }) {
     finally { setDownloading(false); }
   };
 
-  const handleImport = () => {
-    toast({ title: 'Import restricted', description: 'Contact system administrator to restore from snapshot.', variant: 'destructive' });
+  const handleImport = async () => {
+    try {
+      await sdk.platformConfig.createAdminChangeRequest(orgId, { title: 'Request backup restore', area: 'configuration', reason: 'Restore requires a reviewed maintenance window and approval from the venue owner or platform administrator.' });
+      toast({ title: 'Restore request submitted', description: 'A reviewed maintenance window is required before any restore can proceed.', variant: 'success' });
+    } catch { toast({ title: 'Could not submit restore request', description: 'Please try again or contact support.', variant: 'destructive' }); }
   };
 
   return (
@@ -846,12 +849,12 @@ function BackupManager({ orgId }: { orgId: string }) {
 
         <Card className="border-danger/20 bg-surface">
           <CardHeader>
-            <CardTitle className="text-base flex items-center gap-2 text-danger"><Upload className="w-4 h-4"/> Restore Backup</CardTitle>
+            <CardTitle className="text-base flex items-center gap-2 text-danger"><Upload className="w-4 h-4"/> Request Restore</CardTitle>
             <CardDescription className="text-xs text-fg-subtle">Restore is restricted and requires an administrator-reviewed maintenance window.</CardDescription>
           </CardHeader>
           <CardContent>
             <Button variant="destructive" className="w-full" onClick={handleImport}>
-               Upload & Restore
+               Request Restore
             </Button>
             <p className="text-[10px] text-center text-danger/70 mt-3 font-semibold">Destructive restore is disabled in self-service mode.</p>
           </CardContent>
