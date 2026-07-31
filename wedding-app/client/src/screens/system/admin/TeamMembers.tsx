@@ -104,7 +104,7 @@ export function TeamMembers({ orgId }: Props) {
                     value={(m.roleId ?? m.role_id ?? roles.find(r => r.name === m.roleName)?.id) || ''}
                     onChange={(e) => updateMemberRoleMutation.mutate({ userId: m.userId ?? m.user_id ?? '', targetRoleId: e.target.value })}
                   >
-                    {roles.map((r: any) => (
+                    {roles.filter((r: any) => r.key !== 'owner').map((r: any) => (
                       <option key={r.id} value={r.id}>{r.name}</option>
                     ))}
                   </select>
