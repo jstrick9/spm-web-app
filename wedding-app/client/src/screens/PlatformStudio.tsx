@@ -92,10 +92,10 @@ export function PlatformStudio({ orgId, onSaved }: Props) {
       };
       const r = await sdk.platformConfig.putOrg(orgId, next);
       setServerConfig(r.config);
-      // Keep the committed theme applied immediately while the parent org
-      // layer refreshes; it is cleared on unmount or when a card is released.
-      setPreviewOverride({ theme: r.config.theme });
+      // The parent applies the committed config. Clear any hover preview so
+      // the studio does not remain in a misleading preview-active state.
       onSaved(r.config);
+      setPreviewOverride(null);
       toast({
         title: `Applied "${preset.name}"`,
         description: 'The theme is live for everyone in your organization.',
