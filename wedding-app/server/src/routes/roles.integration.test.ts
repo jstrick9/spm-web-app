@@ -253,6 +253,20 @@ describe('Member management', () => {
     expect(res.json().error).toBe('cannot-remove-owner');
   });
 
+  it('prevents manager promotion to admin and owner role changes', async () => {
+    const owner = await register();
+    const manager = await register();
+    const staff = await register();
+    await authed(owner.token, 'POST', `/api/orgs/${owner.orgId}/members`, { userEmail: manager.email, roleId: SYSTEM_ROLE_IDS.manager });
+    await authed(owner.token, 'POST', `/api/orgs/${owner.orgId}/members`, { userEmail: staff.email, roleId: SYSTEM_ROLE_IDS.staff });
+    const login = await app.inject({ method: 'POST', url: '/api/auth/login', payload: { email: manager.email, password: 'testpass123' }, headers: { 'content-type': 'application/json' } });
+    const blocked = await authed(login.json().token, 'PATCH', `/api/orgs/${owner.orgId}/members/${staff.userId}`, { roleId: SYSTEM_ROLE_IDS.admin });
+    expect(blocked.statusCode).toBe(403);
+    const ownerChange = await authed(owner.token, 'PATCH', `/api/orgs/${owner.orgId}/members/${owner.userId}`, { roleId: SYSTEM_ROLE_IDS.manager });
+    expect(ownerChange.statusCode).toBe(400);
+    expect(ownerChange.json().error).toBe('cannot-change-owner-role');
+  });
+
   it('change a member role (promote staff -> planner)', async () => {
     const owner = await register();
     const u2 = await register();
