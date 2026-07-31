@@ -236,6 +236,15 @@ describe('PATCH / DELETE /api/roles/:id', () => {
   });
 });
 
+describe('Reserved system role keys', () => {
+  it('does not allow a custom role to reuse a system role key', async () => {
+    const owner = await register();
+    const res = await authed(owner.token, 'POST', `/api/orgs/${owner.orgId}/roles`, { key: 'admin', name: 'Custom Admin', permissions: [] });
+    expect(res.statusCode).toBe(400);
+    expect(res.json().error).toBe('reserved-system-role-key');
+  });
+});
+
 describe('Member management', () => {
   it('lists members with their role keys', async () => {
     const u = await register();

@@ -110,6 +110,7 @@ export async function roleRoutes(app: FastifyInstance) {
 
       const parsed = createRoleSchema.safeParse(req.body);
       if (!parsed.success) throw BadRequest('invalid-input', parsed.error.issues);
+      if (rolesRepo.findByKey(null, parsed.data.key)) throw BadRequest('reserved-system-role-key');
 
       // If copyFrom is provided, start from that role's permission set,
       // then union with explicit `permissions`.
