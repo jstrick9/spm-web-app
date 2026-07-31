@@ -48,6 +48,9 @@ export const eventsSdk = {
     return api.get(`/api/orgs/${orgId}/events${qs ? `?${qs}` : ''}`);
   },
 
+  coupleUpdates(eventId: string): Promise<{ updates: Array<{ id: string; title: string; body: string; category: string; critical: number; viewed_at: string | null; acknowledged_at: string | null; published_at: string }> }> { return api.get(`/api/events/${eventId}/couple-updates`); },
+  viewCoupleUpdate(eventId: string, updateId: string): Promise<{ ok: boolean }> { return api.post(`/api/events/${eventId}/couple-updates/${updateId}/view`, {}); },
+  acknowledgeCoupleUpdate(eventId: string, updateId: string): Promise<{ ok: boolean }> { return api.post(`/api/events/${eventId}/couple-updates/${updateId}/acknowledge`, {}); },
   communicationTemplates(orgId: string): Promise<{ templates: Array<{ id: string; name: string; category: string; audience: string; subject: string; body: string; active: number }> }> { return api.get(`/api/orgs/${orgId}/communication-templates`); },
   createCommunicationTemplate(orgId: string, input: { name: string; category: 'rain_plan' | 'timing_change' | 'parking' | 'arrival' | 'guest_guidance' | 'other'; audience: 'couple' | 'guests' | 'both'; subject: string; body: string; active?: boolean }): Promise<{ template: any }> { return api.post(`/api/orgs/${orgId}/communication-templates`, input); },
   updateCommunicationTemplate(id: string, patch: Partial<{ name: string; category: 'rain_plan' | 'timing_change' | 'parking' | 'arrival' | 'guest_guidance' | 'other'; audience: 'couple' | 'guests' | 'both'; subject: string; body: string; active: boolean }>): Promise<{ template: any }> { return api.patch(`/api/communication-templates/${id}`, patch); },
