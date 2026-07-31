@@ -18,6 +18,7 @@ import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
 import { requireAuth } from '../middleware/auth.js';
 import { assertCan } from '../lib/rbac.js';
+import { db } from '../db/database.js';
 import { auditRepo, eventsRepo, orgsRepo, rolesRepo, teamInvitationsRepo, usersRepo } from '../db/repos/index.js';
 import { BadRequest, Forbidden, NotFound } from '../lib/errors.js';
 import { deliverTeamInvitation } from '../lib/teamInviteDelivery.js';
@@ -229,6 +230,13 @@ export async function roleRoutes(app: FastifyInstance) {
       })) };
     },
   );
+
+  app.delete('/api/orgs/:orgId/team-invitations/:id', { preHandler: requireAuth }, async (req, reply) => {
+    const { orgId, id } = req.params as { orgId: string; id: string }; assertCan(req.auth!.memberships, { organizationId: orgId }, 'org.members.invite');
+    const invitation = teamInvitationsRepo.findById(id); if (!invitation || invitation.organization_id !== orgId || invitation.invitation_type !== 'organization') throw NotFound('invitation-not-found');
+    const result = db.prepare(`UPDATE team_invitations SET revoked_at=datetime('now'), updated_at=datetime('now') WHERE id=? AND accepted_at IS NULL AND revoked_at IS NULL`).run(id); if (!result.changes) throw BadRequest('invitation-not-revocable');
+    auditRepo.log({ organizationId: orgId, actorUserId: req.auth!.userId, actorLabel: req.auth!.email, action: 'member.invitation.revoke', targetType: 'team_invitation', targetId: id, ip: req.ip }); return reply.code(204).send();
+  });
 
   app.get('/api/events/:eventId/couple-invitations', { preHandler: requireAuth }, async (req) => {
     const { eventId } = req.params as { eventId: string }; const event = eventsRepo.findById(eventId); if (!event) throw NotFound('event-not-found');
