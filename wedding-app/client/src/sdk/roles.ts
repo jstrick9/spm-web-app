@@ -57,6 +57,8 @@ export const rolesSdk = {
     return api.get(`/api/orgs/${orgId}/team-invitations`);
   },
 
+  revokeInvitation(orgId: string, invitationId: string): Promise<void> { return api.delete(`/api/orgs/${orgId}/team-invitations/${invitationId}`); },
+
   updateMemberRole(orgId: string, userId: string, roleId: string) {
     return api.patch(`/api/orgs/${orgId}/members/${userId}`, { roleId });
   },

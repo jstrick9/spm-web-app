@@ -30,6 +30,7 @@ export function TeamMembers({ orgId }: Props) {
     queryFn: () => sdk.roles.listMembers(orgId),
   });
 
+  const invitationsQuery = useQuery({ queryKey: ['team-invitations', orgId], queryFn: () => sdk.roles.listInvitations(orgId) });
   const rolesQuery = useQuery({
     queryKey: ['roles', orgId],
     queryFn: () => sdk.roles.listRoles(orgId),
@@ -56,6 +57,8 @@ export function TeamMembers({ orgId }: Props) {
     }
   });
 
+  const revokeInvitationMutation = useMutation({ mutationFn: (invitationId: string) => sdk.roles.revokeInvitation(orgId, invitationId), onSuccess: () => { qc.invalidateQueries({ queryKey: ['team-invitations', orgId] }); toast({ title: 'Invitation revoked', variant: 'success' }); } });
+
   interface OrgMember {
     userId: string; user_id?: string; email: string;
     fullName?: string; full_name?: string;
@@ -75,6 +78,7 @@ export function TeamMembers({ orgId }: Props) {
         <InviteDialog orgId={orgId} roles={roles} open={inviteOpen} onOpenChange={setInviteOpen} />
       </div>
 
+      {invitationsQuery.data?.invitations?.filter((invite: any) => !invite.accepted_at && !invite.revoked_at).length ? <Card><CardHeader><CardTitle>Pending team invitations</CardTitle><CardDescription>Invitations remain active until accepted or expired.</CardDescription></CardHeader><CardContent className="space-y-2">{invitationsQuery.data.invitations.filter((invite: any) => !invite.accepted_at && !invite.revoked_at).map((invite: any) => <div key={invite.id} className="flex items-center justify-between gap-2 text-sm"><span>{invite.email} · expires {new Date(invite.expires_at).toLocaleDateString()}</span><Button size="xs" variant="outline" isLoading={revokeInvitationMutation.isPending} onClick={() => revokeInvitationMutation.mutate(invite.id)}>Revoke</Button></div>)}</CardContent></Card> : null}
       {members.length === 0 ? (
         <Card>
           <CardContent className="py-12 text-center text-fg-muted text-sm">
