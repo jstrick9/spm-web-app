@@ -24,6 +24,7 @@ export interface VenueInput {
 export const venuesSdk = {
   applyEventTemplate(eventId: string, templateId: string): Promise<{ layout: any }> { return api.post(`/api/events/${eventId}/venue-templates/${templateId}/apply`, {}); },
   eventTemplates(eventId: string): Promise<{ templates: Array<{ id: string; name: string; spec: Record<string, any> }>; spaces: Array<{ id: string; name: string; category: string; capacity: number; templateKey: string }>; guestCount: number }> { return api.get(`/api/events/${eventId}/venue-templates`); },
+  spaceDetail(venueId: string): Promise<{ space: { id: string; name: string; capacity: number; approvalStatus: string; commitments: Array<any>; templates: Array<any> } }> { return api.get(`/api/venues/${venueId}/space-detail`); },
   spaceCalendar(orgId: string, startsAt: string, endsAt: string): Promise<{ calendar: { startsAt: string; endsAt: string; spaces: Array<{ id: string; name: string; capacity: number; category: string }>; commitments: Array<any> } }> { return api.get(`/api/orgs/${orgId}/space-calendar?startsAt=${encodeURIComponent(startsAt)}&endsAt=${encodeURIComponent(endsAt)}`); },
   list(orgId: string): Promise<{ venues: SdkVenue[] }> {
     return api.get(`/api/orgs/${orgId}/venues`);
