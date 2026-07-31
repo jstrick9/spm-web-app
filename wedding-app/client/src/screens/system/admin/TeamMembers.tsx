@@ -135,15 +135,15 @@ function InviteDialog({ orgId, roles, open, onOpenChange }: {
   const [roleId, setRoleId] = useState('');
 
   const inviteMutation = useMutation({
-    mutationFn: () => sdk.roles.addMember(orgId, { userEmail: email, roleId }),
+    mutationFn: () => sdk.roles.inviteMember(orgId, { email, roleId }),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['members', orgId] });
-      toast({ title: 'Member invited!', description: `${email} has been added.`, variant: 'success' });
+      toast({ title: 'Team invitation sent', description: `${email} can join this venue with the selected role.`, variant: 'success' });
       onOpenChange(false);
       setEmail(''); setRoleId('');
     },
     onError: (e: any) => {
-      const msg = e?.message?.includes('not-found') ? 'User not found. They need to register first.' : 'Could not invite member.';
+      const msg = e?.message || 'Could not send team invitation.';
       toast({ title: msg, variant: 'destructive' });
     },
   });
@@ -161,7 +161,7 @@ function InviteDialog({ orgId, roles, open, onOpenChange }: {
           <div>
             <Label>Email Address</Label>
             <Input value={email} onChange={e => setEmail(e.target.value)} placeholder="planner@example.com" className="mt-1" type="email" />
-            <p className="text-[11px] text-fg-subtle mt-1">The user must have a registered account.</p>
+            <p className="text-[11px] text-fg-subtle mt-1">New teammates receive an invitation; existing users are added immediately.</p>
           </div>
           <div>
             <Label>Role</Label>
