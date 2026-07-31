@@ -617,7 +617,7 @@ function DataRetentionEditor({ draft, setDraft }: { draft: any; setDraft: (value
       <div><Label className="text-xs">Guest portal data (months)</Label><Input type="number" value={retention.guestPortalDataMonths} onChange={(event) => update({ guestPortalDataMonths: Number(event.target.value) || 1 })} /></div>
       <div><Label className="text-xs">Audit log (months)</Label><Input type="number" value={retention.auditLogMonths} onChange={(event) => update({ auditLogMonths: Number(event.target.value) || 1 })} /></div>
     </div>
-    <label className="flex items-center gap-2 rounded-xl border border-warning/30 bg-warning/10 p-3 text-sm font-semibold text-fg"><input type="checkbox" checked={retention.autoDeleteInactiveLeads} onChange={(event) => update({ autoDeleteInactiveLeads: event.target.checked })} className="h-4 w-4 accent-brand" /> Automatically delete inactive leads after retention window</label>
+    <div className="rounded-xl border border-warning/30 bg-warning/10 p-3 text-sm"><label className="flex items-center gap-2 font-semibold text-fg"><input type="checkbox" checked={retention.autoDeleteInactiveLeads} onChange={(event) => update({ autoDeleteInactiveLeads: event.target.checked })} className="h-4 w-4 accent-brand" /> Mark inactive leads for retention review</label><p className="mt-1 text-xs text-fg-muted">This records your policy preference. Automatic deletion is not enabled until a reviewed retention job is configured.</p></div>
   </div>;
 }
 
