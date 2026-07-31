@@ -48,6 +48,8 @@ export const eventsSdk = {
     return api.get(`/api/orgs/${orgId}/events${qs ? `?${qs}` : ''}`);
   },
 
+  communicationTemplates(orgId: string): Promise<{ templates: Array<{ id: string; name: string; category: string; audience: string; subject: string; body: string; active: number }> }> { return api.get(`/api/orgs/${orgId}/communication-templates`); },
+  createCommunicationTemplate(orgId: string, input: { name: string; category: 'rain_plan' | 'timing_change' | 'parking' | 'arrival' | 'guest_guidance' | 'other'; audience: 'couple' | 'guests' | 'both'; subject: string; body: string; active?: boolean }): Promise<{ template: any }> { return api.post(`/api/orgs/${orgId}/communication-templates`, input); },
   liveOperations(eventId: string): Promise<{ board: { event: { id: string; title: string; startDate: string | null; status: SdkEventStatus }; tasks: any[]; shifts: any[]; vendors: any[]; incidents: any[]; layouts: any[] } }> { return api.get(`/api/events/${eventId}/live-operations`); },
   portfolioReadiness(orgId: string): Promise<{ events: Array<{ id: string; title: string; status: SdkEventStatus; startDate: string | null; guestCount: number; readinessScore: number; criticalIssues: number; warningIssues: number; nextIssue: { title: string; detail: string; href: string } | null }> }> { return api.get(`/api/orgs/${orgId}/portfolio-readiness`); },
   get(eventId: string): Promise<{ event: SdkEvent }> {
