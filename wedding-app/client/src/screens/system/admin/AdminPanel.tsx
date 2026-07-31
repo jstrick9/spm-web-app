@@ -476,9 +476,6 @@ function AdminConfigurationManager({ orgId, section }: { orgId: string; section:
 
   const saveMutation = useMutation({
     mutationFn: () => {
-      if (!window.confirm(`Save admin configuration changes?\n\n${diffs.join('\n') || 'No differences detected.'}`)) {
-        return Promise.resolve({ config: configQuery.data?.config ?? {} });
-      }
       const nextConfig: PartialPlatformConfig = { ...(configQuery.data?.config ?? {}), admin: draft as any };
       return sdk.platformConfig.putOrg(orgId, nextConfig);
     },
@@ -509,7 +506,7 @@ function AdminConfigurationManager({ orgId, section }: { orgId: string; section:
             </div>
             <div className="flex flex-wrap gap-2">
               <Button variant="outline" size="sm" onClick={restoreDefaults}><RefreshCcw className="h-4 w-4" /> Restore defaults</Button>
-              <Button size="sm" disabled={!isDirty || saveMutation.isPending} isLoading={saveMutation.isPending} onClick={() => saveMutation.mutate()}>
+              <Button size="sm" disabled={!isDirty || saveMutation.isPending} isLoading={saveMutation.isPending} onClick={() => { if (window.confirm(`Save admin configuration changes?\n\n${diffs.join('\n') || 'No differences detected.'}`)) saveMutation.mutate(); }}>
                 Save changes
               </Button>
             </div>
