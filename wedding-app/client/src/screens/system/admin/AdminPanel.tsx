@@ -130,6 +130,8 @@ export function AdminPanel({ orgId }: Props) {
             </CardContent>
           </Card>
 
+          <OwnerChangeRequestQueue orgId={orgId} />
+
           <Card className="min-h-[600px] flex flex-col border-border bg-bg shadow-lg">
             <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as AdminTab)} className="flex-1 flex flex-col">
               <div className="border-b border-border bg-bg/30 p-4">
@@ -790,6 +792,15 @@ function LayoutApprovalQueue({ orgId }: { orgId: string }) {
       </div>
     </div>
   );
+}
+
+function OwnerChangeRequestQueue({ orgId }: { orgId: string }) {
+  const qc = useQueryClient(); const { toast } = useToast();
+  const requestsQuery = useQuery({ queryKey: ['admin-change-requests', orgId, 'owner-review'], queryFn: () => sdk.platformConfig.listAdminChangeRequests(orgId) });
+  const decisionMutation = useMutation({ mutationFn: ({ id, status }: { id: string; status: 'approved' | 'rejected' | 'resolved' }) => sdk.platformConfig.updateAdminChangeRequest(orgId, id, { status, responseNote: window.prompt('Optional decision note') || null }), onSuccess: () => { qc.invalidateQueries({ queryKey: ['admin-change-requests', orgId] }); toast({ title: 'Change request updated', variant: 'success' }); } });
+  const open = requestsQuery.data?.requests?.filter((request) => request.status === 'open') ?? [];
+  if (!open.length) return null;
+  return <Card className="border-warning/30"><CardHeader><CardTitle>Admin change requests awaiting review</CardTitle><CardDescription>Approve, reject, or resolve venue-manager requests with an auditable decision.</CardDescription></CardHeader><CardContent className="space-y-2">{open.map((request) => <div key={request.id} className="flex flex-wrap items-center justify-between gap-2 rounded border border-border p-3 text-sm"><div><strong>{request.title}</strong><p className="text-fg-muted">{request.area} · {request.reason || 'No reason provided'}</p></div><div className="flex gap-1"><Button size="xs" onClick={() => decisionMutation.mutate({ id: request.id, status: 'approved' })}>Approve</Button><Button size="xs" variant="outline" onClick={() => decisionMutation.mutate({ id: request.id, status: 'rejected' })}>Reject</Button><Button size="xs" variant="ghost" onClick={() => decisionMutation.mutate({ id: request.id, status: 'resolved' })}>Resolve</Button></div></div>)}</CardContent></Card>;
 }
 
 // ─── Backup Snapshot Archiver ────────────────────────────────────────────────
