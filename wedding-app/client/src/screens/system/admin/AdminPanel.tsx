@@ -85,7 +85,8 @@ export function AdminPanel({ orgId }: Props) {
   const [group, setGroup] = useState<AdminGroup>('required');
   const [previewRoleId, setPreviewRoleId] = useState<string>('');
   const tabs = group === 'required' ? REQUIRED_TABS : ADVANCED_TABS;
-  const managerMode = typeof window !== 'undefined' && localStorage.getItem('wvi_registration_role') === 'venue_manager';
+  const currentUserQuery = useQuery({ queryKey: ['me', 'admin-panel-role'], queryFn: () => sdk.auth.me(), staleTime: 60_000 });
+  const managerMode = currentUserQuery.data ? (currentUserQuery.data.memberships?.some((membership: any) => membership.organizationId === orgId && String(membership.roleKey).toLowerCase() === 'manager') ?? false) : (typeof window !== 'undefined' && localStorage.getItem('wvi_registration_role') === 'venue_manager');
 
   if (managerMode) return <ManagerConfigurationViewer orgId={orgId} />;
 
