@@ -156,6 +156,17 @@ export async function eventRoutes(app: FastifyInstance) {
     return { events: summary };
   });
 
+  app.get('/api/events/:eventId/live-operations', { preHandler: requireAuth }, async (req) => {
+    const { eventId } = req.params as { eventId: string }; const event = eventsRepo.findById(eventId); if (!event) throw NotFound();
+    const orgMap = eventsRepo.orgMapForUser(req.auth!.userId); if (!can(req.auth!.memberships, { eventId }, 'events.view', orgMap) && !can(req.auth!.memberships, { organizationId: event.organization_id }, 'staff.view')) throw Forbidden();
+    const tasks = db.prepare(`SELECT id, title, status, priority, due_at, assigned_staff FROM staff_tasks WHERE event_id=? AND status!='completed' ORDER BY CASE priority WHEN 'critical' THEN 1 WHEN 'high' THEN 2 ELSE 3 END, due_at`).all(eventId);
+    const shifts = db.prepare(`SELECT s.id, s.role, s.starts_at, s.ends_at, s.clocked_in_at, s.clocked_out_at, u.full_name AS staff_name FROM staff_shifts s LEFT JOIN users u ON u.id=s.staff_id WHERE s.event_id=? ORDER BY s.starts_at`).all(eventId);
+    const vendors = db.prepare(`SELECT id, name, category, metadata FROM vendors WHERE event_id=? AND deleted_at IS NULL ORDER BY name`).all(eventId) as any[];
+    const incidents = db.prepare(`SELECT id, severity, note, status, created_at FROM timeline_incidents WHERE event_id=? AND status!='resolved' ORDER BY CASE severity WHEN 'critical' THEN 1 WHEN 'incident' THEN 2 ELSE 3 END, created_at DESC`).all(eventId);
+    const layouts = db.prepare(`SELECT id, name, approval_status, revision FROM layouts WHERE event_id=? ORDER BY updated_at DESC`).all(eventId);
+    return { board: { event: { id: event.id, title: event.title, startDate: event.start_date, status: event.status }, tasks, shifts, vendors: vendors.map((vendor) => ({ ...vendor, loadIn: (() => { try { const metadata = JSON.parse(vendor.metadata || '{}'); return metadata.loadIn || metadata.load_in || null; } catch { return null; } })() })), incidents, layouts } };
+  });
+
   app.get('/api/events/:eventId', { preHandler: requireAuth }, async (req) => {
     const { eventId } = req.params as { eventId: string };
     const event = eventsRepo.findById(eventId);
