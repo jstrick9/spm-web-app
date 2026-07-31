@@ -48,6 +48,8 @@ export const eventsSdk = {
     return api.get(`/api/orgs/${orgId}/events${qs ? `?${qs}` : ''}`);
   },
 
+  dayOfContact(eventId: string): Promise<{ contact: { name: string; phone?: string; email?: string; hours?: string; escalation?: string } }> { return api.get(`/api/events/${eventId}/day-of-contact`); },
+  setDayOfContact(eventId: string, contact: { name: string; phone?: string; email?: string; hours?: string; escalation?: string }): Promise<{ contact: any }> { return api.put(`/api/events/${eventId}/day-of-contact`, contact); },
   coupleUpdateSummary(eventId: string): Promise<{ coupleCount: number; updates: Array<{ id: string; title: string; category: string; critical: number; published_at: string; viewed_count: number; acknowledged_count: number }> }> { return api.get(`/api/events/${eventId}/couple-updates/summary`); },
   coupleUpdates(eventId: string): Promise<{ updates: Array<any> }> { return api.get(`/api/events/${eventId}/couple-updates`); },
   viewCoupleUpdate(eventId: string, updateId: string): Promise<{ ok: boolean }> { return api.post(`/api/events/${eventId}/couple-updates/${updateId}/view`, {}); },
