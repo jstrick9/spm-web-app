@@ -18,6 +18,7 @@ import { cn } from '../../../ui/lib/cn';
 import { ControlPanel } from '../../../components/ControlPanel';
 import { EventQuestionsStudio } from '../questions/EventQuestionsStudio';
 import { sdk } from '../../../sdk';
+import { getToken } from '../../../sdk/client';
 import { SYSTEM_DEFAULTS } from '../../../config/defaults';
 import type { PartialPlatformConfig } from '../../../config/schema';
 
@@ -798,17 +799,18 @@ function BackupManager({ orgId }: { orgId: string }) {
   const { toast } = useToast();
   const [downloading, setDownloading] = useState(false);
 
-  const handleExport = () => {
+  const handleExport = async () => {
     setDownloading(true);
     toast({ title: 'Preparing Backup', description: 'Downloading your organization data...' });
-    const link = document.createElement('a');
-    link.href = `/api/orgs/${orgId}/export/backup.json`;
-    link.download = `backup_${new Date().toISOString().slice(0, 10)}.json`;
-    link.click();
-    setTimeout(() => {
-      setDownloading(false);
+    try {
+      const token = getToken();
+      const response = await fetch(`/api/orgs/${orgId}/export/backup.json`, { headers: token ? { authorization: `Bearer ${token}` } : {} });
+      if (!response.ok) throw new Error('backup-export-failed');
+      const url = URL.createObjectURL(await response.blob()); const link = document.createElement('a');
+      link.href = url; link.download = `backup_${new Date().toISOString().slice(0, 10)}.json`; link.click(); URL.revokeObjectURL(url);
       toast({ title: 'Backup Downloaded', variant: 'success' });
-    }, 1000);
+    } catch { toast({ title: 'Backup export failed', description: 'Please verify your access and try again.', variant: 'destructive' }); }
+    finally { setDownloading(false); }
   };
 
   const handleImport = () => {
