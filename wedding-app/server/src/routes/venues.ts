@@ -103,6 +103,13 @@ export async function venueRoutes(app: FastifyInstance) {
     return { venue: venuesRepo.update(id, parsed.data) };
   });
 
+  app.get('/api/venues/:id/space-detail', { preHandler: requireAuth }, async (req) => {
+    const { id } = req.params as { id: string }; const venue = venuesRepo.findById(id); if (!venue) throw NotFound(); if (!can(req.auth!.memberships, { organizationId: venue.organization_id }, 'venues.view')) throw Forbidden();
+    const commitments = db.prepare(`SELECT id, title, status, start_date, end_date, guest_count FROM events WHERE venue_id=? AND deleted_at IS NULL AND start_date >= date('now') ORDER BY start_date LIMIT 20`).all(id);
+    const templates = catalogRepo.listForOrg(venue.organization_id, 'template').filter((template: any) => { const spec = typeof template.spec === 'string' ? (() => { try { return JSON.parse(template.spec); } catch { return {}; } })() : (template.spec || {}); return spec.venueId === id; }).map((template: any) => ({ id: template.id, name: template.name, visible: template.visible, spec: template.spec }));
+    return { space: { id: venue.id, name: venue.name, capacity: venue.capacity, approvalStatus: venue.approval_status, commitments, templates } };
+  });
+
   app.get('/api/venues/:id/scaffold/versions', { preHandler: requireAuth }, async (req) => {
     const { id } = req.params as { id: string }; const venue = venuesRepo.findById(id);
     if (!venue) throw NotFound(); if (!can(req.auth!.memberships, { organizationId: venue.organization_id }, 'venues.view')) throw Forbidden();

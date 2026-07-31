@@ -19,5 +19,7 @@ describe('Space calendar', () => {
     expect(res.statusCode).toBe(200);
     expect(res.json().calendar.spaces[0]).toMatchObject({ name: 'Grand Hall', capacity: 100 });
     expect(res.json().calendar.commitments[0]).toMatchObject({ title: 'Space Wedding', venue_name: 'Grand Hall' });
+    const detail = await app.inject({ method: 'GET', url: `/api/venues/${venue.json().venue.id}/space-detail`, headers: { authorization: `Bearer ${token}` } });
+    expect(detail.statusCode).toBe(200); expect(detail.json().space).toMatchObject({ name: 'Grand Hall', capacity: 100 }); expect(detail.json().space.commitments[0].title).toBe('Space Wedding');
   });
 });
