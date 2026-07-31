@@ -64,7 +64,8 @@ export function AuditLog({ orgId }: Props) {
   const [search, setSearch] = useState('');
   const [actionFilter, setActionFilter] = useState<string | null>(null);
   const [managerAuditFilter, setManagerAuditFilter] = useState<'all' | 'manager_ops' | 'pii' | 'approvals' | 'communications'>('all');
-  const managerMode = typeof window !== 'undefined' && localStorage.getItem('wvi_registration_role') === 'venue_manager';
+  const currentUserQuery = useQuery({ queryKey: ['me', 'audit-role'], queryFn: () => sdk.auth.me(), staleTime: 60_000 });
+  const managerMode = currentUserQuery.data ? (currentUserQuery.data.memberships?.some((membership: any) => membership.organizationId === orgId && String(membership.roleKey).toLowerCase() === 'manager') ?? false) : (typeof window !== 'undefined' && localStorage.getItem('wvi_registration_role') === 'venue_manager');
   const debouncedSearch = useDebouncedValue(search, 250);
 
   const { data, isLoading } = useQuery({
