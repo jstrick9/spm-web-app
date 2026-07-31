@@ -631,10 +631,12 @@ function updateDraftArray(setDraft: (value: any) => void, key: string, index: nu
 function SystemHealthDashboard({ orgId }: { orgId: string }) {
   const rolesQuery = useQuery({ queryKey: ['roles', orgId, 'health'], queryFn: () => sdk.roles.listRoles(orgId) });
   const configQuery = useQuery({ queryKey: ['platformConfig', orgId, 'health'], queryFn: () => sdk.platformConfig.getOrg(orgId) });
+  const integrationsQuery = useQuery({ queryKey: ['integrations', orgId, 'health'], queryFn: () => sdk.integrations.list(orgId) });
   const adminConfig = mergeAdminConfig(configQuery.data?.config);
   const checks = [
     { label: 'Configuration storage', ok: !configQuery.isError, detail: configQuery.isLoading ? 'Checking organization config…' : 'Org Platform Studio config is reachable.' },
     { label: 'Role catalog', ok: !rolesQuery.isError && (rolesQuery.data?.roles?.length ?? 0) > 0, detail: `${rolesQuery.data?.roles?.length ?? 0} roles available for preview and assignment.` },
+    { label: 'Integration connections', ok: !integrationsQuery.isError && (integrationsQuery.data?.integrations ?? []).every((integration: any) => integration.status === 'connected' || integration.status === 'disabled'), detail: integrationsQuery.isLoading ? 'Checking integration status…' : `${(integrationsQuery.data?.integrations ?? []).filter((integration: any) => integration.status === 'connected').length} connected integration(s).` },
     { label: 'Critical notification path', ok: adminConfig.notificationPreferences.some((pref: any) => pref.enabled && pref.criticalOnly), detail: 'At least one channel should carry critical-only alerts for health drops.' },
     { label: 'Owner setup requirements', ok: adminConfig.setupChecklist.some((item: any) => item.required), detail: `${adminConfig.setupChecklist.filter((item: any) => item.required).length} required setup steps configured.` },
     { label: 'Data retention policy', ok: adminConfig.dataRetention.auditLogMonths >= 12, detail: `${adminConfig.dataRetention.auditLogMonths} months audit log retention configured.` },
@@ -651,7 +653,7 @@ function SystemHealthDashboard({ orgId }: { orgId: string }) {
         <CardContent>
           <div className="grid gap-3 md:grid-cols-3">
             <div className="rounded-xl border border-border bg-bg p-4"><p className="text-xs text-fg-subtle">Checks passing</p><p className="text-2xl font-black text-fg">{healthy}/{checks.length}</p></div>
-            <div className="rounded-xl border border-border bg-bg p-4"><p className="text-xs text-fg-subtle">Integration status</p><p className="text-2xl font-black text-fg">{healthy === checks.length ? 'Ready' : 'Review'}</p></div>
+            <div className="rounded-xl border border-border bg-bg p-4"><p className="text-xs text-fg-subtle">Integration status</p><p className="text-2xl font-black text-fg">{integrationsQuery.isLoading ? 'Checking' : integrationsQuery.isError ? 'Unavailable' : 'Reviewed'}</p></div>
             <div className="rounded-xl border border-border bg-bg p-4"><p className="text-xs text-fg-subtle">Last checked</p><p className="text-sm font-semibold text-fg">{new Date().toLocaleString()}</p></div>
           </div>
         </CardContent>
