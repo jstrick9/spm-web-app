@@ -148,6 +148,16 @@ export async function eventRoutes(app: FastifyInstance) {
     return reply.code(201).send({ event });
   });
 
+  app.get('/api/events/:eventId/day-of-contact', { preHandler: requireAuth }, async (req) => {
+    const { eventId } = req.params as { eventId: string }; const event = eventsRepo.findById(eventId); if (!event) throw NotFound(); const isCouple = req.auth!.memberships.some((membership: any) => membership.eventId === eventId && String(membership.roleKey).toLowerCase() === 'couple'); if (!isCouple) throw Forbidden();
+    const metadata = (() => { try { return JSON.parse(event.metadata || '{}'); } catch { return {}; } })(); return { contact: metadata.dayOfContact || { name: '', phone: '', email: '', hours: '', escalation: '' } };
+  });
+  app.put('/api/events/:eventId/day-of-contact', { preHandler: requireAuth }, async (req) => {
+    const { eventId } = req.params as { eventId: string }; const event = eventsRepo.findById(eventId); if (!event) throw NotFound(); if (!can(req.auth!.memberships, { organizationId: event.organization_id }, 'events.edit')) throw Forbidden();
+    const parsed = z.object({ name: z.string().min(1).max(160), phone: z.string().max(40).optional(), email: z.string().email().optional().or(z.literal('')), hours: z.string().max(200).optional(), escalation: z.string().max(1000).optional() }).safeParse(req.body); if (!parsed.success) throw BadRequest('invalid-input', parsed.error.issues);
+    const metadata = (() => { try { return JSON.parse(event.metadata || '{}'); } catch { return {}; } })(); eventsRepo.update(eventId, { metadata: { ...metadata, dayOfContact: parsed.data } }); return { contact: parsed.data };
+  });
+
   app.post('/api/events/:eventId/couple-updates', { preHandler: requireAuth }, async (req, reply) => {
     const { eventId } = req.params as { eventId: string }; const event = eventsRepo.findById(eventId); if (!event) throw NotFound(); if (!can(req.auth!.memberships, { organizationId: event.organization_id }, 'events.edit')) throw Forbidden();
     const parsed = z.object({ templateId: z.string().optional(), title: z.string().min(1).max(200), body: z.string().min(1).max(4000), category: z.string().min(1).max(60), critical: z.boolean().optional() }).safeParse(req.body); if (!parsed.success) throw BadRequest('invalid-input', parsed.error.issues);
