@@ -48,6 +48,7 @@ export const eventsSdk = {
     return api.get(`/api/orgs/${orgId}/events${qs ? `?${qs}` : ''}`);
   },
 
+  coupleUpdateSummary(eventId: string): Promise<{ coupleCount: number; updates: Array<{ id: string; title: string; category: string; critical: number; published_at: string; viewed_count: number; acknowledged_count: number }> }> { return api.get(`/api/events/${eventId}/couple-updates/summary`); },
   coupleUpdates(eventId: string): Promise<{ updates: Array<any> }> { return api.get(`/api/events/${eventId}/couple-updates`); },
   viewCoupleUpdate(eventId: string, updateId: string): Promise<{ ok: boolean }> { return api.post(`/api/events/${eventId}/couple-updates/${updateId}/view`, {}); },
   acknowledgeCoupleUpdate(eventId: string, updateId: string): Promise<{ ok: boolean }> { return api.post(`/api/events/${eventId}/couple-updates/${updateId}/acknowledge`, {}); },
