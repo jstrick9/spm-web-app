@@ -148,6 +148,25 @@ export async function eventRoutes(app: FastifyInstance) {
     return reply.code(201).send({ event });
   });
 
+  app.post('/api/events/:eventId/couple-updates', { preHandler: requireAuth }, async (req, reply) => {
+    const { eventId } = req.params as { eventId: string }; const event = eventsRepo.findById(eventId); if (!event) throw NotFound(); if (!can(req.auth!.memberships, { organizationId: event.organization_id }, 'events.edit')) throw Forbidden();
+    const parsed = z.object({ templateId: z.string().optional(), title: z.string().min(1).max(200), body: z.string().min(1).max(4000), category: z.string().min(1).max(60), critical: z.boolean().optional() }).safeParse(req.body); if (!parsed.success) throw BadRequest('invalid-input', parsed.error.issues);
+    const id = crypto.randomUUID(); db.prepare(`INSERT INTO event_week_updates (id, organization_id, event_id, template_id, title, body, category, critical, published_by) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`).run(id, event.organization_id, eventId, parsed.data.templateId || null, parsed.data.title, parsed.data.body, parsed.data.category, parsed.data.critical ? 1 : 0, req.auth!.userId);
+    return reply.code(201).send({ update: db.prepare(`SELECT * FROM event_week_updates WHERE id=?`).get(id) });
+  });
+  app.get('/api/events/:eventId/couple-updates', { preHandler: requireAuth }, async (req) => {
+    const { eventId } = req.params as { eventId: string }; const event = eventsRepo.findById(eventId); if (!event) throw NotFound(); const isCouple = req.auth!.memberships.some((membership: any) => membership.eventId === eventId && String(membership.roleKey).toLowerCase() === 'couple'); if (!isCouple) throw Forbidden();
+    const updates = db.prepare(`SELECT u.*, a.viewed_at, a.acknowledged_at FROM event_week_updates u LEFT JOIN event_week_update_acknowledgments a ON a.update_id=u.id AND a.user_id=? WHERE u.event_id=? ORDER BY u.published_at DESC`).all(req.auth!.userId, eventId); return { updates };
+  });
+  app.post('/api/events/:eventId/couple-updates/:updateId/view', { preHandler: requireAuth }, async (req) => {
+    const { eventId, updateId } = req.params as { eventId: string; updateId: string }; const isCouple = req.auth!.memberships.some((membership: any) => membership.eventId === eventId && String(membership.roleKey).toLowerCase() === 'couple'); if (!isCouple) throw Forbidden();
+    db.prepare(`INSERT INTO event_week_update_acknowledgments (update_id, user_id, viewed_at) VALUES (?, ?, datetime('now')) ON CONFLICT(update_id, user_id) DO UPDATE SET viewed_at=datetime('now')`).run(updateId, req.auth!.userId); return { ok: true };
+  });
+  app.post('/api/events/:eventId/couple-updates/:updateId/acknowledge', { preHandler: requireAuth }, async (req) => {
+    const { eventId, updateId } = req.params as { eventId: string; updateId: string }; const isCouple = req.auth!.memberships.some((membership: any) => membership.eventId === eventId && String(membership.roleKey).toLowerCase() === 'couple'); if (!isCouple) throw Forbidden();
+    db.prepare(`INSERT INTO event_week_update_acknowledgments (update_id, user_id, viewed_at, acknowledged_at) VALUES (?, ?, datetime('now'), datetime('now')) ON CONFLICT(update_id, user_id) DO UPDATE SET viewed_at=datetime('now'), acknowledged_at=datetime('now')`).run(updateId, req.auth!.userId); return { ok: true };
+  });
+
   app.get('/api/orgs/:orgId/communication-templates', { preHandler: requireAuth }, async (req) => {
     const { orgId } = req.params as { orgId: string }; if (!can(req.auth!.memberships, { organizationId: orgId }, 'events.view')) throw Forbidden();
     return { templates: db.prepare(`SELECT * FROM venue_communication_templates WHERE organization_id=? ORDER BY active DESC, category, name`).all(orgId) };
