@@ -76,7 +76,22 @@ function staffingCoverage(orgId: string) {
   return { events: [...eventMap.values()].map((group) => ({ ...group, staffCount: group.staffIds.size, taskCount: taskMap.get(group.eventId || 'unassigned')?.task_count || 0, blockedTaskCount: taskMap.get(group.eventId || 'unassigned')?.blocked_count || 0, missingRoles: group.requiredRoles.filter((role: string) => !group.shifts.some((shift: any) => shift.role === role)), staffIds: undefined, requiredRoles: undefined })), staff: [...staffMap.values()].map((staff) => ({ ...staff, eventCount: staff.eventIds.size, eventIds: undefined })), conflicts: [...new Set(conflicts)], conflictDetails, totalShifts: shifts.length };
 }
 
+const coreSetupChecklist = [
+  ['Confirm ceremony seating and processional path', 'coordinator'], ['Set reception tables, service, and dance floor', 'setup'], ['Verify exits, accessibility route, and power', 'setup'], ['Confirm vendor load-in and assigned zones', 'coordinator'], ['Complete final floor walk and handoff', 'coordinator'],
+] as const;
+
 export async function staffRoutes(app: FastifyInstance) {
+  app.get('/api/events/:eventId/setup-checklist', { preHandler: requireAuth }, async (req) => {
+    const { eventId } = req.params as { eventId: string }; const event = eventsRepo.findById(eventId); if (!event) throw NotFound(); if (!can(req.auth!.memberships, { organizationId: event.organization_id }, 'staff.view')) throw Forbidden();
+    return { checklist: staffTasksRepo.listForOrg(event.organization_id, { eventId }).filter((task: any) => { try { return JSON.parse(task.tags || '[]').includes('event-week-setup'); } catch { return false; } }) };
+  });
+  app.post('/api/events/:eventId/setup-checklist/seed', { preHandler: requireAuth }, async (req, reply) => {
+    const { eventId } = req.params as { eventId: string }; const event = eventsRepo.findById(eventId); if (!event) throw NotFound(); if (!can(req.auth!.memberships, { organizationId: event.organization_id }, 'staff.manage')) throw Forbidden();
+    const existing = staffTasksRepo.listForOrg(event.organization_id, { eventId }); const existingTitles = new Set(existing.map((task: any) => task.title));
+    const created = coreSetupChecklist.filter(([title]) => !existingTitles.has(title)).map(([title, role]) => staffTasksRepo.create(event.organization_id, req.auth!.userId, { eventId, title, phase: 'during-event', priority: 'high', tags: ['event-week-setup', role] }));
+    return reply.code(201).send({ created, checklist: staffTasksRepo.listForOrg(event.organization_id, { eventId }).filter((task: any) => { try { return JSON.parse(task.tags || '[]').includes('event-week-setup'); } catch { return false; } }) });
+  });
+
   app.get('/api/orgs/:orgId/staff/availability', { preHandler: requireAuth }, async (req) => {
     const { orgId } = req.params as { orgId: string }; if (!can(req.auth!.memberships, { organizationId: orgId }, 'staff.view')) throw Forbidden();
     const { staffId } = req.query as { staffId?: string }; const isManager = can(req.auth!.memberships, { organizationId: orgId }, 'staff.manage');
