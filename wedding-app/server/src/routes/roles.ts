@@ -424,6 +424,10 @@ export async function roleRoutes(app: FastifyInstance) {
       const role = rolesRepo.findById(parsed.data.roleId);
       if (!role) throw BadRequest('role-not-found');
       if (role.organization_id && role.organization_id !== orgId) throw Forbidden();
+      const org = orgsRepo.findById(orgId);
+      if (org?.owner_id === userId) throw BadRequest('cannot-change-owner-role');
+      const isOwnerOrAdmin = req.auth!.memberships.some((membership: any) => membership.organizationId === orgId && ['owner', 'admin'].includes(String(membership.roleKey).toLowerCase()));
+      if (['owner', 'admin'].includes(String(role.key).toLowerCase()) && !isOwnerOrAdmin) throw Forbidden();
 
       const updated = orgsRepo.updateMemberRole(orgId, userId, role.id);
       if (!updated) throw NotFound('membership-not-found');
