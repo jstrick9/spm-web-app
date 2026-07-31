@@ -14,7 +14,9 @@ describe('Venue communication templates', () => {
     const token = registration.json().token; const orgId = registration.json().organizationId;
     const created = await app.inject({ method: 'POST', url: `/api/orgs/${orgId}/communication-templates`, headers: { authorization: `Bearer ${token}`, 'content-type': 'application/json' }, payload: { name: 'Rain plan update', category: 'rain_plan', audience: 'both', subject: 'Weather update', body: 'The ceremony moves indoors at 3 PM.' } });
     expect(created.statusCode).toBe(201);
+    const updated = await app.inject({ method: 'PATCH', url: `/api/communication-templates/${created.json().template.id}`, headers: { authorization: `Bearer ${token}`, 'content-type': 'application/json' }, payload: { category: 'parking', audience: 'couple', active: false } });
+    expect(updated.json().template).toMatchObject({ category: 'parking', audience: 'couple', active: 0 });
     const list = await app.inject({ method: 'GET', url: `/api/orgs/${orgId}/communication-templates`, headers: { authorization: `Bearer ${token}` } });
-    expect(list.json().templates[0]).toMatchObject({ name: 'Rain plan update', category: 'rain_plan', audience: 'both' });
+    expect(list.json().templates[0]).toMatchObject({ name: 'Rain plan update', category: 'parking', audience: 'couple' });
   });
 });

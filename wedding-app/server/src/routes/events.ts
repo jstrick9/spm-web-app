@@ -159,6 +159,12 @@ export async function eventRoutes(app: FastifyInstance) {
     return reply.code(201).send({ template: db.prepare(`SELECT * FROM venue_communication_templates WHERE id=?`).get(id) });
   });
 
+  app.patch('/api/communication-templates/:id', { preHandler: requireAuth }, async (req) => {
+    const { id } = req.params as { id: string }; const template = db.prepare(`SELECT * FROM venue_communication_templates WHERE id=?`).get(id) as any; if (!template) throw NotFound(); if (!can(req.auth!.memberships, { organizationId: template.organization_id }, 'events.edit')) throw Forbidden();
+    const parsed = z.object({ name: z.string().min(1).max(120).optional(), category: z.enum(['rain_plan','timing_change','parking','arrival','guest_guidance','other']).optional(), audience: z.enum(['couple','guests','both']).optional(), subject: z.string().min(1).max(200).optional(), body: z.string().min(1).max(4000).optional(), active: z.boolean().optional() }).safeParse(req.body); if (!parsed.success) throw BadRequest('invalid-input', parsed.error.issues);
+    const map: Record<string, string> = { name: 'name', category: 'category', audience: 'audience', subject: 'subject', body: 'body', active: 'active' }; const fields: string[] = []; const values: any[] = []; for (const [key, column] of Object.entries(map)) if (key in parsed.data) { fields.push(`${column}=?`); values.push(key === 'active' ? ((parsed.data as any)[key] ? 1 : 0) : (parsed.data as any)[key]); } if (!fields.length) return { template }; values.push(id); db.prepare(`UPDATE venue_communication_templates SET ${fields.join(', ')}, updated_at=datetime('now') WHERE id=?`).run(...values); return { template: db.prepare(`SELECT * FROM venue_communication_templates WHERE id=?`).get(id) };
+  });
+
   app.get('/api/orgs/:orgId/portfolio-readiness', { preHandler: requireAuth }, async (req) => {
     const { orgId } = req.params as { orgId: string }; if (!can(req.auth!.memberships, { organizationId: orgId }, 'events.view')) throw Forbidden();
     const events = eventsRepo.listForOrg(orgId, { status: ['booked','planning','final_review'] as any });
