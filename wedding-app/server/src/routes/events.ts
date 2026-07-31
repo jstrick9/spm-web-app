@@ -148,6 +148,17 @@ export async function eventRoutes(app: FastifyInstance) {
     return reply.code(201).send({ event });
   });
 
+  app.get('/api/orgs/:orgId/communication-templates', { preHandler: requireAuth }, async (req) => {
+    const { orgId } = req.params as { orgId: string }; if (!can(req.auth!.memberships, { organizationId: orgId }, 'events.view')) throw Forbidden();
+    return { templates: db.prepare(`SELECT * FROM venue_communication_templates WHERE organization_id=? ORDER BY active DESC, category, name`).all(orgId) };
+  });
+  app.post('/api/orgs/:orgId/communication-templates', { preHandler: requireAuth }, async (req, reply) => {
+    const { orgId } = req.params as { orgId: string }; if (!can(req.auth!.memberships, { organizationId: orgId }, 'events.edit')) throw Forbidden();
+    const parsed = z.object({ name: z.string().min(1).max(120), category: z.enum(['rain_plan','timing_change','parking','arrival','guest_guidance','other']), audience: z.enum(['couple','guests','both']), subject: z.string().min(1).max(200), body: z.string().min(1).max(4000), active: z.boolean().optional() }).safeParse(req.body); if (!parsed.success) throw BadRequest('invalid-input', parsed.error.issues);
+    const id = crypto.randomUUID(); db.prepare(`INSERT INTO venue_communication_templates (id, organization_id, name, category, audience, subject, body, active, created_by) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`).run(id, orgId, parsed.data.name, parsed.data.category, parsed.data.audience, parsed.data.subject, parsed.data.body, parsed.data.active === false ? 0 : 1, req.auth!.userId);
+    return reply.code(201).send({ template: db.prepare(`SELECT * FROM venue_communication_templates WHERE id=?`).get(id) });
+  });
+
   app.get('/api/orgs/:orgId/portfolio-readiness', { preHandler: requireAuth }, async (req) => {
     const { orgId } = req.params as { orgId: string }; if (!can(req.auth!.memberships, { organizationId: orgId }, 'events.view')) throw Forbidden();
     const events = eventsRepo.listForOrg(orgId, { status: ['booked','planning','final_review'] as any });
