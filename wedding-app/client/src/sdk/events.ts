@@ -48,6 +48,7 @@ export const eventsSdk = {
     return api.get(`/api/orgs/${orgId}/events${qs ? `?${qs}` : ''}`);
   },
 
+  liveOperations(eventId: string): Promise<{ board: { event: { id: string; title: string; startDate: string | null; status: SdkEventStatus }; tasks: any[]; shifts: any[]; vendors: any[]; incidents: any[]; layouts: any[] } }> { return api.get(`/api/events/${eventId}/live-operations`); },
   portfolioReadiness(orgId: string): Promise<{ events: Array<{ id: string; title: string; status: SdkEventStatus; startDate: string | null; guestCount: number; readinessScore: number; criticalIssues: number; warningIssues: number; nextIssue: { title: string; detail: string; href: string } | null }> }> { return api.get(`/api/orgs/${orgId}/portfolio-readiness`); },
   get(eventId: string): Promise<{ event: SdkEvent }> {
     return api.get(`/api/events/${eventId}`);
