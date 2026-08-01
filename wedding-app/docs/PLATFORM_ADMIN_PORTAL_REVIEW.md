@@ -42,12 +42,19 @@ Validation run:
 - `roles.integration.test.ts` (17/17 passing);
 - diff whitespace validation.
 
-## Next Platform Admin review sequence
+## Retention decision
 
-1. Team Members and invitation lifecycle
-2. Role/permission preview and custom-role management
-3. Organization configuration editors and persistence contracts
-4. Backup/export/restore safeguards
-5. System health, integrations, diagnostics, and feature controls
-6. Audit, retention, policy, notification, approval, and catalog admin tools
-7. Admin portal focused quality gate and regression mapping
+The venue selected **report-only** retention handling for now. Retention settings remain documented policy preferences; no automatic deletion/anonymization or candidate-review job will run until the venue explicitly authorizes a future retention workflow.
+
+## Platform Admin focused quality gate
+
+- Server administration coverage: **41/41 tests passed** across role management, platform configuration, admin change requests, and authenticated exports.
+- Client administration coverage: **28/28 tests passed** across Admin Panel, Team Members, Audit Log, Platform Studio, and diagnostics controls.
+- Server and client TypeScript checks passed.
+- Production dependency audit passed with **0 vulnerabilities** for server and client production dependencies.
+
+## Remaining review watchlist
+
+- Advanced module production-readiness labeling for diagnostics, retention, policy, notification, approval, and catalog tools.
+- Future retention execution workflow only if the venue changes its report-only decision.
+- Ongoing regression coverage whenever new platform-level role keys, permissions, or destructive administration actions are introduced.
