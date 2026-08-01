@@ -1806,7 +1806,7 @@ export function DecorManager({ orgId }: { orgId: string }) {
                         variant="ghost"
                         size="icon"
                         className="h-8 w-8 text-danger hover:bg-danger/10"
-                        onClick={() => deleteItemMutation.mutate(it.id)}
+                        onClick={() => { if (window.confirm(`Delete ${it.name}? This decor item cannot be restored.`)) deleteItemMutation.mutate(it.id); }}
                       >
                         <Trash2 className="w-4 h-4" />
                       </Button>
@@ -1872,7 +1872,7 @@ export function DecorManager({ orgId }: { orgId: string }) {
                     variant="ghost"
                     size="icon"
                     className="h-8 w-8 text-danger hover:bg-danger/10"
-                    onClick={() => deleteCategoryMutation.mutate(c.id)}
+                    onClick={() => { if (window.confirm(`Delete ${c.name}? Decor items may need to be reassigned.`)) deleteCategoryMutation.mutate(c.id); }}
                   >
                     <Trash2 className="w-4 h-4" />
                   </Button>
