@@ -104,6 +104,9 @@ export function ControlPanel() {
           start mirroring; switch to <code>server</code> when you trust
           the data has migrated.
         </p>
+        <p style={{ fontSize: 12, color: '#92400e', marginTop: 0, marginBottom: 16 }}>
+          These diagnostic switches are browser-local troubleshooting controls. They do not change shared server configuration and should be reset after investigation.
+        </p>
 
         <div style={{ display: 'flex', gap: 8, marginBottom: 16 }}>
           <button style={btnBase} onClick={() => setAll('local')}>All local</button>
