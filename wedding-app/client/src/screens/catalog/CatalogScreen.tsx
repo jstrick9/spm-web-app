@@ -1408,7 +1408,7 @@ export function VenueManager({ orgId }: { orgId: string }) {
                       <Plus className="h-3.5 w-3.5" />
                    </Button>
 
-                   <Button variant="ghost" size="icon" className="h-8 w-8 text-danger hover:bg-danger/10" onClick={() => deleteMutation.mutate(v.id)}>
+                   <Button variant="ghost" size="icon" className="h-8 w-8 text-danger hover:bg-danger/10" onClick={() => { if (window.confirm(`Delete ${v.name}? Existing event layouts will lose their space link.`)) deleteMutation.mutate(v.id); }}>
                      <Trash2 className="w-4 h-4" />
                    </Button>
                 </div>
