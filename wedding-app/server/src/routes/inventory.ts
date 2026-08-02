@@ -1,5 +1,6 @@
 import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
+import { db } from '../db/database.js';
 import { requireAuth } from '../middleware/auth.js';
 import { can } from '../lib/rbac.js';
 import { inventoryRepo } from '../db/repos/inventory.js';
@@ -51,6 +52,8 @@ export async function inventoryRoutes(app: FastifyInstance) {
     const item = inventoryRepo.findById(id);
     if (!item) throw NotFound();
     if (!can(req.auth!.memberships, { organizationId: item.organization_id }, 'inventory.manage')) throw Forbidden();
+    const reservationCount = Number((db.prepare(`SELECT COUNT(*) AS count FROM layout_inventory_reservations WHERE inventory_item_id=?`).get(id) as any).count);
+    if (reservationCount > 0) throw BadRequest('inventory-item-has-reservations', { reservationCount });
     inventoryRepo.delete(id);
     return reply.code(204).send();
   });
