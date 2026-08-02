@@ -1,39 +1,23 @@
 # Venue Portal Review
 
-_Status: in progress — began 2026-07-31._
+_Status: in progress — portal/module review began 2026-07-31._
 
 ## Scope
 
-The Venue Portal review covers Seven Paths Manor owner, admin, manager, planner, and staff workflows that manage venue operations:
-
-- dashboard and command center
-- venue spaces, scaffolds, reference plans, and approvals
-- template library and couple proposal boundaries
-- venue inventory and cross-event allocation
-- event portfolio, layouts, staffing, and Event Week operations
-- venue-to-couple communications and operational handoff
-
-## Review method
-
-- Trace owner/manager and staff journeys from navigation through persistence.
-- Verify permissions at route and API layers, not only UI gates.
-- Review destructive actions, capacity/inventory/staffing effects, empty/error/loading states, and downstream couple/vendor impact.
-- Fix validated defects as found and record affected modules.
+Seven Paths Manor owner, admin, manager, planner, and staff operational surfaces: Venue Studio, venue spaces, template gallery, inventory, event portfolio, layouts, staffing, Event Week execution, and venue-facing couple collaboration.
 
 ## Findings and remediation log
 
 | Priority | Area | Finding | Impact | Status |
 |---|---|---|---|---|
-| In review | Venue dashboard | Review active-event readiness, staffing, space, communications, and Event Week widgets for truthful status and actionable navigation. | Venue operational prioritization. | In progress. |
-| High | Venue Studio / spaces | Soft-deleting a space that was still referenced by event layouts left a broken/deleted space relationship. | Space integrity and event layout continuity. | **Fixed**: server blocks deletion while layouts reference the space; UI explains the deletion constraint. Scaffold/import/calibration review continues. |
-| In review | Templates / inventory | Review template controls, archive/edit lifecycle, capacity warnings, inventory mapping, and event proposal impact. | Couple proposal safety and inventory feasibility. | In progress. |
-| In review | Event operations | Review event stages, layouts, staffing, vendor operations, setup packets, and live Event Week board. | Event execution and staff coordination. | In progress. |
+| High | Inventory reservations | Deleting an inventory item with active layout reservations cascaded to reservation records, silently breaking event setup commitments. | Inventory availability and layout/event operational integrity risk. | **Fixed** in `0fb8a74`: deletion is blocked while reservations exist and returns reservation count. |
 
-## Review sequence
+## Next review sequence
 
-1. Venue dashboard / operational command center
-2. Venue Studio spaces and scaffold lifecycle
-3. Template library and inventory allocation
-4. Event portfolio, layouts, staffing, vendors, and Event Week execution
-5. Venue-to-couple communication and handoff boundaries
-6. Venue Portal focused quality gate
+1. Inventory lifecycle, reservation visibility, shortage/conflict behavior
+2. Venue Studio spaces, templates, and structural/layout dependency behavior
+3. Event portfolio and event-stage workflows
+4. Layout approval and operational readiness
+5. Staffing, Event Week execution, vendor operations, and live board
+6. Venue-side couple collaboration, updates, and acknowledgments
+7. Venue Portal quality gate and regression mapping

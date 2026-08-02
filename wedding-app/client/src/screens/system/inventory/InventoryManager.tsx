@@ -53,6 +53,10 @@ export function InventoryManager({ orgId }: Props) {
       qc.invalidateQueries({ queryKey: ['inventory', orgId] });
       toast({ title: 'Item removed', variant: 'success' });
     },
+    onError: (error: any) => {
+      const reserved = error?.code === 'inventory-item-has-reservations';
+      toast({ title: reserved ? 'Item is reserved by active layouts' : 'Could not remove item', description: reserved ? 'Remove or reassign the layout reservations before deleting this inventory item.' : error?.message, variant: 'destructive' });
+    },
   });
 
   if (isLoading) {
