@@ -167,6 +167,8 @@ export async function venueRoutes(app: FastifyInstance) {
     const venue = venuesRepo.findById(id);
     if (!venue) throw NotFound();
     if (!can(req.auth!.memberships, { organizationId: venue.organization_id }, 'venues.manage')) throw Forbidden();
+    const linkedLayouts = Number((db.prepare(`SELECT COUNT(*) AS count FROM layouts WHERE venue_id=?`).get(id) as { count: number }).count);
+    if (linkedLayouts > 0) throw BadRequest('venue-space-in-use', { linkedLayouts });
     venuesRepo.softDelete(id);
     return reply.code(204).send();
   });

@@ -25,7 +25,7 @@ The Venue Portal review covers Seven Paths Manor owner, admin, manager, planner,
 | Priority | Area | Finding | Impact | Status |
 |---|---|---|---|---|
 | In review | Venue dashboard | Review active-event readiness, staffing, space, communications, and Event Week widgets for truthful status and actionable navigation. | Venue operational prioritization. | In progress. |
-| In review | Venue Studio / spaces | Review scaffold lifecycle, approval, imports, reference calibration, destructive space changes, and event layout dependencies. | Space integrity and event layout continuity. | In progress. |
+| High | Venue Studio / spaces | Soft-deleting a space that was still referenced by event layouts left a broken/deleted space relationship. | Space integrity and event layout continuity. | **Fixed**: server blocks deletion while layouts reference the space; UI explains the deletion constraint. Scaffold/import/calibration review continues. |
 | In review | Templates / inventory | Review template controls, archive/edit lifecycle, capacity warnings, inventory mapping, and event proposal impact. | Couple proposal safety and inventory feasibility. | In progress. |
 | In review | Event operations | Review event stages, layouts, staffing, vendor operations, setup packets, and live Event Week board. | Event execution and staff coordination. | In progress. |
 
