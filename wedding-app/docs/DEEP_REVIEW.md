@@ -287,7 +287,7 @@ This is a serious, unusually well-tested product that genuinely understands how 
 | F-3 | Stale branches `develop`, `staging`, `feature/fixes_web_app` fast-forwarded to `main` (no merge hazard remains) | git history verified post-push |
 | F-4 | New permissions `events.stage.transition`, `events.final_review.decide`; stage transition, final-review checks/decisions, day-of-contact, and couple-guest endpoints converted from raw `roleKey` checks to cataloged permissions (admin now also eligible to decide final-review changes) | `rbac-coverage.integration.test.ts`, `final-review*.integration.test.ts` |
 | F-5 | `schema.sql` flagged as historical reference (banner) — migrations remain the single source of truth | n/a (docs) |
-| F-6 | Decomposed `routes/couple.ts` (2,190 → 30 lines) into `routes/couple/{planning,guests,finance,portal,documents,postEvent,shared}` and `routes/guests.ts` (1,589 → 20 lines) into `routes/guests/{core,portal,shared}` | all 44 couple + 88 guest-related integration tests green |
+| F-6 | Decomposed `routes/couple.ts` (2,190 → 22 lines) into `routes/couple/{planning,guests,finance,portal,documents,postEvent,shared}`, `routes/guests.ts` (1,589 → 14 lines) into `routes/guests/{core,portal,shared}`; **client follow-up**: `CatalogScreen` (2,962 → 169 + `managers/*`), `DashboardScreen` (2,513 → 861 + `dashboardPanels`), `CanvasPage` (2,874 → 2,535 + `canvasPanels`), `EventDetail` (1,973 → 637 + `eventDetailPanels`), `AdminPanel` (1,123 → 470 + `adminPanels`), `EventVendorsTab` (1,348 → 945 + `vendorPanels`), `EventStaffTab` (1,389 → 1,235 + `staffPanels`), `GuestPortalSettingsTab` (1,697 → 1,465 + `portalSettingsPanels`) | all 44 couple + 88 guest integration tests green; full client suite 738/738 green; typechecks + production build + bundle budgets pass |
 | F-7 | Stage-aware event tabs: `filterTabsForStage` hides staff/emergency/portal for lead/hold/booked and emergency until planning; wired into `EventDetail` | `eventTabConfig.test.tsx` (4) |
 | F-8 | Navigation/command-palette labels reframed per blueprint (Couple Intake Forms, Brand & Experience, Venue Studio: Spaces / Assets & Templates, Venue Inventory) | existing AppShell/PlatformStudio suites |
 | F-9 | Rain-plan alternate space: `metadata.rainPlanVenueId` validated on venue patch (approved space in-org only); `POST /api/events/:eventId/activate-rain-plan` switches the event's space with full audit; fixed the pre-existing bug where approving a space with zones in the same request failed | `rain-plan.integration.test.ts` (2) |
@@ -300,7 +300,7 @@ This is a serious, unusually well-tested product that genuinely understands how 
 
 ### Post-remediation validation (2026-08-03)
 - Server: typecheck clean; **453 tests passing** (65 files).
-- Client: typecheck clean; **738 tests passing** (120 files).
+- Client: typecheck clean; **738 tests passing** (119 files).
 - Browser: axe-core a11y (login + portal) and owner happy-path e2e passing against the built, seeded production server.
 - Bundle budgets: main index 192 KB / react-vendor 140 KB / radix-vendor 160 KB — all under budget.
 - Production build green; PWA service worker regenerated.

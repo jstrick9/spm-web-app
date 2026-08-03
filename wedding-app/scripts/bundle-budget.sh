@@ -24,15 +24,20 @@ npm run build >/tmp/bundle-build.log 2>&1 || { tail -20 /tmp/bundle-build.log; e
 FAIL=0
 check() {
   local label=$1 pattern=$2 budget_kb=$3
-  local file
-  file=$(ls $pattern 2>/dev/null | head -1 || true)
-  if [ -z "$file" ]; then
+  local files kb=0 file
+  files=$(ls $pattern 2>/dev/null || true)
+  if [ -z "$files" ]; then
     echo "[bundle] MISSING chunk: $pattern" >&2
     FAIL=1
     return
   fi
-  local kb
-  kb=$(du -k "$file" | cut -f1)
+  # Some builds emit multiple index-*.js entries (e.g. the PWA stub);
+  # enforce the budget against the LARGEST matching chunk.
+  for file in $files; do
+    local size
+    size=$(du -k "$file" | cut -f1)
+    if [ "$size" -gt "$kb" ]; then kb=$size; fi
+  done
   echo "[bundle] $label: ${kb} KB (budget ${budget_kb} KB)"
   if [ "$kb" -gt "$budget_kb" ]; then
     echo "[bundle] FAIL: $label exceeds budget (${kb} KB > ${budget_kb} KB)" >&2
