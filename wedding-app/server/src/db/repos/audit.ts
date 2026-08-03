@@ -54,4 +54,25 @@ export const auditRepo = {
     params.push(opts.limit ?? 500);
     return db.prepare(sql).all(...params) as AuditLogRow[];
   },
+
+  /**
+   * Retention: delete audit rows created before `beforeIso` (ISO-8601 or
+   * SQLite datetime string). Returns the number of deleted rows. Only called
+   * when the venue has explicitly authorized a retention policy (the
+   * AUDIT_RETENTION_DAYS env var); the default platform posture is
+   * report-only — nothing is ever deleted automatically.
+   */
+  purgeBefore(beforeIso: string, opts: { organizationId?: string } = {}): number {
+    let sql = `DELETE FROM audit_logs WHERE created_at < ?`;
+    const params: unknown[] = [beforeIso];
+    if (opts.organizationId) { sql += ` AND organization_id = ?`; params.push(opts.organizationId); }
+    return db.prepare(sql).run(...params).changes;
+  },
+
+  /** Distinct orgs with audit rows older than `beforeIso` (for retention reporting). */
+  orgsWithRowsOlderThan(beforeIso: string): Array<{ organization_id: string | null; rows: number }> {
+    return db.prepare(
+      `SELECT organization_id, COUNT(*) AS rows FROM audit_logs WHERE created_at < ? GROUP BY organization_id`
+    ).all(beforeIso) as Array<{ organization_id: string | null; rows: number }>;
+  },
 };

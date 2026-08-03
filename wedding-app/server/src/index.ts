@@ -81,7 +81,14 @@ if (rolesTableExists) {
 export async function buildApp() {
   const app = Fastify({
     logger: { level: process.env.LOG_LEVEL ?? 'info' },
-    trustProxy: true,
+    // Trust proxy headers only when running behind the known reverse proxy;
+    // TRUSTED_PROXIES accepts a comma-separated list of IPs/CIDRs. The default
+    // `true` matches the documented single-VPS Caddy deployment (port 3000 is
+    // not published). Set TRUSTED_PROXIES if the app port can be reached
+    // directly, so spoofed X-Forwarded-For headers are ignored.
+    trustProxy: process.env.TRUSTED_PROXIES
+      ? process.env.TRUSTED_PROXIES.split(',').map((s) => s.trim()).filter(Boolean)
+      : true,
     disableRequestLogging: process.env.NODE_ENV === 'test',
     bodyLimit: 2 * 1024 * 1024, // 2MB default body limit
   });

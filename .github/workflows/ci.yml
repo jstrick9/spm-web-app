@@ -62,9 +62,11 @@ jobs:
       - name: Smoke
         run: npm run smoke
 
-  # ── Accessibility: axe-core (Playwright) against public surfaces ──
+  # ── Browser quality gates: axe-core (public surfaces) + e2e happy path ──
+  # The a11y harness (scripts/a11y-test.sh) builds, seeds, and boots the real
+  # server, then runs every *.a11y.spec.ts and *.e2e.spec.ts in Playwright.
   a11y:
-    name: Accessibility (axe-core)
+    name: Browser gates (a11y + e2e)
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -73,12 +75,14 @@ jobs:
       - run: npm run install:all
       - name: Install Playwright browser + OS deps
         run: npm --prefix client exec -- playwright install --with-deps chromium
-      - name: Accessibility gate
+      - name: Bundle-size budget gate
+        run: npm run bundle:budget
+      - name: Browser gates (axe-core a11y + e2e happy path)
         run: npm run a11y
       - name: Upload Playwright report on failure
         if: failure()
         uses: actions/upload-artifact@v4
         with:
-          name: playwright-a11y-report
+          name: playwright-browser-report
           path: wedding-app/client/playwright-report/
           retention-days: 7

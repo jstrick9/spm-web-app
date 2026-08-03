@@ -1,7 +1,7 @@
 import type { FastifyInstance } from 'fastify';
 import { BadRequest, NotFound } from '../lib/errors.js';
 import { z } from 'zod';
-import { hashPassword, verifyPassword } from '../lib/crypto.js';
+import { hashPassword, verifyPassword, needsRehash } from '../lib/crypto.js';
 import { slugify } from '../lib/slug.js';
 import { auditRepo, eventsRepo, integrationsRepo, jobsRepo, orgsRepo, rolesRepo, teamInvitationsRepo, usersRepo } from '../db/repos/index.js';
 import { passwordResetTokensRepo } from '../db/repos/passwordResetTokens.js';
@@ -109,6 +109,7 @@ export async function authRoutes(app: FastifyInstance) {
       fullName: parsed.data.fullName,
       passwordHash: pwd.passwordHash,
       passwordSalt: pwd.passwordSalt,
+      passwordIterations: pwd.iterations,
     });
     let orgId: string;
     let acceptedEventId: string | null = null;
@@ -162,6 +163,7 @@ export async function authRoutes(app: FastifyInstance) {
     const ok = verifyPassword(parsed.data.password, {
       passwordHash: user.password_hash,
       passwordSalt: user.password_salt,
+      iterations: user.password_iterations ?? undefined,
     });
     if (!ok) {
       usersRepo.recordFailedLogin(user.id);
@@ -172,6 +174,17 @@ export async function authRoutes(app: FastifyInstance) {
       return reply.code(401).send({ error: 'invalid-credentials' });
     }
     usersRepo.clearFailedLogin(user.id);
+    // Rehash-on-login: transparently upgrade legacy-work-factor hashes without
+    // invalidating the session about to be issued.
+    if (needsRehash({ iterations: user.password_iterations })) {
+      const upgraded = hashPassword(parsed.data.password);
+      usersRepo.upgradePasswordHash(user.id, upgraded.passwordHash, upgraded.passwordSalt, upgraded.iterations);
+      auditRepo.log({
+        actorUserId: user.id, actorLabel: user.email,
+        action: 'user.password.rehashed', ip: req.ip,
+        details: { fromIterations: user.password_iterations ?? 120000, toIterations: upgraded.iterations },
+      });
+    }
     auditRepo.log({
       actorUserId: user.id, actorLabel: user.email,
       action: 'user.login', ip: req.ip, userAgent: req.headers['user-agent'],
@@ -327,7 +340,7 @@ export async function authRoutes(app: FastifyInstance) {
     if (!user || user.status !== 'active') return reply.code(400).send({ error: 'invalid-reset-token' });
 
     const pwd = hashPassword(parsed.data.newPassword);
-    usersRepo.changePassword(user.id, pwd.passwordHash, pwd.passwordSalt);
+    usersRepo.changePassword(user.id, pwd.passwordHash, pwd.passwordSalt, pwd.iterations);
     passwordResetTokensRepo.markUsed(reset.id);
     auditRepo.log({
       actorUserId: user.id,
@@ -354,11 +367,12 @@ export async function authRoutes(app: FastifyInstance) {
 
     const valid = verifyPassword(parsed.data.currentPassword, {
       passwordHash: user.password_hash, passwordSalt: user.password_salt,
+      iterations: user.password_iterations ?? undefined,
     });
     if (!valid) return { error: "invalid-current-password" };
 
     const pwd = hashPassword(parsed.data.newPassword);
-    usersRepo.changePassword(req.auth!.userId, pwd.passwordHash, pwd.passwordSalt);
+    usersRepo.changePassword(req.auth!.userId, pwd.passwordHash, pwd.passwordSalt, pwd.iterations);
     auditRepo.log({
       actorUserId: req.auth!.userId, actorLabel: req.auth!.email,
       action: "user.password.change", ip: req.ip,

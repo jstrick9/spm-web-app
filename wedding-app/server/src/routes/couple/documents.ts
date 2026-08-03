@@ -1,0 +1,108 @@
+import { assetsRepo, auditRepo, coupleDocumentsRepo, eventsRepo } from '../../db/repos/index.js';
+import { requireAuth } from '../../middleware/auth.js';
+import { can } from '../../lib/rbac.js';
+import { saveDocumentDataUri } from '../../lib/fileStorage.js';
+import { privateFilePath } from '../../lib/fileStorage.js';
+import { createReadStream } from 'node:fs';
+import { existsSync } from 'node:fs';
+import { BadRequest, Forbidden, NotFound } from '../../lib/errors.js';
+import type { FastifyInstance } from 'fastify';
+import { coupleDocumentUploadSchema, coupleDocumentUpdateSchema, extractDocumentSummary, safeDocument } from './shared.js';
+
+export async function coupleDocumentsRoutes(app: FastifyInstance) {
+  app.get('/api/events/:eventId/couple-documents/:documentId/content', { preHandler: requireAuth }, async (req, reply) => {
+    const { eventId, documentId } = req.params as { eventId: string; documentId: string };
+    const event = eventsRepo.findById(eventId);
+    if (!event) throw NotFound('event-not-found');
+    const orgMap = eventsRepo.orgMapForUser(req.auth!.userId);
+    if (!can(req.auth!.memberships, { eventId }, 'events.view', orgMap)) throw Forbidden();
+    const document = coupleDocumentsRepo.findById(documentId);
+    if (!document || document.event_id !== eventId) throw NotFound('document-not-found');
+    const path = privateFilePath(document.url);
+    if (!path) return reply.redirect(document.url);
+    if (!existsSync(path)) throw NotFound('document-file-not-found');
+    reply.header('Content-Type', document.mime_type || 'application/octet-stream');
+    reply.header('Content-Disposition', `inline; filename="${document.filename.replace(/[\"\\\\\r\n]/g, '_')}"`);
+    return reply.send(createReadStream(path));
+  });
+
+  app.get('/api/events/:eventId/couple-documents', { preHandler: requireAuth }, async (req) => {
+    const { eventId } = req.params as { eventId: string };
+    const event = eventsRepo.findById(eventId);
+    if (!event) throw NotFound('event-not-found');
+    const orgMap = eventsRepo.orgMapForUser(req.auth!.userId);
+    if (!can(req.auth!.memberships, { eventId }, 'events.view', orgMap)) throw Forbidden();
+    const documents = coupleDocumentsRepo.listForEvent(eventId).map(safeDocument);
+    const counts = documents.reduce((acc: Record<string, number>, doc) => { acc[doc.category] = (acc[doc.category] || 0) + 1; return acc; }, {});
+    return {
+      documents,
+      counts,
+      reviewQueue: documents.filter((doc) => ['pending', 'changes_requested'].includes(doc.approvalStatus)),
+      postEventGallery: documents.filter((doc) => doc.category === 'post_event_gallery' && doc.approvalStatus === 'approved'),
+      allowedTypes: ['application/pdf', 'image/jpeg', 'image/png', 'image/webp'],
+      maxBytes: 8 * 1024 * 1024,
+      categories: ['inspiration_photo','insurance','vendor_doc','ceremony_doc','playlist','diagram','permit','guest_list','menu','contract','post_event_gallery','other'],
+      visibilityOptions: ['couple','couple_venue','planner','vendor','guest_visible'],
+    };
+  });
+
+  app.post('/api/events/:eventId/couple-documents', { preHandler: requireAuth }, async (req, reply) => {
+    const { eventId } = req.params as { eventId: string };
+    const event = eventsRepo.findById(eventId);
+    if (!event) throw NotFound('event-not-found');
+    const orgMap = eventsRepo.orgMapForUser(req.auth!.userId);
+    if (!can(req.auth!.memberships, { eventId }, 'events.view', orgMap)) throw Forbidden();
+    const parsed = coupleDocumentUploadSchema.safeParse(req.body);
+    if (!parsed.success) throw BadRequest('invalid-input', parsed.error.issues);
+    const savedUrl = saveDocumentDataUri(parsed.data.dataUri, 'couple_doc');
+    const extractedSummary = extractDocumentSummary({ filename: parsed.data.filename, category: parsed.data.category, notes: parsed.data.notes });
+    const doc = coupleDocumentsRepo.create({ organizationId: event.organization_id, eventId, filename: parsed.data.filename, url: savedUrl, mimeType: parsed.data.mimeType, category: parsed.data.category, visibility: parsed.data.visibility, notes: parsed.data.notes, extractedSummary, uploadedBy: req.auth!.userId });
+    if (privateFilePath(savedUrl)) assetsRepo.create({ organization_id: event.organization_id, event_id: eventId, owner_type: 'couple_document', owner_id: doc.id, storage_key: savedUrl, original_filename: doc.filename, mime_type: doc.mime_type, visibility: 'private', publish_status: 'draft', created_by: req.auth!.userId });
+    auditRepo.log({ organizationId: event.organization_id, actorUserId: req.auth!.userId, actorLabel: req.auth!.email, action: 'couple.document.upload', targetType: 'couple_document', targetId: doc.id, ip: req.ip, details: { eventId, category: doc.category, visibility: doc.visibility } });
+    return reply.code(201).send({ document: safeDocument(doc) });
+  });
+
+  app.patch('/api/events/:eventId/couple-documents/:documentId', { preHandler: requireAuth }, async (req) => {
+    const { eventId, documentId } = req.params as { eventId: string; documentId: string };
+    const event = eventsRepo.findById(eventId);
+    if (!event) throw NotFound('event-not-found');
+    const orgMap = eventsRepo.orgMapForUser(req.auth!.userId);
+    if (!can(req.auth!.memberships, { eventId }, 'events.view', orgMap)) throw Forbidden();
+    const current = coupleDocumentsRepo.findById(documentId);
+    if (!current || current.event_id !== eventId) throw NotFound('document-not-found');
+    const parsed = coupleDocumentUpdateSchema.safeParse(req.body);
+    if (!parsed.success) throw BadRequest('invalid-input', parsed.error.issues);
+    const updated = coupleDocumentsRepo.update(documentId, parsed.data, req.auth!.userId);
+    return { document: updated ? safeDocument(updated) : null };
+  });
+
+  app.post('/api/events/:eventId/couple-documents/:documentId/version', { preHandler: requireAuth }, async (req, reply) => {
+    const { eventId, documentId } = req.params as { eventId: string; documentId: string };
+    const event = eventsRepo.findById(eventId);
+    if (!event) throw NotFound('event-not-found');
+    const orgMap = eventsRepo.orgMapForUser(req.auth!.userId);
+    if (!can(req.auth!.memberships, { eventId }, 'events.view', orgMap)) throw Forbidden();
+    const current = coupleDocumentsRepo.findById(documentId);
+    if (!current || current.event_id !== eventId) throw NotFound('document-not-found');
+    const parsed = coupleDocumentUploadSchema.pick({ filename: true, dataUri: true, mimeType: true, notes: true }).safeParse(req.body);
+    if (!parsed.success) throw BadRequest('invalid-input', parsed.error.issues);
+    const savedUrl = saveDocumentDataUri(parsed.data.dataUri, 'couple_doc');
+    const extractedSummary = extractDocumentSummary({ filename: parsed.data.filename, category: current.category, notes: parsed.data.notes });
+    const updated = coupleDocumentsRepo.newVersion(documentId, { filename: parsed.data.filename, url: savedUrl, mimeType: parsed.data.mimeType, notes: parsed.data.notes, actor: req.auth!.userId, extractedSummary });
+    return reply.code(201).send({ document: updated ? safeDocument(updated) : null });
+  });
+
+  app.get('/api/events/:eventId/couple-documents/final-packet.txt', { preHandler: requireAuth }, async (req, reply) => {
+    const { eventId } = req.params as { eventId: string };
+    const event = eventsRepo.findById(eventId);
+    if (!event) throw NotFound('event-not-found');
+    const orgMap = eventsRepo.orgMapForUser(req.auth!.userId);
+    if (!can(req.auth!.memberships, { eventId }, 'events.view', orgMap)) throw Forbidden();
+    const docs = coupleDocumentsRepo.listForEvent(eventId).map(safeDocument);
+    const text = [`${event.title} — Shared Final Wedding Document Packet`, '', ...docs.map((doc) => [`${doc.filename} v${doc.version}`, `Category: ${doc.category}`, `Visibility: ${doc.visibility}`, `Approval: ${doc.approvalStatus}`, `URL: ${doc.url}`, doc.extractedSummary ? `Review summary: ${doc.extractedSummary}` : ''].filter(Boolean).join('\n'))].join('\n\n---\n\n');
+    reply.header('Content-Type', 'text/plain');
+    reply.header('Content-Disposition', `attachment; filename="couple_final_document_packet_${eventId}.txt"`);
+    return reply.send(text);
+  });
+
+}

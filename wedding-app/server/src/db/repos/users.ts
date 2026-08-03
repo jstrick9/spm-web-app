@@ -7,6 +7,7 @@ export interface UserRow {
   full_name: string;
   password_hash: string;
   password_salt: string;
+  password_iterations: number | null;
   session_version: number;
   status: 'invited' | 'active' | 'suspended' | 'disabled';
   failed_login_count: number;
@@ -34,12 +35,13 @@ export const usersRepo = {
     fullName: string;
     passwordHash: string;
     passwordSalt: string;
+    passwordIterations?: number;
   }): UserRow {
     const id = uuid();
     db.prepare(
-      `INSERT INTO users (id, email, full_name, password_hash, password_salt)
-       VALUES (?, ?, ?, ?, ?)`
-    ).run(id, input.email, input.fullName, input.passwordHash, input.passwordSalt);
+      `INSERT INTO users (id, email, full_name, password_hash, password_salt, password_iterations)
+       VALUES (?, ?, ?, ?, ?, ?)`
+    ).run(id, input.email, input.fullName, input.passwordHash, input.passwordSalt, input.passwordIterations ?? null);
     return this.findById(id)!;
   },
 
@@ -81,12 +83,23 @@ export const usersRepo = {
   },
 
   /** Change password — hashes + stores + bumps session version. */
-  changePassword(userId: string, newHash: string, newSalt: string): void {
+  changePassword(userId: string, newHash: string, newSalt: string, iterations?: number): void {
     db.prepare(
-      `UPDATE users SET password_hash = ?, password_salt = ?,
+      `UPDATE users SET password_hash = ?, password_salt = ?, password_iterations = ?,
        password_updated_at = datetime('now'), session_version = session_version + 1,
        updated_at = datetime('now') WHERE id = ?`
-    ).run(newHash, newSalt, userId);
+    ).run(newHash, newSalt, iterations ?? null, userId);
+  },
+
+  /**
+   * Rehash-on-login upgrade: stores a newly derived hash WITHOUT bumping
+   * session_version, so the just-issued session token stays valid.
+   */
+  upgradePasswordHash(userId: string, newHash: string, newSalt: string, iterations: number): void {
+    db.prepare(
+      `UPDATE users SET password_hash = ?, password_salt = ?, password_iterations = ?,
+       password_updated_at = datetime('now'), updated_at = datetime('now') WHERE id = ?`
+    ).run(newHash, newSalt, iterations, userId);
   },
 
   /** Bump session version → invalidates all existing JWTs for this user. */

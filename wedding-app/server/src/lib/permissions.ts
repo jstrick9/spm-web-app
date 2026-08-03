@@ -39,6 +39,8 @@ export type PermissionId =
   | 'events.edit'
   | 'events.delete'
   | 'events.members.invite'
+  | 'events.stage.transition'   // advance an event between pipeline stages
+  | 'events.final_review.decide'// make the final call on final-review change requests
 
   // ─── Venues + catalog ─────────────────────────────────
   | 'venues.view'
@@ -64,6 +66,9 @@ export type PermissionId =
   | 'rsvp.view'
   | 'rsvp.submit'
   | 'rsvp.manage'
+
+  // ─── Couple workspace ─────────────────────────────────
+  | 'guests.couple.manage'      // couples only: own the guest list (create/edit/import/assign)
 
   // ─── Portal ───────────────────────────────────────────
   | 'portal.config.manage'
@@ -178,6 +183,8 @@ export const PERMISSION_CATALOG: ReadonlyArray<PermissionDefinition> = [
   { id: 'events.edit',           label: 'Edit events',            description: 'Modify event properties and status', category: 'events' },
   { id: 'events.delete',         label: 'Delete events',          description: 'Soft-delete events', category: 'events' },
   { id: 'events.members.invite', label: 'Invite event members',   description: 'Add couple/planner users to a specific event', category: 'events' },
+  { id: 'events.stage.transition', label: 'Transition event stages', description: 'Advance events through pipeline stages (lead → hold → booked → planning → final review → completed)', category: 'events' },
+  { id: 'events.final_review.decide', label: 'Decide final-review changes', description: 'Accept or decline final-review change requests from couples and planners', category: 'events' },
 
   // Venues + catalog
   { id: 'venues.view',           label: 'View venues',            description: 'See venue list and floor plans', category: 'venues' },
@@ -194,6 +201,7 @@ export const PERMISSION_CATALOG: ReadonlyArray<PermissionDefinition> = [
 
   // Guests
   { id: 'guests.view',           label: 'View guests',            description: 'See guest lists', category: 'guests' },
+  { id: 'guests.couple.manage',  label: 'Manage couple guest list', description: 'Create / edit / import / assign guests in the couple workspace (couples only)', category: 'guests' },
   { id: 'guests.manage',         label: 'Manage guests',          description: 'Add / edit / remove guests', category: 'guests' },
   { id: 'guests.assign',         label: 'Assign guests',          description: 'Assign guests to tables / rooms', category: 'guests' },
   { id: 'guests.import',         label: 'Import guests',          description: 'Bulk import from CSV', category: 'guests' },
@@ -317,8 +325,11 @@ export interface SystemRoleDefinition {
 }
 
 // ─── Every permission id (for the "grant all" roles) ────
+// `vendor.*` permissions are vendor-side only, and `guests.couple.manage` is
+// couple-only: even owner/admin roles must NOT gain couple guest-list
+// ownership (the venue has read-only operational guest visibility).
 const ALL_INTERNAL_PERMISSIONS: ReadonlyArray<PermissionId> = PERMISSION_CATALOG
-  .filter(p => !p.id.startsWith('vendor.'))  // vendor.portal.* are vendor-side only
+  .filter(p => !p.id.startsWith('vendor.') && p.id !== 'guests.couple.manage')
   .map(p => p.id);
 
 export const SYSTEM_ROLE_DEFINITIONS: ReadonlyArray<SystemRoleDefinition> = [
@@ -348,6 +359,7 @@ export const SYSTEM_ROLE_DEFINITIONS: ReadonlyArray<SystemRoleDefinition> = [
       'org.view',
       'roles.view',
       'events.view','events.create','events.edit','events.members.invite',
+      'events.stage.transition','events.final_review.decide',
       'venues.view',
       'catalog.view',
       'layouts.view','layouts.create','layouts.edit','layouts.publish',
@@ -418,7 +430,7 @@ export const SYSTEM_ROLE_DEFINITIONS: ReadonlyArray<SystemRoleDefinition> = [
       'events.view',
       'venues.view',
       'layouts.view','layouts.create','layouts.edit',
-      'guests.view','guests.manage','guests.assign','guests.import','guests.export',
+      'guests.view','guests.couple.manage','guests.manage','guests.assign','guests.import','guests.export',
       'rsvp.view','rsvp.submit',
       'portal.guest.view',
       'timeline.view',

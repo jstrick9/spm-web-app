@@ -29,6 +29,7 @@
     "docker:up": "docker compose up -d",
     "docker:logs": "docker compose logs -f",
     "test:mobile-visual": "bash scripts/mobile-visual-test.sh",
-    "test:mobile-visual:update": "UPDATE_SNAPSHOTS=1 bash scripts/mobile-visual-test.sh"
+    "test:mobile-visual:update": "UPDATE_SNAPSHOTS=1 bash scripts/mobile-visual-test.sh",
+    "bundle:budget": "bash scripts/bundle-budget.sh"
   }
 }

@@ -50,9 +50,11 @@ wedding-app/
 │   │   │   ├── database.ts         # SQLite connection
 │   │   │   ├── migrate.ts          # Migration runner
 │   │   │   ├── seed.ts             # Demo data (4 events, 28 guests, etc.)
-│   │   │   ├── migrations/         # 10 SQL migration files (49 tables)
+│   │   │   ├── migrations/         # 49 forward-only SQL migration files
 │   │   │   └── repos/              # Data access layer (26 repos)
-│   │   ├── routes/                 # 28 route files + 26 test files
+│   │   ├── routes/                 # 33 route files + test files; couple.ts and
+│   │   │                         #   guests.ts decomposed into routes/couple/*
+│   │   │                         #   and routes/guests/* domain modules
 │   │   ├── lib/                    # RBAC, crypto, errors, permissions
 │   │   ├── integrations/           # Provider framework (SMTP, registry)
 │   │   ├── jobs/                   # Background job worker
@@ -71,7 +73,7 @@ wedding-app/
 ## Key Design Decisions
 
 ### 1. RBAC: DB-backed, code-defined catalog
-- 71 permission IDs defined as a TypeScript union in `lib/permissions.ts`
+- 75 permission IDs defined as a TypeScript union in `lib/permissions.ts`
 - 7 system roles with pre-defined grants (owner → guest)
 - Custom roles created at runtime via the admin API
 - Permission check: `can(memberships, scope, permissionId)`
@@ -129,9 +131,10 @@ User Action → React Component → SDK method → HTTP fetch
 
 | Type | Count | Tool | Coverage |
 |---|---|---|---|
-| Server integration | 359 | Vitest + Fastify inject | Every CRUD lifecycle, auth, RBAC, portal flow, E2E journey |
-| Client component | 635 | Vitest + Testing Library | Every screen, dialog, form, toolbar, widget |
-| **Total** | **994** | | 0 failures, 0 untested components |
+| Server integration | 450+ | Vitest + Fastify inject | Every CRUD lifecycle, auth, RBAC, portal flow, E2E journey, space-conflict guard, rain-plan, retention |
+| Client component | 740+ | Vitest + Testing Library | Every screen, dialog, form, toolbar, widget |
+| Browser (Playwright) | 3+ | axe-core + happy-path e2e | Public-surface WCAG A/AA + owner login → create-event journey |
+| **Total** | **1,200+** | | 0 failures, 0 untested components |
 
 ---
 
@@ -146,3 +149,8 @@ User Action → React Component → SDK method → HTTP fetch
 7. **Route**: Add to `App.tsx` route table + command palette
 8. **Tests**: Server integration + client component tests
 9. **Docs**: `docs/PHASE-XX-DAY-Y.md`
+
+
+### 6. Timestamps
+
+Application code writes ISO-8601 UTC (`YYYY-MM-DDTHH:MM:SS.sssZ` via `lib/time.ts`'s `nowIso()`). SQLite `datetime('now')` is reserved for column defaults inside migrations. Never compare the two formats as strings.

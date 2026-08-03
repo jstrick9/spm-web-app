@@ -52,7 +52,10 @@ export class ApiError extends Error {
     public readonly code: string,
     public readonly body?: ApiErrorBody,
   ) {
-    super(`${status} ${code}`);
+    // Prefer the server's human-readable message when present (e.g. the
+    // venue-space-conflict message listing the conflicting bookings), with a
+    // stable `${status} ${code}` fallback for callers that branch on it.
+    super(typeof body?.message === 'string' && body.message ? `${status} ${code}: ${body.message}` : `${status} ${code}`);
     this.name = 'ApiError';
   }
 }

@@ -1,3 +1,16 @@
+-- ============================================================================
+-- ⚠️  HISTORICAL REFERENCE ONLY — DO NOT USE FOR MIGRATIONS
+-- ============================================================================
+-- This file is a Phase-1 schema snapshot. It is NOT executed anywhere and
+-- CONTRADICTS the live schema in places (e.g. it defines the old
+-- organization_memberships.role column with a 4-value CHECK, while the real
+-- schema uses role_id referencing the roles table with 8 system roles).
+--
+-- The single source of truth for the database shape is the forward-only
+-- migration runner: server/src/db/migrations/NNNN_name.sql, applied by
+-- server/src/db/migrate.ts on boot. Read the migrations, not this file.
+-- ============================================================================
+
 -- ============================================================
 -- Wedding Venue App - SQLite schema v2
 -- ============================================================

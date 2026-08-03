@@ -116,6 +116,39 @@ export const eventsRepo = {
     return res.changes > 0;
   },
 
+  /**
+   * Find events that already occupy a venue space over the given date range.
+   * Cancelled and lost events do not block a space; soft-deleted events are
+   * excluded. Returns the conflicting rows so callers can report them.
+   */
+  listSpaceConflicts(input: {
+    organizationId: string;
+    venueId: string;
+    startDate: string;
+    endDate?: string | null;
+    excludeEventId?: string;
+  }): Array<{ id: string; title: string; start_date: string | null; end_date: string | null; status: EventStatus }> {
+    const rows = db.prepare(
+      `SELECT id, title, start_date, end_date, status
+       FROM events
+       WHERE organization_id = ?
+         AND venue_id = ?
+         AND deleted_at IS NULL
+         AND status NOT IN ('cancelled','lost')
+         AND id <> ?
+         AND start_date IS NOT NULL
+         AND start_date <= ?
+         AND COALESCE(end_date, start_date) >= ?`
+    ).all(
+      input.organizationId,
+      input.venueId,
+      input.excludeEventId ?? '',
+      input.endDate ?? input.startDate,
+      input.startDate,
+    ) as Array<{ id: string; title: string; start_date: string | null; end_date: string | null; status: EventStatus }>;
+    return rows;
+  },
+
   listForOrg(orgId: string, opts: {
     status?: EventStatus | EventStatus[];
     search?: string;

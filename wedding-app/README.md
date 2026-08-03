@@ -77,7 +77,7 @@ Login: `owner@demo.local` / `wedding123`
 │  └── Job queue + integration framework             │
 ├────────────────────────────────────────────────────┤
 │  SQLite                                            │
-│  ├── schema managed by 34 forward-only migrations│
+│  ├── schema managed by 49 forward-only migrations│
 │  ├── Single-file database (full control)           │
 │  └── Encrypted integration credentials (AES-GCM)  │
 └────────────────────────────────────────────────────┘
@@ -111,10 +111,13 @@ Login: `owner@demo.local` / `wedding123`
 ## Test Suite
 
 ```
-Total: 1,107 automated tests (latest validated suite)
+Total: 1,191 automated tests (latest validated suite)
 
-Server:  397 tests across 42 test files
-Client:  710 tests across 109 test files
+Server:  453 tests across 65 test files (incl. space-conflict, rain-plan,
+         retention, and auth-hardening regression suites)
+Client:  738 tests across 120 test files (incl. stage-aware tab and space
+         conflict utilities), plus Playwright browser gates (axe-core a11y +
+         a full owner happy-path e2e) and a bundle-size budget gate
 
 Every screen component has test coverage.
 Every API endpoint is RBAC-gated and integration-tested.
@@ -136,6 +139,8 @@ Every API endpoint is RBAC-gated and integration-tested.
 | `WEDDING_SECRETS_KEY` | — | AES-256-GCM key for integration credentials (required in Docker production) |
 | `WEDDING_UPLOADS_PATH` | `server/uploads` | Persistent directory for uploaded images and documents |
 | `WEBHOOK_DELIVERY_RETENTION_DAYS` | `90` | Days to retain outbound webhook delivery history |
+| `AUDIT_RETENTION_DAYS` | unset | Audit-log retention window; **report-only by default** — set explicitly to enable the daily purge |
+| `TRUSTED_PROXIES` | unset | Comma-separated proxy IPs to trust for `X-Forwarded-For` when the app port is directly reachable |
 
 ---
 

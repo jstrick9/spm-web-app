@@ -93,8 +93,18 @@ export async function venueRoutes(app: FastifyInstance) {
     if (!can(req.auth!.memberships, { organizationId: venue.organization_id }, 'venues.manage')) throw Forbidden();
     const parsed = venueSchema.partial().safeParse(req.body);
     if (!parsed.success) throw BadRequest('invalid-input', parsed.error.issues);
+    // Rain-plan alternate space must reference an approved space in this org.
+    if (typeof parsed.data.metadata?.rainPlanVenueId === 'string' && parsed.data.metadata.rainPlanVenueId) {
+      const alternate = venuesRepo.findById(parsed.data.metadata.rainPlanVenueId);
+      if (!alternate || alternate.organization_id !== venue.organization_id || alternate.approval_status !== 'approved') {
+        throw BadRequest('invalid-rain-plan-space', { rainPlanVenueId: parsed.data.metadata.rainPlanVenueId });
+      }
+    }
     if (parsed.data.approvalStatus === 'approved') {
-      const masterLayout = (() => { try { return JSON.parse(venue.master_layout || '{}'); } catch { return {}; } })() as { zones?: Array<{ type?: string }> };
+      // Use the pending scaffold from this same patch when provided — the
+      // check must not read only the pre-patch DB value (approving a space
+      // with its zones in one request used to fail spuriously).
+      const masterLayout = (parsed.data.masterLayout ?? (() => { try { return JSON.parse(venue.master_layout || '{}'); } catch { return {}; } })()) as { zones?: Array<{ type?: string }> };
       const zoneTypes = new Set((masterLayout.zones || []).map((zone) => zone.type));
       const missing = ['exit', 'accessible_route', 'power', 'loading'].filter((type) => !zoneTypes.has(type));
       const overrideReason = typeof parsed.data.metadata?.approvalOverrideReason === 'string' ? parsed.data.metadata.approvalOverrideReason.trim() : '';
@@ -160,6 +170,35 @@ export async function venueRoutes(app: FastifyInstance) {
     const layout = layoutsRepo.create({ organizationId: venue.organization_id, eventId: parsed.data.eventId, venueId: venue.id, name: parsed.data.name ?? `${venue.name} event layout`, visibility: 'event', payload: { ...masterLayout, venueScaffoldId: venue.id, venueRevision: venue.revision }, createdBy: req.auth!.userId });
     auditRepo.log({ organizationId: venue.organization_id, actorUserId: req.auth!.userId, actorLabel: req.auth!.email, action: 'venue.scaffold.instantiate', targetType: 'layout', targetId: layout.id, ip: req.ip, details: { venueId: venue.id, eventId: parsed.data.eventId, venueRevision: venue.revision } });
     return reply.code(201).send({ layout });
+  });
+
+  /**
+   * Activate the rain plan: move the event to the configured alternate space
+   * (metadata.rainPlanVenueId on the currently assigned venue scaffold).
+   */
+  app.post('/api/events/:eventId/activate-rain-plan', { preHandler: requireAuth }, async (req, reply) => {
+    const { eventId } = req.params as { eventId: string };
+    const event = eventsRepo.findById(eventId);
+    if (!event) throw NotFound('event-not-found');
+    const orgMap = eventsRepo.orgMapForUser(req.auth!.userId);
+    if (!can(req.auth!.memberships, { eventId }, 'events.edit', orgMap)) throw Forbidden();
+    if (!event.venue_id) throw BadRequest('rain-plan-requires-venue');
+    const venue = venuesRepo.findById(event.venue_id);
+    if (!venue) throw NotFound('venue-not-found');
+    const metadata = (() => { try { return JSON.parse(venue.metadata || '{}'); } catch { return {}; } })() as Record<string, unknown>;
+    const rainPlanVenueId = typeof metadata.rainPlanVenueId === 'string' ? metadata.rainPlanVenueId : '';
+    if (!rainPlanVenueId) throw BadRequest('rain-plan-not-configured');
+    const alternate = venuesRepo.findById(rainPlanVenueId);
+    if (!alternate || alternate.organization_id !== event.organization_id || alternate.approval_status !== 'approved') {
+      throw BadRequest('invalid-rain-plan-space');
+    }
+    const updated = eventsRepo.update(eventId, { venue_id: rainPlanVenueId });
+    auditRepo.log({
+      organizationId: event.organization_id, actorUserId: req.auth!.userId, actorLabel: req.auth!.email,
+      action: 'event.rain_plan.activated', targetType: 'event', targetId: eventId, ip: req.ip,
+      details: { fromVenueId: event.venue_id, fromVenueName: venue.name, toVenueId: rainPlanVenueId, toVenueName: alternate.name },
+    });
+    return reply.code(200).send({ event: updated, rainPlan: { fromVenue: venue.name, toVenue: alternate.name } });
   });
 
   app.delete('/api/venues/:id', { preHandler: requireAuth }, async (req, reply) => {

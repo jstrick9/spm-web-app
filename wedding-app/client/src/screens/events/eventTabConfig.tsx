@@ -1,5 +1,6 @@
 import type { ReactNode } from 'react';
 import { BarChart, ClipboardCheck, ClipboardList, Cog, DollarSign, FileSignature, ImageIcon, LayoutGrid, Link as LinkIcon, Mail, MapPin, MessageCircle, ShieldAlert, Truck, Users } from 'lucide-react';
+import type { SdkEventStatus } from '../../sdk/types';
 
 export type TabId =
   | "overview"
@@ -196,4 +197,31 @@ export const ACTION_PERMISSIONS = {
   duplicate: "events.create",
   vendorCheckIn: "vendors.checkin.view",
 } as const satisfies Record<string, EventDetailPermission>;
+
+// ─── Stage-aware tab visibility ────────────────────────────────────────────
+// Event pipeline stages: lead | hold | booked | planning | final_review |
+// completed | cancelled | lost.
+// Tabs whose concerns do not exist yet at a stage are hidden so the event
+// workspace reads as the current phase of work rather than a full feature
+// catalog (per the Seven Paths Manor blueprint §4.4).
+const TABS_HIDDEN_BY_STAGE: Partial<Record<SdkEventStatus, TabId[]>> = {
+  // Sales phase: no staff, no event-week risk protocols, no guest portal yet.
+  lead: ["staff", "emergency", "portal"],
+  hold: ["staff", "emergency", "portal"],
+  // Booked but not yet planning: same operational surfaces deferred.
+  booked: ["staff", "emergency", "portal"],
+  // Planning: emergency protocols appear once the plan is concrete.
+  planning: ["emergency"],
+  // final_review and completed: everything relevant is on screen.
+  final_review: [],
+  completed: [],
+};
+
+/** Filter tabs for an event's pipeline stage. Unknown statuses show all tabs. */
+export function filterTabsForStage(tabs: TabDef[], status?: string | null): TabDef[] {
+  if (!status) return tabs;
+  const hidden = TABS_HIDDEN_BY_STAGE[status as SdkEventStatus];
+  if (!hidden || hidden.length === 0) return tabs;
+  return tabs.filter((tab) => !hidden.includes(tab.id));
+}
 

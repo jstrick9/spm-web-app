@@ -11,7 +11,7 @@
  * will be added as their OAuth flows are implemented.
  */
 import type { FastifyInstance } from 'fastify';
-import { createHmac } from 'node:crypto';
+import { createHmac, timingSafeEqual } from 'node:crypto';
 import { auditRepo } from '../db/repos/index.js';
 import { webhooksRepo } from '../db/repos/webhooks.js';
 import { requireAuth } from '../middleware/auth.js';
@@ -35,9 +35,13 @@ export async function webhookReceiverRoutes(app: FastifyInstance) {
     if (webhook.secret) {
       const signature = req.headers['x-webhook-signature'] as string | undefined;
       const body = JSON.stringify(req.body);
-      const expected = `sha256=${createHmac('sha256', webhook.secret).update(body).digest('hex')}`;
-
-      if (!signature || signature !== expected) {
+      const expected = createHmac('sha256', webhook.secret).update(body).digest();
+      const provided = typeof signature === 'string' && signature.startsWith('sha256=')
+        ? Buffer.from(signature.slice('sha256='.length), 'hex')
+        : null;
+      // Constant-time comparison (length mismatch must not throw).
+      const valid = provided !== null && provided.length === expected.length && timingSafeEqual(provided, expected);
+      if (!valid) {
         return reply.code(401).send({ error: 'invalid-signature' });
       }
     }

@@ -156,7 +156,7 @@ interface Props {
   eventId: string;
 }
 
-import { ACTION_PERMISSIONS, TAB_DEFS, type EventDetailPermission, type TabDef, type TabGroup, type TabId } from './eventTabConfig';
+import { ACTION_PERMISSIONS, TAB_DEFS, filterTabsForStage, type EventDetailPermission, type TabDef, type TabGroup, type TabId } from './eventTabConfig';
 
 import { eventReadinessScore, eventSetupItems, safeMetadata } from './eventDetailUtils';
 
@@ -193,11 +193,6 @@ export function EventDetail({ eventId, user }: Props & { user: any }) {
   const hasPermission = (permission: EventDetailPermission | null) =>
     !permission || perms[permission] === true;
 
-  const visibleTabs = useMemo(
-    () => TAB_DEFS.filter((t) => hasPermission(t.permission) && (t.id !== 'guests' || isCoupleForEvent)),
-    [perms, isCoupleForEvent],
-  );
-
   // If current tab id is invalid, fall back to overview. If it is valid but
   // unauthorized, keep the URL/tab and render AccessDenied in that tab panel.
   useEffect(() => {
@@ -220,6 +215,16 @@ export function EventDetail({ eventId, user }: Props & { user: any }) {
     queryKey: ["event", eventId],
     queryFn: () => sdk.events.get(eventId),
   });
+
+  // Stage-aware tabs: hide surfaces that don't exist yet for the event's
+  // pipeline stage (e.g. staff/emergency/portal for sales-stage leads).
+  const visibleTabs = useMemo(
+    () => filterTabsForStage(
+      TAB_DEFS.filter((t) => hasPermission(t.permission) && (t.id !== 'guests' || isCoupleForEvent)),
+      eventQuery.data?.event?.status,
+    ),
+    [perms, isCoupleForEvent, eventQuery.data?.event?.status],
+  );
 
   const guestsQuery = useQuery({
     queryKey: ["guests", eventId],

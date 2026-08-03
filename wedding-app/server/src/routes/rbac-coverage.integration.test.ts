@@ -115,10 +115,41 @@ describe('System role grants', () => {
   it('owner role has all non-vendor-portal permissions', () => {
     const ownerDef = SYSTEM_ROLE_DEFINITIONS.find(r => r.key === 'owner')!;
     // Owner should have everything except vendor.portal.*, vendor.bookings.*, vendor.invoices.*
-    const nonVendorPortal = PERMISSION_CATALOG.filter(p => !p.id.startsWith('vendor.'));
+    // and the couple-only guest-list ownership permission.
+    const nonVendorPortal = PERMISSION_CATALOG.filter(p => !p.id.startsWith('vendor.') && p.id !== 'guests.couple.manage');
     for (const perm of nonVendorPortal) {
       expect(ownerDef.permissions, `Owner missing: ${perm.id}`).toContain(perm.id);
     }
+    expect(ownerDef.permissions).not.toContain('guests.couple.manage');
+  });
+
+  it('couple role is the only system role with guests.couple.manage', () => {
+    const coupleDef = SYSTEM_ROLE_DEFINITIONS.find(r => r.key === 'couple')!;
+    expect(coupleDef.permissions).toContain('guests.couple.manage');
+    for (const r of SYSTEM_ROLE_DEFINITIONS) {
+      if (r.key === 'couple') continue;
+      expect(r.permissions, `Role ${r.key} must not own the couple guest list`).not.toContain('guests.couple.manage');
+    }
+  });
+
+  it('manager and planner retain venue guest support ops but not couple ownership', () => {
+    const managerDef = SYSTEM_ROLE_DEFINITIONS.find(r => r.key === 'manager')!;
+    const plannerDef = SYSTEM_ROLE_DEFINITIONS.find(r => r.key === 'planner')!;
+    // Venue-side guest support (help desk, portal security) stays available.
+    expect(managerDef.permissions).toContain('guests.view');
+    expect(managerDef.permissions).toContain('guests.manage');
+    expect(plannerDef.permissions).toContain('guests.view');
+    expect(managerDef.permissions).not.toContain('guests.couple.manage');
+    expect(plannerDef.permissions).not.toContain('guests.couple.manage');
+  });
+
+  it('manager has stage-transition and final-review decision permissions', () => {
+    const managerDef = SYSTEM_ROLE_DEFINITIONS.find(r => r.key === 'manager')!;
+    expect(managerDef.permissions).toContain('events.stage.transition');
+    expect(managerDef.permissions).toContain('events.final_review.decide');
+    const plannerDef = SYSTEM_ROLE_DEFINITIONS.find(r => r.key === 'planner')!;
+    expect(plannerDef.permissions).not.toContain('events.stage.transition');
+    expect(plannerDef.permissions).not.toContain('events.final_review.decide');
   });
 
   it('admin has same as owner minus org.manage', () => {

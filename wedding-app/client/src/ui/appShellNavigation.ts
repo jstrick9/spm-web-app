@@ -55,7 +55,7 @@ export const NAV_ITEM_META: Record<
   },
   questions: {
     icon: HelpCircle,
-    label: "Questions Studio",
+    label: "Couple Intake Forms",
     href: "#/system/questions",
     permission: "platform.manage",
   },
@@ -79,7 +79,7 @@ export const NAV_ITEM_META: Record<
   },
   branding: {
     icon: Palette,
-    label: "Platform Studio",
+    label: "Brand & Experience",
     href: "#/system/platform",
     permission: "platform.manage",
   },

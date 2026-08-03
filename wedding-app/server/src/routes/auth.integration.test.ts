@@ -611,6 +611,28 @@ describe('Auth: logout', () => {
     expect(plannerCollab.json().request.requestType).toBe('planner_collaboration');
   });
 
+
+  it('rehashes legacy-work-factor passwords on successful login', async () => {
+    const u = await register();
+    // Simulate a legacy account: hash derived with the old 120k work factor,
+    // no iterations recorded on the row (as pre-0049 rows are).
+    const { pbkdf2Sync } = await import('node:crypto');
+    const salt = Buffer.from('U0FMVF9MRUdBQ1lfVEVTVF8wMDE=', 'base64');
+    const legacyHash = pbkdf2Sync('testpass123', salt, 120_000, 32, 'sha256').toString('base64');
+    db.prepare(`UPDATE users SET password_hash = ?, password_salt = ?, password_iterations = NULL WHERE id = (SELECT id FROM users WHERE email = ?)`).run(legacyHash, salt.toString('base64'), u.email);
+    // Old hash must still verify, and the account must log in.
+    const login = await app.inject({ method: 'POST', url: '/api/auth/login', payload: { email: u.email, password: 'testpass123' }, headers: { 'content-type': 'application/json' } });
+    expect(login.statusCode).toBe(200);
+    const row = db.prepare(`SELECT password_iterations FROM users WHERE email = ?`).get(u.email) as { password_iterations: number | null };
+    expect(row.password_iterations).toBe(600_000);
+    // The issued session must still be valid after the silent upgrade.
+    const me = await app.inject({ method: 'GET', url: '/api/auth/me', headers: { authorization: `Bearer ${login.json().token}` } });
+    expect(me.statusCode).toBe(200);
+    // Rehash is recorded in the audit log.
+    const audit = db.prepare(`SELECT COUNT(*) AS n FROM audit_logs WHERE action = 'user.password.rehashed'`).get() as { n: number };
+    expect(audit.n).toBeGreaterThanOrEqual(1);
+  });
+
   it('register creates org + membership', async () => {
     const u = await register();
     const me = await app.inject({ method: 'GET', url: '/api/auth/me',

@@ -7,7 +7,7 @@ import { can } from '../lib/rbac.js';
 import {
   auditRepo, eventsRepo, orgsRepo, subEventsRepo, eventReadinessRepo,
 } from '../db/repos/index.js';
-import { Forbidden, NotFound, BadRequest } from '../lib/errors.js';
+import { Forbidden, NotFound, BadRequest, Conflict } from '../lib/errors.js';
 import { runTrigger } from '../jobs/lifecycleEmails.js';
 
 const isoDate = z.string().regex(/^\d{4}-\d{2}-\d{2}$/);
@@ -40,8 +40,7 @@ const subEventSchema = z.object({
   metadata:    z.record(z.unknown()).optional(),
 });
 
-function finalReviewReadiness(event: any) {
-  const metadata = (() => { try { return JSON.parse(event.metadata || '{}'); } catch { return {}; } })() as Record<string, any>;
+function finalReviewReadiness(event: any) {  const metadata = (() => { try { return JSON.parse(event.metadata || '{}'); } catch { return {}; } })() as Record<string, any>;
   const approvedLayouts = db.prepare(`SELECT id, payload FROM layouts WHERE event_id = ? AND approval_status = 'approved'`).all(event.id) as Array<{ id: string; payload: string }>;
   const hasAccessibleRoute = approvedLayouts.some((layout) => { try { return (JSON.parse(layout.payload || '{}').zones || []).some((zone: any) => zone.type === 'accessible_route'); } catch { return false; } });
   const timelineCount = Number((db.prepare(`SELECT COUNT(*) AS count FROM timeline_events WHERE event_id = ?`).get(event.id) as any).count);
@@ -61,6 +60,48 @@ function finalReviewReadiness(event: any) {
     { key: 'rain_plan_checks', label: 'Rain-plan checks', complete: metadata.rainPlanRequired !== true || metadata.rainPlanChecked === true },
   ];
   return { ready: checks.every((check) => check.complete), checks };
+}
+
+/**
+ * Block assigning a venue space to an event whose date range already has
+ * another active booking on that space — unless the caller explicitly
+ * provides a bookingConflictOverrideReason (recorded in the audit log).
+ */
+function assertNoSpaceConflict(input: {
+  organizationId: string;
+  venueId: string;
+  startDate: string;
+  endDate?: string | null;
+  excludeEventId?: string;
+  metadata?: Record<string, unknown> | null;
+  actorUserId: string;
+  actorLabel: string;
+  ip: string;
+}): void {
+  const conflicts = eventsRepo.listSpaceConflicts({
+    organizationId: input.organizationId,
+    venueId: input.venueId,
+    startDate: input.startDate,
+    endDate: input.endDate ?? input.startDate,
+    excludeEventId: input.excludeEventId,
+  });
+  if (conflicts.length === 0) return;
+  const overrideReason = typeof input.metadata?.bookingConflictOverrideReason === 'string'
+    ? input.metadata.bookingConflictOverrideReason.trim()
+    : '';
+  if (overrideReason) {
+    auditRepo.log({
+      organizationId: input.organizationId, actorUserId: input.actorUserId,
+      actorLabel: input.actorLabel, action: 'event.booking_conflict.overridden',
+      targetType: 'venue', targetId: input.venueId, ip: input.ip,
+      details: { conflicts: conflicts.map((c) => ({ eventId: c.id, title: c.title, startDate: c.start_date, endDate: c.end_date })), reason: overrideReason },
+    });
+    return;
+  }
+  throw Conflict('venue-space-conflict', {
+    conflicts: conflicts.map((c) => ({ eventId: c.id, title: c.title, startDate: c.start_date, endDate: c.end_date })),
+    message: `This space is already booked ${conflicts.map((c) => `“${c.title}” (${c.start_date ?? 'no date'}${c.end_date && c.end_date !== c.start_date ? ` → ${c.end_date}` : ''})`).join(', ')}. Choose another space/date or provide an override reason.`,
+  });
 }
 
 export async function eventRoutes(app: FastifyInstance) {
@@ -124,6 +165,18 @@ export async function eventRoutes(app: FastifyInstance) {
     if (!can(req.auth!.memberships, { organizationId: parsed.data.organizationId }, 'events.create')) {
       throw Forbidden();
     }
+    if (parsed.data.venueId && parsed.data.startDate) {
+      assertNoSpaceConflict({
+        organizationId: parsed.data.organizationId,
+        venueId: parsed.data.venueId,
+        startDate: parsed.data.startDate,
+        endDate: parsed.data.endDate,
+        metadata: parsed.data.metadata,
+        actorUserId: req.auth!.userId,
+        actorLabel: req.auth!.email,
+        ip: req.ip,
+      });
+    }
     const event = eventsRepo.create({
       organizationId: parsed.data.organizationId,
       title: parsed.data.title,
@@ -149,7 +202,7 @@ export async function eventRoutes(app: FastifyInstance) {
   });
 
   app.get('/api/events/:eventId/day-of-contact', { preHandler: requireAuth }, async (req) => {
-    const { eventId } = req.params as { eventId: string }; const event = eventsRepo.findById(eventId); if (!event) throw NotFound(); const isCouple = req.auth!.memberships.some((membership: any) => membership.eventId === eventId && String(membership.roleKey).toLowerCase() === 'couple'); if (!isCouple) throw Forbidden();
+    const { eventId } = req.params as { eventId: string }; const event = eventsRepo.findById(eventId); if (!event) throw NotFound(); const orgMap = eventsRepo.orgMapForUser(req.auth!.userId); if (!can(req.auth!.memberships, { eventId }, 'guests.couple.manage', orgMap)) throw Forbidden();
     const metadata = (() => { try { return JSON.parse(event.metadata || '{}'); } catch { return {}; } })(); return { contact: metadata.dayOfContact || { name: '', phone: '', email: '', hours: '', escalation: '' } };
   });
   app.put('/api/events/:eventId/day-of-contact', { preHandler: requireAuth }, async (req) => {
@@ -231,7 +284,8 @@ export async function eventRoutes(app: FastifyInstance) {
 
   app.post('/api/events/:eventId/final-review/checks', { preHandler: requireAuth }, async (req) => {
     const { eventId } = req.params as { eventId: string }; const event = eventsRepo.findById(eventId); if (!event) throw NotFound();
-    const isManager = req.auth!.memberships.some((item: any) => item.organizationId === event.organization_id && ['owner', 'manager'].includes(String(item.roleKey).toLowerCase())); if (!isManager) throw Forbidden();
+    const orgMap = eventsRepo.orgMapForUser(req.auth!.userId);
+    if (!can(req.auth!.memberships, { eventId }, 'events.stage.transition', orgMap)) throw Forbidden();
     const parsed = z.object({ key: z.enum(['confirmed_guest_count', 'staffing_readiness', 'inventory_readiness', 'accessibility_checks', 'rain_plan_checks']), complete: z.boolean() }).safeParse(req.body); if (!parsed.success) throw BadRequest('invalid-input', parsed.error.issues);
     const metadata = (() => { try { return JSON.parse(event.metadata || '{}'); } catch { return {}; } })() as Record<string, any>;
     const metadataKey: Record<string, string> = { confirmed_guest_count: 'finalGuestCountConfirmed', staffing_readiness: 'staffingReady', inventory_readiness: 'inventoryReady', accessibility_checks: 'accessibilityChecked', rain_plan_checks: 'rainPlanChecked' };
@@ -251,7 +305,8 @@ export async function eventRoutes(app: FastifyInstance) {
     const { eventId } = req.params as { eventId: string }; const event = eventsRepo.findById(eventId); if (!event) throw NotFound();
     const detail = z.object({ detail: z.string().min(3).max(2000) }).safeParse(req.body); if (!detail.success) throw BadRequest('invalid-input', detail.error.issues);
     const membership = req.auth!.memberships.find((item: any) => item.eventId === eventId && ['couple', 'planner'].includes(String(item.roleKey).toLowerCase()));
-    const isManager = req.auth!.memberships.some((item: any) => item.organizationId === event.organization_id && ['owner', 'manager'].includes(String(item.roleKey).toLowerCase()));
+    const orgMap = eventsRepo.orgMapForUser(req.auth!.userId);
+    const isManager = can(req.auth!.memberships, { eventId }, 'events.final_review.decide', orgMap);
     if (!membership && !isManager) throw Forbidden();
     const requestedRole = isManager ? 'manager' : String(membership!.roleKey).toLowerCase(); const id = crypto.randomUUID();
     db.prepare(`INSERT INTO final_review_change_requests (id, organization_id, event_id, requested_by, requested_role, detail) VALUES (?, ?, ?, ?, ?, ?)`).run(id, event.organization_id, eventId, req.auth!.userId, requestedRole, detail.data.detail);
@@ -261,7 +316,8 @@ export async function eventRoutes(app: FastifyInstance) {
 
   app.patch('/api/events/:eventId/final-review/change-requests/:requestId', { preHandler: requireAuth }, async (req) => {
     const { eventId, requestId } = req.params as { eventId: string; requestId: string }; const event = eventsRepo.findById(eventId); if (!event) throw NotFound();
-    const isManager = req.auth!.memberships.some((item: any) => item.organizationId === event.organization_id && ['owner', 'manager'].includes(String(item.roleKey).toLowerCase())); if (!isManager) throw Forbidden();
+    const orgMap = eventsRepo.orgMapForUser(req.auth!.userId);
+    if (!can(req.auth!.memberships, { eventId }, 'events.final_review.decide', orgMap)) throw Forbidden();
     const parsed = z.object({ status: z.enum(['accepted', 'declined', 'resolved']), managerNote: z.string().max(2000).optional() }).safeParse(req.body); if (!parsed.success) throw BadRequest('invalid-input', parsed.error.issues);
     const existing = db.prepare(`SELECT id FROM final_review_change_requests WHERE id = ? AND event_id = ?`).get(requestId, eventId); if (!existing) throw NotFound('final-review-change-request-not-found');
     db.prepare(`UPDATE final_review_change_requests SET status = ?, manager_note = ?, decided_by = ?, decided_at = datetime('now'), updated_at = datetime('now') WHERE id = ?`).run(parsed.data.status, parsed.data.managerNote ?? null, req.auth!.userId, requestId);
@@ -277,8 +333,8 @@ export async function eventRoutes(app: FastifyInstance) {
 
   app.post('/api/events/:eventId/stage', { preHandler: requireAuth }, async (req) => {
     const { eventId } = req.params as { eventId: string }; const event = eventsRepo.findById(eventId); if (!event) throw NotFound();
-    const roleKeys = req.auth!.memberships.filter((membership: any) => membership.organizationId === event.organization_id).map((membership: any) => String(membership.roleKey).toLowerCase());
-    if (!roleKeys.some((key: string) => ['owner','manager'].includes(key))) throw Forbidden();
+    const orgMap = eventsRepo.orgMapForUser(req.auth!.userId);
+    if (!can(req.auth!.memberships, { eventId }, 'events.stage.transition', orgMap)) throw Forbidden();
     const parsed = z.object({ status: z.enum(['lead','hold','booked','planning','final_review','completed','cancelled','lost']) }).safeParse(req.body); if (!parsed.success) throw BadRequest('invalid-input', parsed.error.issues);
     if (parsed.data.status === 'final_review') { const finalReview = finalReviewReadiness(event); if (!finalReview.ready) throw BadRequest('final-review-not-ready', { checks: finalReview.checks.filter((check) => !check.complete) }); }
     const updated = eventsRepo.update(eventId, { status: parsed.data.status });
@@ -312,6 +368,26 @@ export async function eventRoutes(app: FastifyInstance) {
     }
     if ('metadata' in dataIn && dataIn.metadata !== undefined) {
       patch.metadata = dataIn.metadata as Record<string, unknown>;
+    }
+    // Space-conflict guard: re-check whenever the space or date window changes.
+    const effectiveVenueId: string | null = ('venueId' in dataIn && typeof dataIn.venueId === 'string') ? dataIn.venueId : (event.venue_id ?? null);
+    const effectiveStart: string | null = ('startDate' in dataIn && typeof dataIn.startDate === 'string') ? dataIn.startDate : event.start_date;
+    const effectiveEnd: string | null = ('endDate' in dataIn && typeof dataIn.endDate === 'string') ? dataIn.endDate : event.end_date;
+    if (effectiveVenueId && effectiveStart) {
+      const metadataForOverride = ('metadata' in dataIn && dataIn.metadata !== undefined)
+        ? (dataIn.metadata as Record<string, unknown>)
+        : (() => { try { return JSON.parse(event.metadata || '{}') as Record<string, unknown>; } catch { return {}; } })();
+      assertNoSpaceConflict({
+        organizationId: event.organization_id,
+        venueId: effectiveVenueId,
+        startDate: effectiveStart,
+        endDate: effectiveEnd,
+        excludeEventId: eventId,
+        metadata: metadataForOverride,
+        actorUserId: req.auth!.userId,
+        actorLabel: req.auth!.email,
+        ip: req.ip,
+      });
     }
     const updated = eventsRepo.update(eventId, patch as never);
     auditRepo.log({

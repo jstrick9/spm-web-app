@@ -16,6 +16,7 @@ import { jobsRepo, type JobRow } from '../db/repos/jobs.js';
 import { webhooksRepo } from '../db/repos/webhooks.js';
 import { runAction } from '../integrations/runtime.js';
 import { scanUpcomingDeadlines } from './lifecycleEmails.js';
+import { runAuditRetention } from './retention.js';
 import { hostname } from 'node:os';
 import { replayDueWebhookDeliveries } from '../webhooks/dispatcher.js';
 
@@ -38,6 +39,7 @@ let reclaimTimer: ReturnType<typeof setInterval> | null = null;
 let rsvpScanTimer: ReturnType<typeof setInterval> | null = null;
 let webhookRetryTimer: ReturnType<typeof setInterval> | null = null;
 let webhookPruneTimer: ReturnType<typeof setInterval> | null = null;
+let retentionTimer: ReturnType<typeof setInterval> | null = null;
 
 export function startWorker(): void {
   if (tickTimer || reclaimTimer) return;     // already running
@@ -61,6 +63,10 @@ export function startWorker(): void {
   const pruneWebhooks = () => { try { webhooksRepo.pruneDeliveries(Number(process.env.WEBHOOK_DELIVERY_RETENTION_DAYS ?? 90)); } catch (e) { logErr('webhook-prune', e); } };
   webhookPruneTimer = setInterval(pruneWebhooks, 24 * 60 * 60 * 1000);
   setTimeout(pruneWebhooks, 10_000);
+  // Audit-log retention sweep (report-only unless AUDIT_RETENTION_DAYS is set).
+  const sweepAudit = () => { try { runAuditRetention(); } catch (e) { logErr('audit-retention', e); } };
+  retentionTimer = setInterval(sweepAudit, 24 * 60 * 60 * 1000);
+  setTimeout(sweepAudit, 15_000);
   scheduleNext();
 }
 
@@ -71,6 +77,7 @@ export function stopWorker(): void {
   if (rsvpScanTimer) { clearInterval(rsvpScanTimer); rsvpScanTimer = null; }
   if (webhookRetryTimer) { clearInterval(webhookRetryTimer); webhookRetryTimer = null; }
   if (webhookPruneTimer) { clearInterval(webhookPruneTimer); webhookPruneTimer = null; }
+  if (retentionTimer) { clearInterval(retentionTimer); retentionTimer = null; }
 }
 
 function scheduleNext(): void {

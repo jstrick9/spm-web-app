@@ -41,6 +41,11 @@ The restore script validates SQLite integrity, requires explicit confirmation, r
 - Webhook delivery history: `WEBHOOK_DELIVERY_RETENTION_DAYS` (default 90).
 - SQLite backups: 30 daily and 12 monthly snapshots by default.
 - Uploads: retained with their snapshots; use business/legal retention policy before deleting event media or documents.
+- Audit log: **report-only by default — nothing is ever deleted automatically.** If the venue explicitly authorizes a retention policy, set `AUDIT_RETENTION_DAYS` (e.g. `365`) and the worker's daily sweep deletes older rows (recording a `system.audit_retention` audit entry per affected org first). Verify the sweep in logs after enabling: `[retention] audit sweep: deleted N rows...`.
+
+## Proxy trust
+
+`trustProxy` trusts `X-Forwarded-For` by default because the documented deployment is a single VPS behind Caddy with port 3000 unpublished. If the app port is ever reachable directly, set `TRUSTED_PROXIES` to the comma-separated proxy IPs so clients cannot spoof their IP in audit logs.
 
 ## SQLite operating limits
 

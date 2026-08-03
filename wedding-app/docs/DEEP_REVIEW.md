@@ -275,3 +275,32 @@ This is a genuinely impressive, unusually complete single-tenant/multi-tenant-ca
 | Documentation accuracy | 2.5 |
 
 This is a serious, unusually well-tested product that genuinely understands how wedding venues operate — the scaffold/layout boundary, inventory reservations, final-review gates, allergy escalations, and vendor gate-passes are proof of deep domain thinking. The engineering risk is not "does it work" (it demonstrably does: 1,164 tests green, clean build) but **maintainability and drift**: monolith files, permission-catalog/enforcement mismatch, stale branches, and documentation that no longer describes reality. Fix those, then execute the already-excellent Seven Paths Manor blueprint to turn a feature-complete platform into a venue-shaped product.
+
+---
+
+## 15. Remediation log — 2026-08-03 (all findings actioned)
+
+| ID | Fix implemented | Regression tests |
+|---|---|---|
+| F-1 | Space-conflict guard: `eventsRepo.listSpaceConflicts` + enforcement on event create/patch (409 `venue-space-conflict` with conflicting bookings; explicit `bookingConflictOverrideReason` + audit `event.booking_conflict.overridden`); client conflict detection (`findSpaceConflicts`/`conflictedEventIds`) with warning badges in the space calendar and commitment list; `ApiError` now surfaces the server's human message | `space-conflict.integration.test.ts` (7), `dashboardUtils.test.ts` (3) |
+| F-2 | New couple-only permission `guests.couple.manage` (couple role only — excluded from owner/admin ALL grants); couple-gated guest CRUD in `routes/guests.ts` + `routes/couple/guests.ts` converted from roleKey to this permission; venue `guests.manage` retained for guest-help-desk operations | `rbac-coverage.integration.test.ts` (new couple-ownership + manager/planner assertions), existing core-crud/domain-crud 403 tests |
+| F-3 | Stale branches `develop`, `staging`, `feature/fixes_web_app` fast-forwarded to `main` (no merge hazard remains) | git history verified post-push |
+| F-4 | New permissions `events.stage.transition`, `events.final_review.decide`; stage transition, final-review checks/decisions, day-of-contact, and couple-guest endpoints converted from raw `roleKey` checks to cataloged permissions (admin now also eligible to decide final-review changes) | `rbac-coverage.integration.test.ts`, `final-review*.integration.test.ts` |
+| F-5 | `schema.sql` flagged as historical reference (banner) — migrations remain the single source of truth | n/a (docs) |
+| F-6 | Decomposed `routes/couple.ts` (2,190 → 30 lines) into `routes/couple/{planning,guests,finance,portal,documents,postEvent,shared}` and `routes/guests.ts` (1,589 → 20 lines) into `routes/guests/{core,portal,shared}` | all 44 couple + 88 guest-related integration tests green |
+| F-7 | Stage-aware event tabs: `filterTabsForStage` hides staff/emergency/portal for lead/hold/booked and emergency until planning; wired into `EventDetail` | `eventTabConfig.test.tsx` (4) |
+| F-8 | Navigation/command-palette labels reframed per blueprint (Couple Intake Forms, Brand & Experience, Venue Studio: Spaces / Assets & Templates, Venue Inventory) | existing AppShell/PlatformStudio suites |
+| F-9 | Rain-plan alternate space: `metadata.rainPlanVenueId` validated on venue patch (approved space in-org only); `POST /api/events/:eventId/activate-rain-plan` switches the event's space with full audit; fixed the pre-existing bug where approving a space with zones in the same request failed | `rain-plan.integration.test.ts` (2) |
+| F-10 | Audit retention job (daily sweep + boot run) — **report-only by default** (`AUDIT_RETENTION_DAYS` unset = nothing deleted; enabled = per-org purge with `system.audit_retention` audit rows) | `jobs/retention.test.ts` (4) |
+| F-11 | PBKDF2-SHA256 iterations raised 120k → 600k with per-record `password_iterations` (migration 0049) + silent rehash-on-login (no session invalidation); legacy hashes still verify; inbound webhook signature compare now constant-time; `TRUSTED_PROXIES` env for proxy-header trust | `crypto.test.ts` (3 new), `auth.integration.test.ts` (rehash-on-login) |
+| F-12 | Canonical timestamp helper `lib/time.ts` (`nowIso`, `toSqliteUtc`) + documented convention; used in new code | existing suites |
+| F-13 | Deleted `client/src/lib/api.ts` (legacy client, stale token key), `.gitconfig` (synthetic identity), `.github/workflows/manual.yml` (hello-world template) | typecheck + full suites |
+| F-14 | Browser e2e happy path (`e2e/happy-path.e2e.spec.ts`: login → create event → redirect) wired into the Playwright config and CI; bundle-size budget gate (`scripts/bundle-budget.sh` + `npm run bundle:budget`) added to CI | e2e verified locally against built+seeded server |
+| F-15 | README/ARCHITECTURE/RUNBOOK counts and env tables updated; `.env.example` added; this remediation log | n/a (docs) |
+
+### Post-remediation validation (2026-08-03)
+- Server: typecheck clean; **453 tests passing** (65 files).
+- Client: typecheck clean; **738 tests passing** (120 files).
+- Browser: axe-core a11y (login + portal) and owner happy-path e2e passing against the built, seeded production server.
+- Bundle budgets: main index 192 KB / react-vendor 140 KB / radix-vendor 160 KB — all under budget.
+- Production build green; PWA service worker regenerated.

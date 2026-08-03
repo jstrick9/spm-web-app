@@ -14,3 +14,7 @@ wedding-app/server/data/*.db
 *.log
 coverage/
 .config/
+
+# Playwright artifacts
+wedding-app/client/test-results/
+wedding-app/client/playwright-report/

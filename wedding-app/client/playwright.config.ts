@@ -1,21 +1,21 @@
 import { defineConfig, devices } from '@playwright/test';
 
 /**
- * Playwright config — scoped to accessibility (axe-core) checks.
+ * Playwright config — accessibility (axe-core) checks + browser e2e specs.
  *
  * The app is served as a single origin in production: the Fastify server
- * serves the built client from client/dist. So the a11y suite points at the
+ * serves the built client from client/dist. So the suite points at the
  * running server (default http://localhost:3000), NOT the Vite dev server.
  *
  * The harness that builds + seeds + boots that server lives in
  * scripts/a11y-test.sh; it sets A11Y_BASE_URL and runs `playwright test`.
+ * Spec naming: *.a11y.spec.ts (axe scans) and *.e2e.spec.ts (functional).
  */
 const BASE_URL = process.env.A11Y_BASE_URL ?? 'http://localhost:3000';
 
 export default defineConfig({
   testDir: './e2e',
-  // Only the a11y specs for now. Functional E2E can be added later.
-  testMatch: /.*\.a11y\.spec\.ts/,
+  testMatch: /.*\.(a11y|e2e)\.spec\.ts/,
   // Run serially with a single worker. The suite shares one backend server,
   // and a single worker also avoids a global-`expect` collision between
   // Playwright and Vitest (both live in the dependency tree) that corrupts
