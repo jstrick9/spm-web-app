@@ -2,13 +2,14 @@ import React from 'react';
 import { useForm } from 'react-hook-form';
 import { z } from 'zod';
 import { zodResolver } from '@hookform/resolvers/zod';
-import { useMutation, useQueryClient } from '@tanstack/react-query';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '../../../ui/Dialog';
 import { Form, FormField, FormItem, FormLabel, FormControl, FormMessage } from '../../../ui/Form';
 import { Input } from '../../../ui/Input';
 import { Button } from '../../../ui/Button';
 import { useToast } from '../../../ui/Toast';
 import { vendorsSdk } from '../../../sdk/vendors';
+import { Trash2 } from 'lucide-react';
 
 const paymentSchema = z.object({
   amountStr: z.string().min(1, 'Amount is required'),
@@ -73,12 +74,62 @@ export function VendorPaymentDialog({ open, onOpenChange, vendorId, vendorName, 
     }
   });
 
+  const paymentsQuery = useQuery({
+    queryKey: ['vendorPayments', vendorId],
+    queryFn: () => vendorsSdk.listPayments(vendorId),
+    enabled: open,
+  });
+
+  const deletePayment = useMutation({
+    mutationFn: (paymentId: string) => vendorsSdk.deletePayment(vendorId, paymentId),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['vendors', eventId] });
+      qc.invalidateQueries({ queryKey: ['vendorPayments', vendorId] });
+      toast({ title: 'Payment removed', description: 'The running paid total was adjusted.', variant: 'success' });
+    },
+    onError: (e: any) => toast({ title: 'Could not remove payment', description: e.message, variant: 'destructive' }),
+  });
+
+  const payments = (paymentsQuery.data as { payments?: Array<{ id: string; amount_cents: number; paid_at: string; method?: string | null; notes?: string | null }> } | undefined)?.payments ?? [];
+
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-md">
         <DialogHeader>
           <DialogTitle>Log Payment for {vendorName}</DialogTitle>
         </DialogHeader>
+
+        {payments.length > 0 && (
+          <div className="rounded-xl border border-border bg-surface-2/60 p-3 space-y-1.5">
+            <div className="text-xs font-bold text-fg-muted uppercase tracking-wider">
+              Payment history ({payments.length})
+            </div>
+            {payments.map((p) => (
+              <div key={p.id} className="flex items-center justify-between gap-2 text-xs">
+                <div className="font-semibold">
+                  ${(p.amount_cents / 100).toLocaleString(undefined, { minimumFractionDigits: 2 })}
+                  <span className="text-fg-muted font-normal">
+                    {" "}· {new Date(p.paid_at).toLocaleDateString()}
+                    {p.method ? ` · ${p.method}` : ""}
+                    {p.notes ? ` · ${p.notes}` : ""}
+                  </span>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => {
+                    if (window.confirm('Remove this payment and adjust the paid total?')) {
+                      deletePayment.mutate(p.id);
+                    }
+                  }}
+                  className="text-danger hover:underline inline-flex items-center gap-0.5"
+                  aria-label={`Remove payment ${(p.amount_cents / 100).toLocaleString(undefined, { minimumFractionDigits: 2 })}`}
+                >
+                  <Trash2 className="w-3 h-3" /> Remove
+                </button>
+              </div>
+            ))}
+          </div>
+        )}
 
         <Form {...form}>
           <form onSubmit={form.handleSubmit(v => mutation.mutate(v))} className="space-y-4">

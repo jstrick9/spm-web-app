@@ -72,4 +72,10 @@ export const vendorsSdk = {
   addPayment(vendorId: string, input: { amountCents: number; paidAt: string; method?: string; notes?: string }) {
     return api.post(`/api/vendors/${vendorId}/payments`, input);
   },
+  deletePayment(vendorId: string, paymentId: string): Promise<void> {
+    return api.delete(`/api/vendors/${vendorId}/payments/${paymentId}`);
+  },
+  reviewCoi(vendorId: string, input: { status: 'approved' | 'changes_requested'; note?: string }): Promise<{ vendor: SdkVendor }> {
+    return api.post(`/api/vendors/${vendorId}/coi-review`, input);
+  },
 };

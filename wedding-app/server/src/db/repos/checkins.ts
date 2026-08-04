@@ -65,16 +65,17 @@ export const checkinsRepo = {
     return map;
   },
 
-  counts(eventId: string): { expected: number; arrived: number; completed: number; departed: number } {
+  counts(eventId: string): { expected: number; arrived: number; completed: number; departed: number; late: number } {
     const rows = db.prepare(
       `SELECT status, COUNT(*) AS n FROM vendor_checkins WHERE event_id = ? GROUP BY status`
     ).all(eventId) as Array<{ status: string; n: number }>;
-    const c = { expected: 0, arrived: 0, completed: 0, departed: 0 };
+    const c = { expected: 0, arrived: 0, completed: 0, departed: 0, late: 0 };
     for (const r of rows) {
       if (r.status === 'expected') c.expected = r.n;
       else if (r.status === 'arrived' || r.status === 'setup') c.arrived += r.n;
       else if (r.status === 'completed') c.completed = r.n;
       else if (r.status === 'departed') c.departed = r.n;
+      else if (r.status === 'late') c.late = r.n;
     }
     return c;
   },

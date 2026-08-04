@@ -4,6 +4,7 @@ import { requireAuth } from '../middleware/auth.js';
 import { can } from '../lib/rbac.js';
 import { vendorsRepo, assetsRepo, auditRepo, orgsRepo, integrationsRepo, jobsRepo } from '../db/repos/index.js';
 import { BadRequest, Forbidden, NotFound, Unauthorized } from '../lib/errors.js';
+import { broadcastSSE } from './sse.js';
 import { assertNoPublicHoneypot, auditPublicSubmission } from '../lib/publicAbuse.js';
 import { saveDocumentDataUri, privateFilePath } from '../lib/fileStorage.js';
 import { createReadStream, existsSync } from 'node:fs';
@@ -141,8 +142,40 @@ export async function vendorRoutes(app: FastifyInstance) {
        const { eventsRepo, timelineRepo, layoutsRepo } = await import('../db/repos/index.js');
        event = eventsRepo.findById(v.event_id);
        if (event) {
-         timeline = timelineRepo.listForEvent(v.event_id);
+         // VE-04: vendors see a run-of-show, not the venue's internal plan.
+         // Strip internal fields from the event, and show each timeline item
+         // in full only when it belongs to this vendor; other items keep
+         // title/time/location but lose internal notes/metadata.
+         const rawTimeline = timelineRepo.listForEvent(v.event_id);
+         timeline = rawTimeline.map((item: any) => {
+           const isOwn = item.vendor_id === v.id;
+           let meta: Record<string, any> = {};
+           try { meta = JSON.parse(item.metadata || '{}'); } catch { /* ignore */ }
+           return {
+             id: item.id,
+             title: item.title,
+             category: item.category,
+             starts_at: item.starts_at,
+             ends_at: item.ends_at,
+             duration_min: item.duration_min,
+             location: item.location,
+             vendor_id: item.vendor_id,
+             notes: isOwn ? item.notes : (meta.vendorVisibleNotes || null),
+             assignedTo: item.assigned_to,
+           };
+         });
          layouts = layoutsRepo.listForOrg(event.organization_id, { eventId: v.event_id });
+         // Never expose internal event metadata (budget, handoff, day-of
+         // contact, setup checklist, manager notes) to the vendor portal.
+         event = {
+           id: event.id,
+           organization_id: event.organization_id,
+           title: event.title,
+           status: event.status,
+           start_date: event.start_date,
+           end_date: event.end_date,
+           venue_id: event.venue_id ?? null,
+         };
        }
     }
     
@@ -197,7 +230,14 @@ export async function vendorRoutes(app: FastifyInstance) {
     if (!can(req.auth!.memberships, { organizationId: v.organization_id }, 'vendors.manage')) throw Forbidden();
     const parsed = vendorSchema.partial().safeParse(req.body);
     if (!parsed.success) throw BadRequest('invalid-input', parsed.error.issues);
-    return { vendor: vendorsRepo.update(id, parsed.data) };
+    const updated = vendorsRepo.update(id, parsed.data);
+    auditRepo.log({
+      organizationId: v.organization_id, actorUserId: req.auth!.userId, actorLabel: req.auth!.email,
+      action: 'vendor.update', targetType: 'vendor', targetId: id, ip: req.ip,
+      details: { fields: Object.keys(parsed.data) },
+    });
+    broadcastSSE(v.organization_id, 'vendor.updated', { vendorId: id, eventId: updated?.event_id ?? null }, req.auth!.userId);
+    return { vendor: updated };
   });
 
   app.delete('/api/vendors/:id', { preHandler: requireAuth }, async (req, reply) => {
@@ -206,6 +246,12 @@ export async function vendorRoutes(app: FastifyInstance) {
     if (!v) throw NotFound();
     if (!can(req.auth!.memberships, { organizationId: v.organization_id }, 'vendors.manage')) throw Forbidden();
     vendorsRepo.softDelete(id);
+    auditRepo.log({
+      organizationId: v.organization_id, actorUserId: req.auth!.userId, actorLabel: req.auth!.email,
+      action: 'vendor.delete', targetType: 'vendor', targetId: id, ip: req.ip,
+      details: { eventId: v.event_id },
+    });
+    broadcastSSE(v.organization_id, 'vendor.deleted', { vendorId: id, eventId: v.event_id }, req.auth!.userId);
     return reply.code(204).send();
   });
 
@@ -279,7 +325,65 @@ export async function vendorRoutes(app: FastifyInstance) {
     if (!can(req.auth!.memberships, { organizationId: v.organization_id }, 'vendors.manage')) throw Forbidden();
     const parsed = paymentSchema.safeParse(req.body);
     if (!parsed.success) throw BadRequest('invalid-input', parsed.error.issues);
-    return reply.code(201).send({ payment: vendorsRepo.addPayment(id, parsed.data) });
+    const payment = vendorsRepo.addPayment(id, parsed.data);
+    auditRepo.log({
+      organizationId: v.organization_id, actorUserId: req.auth!.userId, actorLabel: req.auth!.email,
+      action: 'vendor.payment.add', targetType: 'vendor', targetId: id, ip: req.ip,
+      details: { paymentId: payment.id, amountCents: payment.amount_cents, paidAt: payment.paid_at, method: payment.method ?? null },
+    });
+    broadcastSSE(v.organization_id, 'vendor.payment', { vendorId: id, eventId: v.event_id, amountCents: payment.amount_cents }, req.auth!.userId);
+    return reply.code(201).send({ payment });
+  });
+
+  // ── Payment correction (VE-07): a mistaken entry must be removable, with
+  // the original record preserved in the audit log and the running total
+  // decremented (floored at 0).
+  app.delete('/api/vendors/:id/payments/:paymentId', { preHandler: requireAuth }, async (req, reply) => {
+    const { id, paymentId } = req.params as { id: string; paymentId: string };
+    const v = vendorsRepo.findById(id);
+    if (!v) throw NotFound();
+    if (!can(req.auth!.memberships, { organizationId: v.organization_id }, 'vendors.manage')) throw Forbidden();
+    const payment = vendorsRepo.deletePayment(id, paymentId);
+    if (!payment) throw NotFound('vendor-payment-not-found');
+    auditRepo.log({
+      organizationId: v.organization_id, actorUserId: req.auth!.userId, actorLabel: req.auth!.email,
+      action: 'vendor.payment.delete', targetType: 'vendor', targetId: id, ip: req.ip,
+      details: { paymentId, amountCents: payment.amount_cents, paidAt: payment.paid_at, method: payment.method ?? null, notes: payment.notes ?? null },
+    });
+    broadcastSSE(v.organization_id, 'vendor.payment', { vendorId: id, eventId: v.event_id, amountCents: -payment.amount_cents, deleted: true }, req.auth!.userId);
+    return reply.code(204).send();
+  });
+
+  // ── COI review (VE-02): the venue approves or requests changes on an
+  // uploaded COI. The vendor portal reflects the decision.
+  app.post('/api/vendors/:id/coi-review', { preHandler: requireAuth }, async (req, reply) => {
+    const { id } = req.params as { id: string };
+    const v = vendorsRepo.findById(id);
+    if (!v) throw NotFound();
+    if (!can(req.auth!.memberships, { organizationId: v.organization_id }, 'vendors.manage')) throw Forbidden();
+    const parsed = z.object({
+      status: z.enum(['approved', 'changes_requested']),
+      note: z.string().max(2000).optional(),
+    }).safeParse(req.body ?? {});
+    if (!parsed.success) throw BadRequest('invalid-input', parsed.error.issues);
+    const meta = parseVendorMetadata(v.metadata);
+    if (!meta.coiReceived) throw BadRequest('coi-not-received');
+    const updated = vendorsRepo.update(id, {
+      metadata: {
+        ...meta,
+        coiVerificationStatus: parsed.data.status,
+        coiReviewedAt: new Date().toISOString(),
+        coiReviewedBy: req.auth!.email,
+        coiReviewNote: parsed.data.note || undefined,
+      },
+    });
+    auditRepo.log({
+      organizationId: v.organization_id, actorUserId: req.auth!.userId, actorLabel: req.auth!.email,
+      action: 'vendor.coi.review', targetType: 'vendor', targetId: id, ip: req.ip,
+      details: { status: parsed.data.status, note: parsed.data.note ?? null },
+    });
+    broadcastSSE(v.organization_id, 'vendor.updated', { vendorId: id, eventId: v.event_id }, req.auth!.userId);
+    return reply.code(200).send({ vendor: updated });
   });
 
   app.post('/api/portal/vendors/:id/questionnaire', { config: { rateLimit: { max: 20, timeWindow: '1 minute' } } }, async (req, reply) => {
@@ -323,7 +427,11 @@ export async function vendorRoutes(app: FastifyInstance) {
     const parsed = coiUploadSchema.extend({ token: z.string().optional() }).safeParse(req.body);
     if (!parsed.success) throw BadRequest('invalid-input', parsed.error.issues);
     const url = saveDocumentDataUri(parsed.data.dataUri, `vendor_coi_${id}`);
-    if (privateFilePath(url)) assetsRepo.create({ organization_id: v.organization_id, event_id: v.event_id, owner_type: 'vendor_coi', owner_id: id, storage_key: url, original_filename: parsed.data.fileName, mime_type: parsed.data.mimeType, visibility: 'capability', publish_status: 'approved', created_by: null });
+    let coiAssetId: string | undefined;
+    if (privateFilePath(url)) {
+      const asset = assetsRepo.create({ organization_id: v.organization_id, event_id: v.event_id, owner_type: 'vendor_coi', owner_id: id, storage_key: url, original_filename: parsed.data.fileName, mime_type: parsed.data.mimeType, visibility: 'capability', publish_status: 'approved', created_by: null });
+      coiAssetId = asset.id;
+    }
     const meta = parseVendorMetadata(v.metadata);
     const updated = vendorsRepo.update(id, { metadata: {
       ...meta,
@@ -334,6 +442,7 @@ export async function vendorRoutes(app: FastifyInstance) {
       coiExpirationDate: parsed.data.expiresAt || (meta.coiExpirationDate as string | undefined),
       coiUploadedAt: new Date().toISOString(),
       coiVerificationStatus: 'pending_review',
+      ...(coiAssetId ? { coiAssetId } : {}),
     } });
     auditPublicSubmission(req, { organizationId: v.organization_id, action: 'vendor.coi.upload', targetType: 'vendor', targetId: id, details: { fileName: parsed.data.fileName, mimeType: parsed.data.mimeType } });
     return reply.code(201).send({ ok: true, url, vendor: updated ? publicVendorPortalView(updated) : null });

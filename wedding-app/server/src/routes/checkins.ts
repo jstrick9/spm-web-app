@@ -4,6 +4,7 @@ import { requireAuth } from '../middleware/auth.js';
 import { can } from '../lib/rbac.js';
 import { checkinsRepo } from '../db/repos/checkins.js';
 import { eventsRepo } from '../db/repos/index.js';
+import { db } from '../db/database.js';
 import { BadRequest, Forbidden, NotFound } from '../lib/errors.js';
 import { broadcastSSE } from './sse.js';
 
@@ -35,6 +36,12 @@ export async function checkinRoutes(app: FastifyInstance) {
     if (!can(req.auth!.memberships, { eventId }, 'vendors.checkin.manage', orgMap)) throw Forbidden();
     const parsed = statusSchema.safeParse(req.body);
     if (!parsed.success) throw BadRequest('invalid-input', parsed.error.issues);
+
+    // The vendor must actually be assigned to this event — otherwise a staff
+    // member could check a different event's vendor into this board and
+    // poison the UNIQUE(event_id, vendor_id) row (VE-01).
+    const vendor = db.prepare(`SELECT id FROM vendors WHERE id = ? AND event_id = ? AND deleted_at IS NULL`).get(parsed.data.vendorId, eventId);
+    if (!vendor) throw BadRequest('vendor-not-in-event');
 
     const checkin = checkinsRepo.upsert({
       organizationId: event.organization_id,

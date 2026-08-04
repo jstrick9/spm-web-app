@@ -1,5 +1,5 @@
 import React, { useState } from "react";
-import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   Plus,
   Search,
@@ -109,6 +109,46 @@ export function EventVendorsTab({ eventId, organizationId }: Props) {
     }, []),
   );
 
+  // Persist the last generated portal URL per vendor so "Preview" can
+  // reopen it WITHOUT rotating the vendor's active link (VE-03).
+  const rememberedPortalUrl = (vendorId: string): string | null => {
+    try {
+      const map = JSON.parse(localStorage.getItem("wvi_vendor_portal_urls") || "{}");
+      return typeof map[vendorId] === "string" ? map[vendorId] : null;
+    } catch {
+      return null;
+    }
+  };
+  const rememberPortalUrl = (vendorId: string, url: string) => {
+    try {
+      const map = JSON.parse(localStorage.getItem("wvi_vendor_portal_urls") || "{}");
+      map[vendorId] = url;
+      localStorage.setItem("wvi_vendor_portal_urls", JSON.stringify(map));
+    } catch { /* private mode etc. */ }
+  };
+
+  // Preview: reopen the last generated portal URL when available (no token
+  // rotation); otherwise generate one explicitly (same as Copy Secure Link).
+  const previewVendorPortal = async (vendor: SdkVendor) => {
+    const existing = rememberedPortalUrl(vendor.id);
+    if (existing) {
+      window.open(existing, "_blank", "noopener,noreferrer");
+      return;
+    }
+    const url = await createAndCopyPortalLink(vendor);
+    if (url) window.open(url, "_blank", "noopener,noreferrer");
+  };
+
+  const coiReview = useMutation({
+    mutationFn: ({ vendorId, status, note }: { vendorId: string; status: 'approved' | 'changes_requested'; note?: string }) =>
+      sdk.vendors.reviewCoi(vendorId, { status, note }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["vendors", eventId] });
+      toast({ title: "COI review saved", variant: "success" });
+    },
+    onError: (e: any) => toast({ title: "Could not save COI review", description: e.message, variant: "destructive" }),
+  });
+
   const createAndCopyPortalLink = async (vendor: SdkVendor) => {
     try {
       setGeneratingPortalFor(vendor.id);
@@ -117,6 +157,7 @@ export function EventVendorsTab({ eventId, organizationId }: Props) {
         { expiresInDays: portalExpiryDays },
       );
       const url = `${window.location.origin}/#/vendor/${vendor.id}?token=${encodeURIComponent(token)}`;
+      rememberPortalUrl(vendor.id, url);
       await navigator.clipboard.writeText(url);
       await qc.invalidateQueries({
         queryKey: ["vendor-portal-tokens", organizationId],
@@ -274,6 +315,17 @@ export function EventVendorsTab({ eventId, organizationId }: Props) {
         meta.coiVerificationStatus === "pending_review"
           ? ("warning" as const)
           : ("success" as const),
+    };
+  };
+
+  const coiReviewMeta = (v: SdkVendor) => {
+    const meta = vendorMetadata(v);
+    const status = meta.coiVerificationStatus;
+    return {
+      assetId: typeof meta.coiAssetId === "string" ? meta.coiAssetId : null,
+      needsReview: !!meta.coiReceived && (status === "pending_review" || status === "changes_requested"),
+      reviewedBy: typeof meta.coiReviewedBy === "string" ? meta.coiReviewedBy : null,
+      note: typeof meta.coiReviewNote === "string" ? meta.coiReviewNote : null,
     };
   };
 
@@ -491,6 +543,45 @@ export function EventVendorsTab({ eventId, organizationId }: Props) {
                 Expires: {new Date(coi.expires).toLocaleDateString()}
               </span>
             )}
+            {coiReviewMeta(v).reviewedBy && (
+              <span className="text-[9px] text-fg-subtle">
+                Reviewed by {coiReviewMeta(v).reviewedBy}
+                {coiReviewMeta(v).note ? ` · ${coiReviewMeta(v).note}` : ""}
+              </span>
+            )}
+            {coiReviewMeta(v).assetId && (
+              <a
+                href={`/api/assets/${coiReviewMeta(v).assetId}/content`}
+                target="_blank"
+                rel="noreferrer noopener"
+                className="text-[9px] text-brand font-bold hover:underline"
+              >
+                View COI file ↗
+              </a>
+            )}
+            {coiReviewMeta(v).needsReview && (
+              <div className="flex flex-wrap gap-1 mt-0.5">
+                <button
+                  type="button"
+                  disabled={coiReview.isPending}
+                  onClick={() => coiReview.mutate({ vendorId: v.id, status: "approved" })}
+                  className="text-[9px] font-bold text-success hover:underline disabled:opacity-50"
+                >
+                  ✓ Approve
+                </button>
+                <button
+                  type="button"
+                  disabled={coiReview.isPending}
+                  onClick={() => {
+                    const note = window.prompt("What changes are needed on this COI?");
+                    coiReview.mutate({ vendorId: v.id, status: "changes_requested", note: note || undefined });
+                  }}
+                  className="text-[9px] font-bold text-warning hover:underline disabled:opacity-50"
+                >
+                  Request changes
+                </button>
+              </div>
+            )}
           </div>
         );
       },
@@ -602,8 +693,9 @@ export function EventVendorsTab({ eventId, organizationId }: Props) {
                 </button>
                 <button
                   type="button"
-                  onClick={() => void createAndCopyPortalLink(v)}
+                  onClick={() => void previewVendorPortal(v)}
                   className="text-[10px] uppercase font-medium text-brand tracking-wider hover:underline"
+                  title="Open the portal in a new tab (reuses the existing secure link when available)"
                 >
                   Preview Vendor Portal
                 </button>

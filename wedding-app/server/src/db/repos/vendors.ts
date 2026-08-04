@@ -216,4 +216,22 @@ export const vendorsRepo = {
       `SELECT * FROM vendor_payments WHERE vendor_id = ? ORDER BY paid_at DESC`
     ).all(vendorId) as VendorPaymentRow[];
   },
+
+  /**
+   * Remove a payment record (correction path). Returns the deleted row so the
+   * caller can audit it, and decrements the vendor's running total (floored
+   * at 0). Returns undefined when the payment doesn't exist.
+   */
+  deletePayment(vendorId: string, paymentId: string): VendorPaymentRow | undefined {
+    const existing = db.prepare(`SELECT * FROM vendor_payments WHERE id = ? AND vendor_id = ?`).get(paymentId, vendorId) as VendorPaymentRow | undefined;
+    if (!existing) return undefined;
+    const tx = db.transaction(() => {
+      db.prepare(`DELETE FROM vendor_payments WHERE id = ? AND vendor_id = ?`).run(paymentId, vendorId);
+      db.prepare(
+        `UPDATE vendors SET amount_paid_cents = MAX(COALESCE(amount_paid_cents, 0) - ?, 0), updated_at = datetime('now') WHERE id = ?`
+      ).run(existing.amount_cents, vendorId);
+    });
+    tx();
+    return existing;
+  },
 };

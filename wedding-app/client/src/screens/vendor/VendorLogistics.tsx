@@ -198,6 +198,21 @@ export function VendorLogistics({ vendorId, token, initialResponses }: { vendorI
                     <span className="flex items-center gap-1.5 truncate">
                       <Check className="w-4 h-4 text-success shrink-0" /> COI Secured &amp; Linked
                     </span>
+                    {initialResponses?.coiVerificationStatus === 'approved' && (
+                      <span className="ml-1 inline-flex items-center gap-1 rounded-full bg-success px-2 py-0.5 text-[10px] font-bold text-white">
+                        ✓ Verified by venue
+                      </span>
+                    )}
+                    {initialResponses?.coiVerificationStatus === 'changes_requested' && (
+                      <span className="ml-1 inline-flex items-center gap-1 rounded-full bg-warning px-2 py-0.5 text-[10px] font-bold text-white">
+                        Changes requested
+                      </span>
+                    )}
+                    {(!initialResponses?.coiVerificationStatus || initialResponses?.coiVerificationStatus === 'pending_review') && (
+                      <span className="ml-1 inline-flex items-center gap-1 rounded-full bg-amber-100 px-2 py-0.5 text-[10px] font-bold text-amber-800">
+                        Pending venue review
+                      </span>
+                    )}
                     <Button 
                       type="button" 
                       variant="ghost" 

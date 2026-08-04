@@ -2,6 +2,7 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import { EventVendorsTab } from './EventVendorsTab';
 import { vendorsSdk } from '../../../sdk/vendors';
+import { sdk } from '../../../sdk';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { ToastProvider } from '../../../ui/Toast';
 
@@ -11,6 +12,8 @@ vi.mock('../../../sdk', () => ({
       addPayment: vi.fn(),
       createPortalToken: vi.fn().mockResolvedValue({ token: 'secure-token', tokenId: 'tok-1', expiresAt: '2026-12-31T00:00:00.000Z' }),
       revokePortalToken: vi.fn().mockResolvedValue(undefined),
+      reviewCoi: vi.fn().mockResolvedValue({ vendor: {} }),
+      deletePayment: vi.fn().mockResolvedValue(undefined),
       listPortalTokens: vi.fn().mockResolvedValue({ tokens: [] }),
       list: vi.fn().mockResolvedValue({ 
         vendors: [
@@ -110,5 +113,63 @@ describe('EventVendorsTab', () => {
     await waitFor(() => {
       expect(writeTextMock).toHaveBeenCalledWith(expect.stringContaining('token=secure-token'));
     });
+  });
+});
+
+const sdkList = sdk.vendors.list as ReturnType<typeof vi.fn>;
+const sdkReviewCoi = sdk.vendors.reviewCoi as ReturnType<typeof vi.fn>;
+const sdkCreatePortalToken = sdk.vendors.createPortalToken as ReturnType<typeof vi.fn>;
+
+describe('EventVendorsTab COI review workflow', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    localStorage.clear();
+    // A vendor with an uploaded COI awaiting venue review.
+    sdkList.mockResolvedValue({
+      vendors: [
+        {
+          id: 'v-coi', name: 'Floral Co', category: 'Florist',
+          email: 'floral@co.com',
+          metadata: JSON.stringify({
+            coiReceived: true,
+            coiVerificationStatus: 'pending_review',
+            coiAssetId: 'asset-42',
+            coiExpirationDate: '2027-01-01',
+          }),
+        },
+      ],
+    });
+  });
+
+  it('shows View COI, Approve, and Request changes actions for a pending-review COI', async () => {
+    render(<EventVendorsTab eventId="evt-1" organizationId="org-1" />, { wrapper: makeWrapper() });
+    await screen.findAllByText('Floral Co');
+    const viewLink = screen.getByRole('link', { name: /view coi file/i });
+    expect(viewLink.getAttribute('href')).toBe('/api/assets/asset-42/content');
+    expect(screen.getByRole('button', { name: /approve/i })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /request changes/i })).toBeInTheDocument();
+  });
+
+  it('fires the COI review mutation on Approve', async () => {
+    render(<EventVendorsTab eventId="evt-1" organizationId="org-1" />, { wrapper: makeWrapper() });
+    await screen.findAllByText('Floral Co');
+    fireEvent.click(screen.getByRole('button', { name: /approve/i }));
+    await waitFor(() => {
+      expect(sdkReviewCoi).toHaveBeenCalledWith('v-coi', { status: 'approved' });
+    });
+  });
+
+  it('preview reuses the persisted portal URL without rotating the token', async () => {
+    localStorage.setItem('wvi_vendor_portal_urls', JSON.stringify({ 'v-coi': 'http://x/#/vendor/v-coi?token=remembered' }));
+    const openSpy = vi.spyOn(window, 'open').mockImplementation(() => null);
+    render(<EventVendorsTab eventId="evt-1" organizationId="org-1" />, { wrapper: makeWrapper() });
+    await screen.findAllByText('Floral Co');
+    fireEvent.click(screen.getByRole('button', { name: /preview vendor portal/i }));
+    await waitFor(() => {
+      expect(openSpy).toHaveBeenCalledWith('http://x/#/vendor/v-coi?token=remembered', '_blank', 'noopener,noreferrer');
+    });
+    // No rotation happened — createPortalToken was not called.
+    expect(sdkCreatePortalToken).not.toHaveBeenCalled();
+    openSpy.mockRestore();
   });
 });

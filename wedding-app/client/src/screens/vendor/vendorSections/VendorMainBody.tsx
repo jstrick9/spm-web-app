@@ -487,7 +487,9 @@ export function VendorMainBody({ newMessageText, setNewMessageText, chatBottomRe
                      initialResponses={(() => {
                         try {
                            const meta = typeof vendor.metadata === 'string' ? JSON.parse(vendor.metadata || '{}') : vendor.metadata;
-                           return meta?.questionnaire;
+                           // Questionnaire fields + COI verification state (the
+                           // venue's review decision is visible to the vendor).
+                           return { ...(meta?.questionnaire || {}), coiVerificationStatus: meta?.coiVerificationStatus ?? null, coiReviewNote: meta?.coiReviewNote ?? null };
                         } catch {
                            return null;
                         }
