@@ -146,10 +146,13 @@ describe('POST /api/orgs/:id/roles - create custom role', () => {
     });
     expect(res.statusCode).toBe(201);
     const role = res.json().role;
-    // Should have everything planner has, plus audit.view
+    // Should have everything planner has, plus audit.view. Final layout
+    // approval is venue-owned, so planner-derived roles must NOT gain
+    // layouts.publish (see MODULE-04 VS-03).
     expect(role.permissions).toContain('audit.view');
     expect(role.permissions).toContain('events.create');
-    expect(role.permissions).toContain('layouts.publish');
+    expect(role.permissions).toContain('layouts.edit');
+    expect(role.permissions).not.toContain('layouts.publish');
   });
 
   it('forbids users without roles.manage (e.g. planner)', async () => {

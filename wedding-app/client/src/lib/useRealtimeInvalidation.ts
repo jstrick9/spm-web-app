@@ -53,6 +53,12 @@ export function useRealtimeInvalidation(orgId: string | null) {
         qc.invalidateQueries({ queryKey: ['event', eventId] });
       }
     },
+    'layout.updated': (e: SSEEvent) => {
+      qc.invalidateQueries({ queryKey: ['layouts'] });
+      const eventId = (e.payload as any)?.eventId;
+      if (eventId) qc.invalidateQueries({ queryKey: ['layouts', eventId] });
+      qc.invalidateQueries({ queryKey: ['layout-approval-queue'] });
+    },
     'layout.comment.resolved': (e: SSEEvent) => { qc.invalidateQueries({ queryKey: ['layout-collaboration'] }); const eventId = (e.payload as any)?.eventId; if (eventId) qc.invalidateQueries({ queryKey: ['layouts', eventId] }); },
     'layout.review.decided': (e: SSEEvent) => { qc.invalidateQueries({ queryKey: ['layout-collaboration'] }); qc.invalidateQueries({ queryKey: ['layout-approval-queue'] }); const eventId = (e.payload as any)?.eventId; if (eventId) qc.invalidateQueries({ queryKey: ['layouts', eventId] }); },
     'budget.updated': (e: SSEEvent) => {

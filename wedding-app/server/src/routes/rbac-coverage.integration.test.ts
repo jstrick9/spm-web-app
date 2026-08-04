@@ -167,6 +167,8 @@ describe('System role grants', () => {
                       'calendar.view','notifications.manage','feedback.view','feedback.manage']) {
       expect(plannerDef.permissions, `Planner missing: ${p}`).toContain(p);
     }
+    // Final layout approval is venue-owned: planners may not publish layouts.
+    expect(plannerDef.permissions).not.toContain('layouts.publish');
   });
 
   it('couple uses client-safe event-scoped finance instead of generic budget/contracts access', () => {

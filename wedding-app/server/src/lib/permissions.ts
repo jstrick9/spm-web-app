@@ -398,7 +398,9 @@ export const SYSTEM_ROLE_DEFINITIONS: ReadonlyArray<SystemRoleDefinition> = [
       'events.view','events.create','events.edit','events.members.invite',
       'venues.view',
       'catalog.view',
-      'layouts.view','layouts.create','layouts.edit','layouts.publish',
+      // Layouts: planners draft and propose, but final layout approval is
+      // venue-owned (blueprint §7) — no layouts.publish for planner.
+      'layouts.view','layouts.create','layouts.edit',
       'guests.view','guests.manage','guests.assign','guests.import','guests.export',
       'rsvp.view','rsvp.submit',
       'portal.config.manage','portal.guest.view',

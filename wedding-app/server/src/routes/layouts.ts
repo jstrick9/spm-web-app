@@ -69,10 +69,13 @@ function isNamedVenueManager(memberships: any[], organizationId: string): boolea
   return memberships.some((membership) => membership.organizationId === organizationId && ['owner', 'admin', 'manager'].includes(String(membership.roleKey).toLowerCase()));
 }
 
-function requireLayoutAccess(layoutId: string, memberships: any[], permission: 'layouts.view' | 'layouts.edit' | 'layouts.publish') {
+function requireLayoutAccess(layoutId: string, memberships: any[], permission: 'layouts.view' | 'layouts.edit' | 'layouts.publish', userId?: string) {
   const layout = layoutsRepo.findById(layoutId);
   if (!layout) throw NotFound();
-  if (!can(memberships, { organizationId: layout.organization_id }, permission)) throw Forbidden();
+  // Event-scoped members (couple/planner) must be able to view layouts for
+  // their event — pass the org map so event memberships resolve (VS-01).
+  const orgMap = userId ? eventsRepo.orgMapForUser(userId) : {};
+  if (!can(memberships, { organizationId: layout.organization_id }, permission, orgMap)) throw Forbidden();
   return layout;
 }
 
@@ -80,7 +83,8 @@ export async function layoutRoutes(app: FastifyInstance) {
   app.get('/api/orgs/:orgId/layouts', { preHandler: requireAuth }, async (req) => {
     const { orgId } = req.params as { orgId: string };
     const { eventId, template } = req.query as { eventId?: string; template?: string };
-    if (!can(req.auth!.memberships, { organizationId: orgId }, 'layouts.view')) throw Forbidden();
+    const orgMap = eventsRepo.orgMapForUser(req.auth!.userId);
+    if (!can(req.auth!.memberships, { organizationId: orgId }, 'layouts.view', orgMap)) throw Forbidden();
     return {
       layouts: layoutsRepo.listForOrg(orgId, {
         eventId, isTemplate: template === 'true' ? true : template === 'false' ? false : undefined,
@@ -107,6 +111,7 @@ export async function layoutRoutes(app: FastifyInstance) {
       actorLabel: req.auth!.email, action: 'layout.create',
       targetType: 'layout', targetId: layout.id, ip: req.ip,
     });
+    broadcastSSE(parsed.data.organizationId, 'layout.updated', { layoutId: layout.id, revision: layout.revision, eventId: layout.event_id ?? null }, req.auth!.userId);
     return reply.code(201).send({ layout });
   });
 
@@ -123,7 +128,14 @@ export async function layoutRoutes(app: FastifyInstance) {
     const { id } = req.params as { id: string };
     const layout = layoutsRepo.findById(id);
     if (!layout) throw NotFound();
-    if (!can(req.auth!.memberships, { organizationId: layout.organization_id }, 'layouts.edit')) throw Forbidden();
+    const orgMap = eventsRepo.orgMapForUser(req.auth!.userId);
+    if (!can(req.auth!.memberships, { organizationId: layout.organization_id }, 'layouts.edit', orgMap)) throw Forbidden();
+    // VS-03: approved layouts are locked — changes go through the reopen
+    // flow. Only venue staff with publish rights may still adjust them.
+    if (layout.approval_status === 'approved' &&
+        !can(req.auth!.memberships, { organizationId: layout.organization_id }, 'layouts.publish', orgMap)) {
+      throw new HttpError(403, 'layout-approved-locked');
+    }
     const parsed = saveSchema.safeParse(req.body);
     if (!parsed.success) throw BadRequest('invalid-input', parsed.error.issues);
     try {
@@ -135,6 +147,7 @@ export async function layoutRoutes(app: FastifyInstance) {
         expectedRevision: parsed.data.expectedRevision,
         approvalStatus: parsed.data.approvalStatus,
       });
+      broadcastSSE(layout.organization_id, 'layout.updated', { layoutId: id, revision: saved.revision, eventId: layout.event_id }, req.auth!.userId);
       return { layout: saved };
     } catch (err) {
       if ((err as { code?: string }).code === 'revision-conflict') {
@@ -150,22 +163,24 @@ export async function layoutRoutes(app: FastifyInstance) {
     const { id } = req.params as { id: string };
     const layout = layoutsRepo.findById(id);
     if (!layout) throw NotFound();
-    if (!can(req.auth!.memberships, { organizationId: layout.organization_id }, 'layouts.view')) throw Forbidden();
+    const orgMap = eventsRepo.orgMapForUser(req.auth!.userId);
+    if (!can(req.auth!.memberships, { organizationId: layout.organization_id }, 'layouts.view', orgMap)) throw Forbidden();
     return { versions: layoutsRepo.listVersions(id) };
   });
 
   app.get('/api/orgs/:orgId/layouts/approval-queue', { preHandler: requireAuth }, async (req) => {
-    const { orgId } = req.params as { orgId: string }; if (!can(req.auth!.memberships, { organizationId: orgId }, 'layouts.publish')) throw Forbidden();
-    const items = db.prepare(`SELECT l.id, l.name, l.event_id, l.venue_id, l.revision, l.approval_status, l.updated_at, e.title AS event_title, e.start_date, v.name AS venue_name, u.email AS requester_email,
+    const { orgId } = req.params as { orgId: string }; const orgMap = eventsRepo.orgMapForUser(req.auth!.userId); if (!can(req.auth!.memberships, { organizationId: orgId }, 'layouts.publish', orgMap)) throw Forbidden();
+    const items = db.prepare(`SELECT l.id, l.name, l.event_id, l.venue_id, l.revision, l.approval_status, l.updated_at, e.title AS event_title, e.start_date, v.name AS venue_name,
       (SELECT COUNT(*) FROM layout_review_requests r WHERE r.layout_id=l.id AND r.decision='pending') AS pending_reviews,
-      (SELECT COUNT(*) FROM layout_comments c WHERE c.layout_id=l.id AND c.status='open') AS open_comments
-      FROM layouts l LEFT JOIN events e ON e.id=l.event_id LEFT JOIN venues v ON v.id=l.venue_id LEFT JOIN layout_review_requests latest_request ON latest_request.layout_id=l.id AND latest_request.decision='pending' LEFT JOIN users u ON u.id=latest_request.requested_by WHERE l.organization_id=? AND (l.approval_status='pending' OR EXISTS (SELECT 1 FROM layout_review_requests r WHERE r.layout_id=l.id AND r.decision='pending'))
+      (SELECT COUNT(*) FROM layout_comments c WHERE c.layout_id=l.id AND c.status='open') AS open_comments,
+      (SELECT u.email FROM layout_review_requests r2 LEFT JOIN users u ON u.id=r2.requested_by WHERE r2.layout_id=l.id AND r2.decision='pending' ORDER BY r2.requested_at DESC LIMIT 1) AS requester_email
+      FROM layouts l LEFT JOIN events e ON e.id=l.event_id LEFT JOIN venues v ON v.id=l.venue_id WHERE l.organization_id=? AND (l.approval_status='pending' OR EXISTS (SELECT 1 FROM layout_review_requests r WHERE r.layout_id=l.id AND r.decision='pending'))
       ORDER BY CASE WHEN (SELECT COUNT(*) FROM layout_comments c WHERE c.layout_id=l.id AND c.status='open') > 0 THEN 0 ELSE 1 END, CASE WHEN e.start_date IS NULL THEN 1 ELSE 0 END, e.start_date ASC, l.updated_at DESC`).all(orgId);
     return { items };
   });
 
   app.get('/api/layouts/:id/revision-comparison', { preHandler: requireAuth }, async (req) => {
-    const { id } = req.params as { id: string }; const layout = requireLayoutAccess(id, req.auth!.memberships, 'layouts.view');
+    const { id } = req.params as { id: string }; const layout = requireLayoutAccess(id, req.auth!.memberships, 'layouts.view', req.auth!.userId);
     const approved = layoutCollaborationRepo.latestApprovedReview(id);
     const baseline = approved ? layoutsRepo.getVersion(id, approved.revision) : layout.approval_status === 'approved' ? { revision: layout.revision, payload: layout.payload } : undefined;
     return { current: { revision: layout.revision, payload: layout.payload }, baseline: baseline ? { revision: baseline.revision, payload: baseline.payload } : null };
@@ -173,25 +188,25 @@ export async function layoutRoutes(app: FastifyInstance) {
 
   app.get('/api/layouts/:id/collaboration', { preHandler: requireAuth }, async (req) => {
     const { id } = req.params as { id: string };
-    requireLayoutAccess(id, req.auth!.memberships, 'layouts.view');
+    requireLayoutAccess(id, req.auth!.memberships, 'layouts.view', req.auth!.userId);
     return { comments: layoutCollaborationRepo.listComments(id), reviews: layoutCollaborationRepo.listReviews(id) };
   });
 
   app.post('/api/layouts/:id/comments', { preHandler: requireAuth }, async (req, reply) => {
-    const { id } = req.params as { id: string }; const layout = requireLayoutAccess(id, req.auth!.memberships, 'layouts.edit');
+    const { id } = req.params as { id: string }; const layout = requireLayoutAccess(id, req.auth!.memberships, 'layouts.edit', req.auth!.userId);
     const parsed = commentSchema.safeParse(req.body); if (!parsed.success) throw BadRequest('invalid-input', parsed.error.issues);
     return reply.code(201).send({ comment: layoutCollaborationRepo.addComment({ layoutId: id, orgId: layout.organization_id, eventId: layout.event_id, revision: layout.revision, authorUserId: req.auth!.userId, authorLabel: req.auth!.email, body: parsed.data.body, target: parsed.data.target }) });
   });
 
   app.post('/api/layouts/:id/comments/:commentId/resolve', { preHandler: requireAuth }, async (req) => {
-    const { id, commentId } = req.params as { id: string; commentId: string }; const layout = requireLayoutAccess(id, req.auth!.memberships, 'layouts.edit');
+    const { id, commentId } = req.params as { id: string; commentId: string }; const layout = requireLayoutAccess(id, req.auth!.memberships, 'layouts.edit', req.auth!.userId);
     const comment = layoutCollaborationRepo.findComment(commentId); if (!comment || comment.layout_id !== id) throw NotFound();
     if (comment.author_user_id !== req.auth!.userId && !isNamedVenueManager(req.auth!.memberships, layout.organization_id)) throw Forbidden();
     const resolved = layoutCollaborationRepo.resolveComment(commentId, req.auth!.userId); broadcastSSE(layout.organization_id, 'layout.comment.resolved', { layoutId: id, commentId, recipientUserIds: coreReviewRecipientIds(layout, comment.author_user_id), eventId: layout.event_id }, req.auth!.userId); return { comment: resolved };
   });
 
   app.post('/api/layouts/:id/reopen-request', { preHandler: requireAuth }, async (req, reply) => {
-    const { id } = req.params as { id: string }; const layout = requireLayoutAccess(id, req.auth!.memberships, 'layouts.edit');
+    const { id } = req.params as { id: string }; const layout = requireLayoutAccess(id, req.auth!.memberships, 'layouts.edit', req.auth!.userId);
     if (layout.approval_status !== 'approved') throw BadRequest('layout-not-approved');
     const parsed = reopenRequestSchema.safeParse(req.body); if (!parsed.success) throw BadRequest('invalid-input', parsed.error.issues);
     const comment = layoutCollaborationRepo.addComment({ layoutId: id, orgId: layout.organization_id, eventId: layout.event_id, revision: layout.revision, authorUserId: req.auth!.userId, authorLabel: req.auth!.email, body: `Reopen request: ${parsed.data.note}`, target: { kind: 'reopen_request' } });
@@ -201,7 +216,7 @@ export async function layoutRoutes(app: FastifyInstance) {
   });
 
   app.post('/api/layouts/:id/reopen-accept', { preHandler: requireAuth }, async (req) => {
-    const { id } = req.params as { id: string }; const layout = requireLayoutAccess(id, req.auth!.memberships, 'layouts.publish');
+    const { id } = req.params as { id: string }; const layout = requireLayoutAccess(id, req.auth!.memberships, 'layouts.publish', req.auth!.userId);
     if (layout.approval_status !== 'approved') throw BadRequest('layout-not-approved');
     const saved = layoutsRepo.saveRevision({ layoutId: id, payload: JSON.parse(layout.payload), updatedBy: req.auth!.userId, expectedRevision: layout.revision, approvalStatus: 'draft', changeDescription: 'Venue accepted reopen request; new proposal draft created' });
     broadcastSSE(layout.organization_id, 'layout.reopen.accepted', { layoutId: id, eventId: layout.event_id, revision: saved.revision, recipientUserIds: coreReviewRecipientIds(layout) }, req.auth!.userId);
@@ -209,13 +224,13 @@ export async function layoutRoutes(app: FastifyInstance) {
   });
 
   app.post('/api/layouts/:id/review-request', { preHandler: requireAuth }, async (req, reply) => {
-    const { id } = req.params as { id: string }; const layout = requireLayoutAccess(id, req.auth!.memberships, 'layouts.edit');
+    const { id } = req.params as { id: string }; const layout = requireLayoutAccess(id, req.auth!.memberships, 'layouts.edit', req.auth!.userId);
     const review = layoutCollaborationRepo.requestReview({ layoutId: id, orgId: layout.organization_id, eventId: layout.event_id, revision: layout.revision, userId: req.auth!.userId });
     return reply.code(201).send({ review });
   });
 
   app.post('/api/layouts/:id/reviews/:reviewId/decision', { preHandler: requireAuth }, async (req) => {
-    const { id, reviewId } = req.params as { id: string; reviewId: string }; const layout = requireLayoutAccess(id, req.auth!.memberships, 'layouts.publish');
+    const { id, reviewId } = req.params as { id: string; reviewId: string }; const layout = requireLayoutAccess(id, req.auth!.memberships, 'layouts.publish', req.auth!.userId);
     const parsed = reviewDecisionSchema.safeParse(req.body); if (!parsed.success) throw BadRequest('invalid-input', parsed.error.issues);
     const review = layoutCollaborationRepo.decideReview(reviewId, req.auth!.userId, parsed.data.decision, parsed.data.note);
     if (!review || (review as any).layout_id !== id) throw NotFound('review-not-found');
@@ -226,7 +241,7 @@ export async function layoutRoutes(app: FastifyInstance) {
   });
 
   app.post('/api/layouts/:id/queue-decision', { preHandler: requireAuth }, async (req) => {
-    const { id } = req.params as { id: string }; const layout = requireLayoutAccess(id, req.auth!.memberships, 'layouts.publish');
+    const { id } = req.params as { id: string }; const layout = requireLayoutAccess(id, req.auth!.memberships, 'layouts.publish', req.auth!.userId);
     const parsed = queueDecisionSchema.safeParse(req.body); if (!parsed.success) throw BadRequest('invalid-input', parsed.error.issues);
     const pending = layoutCollaborationRepo.listReviews(id).find((review: any) => review.decision === 'pending') as any;
     const review = pending || layoutCollaborationRepo.requestReview({ layoutId: id, orgId: layout.organization_id, eventId: layout.event_id, revision: layout.revision, userId: req.auth!.userId });
@@ -239,13 +254,13 @@ export async function layoutRoutes(app: FastifyInstance) {
 
   app.get('/api/layouts/:id/ops', { preHandler: requireAuth }, async (req) => {
     const { id } = req.params as { id: string };
-    requireLayoutAccess(id, req.auth!.memberships, 'layouts.view');
+    requireLayoutAccess(id, req.auth!.memberships, 'layouts.view', req.auth!.userId);
     return { ops: layoutOpsRepo.listForLayout(id) };
   });
 
   app.post('/api/layouts/:id/floor-walk-checks', { preHandler: requireAuth }, async (req, reply) => {
     const { id } = req.params as { id: string };
-    const layout = requireLayoutAccess(id, req.auth!.memberships, 'layouts.edit');
+    const layout = requireLayoutAccess(id, req.auth!.memberships, 'layouts.edit', req.auth!.userId);
     const parsed = floorWalkSchema.safeParse(req.body);
     if (!parsed.success) throw BadRequest('invalid-input', parsed.error.issues);
     const check = layoutOpsRepo.setFloorWalkCheck({
@@ -262,7 +277,7 @@ export async function layoutRoutes(app: FastifyInstance) {
 
   app.post('/api/layouts/:id/variance-evidence', { preHandler: requireAuth }, async (req, reply) => {
     const { id } = req.params as { id: string };
-    const layout = requireLayoutAccess(id, req.auth!.memberships, 'layouts.edit');
+    const layout = requireLayoutAccess(id, req.auth!.memberships, 'layouts.edit', req.auth!.userId);
     const parsed = varianceEvidenceSchema.safeParse(req.body);
     if (!parsed.success) throw BadRequest('invalid-input', parsed.error.issues);
     const photoUrl = parsed.data.photoDataUri ? savePrivateImageDataUri(parsed.data.photoDataUri, `layout_variance_${id}`) : parsed.data.photoUrl;
@@ -280,7 +295,7 @@ export async function layoutRoutes(app: FastifyInstance) {
 
   app.get('/api/layouts/:id/variance-evidence/:evidenceId/content', { preHandler: requireAuth }, async (req, reply) => {
     const { id, evidenceId } = req.params as { id: string; evidenceId: string };
-    requireLayoutAccess(id, req.auth!.memberships, 'layouts.view');
+    requireLayoutAccess(id, req.auth!.memberships, 'layouts.view', req.auth!.userId);
     const evidence = layoutOpsRepo.listForLayout(id).varianceEvidence.find((item) => item.id === evidenceId);
     if (!evidence?.photo_url) throw NotFound('evidence-file-not-found');
     const path = privateFilePath(evidence.photo_url);
@@ -292,7 +307,7 @@ export async function layoutRoutes(app: FastifyInstance) {
 
   app.post('/api/layouts/:id/rain-plan', { preHandler: requireAuth }, async (req, reply) => {
     const { id } = req.params as { id: string };
-    const layout = requireLayoutAccess(id, req.auth!.memberships, 'layouts.edit');
+    const layout = requireLayoutAccess(id, req.auth!.memberships, 'layouts.edit', req.auth!.userId);
     const parsed = rainPlanSchema.safeParse(req.body);
     if (!parsed.success) throw BadRequest('invalid-input', parsed.error.issues);
     const activation = layoutOpsRepo.activateRainPlan({
@@ -308,7 +323,7 @@ export async function layoutRoutes(app: FastifyInstance) {
 
   app.post('/api/layouts/:id/vendor-zone-inspections', { preHandler: requireAuth }, async (req, reply) => {
     const { id } = req.params as { id: string };
-    const layout = requireLayoutAccess(id, req.auth!.memberships, 'layouts.edit');
+    const layout = requireLayoutAccess(id, req.auth!.memberships, 'layouts.edit', req.auth!.userId);
     const parsed = vendorInspectionSchema.safeParse(req.body);
     if (!parsed.success) throw BadRequest('invalid-input', parsed.error.issues);
     const inspection = layoutOpsRepo.setVendorZoneInspection({
@@ -326,7 +341,7 @@ export async function layoutRoutes(app: FastifyInstance) {
 
   app.post('/api/layouts/:id/setup-packet', { preHandler: requireAuth }, async (req, reply) => {
     const { id } = req.params as { id: string };
-    const layout = requireLayoutAccess(id, req.auth!.memberships, 'layouts.view');
+    const layout = requireLayoutAccess(id, req.auth!.memberships, 'layouts.view', req.auth!.userId);
     const parsed = setupPacketSchema.safeParse(req.body);
     if (!parsed.success) throw BadRequest('invalid-input', parsed.error.issues);
     const packet = layoutOpsRepo.upsertSetupPacket({
@@ -341,7 +356,7 @@ export async function layoutRoutes(app: FastifyInstance) {
     return reply.code(201).send({ packet, publicUrl: `/api/public/layout-packets/${packet.token}` });
   });
 
-  app.get('/api/public/layout-packets/:token', async (req) => {
+  app.get('/api/public/layout-packets/:token', { config: { rateLimit: { max: 30, timeWindow: '1 minute' } } }, async (req) => {
     const { token } = req.params as { token: string };
     const packet = layoutOpsRepo.findPacketByToken(token);
     if (!packet) throw NotFound();
@@ -366,12 +381,12 @@ export async function layoutRoutes(app: FastifyInstance) {
   });
 
   app.get('/api/layouts/:id/inventory-reservations', { preHandler: requireAuth }, async (req) => {
-    const { id } = req.params as { id: string }; const layout = requireLayoutAccess(id, req.auth!.memberships, 'layouts.view');
+    const { id } = req.params as { id: string }; const layout = requireLayoutAccess(id, req.auth!.memberships, 'layouts.view', req.auth!.userId);
     return { reservations: db.prepare(`SELECT r.*, i.name, i.category, i.available_count FROM layout_inventory_reservations r JOIN inventory_items i ON i.id=r.inventory_item_id WHERE r.layout_id=? ORDER BY i.name`).all(id), sharedReviewEnabled: false, eventId: layout.event_id };
   });
 
   app.get('/api/layouts/:id/inventory-shared-review', { preHandler: requireAuth }, async (req) => {
-    const { id } = req.params as { id: string }; const layout = requireLayoutAccess(id, req.auth!.memberships, 'layouts.view');
+    const { id } = req.params as { id: string }; const layout = requireLayoutAccess(id, req.auth!.memberships, 'layouts.view', req.auth!.userId);
     if (!isNamedVenueManager(req.auth!.memberships, layout.organization_id)) throw Forbidden();
     if (!layout.event_id) return { review: { status: 'no-event', conflicts: [] } };
     const event = eventsRepo.findById(layout.event_id); if (!event?.start_date) return { review: { status: 'event-date-needed', conflicts: [] } };
@@ -382,7 +397,7 @@ export async function layoutRoutes(app: FastifyInstance) {
   });
 
   app.put('/api/layouts/:id/inventory-reservations', { preHandler: requireAuth }, async (req) => {
-    const { id } = req.params as { id: string }; const layout = requireLayoutAccess(id, req.auth!.memberships, 'layouts.edit');
+    const { id } = req.params as { id: string }; const layout = requireLayoutAccess(id, req.auth!.memberships, 'layouts.edit', req.auth!.userId);
     const parsed = inventoryReservationsSchema.safeParse(req.body); if (!parsed.success) throw BadRequest('invalid-input', parsed.error.issues);
     const requested = parsed.data.reservations.filter((item) => item.quantity > 0); const itemIds = [...new Set(requested.map((item) => item.inventoryItemId))];
     const inventory = itemIds.map((itemId) => inventoryRepo.findById(itemId));
@@ -406,8 +421,29 @@ export async function layoutRoutes(app: FastifyInstance) {
     const { id } = req.params as { id: string };
     const layout = layoutsRepo.findById(id);
     if (!layout) throw NotFound();
-    if (!can(req.auth!.memberships, { organizationId: layout.organization_id }, 'layouts.delete')) throw Forbidden();
-    layoutsRepo.delete(id);
+    const orgMap = eventsRepo.orgMapForUser(req.auth!.userId);
+    if (!can(req.auth!.memberships, { organizationId: layout.organization_id }, 'layouts.delete', orgMap)) throw Forbidden();
+    // VS-02: release the layout's inventory reservations BEFORE the hard
+    // delete, otherwise the cascade silently drops the rows and the reserved
+    // stock stays permanently deducted from available_count.
+    const reservations = db.prepare(`SELECT inventory_item_id, quantity FROM layout_inventory_reservations WHERE layout_id = ?`).all(id) as Array<{ inventory_item_id: string; quantity: number }>;
+    if (reservations.length) {
+      db.transaction(() => {
+        for (const r of reservations) {
+          db.prepare(`UPDATE inventory_items SET available_count = MIN(available_count + ?, total_count), updated_at = datetime('now') WHERE id = ?`).run(r.quantity, r.inventory_item_id);
+        }
+        layoutsRepo.delete(id);
+      })();
+    } else {
+      layoutsRepo.delete(id);
+    }
+    auditRepo.log({
+      organizationId: layout.organization_id, actorUserId: req.auth!.userId,
+      actorLabel: req.auth!.email, action: 'layout.delete',
+      targetType: 'layout', targetId: id, ip: req.ip,
+      details: { eventId: layout.event_id, releasedReservations: reservations.length },
+    });
+    broadcastSSE(layout.organization_id, 'layout.updated', { layoutId: id, deleted: true, eventId: layout.event_id }, req.auth!.userId);
     return reply.code(204).send();
   });
 }

@@ -110,7 +110,13 @@ export async function venueRoutes(app: FastifyInstance) {
       const overrideReason = typeof parsed.data.metadata?.approvalOverrideReason === 'string' ? parsed.data.metadata.approvalOverrideReason.trim() : '';
       if (missing.length && !overrideReason) throw BadRequest('venue-readiness-override-required', { missing });
     }
-    return { venue: venuesRepo.update(id, parsed.data) };
+    const updated = venuesRepo.update(id, parsed.data);
+    auditRepo.log({
+      organizationId: venue.organization_id, actorUserId: req.auth!.userId, actorLabel: req.auth!.email,
+      action: 'venue.update', targetType: 'venue', targetId: id, ip: req.ip,
+      details: { fields: Object.keys(parsed.data), approvalStatus: parsed.data.approvalStatus ?? undefined },
+    });
+    return { venue: updated };
   });
 
   app.get('/api/venues/:id/space-detail', { preHandler: requireAuth }, async (req) => {
@@ -132,6 +138,11 @@ export async function venueRoutes(app: FastifyInstance) {
     const parsed = z.object({ masterLayout: z.record(z.unknown()), canvasWidth: z.number().positive().optional(), canvasHeight: z.number().positive().optional(), description: z.string().max(1000).optional() }).safeParse(req.body);
     if (!parsed.success) throw BadRequest('invalid-input', parsed.error.issues);
     const updated = venuesRepo.saveScaffoldRevision(id, { ...parsed.data, userId: req.auth!.userId });
+    auditRepo.log({
+      organizationId: venue.organization_id, actorUserId: req.auth!.userId, actorLabel: req.auth!.email,
+      action: 'venue.scaffold.save', targetType: 'venue', targetId: id, ip: req.ip,
+      details: { revision: updated?.revision },
+    });
     return { venue: updated };
   });
 
@@ -155,6 +166,11 @@ export async function venueRoutes(app: FastifyInstance) {
     const sourceUrl = sourceDataUri ? savePublicDocumentDataUri(sourceDataUri, `venue_underlay_source_${id}`) : (isPdf ? savePublicDocumentDataUri(dataUri, `venue_underlay_source_${id}`) : undefined);
     const current = (() => { try { return JSON.parse(venue.underlay || '{}'); } catch { return {}; } })();
     const updated = venuesRepo.update(id, { underlay: { ...current, url, kind: isPdf ? 'pdf' : 'image', ...(sourceUrl ? { sourceUrl, sourceName: sourceName || 'venue-reference.pdf', sourceKind: 'pdf' } : {}), locked: true, opacity: 0.55, scale: 1, rotation: 0 } });
+    auditRepo.log({
+      organizationId: venue.organization_id, actorUserId: req.auth!.userId, actorLabel: req.auth!.email,
+      action: 'venue.underlay.upload', targetType: 'venue', targetId: id, ip: req.ip,
+      details: { kind: isPdf ? 'pdf' : 'image', sourceName: sourceName ?? null },
+    });
     return { venue: updated };
   });
 
@@ -209,6 +225,10 @@ export async function venueRoutes(app: FastifyInstance) {
     const linkedLayouts = Number((db.prepare(`SELECT COUNT(*) AS count FROM layouts WHERE venue_id=?`).get(id) as { count: number }).count);
     if (linkedLayouts > 0) throw BadRequest('venue-space-in-use', { linkedLayouts });
     venuesRepo.softDelete(id);
+    auditRepo.log({
+      organizationId: venue.organization_id, actorUserId: req.auth!.userId, actorLabel: req.auth!.email,
+      action: 'venue.delete', targetType: 'venue', targetId: id, ip: req.ip,
+    });
     return reply.code(204).send();
   });
 }
