@@ -135,19 +135,22 @@ describe('guest identity routes', () => {
     expect(res.json().clusters).toHaveLength(1);
   });
 
-  it('POST /guests/merge is unavailable to venue workflows', async () => {
+  it('POST /guests/merge works for the owner as a data-quality tool and audits', async () => {
     const s = await setup();
     const p = guestsRepo.create(s.orgId, s.e1, { fullName: 'Merge Me' });
     const d = guestsRepo.create(s.orgId, s.e2, { fullName: 'Merge Me', email: 'm@x.com' });
     const res = await req(s.token, 'POST', `/api/orgs/${s.orgId}/guests/merge`, { primaryId: p.id, duplicateIds: [d.id] });
-    expect(res.statusCode).toBe(403);
+    expect(res.statusCode).toBe(200);
+    expect(res.json().mergedCount).toBe(1);
+    const dup = db.prepare(`SELECT deleted_at FROM guests WHERE id = ?`).get(d.id) as { deleted_at: string | null };
+    expect(dup.deleted_at).not.toBeNull();
   });
 
-  it('merge with no valid duplicates is also unavailable to venue workflows', async () => {
+  it('merge with no valid duplicates returns 404', async () => {
     const s = await setup();
     const p = guestsRepo.create(s.orgId, s.e1, { fullName: 'Solo' });
     const res = await req(s.token, 'POST', `/api/orgs/${s.orgId}/guests/merge`, { primaryId: p.id, duplicateIds: ['nope'] });
-    expect(res.statusCode).toBe(403);
+    expect(res.statusCode).toBe(404);
   });
 
   it('blocks cross-org duplicate listing', async () => {

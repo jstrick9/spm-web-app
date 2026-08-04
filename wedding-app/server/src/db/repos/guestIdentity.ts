@@ -201,6 +201,23 @@ export const guestIdentityRepo = {
         const setSql = Object.keys(fill).map(c => `${c} = ?`).join(', ');
         db.prepare(`UPDATE guests SET ${setSql} WHERE id = ?`).run(...Object.values(fill), primaryId);
       }
+      // Preserve the duplicates' guest-owned data on the merged primary:
+      // RSVP submissions and sub-event invitations must follow the guest,
+      // otherwise the merged record loses RSVP/meal/dietary history.
+      if (dups.length) {
+        const ph = dups.map(() => '?').join(',');
+        db.prepare(
+          `UPDATE rsvp_submissions SET guest_id = ? WHERE guest_id IN (${ph})`,
+        ).run(primaryId, ...dups);
+        db.prepare(
+          `INSERT OR IGNORE INTO guest_sub_event_invitations (id, guest_id, sub_event_id, rsvp_status)
+           SELECT lower(hex(randomblob(16))), ?, se.sub_event_id, se.rsvp_status
+           FROM guest_sub_event_invitations se WHERE se.guest_id IN (${ph})`,
+        ).run(primaryId, ...dups);
+        db.prepare(
+          `DELETE FROM guest_sub_event_invitations WHERE guest_id IN (${ph})`,
+        ).run(...dups);
+      }
       // Soft-delete the duplicates.
       db.prepare(
         `UPDATE guests SET deleted_at = datetime('now') WHERE id IN (${dups.map(() => '?').join(',')})`,

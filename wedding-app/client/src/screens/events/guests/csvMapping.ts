@@ -6,7 +6,9 @@ export type GuestField =
   | 'rsvpStatus'
   | 'tableAssignment'
   | 'dietaryRestrictions'
-  | 'accessibilityNotes';
+  | 'accessibilityNotes'
+  | 'plusOneAllowed'
+  | 'allowPortalAccess';
 
 export const GUEST_FIELDS: Array<{ id: GuestField; label: string; aliases: string[] }> = [
   { id: 'fullName', label: 'Full Name', aliases: ['name', 'full name', 'guest name', 'first name', 'last name'] },
@@ -17,22 +19,46 @@ export const GUEST_FIELDS: Array<{ id: GuestField; label: string; aliases: strin
   { id: 'tableAssignment', label: 'Table Assignment', aliases: ['table', 'table assignment', 'table number'] },
   { id: 'dietaryRestrictions', label: 'Dietary Restrictions', aliases: ['dietary', 'diet', 'dietary restrictions', 'food allergies', 'allergies'] },
   { id: 'accessibilityNotes', label: 'Accessibility Notes', aliases: ['accessibility', 'accessibility notes', 'special needs'] },
+  { id: 'plusOneAllowed', label: 'Plus-One Allowed', aliases: ['plus one', '+1', 'plus-one', 'plus 1', 'plus one allowed'] },
+  { id: 'allowPortalAccess', label: 'Allow Portal Access', aliases: ['portal', 'portal access', 'allow portal', 'secure link', 'invited'] },
 ];
 
+/** Truthy/falsy values for boolean import columns (plus-one, portal access). */
+const TRUTHY = new Set(['1', 'true', 'yes', 'y', 't']);
+const FALSY = new Set(['0', 'false', 'no', 'n', 'f', '']);
+
+/** Parse a CSV cell into a boolean for boolean-typed fields. */
+export function parseBooleanCell(value: string): boolean {
+  const v = value.trim().toLowerCase();
+  if (TRUTHY.has(v)) return true;
+  if (FALSY.has(v)) return false;
+  // Unrecognized values default to the field's natural state (portal on, plus-one off).
+  return false;
+}
+
+/**
+ * Normalize a header/alias for comparison: lowercase, punctuation becomes a
+ * space so hyphenated forms ("plus-one", "+1") match their spaced aliases.
+ */
+function normalizeHeader(value: string): string {
+  return value.toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim();
+}
+
 export function guessMapping(header: string): { field: GuestField | null; confidence: number } {
-  const normalized = header.toLowerCase().replace(/[^a-z0-9\s]/g, '').trim();
+  const normalized = normalizeHeader(header);
   
   let bestMatch: GuestField | null = null;
   let highestConfidence = 0;
 
   for (const field of GUEST_FIELDS) {
     for (const alias of field.aliases) {
-      if (alias === normalized) {
+      const a = normalizeHeader(alias);
+      if (a === normalized) {
         return { field: field.id, confidence: 1 };
       }
       
       // Partial match
-      if (normalized.includes(alias) || alias.includes(normalized)) {
+      if (normalized.includes(a) || a.includes(normalized)) {
         const conf = 0.8;
         if (conf > highestConfidence) {
           highestConfidence = conf;

@@ -110,6 +110,11 @@ export function ImportGuestsDialog({ eventId, existingGuests = [], open, onOpenC
           }
         } else if (field === 'fullName') {
           guest.fullName = val.trim();
+        } else if (field === 'plusOneAllowed' || field === 'allowPortalAccess') {
+          const v = val.trim().toLowerCase();
+          if (['1', 'true', 'yes', 'y', 't'].includes(v)) (guest as any)[field] = true;
+          else if (['0', 'false', 'no', 'n', 'f', ''].includes(v)) (guest as any)[field] = false;
+          else errors[field] = 'Use yes/no or true/false';
         } else {
           (guest as any)[field] = val.trim();
         }

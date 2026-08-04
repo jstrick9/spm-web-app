@@ -19,6 +19,7 @@
 import '../test/setup.js';
 import { describe, it, expect, beforeAll, afterAll } from 'vitest';
 import { buildApp } from '../index.js';
+import { db } from '../db/database.js';
 import type { FastifyInstance } from 'fastify';
 import { guestsRepo } from '../db/repos/index.js';
 
@@ -114,6 +115,9 @@ describe('POST /api/orgs/:orgId/guests/merge', () => {
     expect(res.statusCode).toBe(401);
   });
 
+  // Merge is an owner/admin-only data-quality tool (blueprint §6), so the
+  // owner (authed) passes the gate and the endpoint behaves like a normal
+  // owner-scoped mutation.
   it('returns 400 with empty duplicateIds', async () => {
     const res = await app.inject({
       method: 'POST',
@@ -121,22 +125,25 @@ describe('POST /api/orgs/:orgId/guests/merge', () => {
       headers: authed(),
       payload: { primaryId: guestId1, duplicateIds: [] },
     });
-    expect(res.statusCode).toBe(403);
+    expect(res.statusCode).toBe(400);
   });
 
-  it('does not expose venue owner guest merging as a normal workflow', async () => {
+  it('merges duplicates for the owner and audits', async () => {
     const res = await app.inject({ method: 'POST', url: `/api/orgs/${orgId}/guests/merge`, headers: authed(), payload: { primaryId: guestId1, duplicateIds: [guestId2] } });
-    expect(res.statusCode).toBe(403);
+    expect(res.statusCode).toBe(200);
+    expect(res.json().mergedCount).toBe(1);
+    const audit = db.prepare(`SELECT COUNT(*) AS n FROM audit_logs WHERE action = 'guest.identity.merge'`).get() as { n: number };
+    expect(audit.n).toBeGreaterThanOrEqual(1);
   });
 
-  it('returns 400 for IDs from another org', async () => {
+  it('returns 404 for IDs from another org', async () => {
     const res = await app.inject({
       method: 'POST',
       url: `/api/orgs/${orgId}/guests/merge`,
       headers: authed(),
       payload: { primaryId: 'nonexistent-id', duplicateIds: ['also-nonexistent'] },
     });
-    expect(res.statusCode).toBe(403);
+    expect(res.statusCode).toBe(404);
   });
 });
 

@@ -16,6 +16,7 @@ import {
   Mail, Phone, Utensils, Accessibility,
 } from 'lucide-react';
 import { useMemo, useState } from 'react';
+import { usePermission } from '../../lib/usePermission';
 import { sdk } from '../../sdk';
 import type { SdkGuest, SdkGuestCounts } from '../../sdk/types';
 import { PageBody, PageHeader } from '../../ui/AppShell';
@@ -45,6 +46,7 @@ interface Props {
 }
 
 export function CrossEventGuestBrowser({ orgId }: Props) {
+  const canManageOrg = usePermission('org.manage');
   const { toast } = useToast();
   const qc = useQueryClient();
   const [search, setSearch] = useState('');
@@ -79,19 +81,10 @@ export function CrossEventGuestBrowser({ orgId }: Props) {
   const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE));
   const totalGuests = counts.pending + counts.attending + counts.declined + counts.maybe;
 
-  // RSVP inline update mutation
-  const updateRsvp = useMutation({
-    mutationFn: ({ guestId, rsvpStatus }: { guestId: string; rsvpStatus: string }) =>
-      sdk.guests.update(guestId, { rsvpStatus: rsvpStatus as any }),
-    onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ['org-guests'] });
-      toast({ title: 'RSVP updated', variant: 'success' });
-    },
-    onError: () => {
-      toast({ title: 'Could not update RSVP', variant: 'destructive' });
-    },
-  });
-
+  // NOTE: guest records are couple-owned (server-enforced). This cross-event
+  // browser is a read-only data-quality tool for staff/owners, so no inline
+  // RSVP editing is offered here — the couple manages RSVPs in their event,
+  // and the venue uses the read-only venue guest manifest.
   // CSV export
   function exportCSV() {
     const headers = ['Name', 'Email', 'Phone', 'Party', 'RSVP', 'Table', 'Event', 'Dietary'];
@@ -137,8 +130,8 @@ export function CrossEventGuestBrowser({ orgId }: Props) {
           <KPITile label="Declined" value={counts.declined} className="text-danger" />
         </div>
 
-        {/* Duplicate guest detection + merge */}
-        <GuestMergePanel orgId={orgId} />
+        {/* Duplicate guest detection + merge — owner/admin-only data-quality tool */}
+        {canManageOrg && <GuestMergePanel orgId={orgId} />}
 
         {/* Filters toolbar */}
         <div className="flex flex-wrap items-center gap-3">
@@ -222,7 +215,6 @@ export function CrossEventGuestBrowser({ orgId }: Props) {
                       <GuestRow
                         key={guest.id}
                         guest={guest}
-                        onRsvpChange={(status) => updateRsvp.mutate({ guestId: guest.id, rsvpStatus: status })}
                       />
                     ))}
                   </tbody>
@@ -268,10 +260,8 @@ export function CrossEventGuestBrowser({ orgId }: Props) {
 
 function GuestRow({
   guest,
-  onRsvpChange,
 }: {
   guest: SdkGuest & { event_title: string };
-  onRsvpChange: (status: string) => void;
 }) {
   const meta = RSVP_META[guest.rsvp_status] ?? RSVP_META.pending;
 
@@ -307,24 +297,11 @@ function GuestRow({
         </a>
       </td>
       <td className="px-4 py-3">
-        <Select
-          value={guest.rsvp_status}
-          onValueChange={onRsvpChange}
-        >
-          <SelectTrigger className="h-7 w-[110px] text-xs border-0 bg-transparent">
-            <Badge variant={meta.variant} className="text-[11px]">
-              {meta.label}
-            </Badge>
-          </SelectTrigger>
-          <SelectContent>
-            {Object.entries(RSVP_META).map(([key, m]) => (
-              <SelectItem key={key} value={key}>
-                <Badge variant={m.variant} className="text-[11px]">{m.label}</Badge>
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
+        <Badge variant={meta.variant} className="text-[11px]">
+          {meta.label}
+        </Badge>
       </td>
+      {/* RSVP is couple-owned; the cross-event browser is read-only for staff/owners. */}
       <td className="px-4 py-3 text-fg-muted text-xs hidden lg:table-cell">
         {guest.table_assignment ?? '—'}
       </td>

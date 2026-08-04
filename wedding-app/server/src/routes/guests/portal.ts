@@ -381,17 +381,18 @@ export async function guestPortalRoutes(app: FastifyInstance) {
     const email = parsed.data.email.trim().toLowerCase();
     const guest = guestsRepo.listForEvent(eventId).find((g) => g.email?.toLowerCase() === email && (!parsed.data.name || g.full_name.toLowerCase().includes(parsed.data.name.toLowerCase().split(' ')[0])));
     let queued = false;
-    if (guest && guest.allow_portal_access) {
+    // Only rotate the guest's portal token when a delivery job can actually be
+    // enqueued — rotating without delivery would invalidate their existing
+    // link and leave them with nothing (GU-04).
+    const smtpId = activeSmtpIntegrationId(event.organization_id);
+    if (guest && guest.allow_portal_access && smtpId) {
       const token = guestsRepo.rotatePortalToken(guest.id);
       const baseUrl = (process.env.PUBLIC_APP_URL || process.env.BASE_URL || 'http://localhost:5173').replace(/\/+$/, '');
       const url = `${baseUrl}/#/portal/${eventId}?guest=${encodeURIComponent(guest.id)}&token=${encodeURIComponent(token)}`;
-      const smtpId = activeSmtpIntegrationId(event.organization_id);
-      if (smtpId) {
-        jobsRepo.enqueue({ kind: 'email.send', organizationId: event.organization_id, payload: { integrationId: smtpId, to: email, subject: `${event.title} RSVP link`, text: `Open your secure RSVP link: ${url}`, html: `<p>Open your secure RSVP link:</p><p><a href="${escapeHtml(url)}">RSVP for ${escapeHtml(event.title)}</a></p>` } });
-        queued = true;
-      }
+      jobsRepo.enqueue({ kind: 'email.send', organizationId: event.organization_id, payload: { integrationId: smtpId, to: email, subject: `${event.title} RSVP link`, text: `Open your secure RSVP link: ${url}`, html: `<p>Open your secure RSVP link:</p><p><a href="${escapeHtml(url)}">RSVP for ${escapeHtml(event.title)}</a></p>` } });
+      queued = true;
     }
-    auditPublicSubmission(req, { organizationId: event.organization_id, action: 'portal.resend_link', targetType: 'event', targetId: eventId, details: { matched: !!guest, queued } });
+    auditPublicSubmission(req, { organizationId: event.organization_id, action: 'portal.resend_link', targetType: 'event', targetId: eventId, details: { matched: !!guest, queued, rotated: queued } });
     return reply.code(202).send({ ok: true, queued, message: 'If that email matches an invited guest, a secure RSVP link will be sent.' });
   });
 
@@ -615,6 +616,21 @@ export async function guestPortalRoutes(app: FastifyInstance) {
       if (!g || g.event_id !== eventId) throw BadRequest('guest-not-in-event');
       if (!g.allow_portal_access) throw new (await import('../../lib/errors.js')).HttpError(403, 'portal-access-revoked');
       const prior = db.prepare(`SELECT COUNT(*) AS n FROM rsvp_submissions WHERE guest_id = ?`).get(g.id) as { n: number };
+      // RSVP edit window: when the couple configures rsvpEditWindowDays and
+      // the event has an rsvp_deadline, edits close at deadline + window.
+      if (prior.n > 0) {
+        const cfg = portalConfigRepo.getForEvent(eventId) as { config?: string } | undefined;
+        const portalConfig = cfg ? (() => { try { return JSON.parse(String(cfg.config || '{}')); } catch { return {}; } })() : {};
+        const editWindowDays = Number(portalConfig.rsvpEditWindowDays ?? 0);
+        if (event.rsvp_deadline && editWindowDays > 0) {
+          const windowEnd = new Date(`${event.rsvp_deadline}T23:59:59`);
+          if (!Number.isNaN(windowEnd.getTime())) windowEnd.setDate(windowEnd.getDate() + editWindowDays);
+          if (!Number.isNaN(windowEnd.getTime()) && Date.now() > windowEnd.getTime()) {
+            auditPublicSubmission(req, { organizationId: event.organization_id, action: 'rsvp.edit_window_closed', targetType: 'guest', targetId: g.id, details: { eventId, rsvpDeadline: event.rsvp_deadline, editWindowDays, windowEnd: windowEnd.toISOString() } });
+            throw new (await import('../../lib/errors.js')).HttpError(403, 'rsvp-edit-window-closed');
+          }
+        }
+      }
       if (g.portal_token_hash && (parsed.data.token || prior.n > 0) && verifyGuestPortalToken(g, parsed.data.token) !== 'valid') {
         auditPublicSubmission(req, { organizationId: event.organization_id, action: 'rsvp.suspicious_submit', targetType: 'guest', targetId: g.id, details: { reason: prior.n > 0 ? 'edit_token_required_or_invalid' : 'token_invalid', priorCount: prior.n } });
         throw new (await import('../../lib/errors.js')).HttpError(403, prior.n > 0 ? 'portal-token-required-for-rsvp-edit' : 'portal-token-invalid');

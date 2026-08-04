@@ -57,15 +57,25 @@ export async function guestCoreRoutes(app: FastifyInstance) {
     if (!event) throw NotFound();
     const orgMap = eventsRepo.orgMapForUser(req.auth!.userId);
     if (!can(req.auth!.memberships, { eventId }, 'guests.view', orgMap)) throw Forbidden();
-    const rows = db.prepare(`SELECT g.full_name, g.email, g.phone, g.party_name, g.table_assignment, g.seat_assignment, g.room_assignment, g.dietary_restrictions, g.accessibility_notes, r.meal_choice, r.dietary_notes, r.special_needs, r.notes, r.submitted_at
+    const rows = db.prepare(`SELECT g.full_name, g.email, g.phone, g.party_name, g.table_assignment, g.seat_assignment, g.room_assignment, g.dietary_restrictions, g.accessibility_notes, g.metadata, r.meal_choice, r.dietary_notes, r.special_needs, r.notes, r.submitted_at
       FROM guests g
       LEFT JOIN rsvp_submissions r ON r.id = (SELECT id FROM rsvp_submissions WHERE guest_id = g.id ORDER BY submitted_at DESC LIMIT 1)
       WHERE g.event_id = ? AND g.deleted_at IS NULL
       ORDER BY g.full_name`).all(eventId) as Array<Record<string, any>>;
     const escape = (value: unknown) => `"${String(value ?? '').replace(/"/g, '""')}"`;
+    const rowsOut: Array<Record<string, any>> = rows.map((r) => {
+      let meta: Record<string, any> = {};
+      try { meta = JSON.parse(r.metadata || '{}'); } catch { /* ignore */ }
+      // Couple-entered meal choices live in guest metadata; the RSVP
+      // submission may be absent (e.g. RSVP captured by phone and entered by
+      // the couple). Coalesce so catering always sees the effective choice.
+      const mealChoice = r.meal_choice || meta.mealChoice || '';
+      const cateringNotes = [r.special_needs, r.notes, meta.coupleNotes ? `Couple note: ${meta.coupleNotes}` : ''].filter(Boolean).join(' | ');
+      return { ...r, mealChoice, cateringNotes };
+    });
     const csv = [
       ['Guest','Email','Phone','Household','Table','Seat','Lodging','Meal choice','Dietary restrictions','Allergies / dietary notes','Accessibility needs','Catering notes','Submitted at'].map(escape).join(','),
-      ...rows.map((r) => [r.full_name, r.email, r.phone, r.party_name, r.table_assignment, r.seat_assignment, r.room_assignment, r.meal_choice, r.dietary_restrictions, r.dietary_notes, r.accessibility_notes, [r.special_needs, r.notes].filter(Boolean).join(' | '), r.submitted_at].map(escape).join(',')),
+      ...rowsOut.map((r) => [r.full_name, r.email, r.phone, r.party_name, r.table_assignment, r.seat_assignment, r.room_assignment, r.mealChoice, r.dietary_restrictions, r.dietary_notes, r.accessibility_notes, r.cateringNotes, r.submitted_at].map(escape).join(',')),
     ].join('\n');
     auditRepo.log({ organizationId: event.organization_id, actorUserId: req.auth!.userId, actorLabel: req.auth!.email, action: 'guests.catering_dietary_export', targetType: 'event', targetId: eventId, ip: req.ip, details: { rows: rows.length } });
     return reply.header('content-type', 'text/csv; charset=utf-8').header('content-disposition', `attachment; filename="catering-dietary-${eventId}.csv"`).send(csv);
@@ -187,9 +197,35 @@ export async function guestCoreRoutes(app: FastifyInstance) {
     return { clusters: guestIdentityRepo.findDuplicates(orgId) };
   });
 
-  app.post("/api/orgs/:orgId/guests/merge", { preHandler: requireAuth }, async () => {
-    // Couples manage guest identity within their own event; venue-wide merge is intentionally unavailable.
-    throw Forbidden();
+  /**
+   * Guest identity merge — owner/admin-only data-quality tool (blueprint §6).
+   * The repo performs the merge safely: human-confirmed, org-scoped,
+   * never deletes across orgs; RSVP/sub-event data is re-pointed to the
+   * primary before the duplicates are soft-deleted.
+   */
+  app.post("/api/orgs/:orgId/guests/merge", { preHandler: requireAuth }, async (req, reply) => {
+    const { orgId } = req.params as { orgId: string };
+    if (!can(req.auth!.memberships, { organizationId: orgId }, "org.manage")) throw Forbidden();
+    const parsed = z.object({
+      primaryId: z.string().min(1),
+      duplicateIds: z.array(z.string().min(1)).min(1).max(50),
+    }).safeParse(req.body);
+    if (!parsed.success) throw BadRequest('invalid-input', parsed.error.issues);
+    const result = guestIdentityRepo.merge(orgId, parsed.data.primaryId, parsed.data.duplicateIds);
+    if ('error' in result) {
+      if (result.error === 'primary-not-found' || result.error === 'no-valid-duplicates') throw NotFound(result.error);
+      throw BadRequest(result.error);
+    }
+    auditRepo.log({
+      organizationId: orgId, actorUserId: req.auth!.userId, actorLabel: req.auth!.email,
+      action: 'guest.identity.merge', targetType: 'guest', targetId: result.primary.id,
+      ip: req.ip, details: { duplicateIds: parsed.data.duplicateIds, mergedCount: result.mergedCount },
+    });
+    for (const dupId of parsed.data.duplicateIds) {
+      const dup = guestsRepo.findById(dupId);
+      if (dup) broadcastSSE(dup.organization_id, "guest.updated", { guestId: dupId, eventId: dup.event_id, mergedInto: result.primary.id }, req.auth!.userId);
+    }
+    return reply.code(200).send(result);
   });
 
   app.post('/api/events/:eventId/guests/bulk', { preHandler: requireAuth }, async (req, reply) => {
@@ -212,7 +248,9 @@ export async function guestCoreRoutes(app: FastifyInstance) {
       organizationId: event.organization_id, actorUserId: req.auth!.userId,
       actorLabel: req.auth!.email, action: 'guest.bulk_create',
       targetType: 'event', targetId: eventId, ip: req.ip,
+      details: { mode: parsed.data.mode, ...result },
     });
+    broadcastSSE(event.organization_id, "guest.updated", { eventId, bulk: true, ...result }, req.auth!.userId);
     return reply.code(201).send(result);
   });
 
@@ -254,6 +292,12 @@ export async function guestCoreRoutes(app: FastifyInstance) {
     const orgMap = eventsRepo.orgMapForUser(req.auth!.userId);
     requireCoupleGuestManager(req.auth!.memberships, guest.event_id, orgMap);
     guestsRepo.softDelete(id);
+    auditRepo.log({
+      organizationId: guest.organization_id, actorUserId: req.auth!.userId,
+      actorLabel: req.auth!.email, action: 'guest.delete',
+      targetType: 'guest', targetId: id, ip: req.ip, details: { eventId: guest.event_id },
+    });
+    broadcastSSE(guest.organization_id, "guest.updated", { guestId: id, eventId: guest.event_id, deleted: true }, req.auth!.userId);
     return reply.code(204).send();
   });
 
@@ -263,6 +307,11 @@ export async function guestCoreRoutes(app: FastifyInstance) {
     if (!guest) throw NotFound();
     const orgMap = eventsRepo.orgMapForUser(req.auth!.userId); requireCoupleGuestManager(req.auth!.memberships, guest.event_id, orgMap);
     const token = guestsRepo.rotatePortalToken(id);
+    auditRepo.log({
+      organizationId: guest.organization_id, actorUserId: req.auth!.userId,
+      actorLabel: req.auth!.email, action: 'guest.portal_token.rotate',
+      targetType: 'guest', targetId: id, ip: req.ip, details: { eventId: guest.event_id },
+    });
     return { token };
   });
 
@@ -272,6 +321,11 @@ export async function guestCoreRoutes(app: FastifyInstance) {
     if (!guest) throw NotFound();
     const orgMap = eventsRepo.orgMapForUser(req.auth!.userId); requireCoupleGuestManager(req.auth!.memberships, guest.event_id, orgMap);
     guestsRepo.revokePortalToken(id);
+    auditRepo.log({
+      organizationId: guest.organization_id, actorUserId: req.auth!.userId,
+      actorLabel: req.auth!.email, action: 'guest.portal_token.revoke',
+      targetType: 'guest', targetId: id, ip: req.ip, details: { eventId: guest.event_id },
+    });
     return reply.code(204).send();
   });
 
