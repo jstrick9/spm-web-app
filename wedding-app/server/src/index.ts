@@ -45,6 +45,7 @@ import { coupleRoutes }         from "./routes/couple.js";
 import { assetRoutes }          from "./routes/assets.js";
 
 import { db } from './db/database.js';
+import { applyAllMigrations } from './db/migrate.js';
 import { rolesRepo } from './db/repos/index.js';
 import { HttpError } from './lib/errors.js';
 
@@ -58,27 +59,27 @@ if (JWT_SECRET === 'dev-secret-change-me-in-production' && process.env.NODE_ENV 
   process.exit(1);
 }
 
-// Ensure schema_version table exists (first-run friendliness).
-db.exec(`CREATE TABLE IF NOT EXISTS schema_version (
-  version INTEGER PRIMARY KEY, applied_at TEXT NOT NULL DEFAULT (datetime('now'))
-);`);
-
-// Seed/refresh the system roles into the roles table on every boot.
-// Idempotent: re-syncs permission grants if the code-side definitions
-// changed (e.g. a deploy added a new permission to the 'admin' system role).
-// Silently skipped if the roles table doesn't exist yet (fresh boot before
-// migrate; test harness applies the schema in its own setup).
-const rolesTableExists = (
-  db.prepare(`SELECT name FROM sqlite_master WHERE type='table' AND name='roles'`)
-    .get() as { name?: string } | undefined
-)?.name === 'roles';
-if (rolesTableExists) {
-  rolesRepo.ensureSystemRoles();
-}
-
-
-
 export async function buildApp() {
+  // Apply any pending schema migrations before serving traffic. Self-hosted
+  // deployments routinely pull updates without remembering the manual
+  // `npm run migrate` step, which left pre-existing databases on stale schemas
+  // (e.g. a pre-0049 DB missing users.password_iterations → 500 on login).
+  // The runner is idempotent (tracked in schema_version), so this is a no-op
+  // on up-to-date databases and self-heals drift on every restart. A failed
+  // migration is fatal on purpose: never serve traffic on a stale schema.
+  try {
+    applyAllMigrations();
+  } catch (err) {
+    console.error('[FATAL] database migration failed at boot; refusing to start:', err);
+    throw err;
+  }
+
+  // Seed/refresh the system roles into the roles table on every boot.
+  // Idempotent: re-syncs permission grants if the code-side definitions
+  // changed (e.g. a deploy added a new permission to the 'admin' system role).
+  // Runs after migrations so the roles table exists even on a fresh database.
+  rolesRepo.ensureSystemRoles();
+
   const app = Fastify({
     logger: { level: process.env.LOG_LEVEL ?? 'info' },
     // Trust proxy headers only when running behind the known reverse proxy;

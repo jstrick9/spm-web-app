@@ -4,6 +4,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { AuthScreen } from './AuthScreen';
 import { ToastProvider } from '../../ui/Toast';
 import { resetStore } from '../../test/handlers';
+import { server, http, HttpResponse } from '../../test/server';
 
 function renderAuth(onAuth = vi.fn()) {
   render(
@@ -101,5 +102,19 @@ describe('AuthScreen first-time owner UX', () => {
 
     expect(await screen.findByText(/check your email for the password reset link/i)).toBeInTheDocument();
     expect(screen.getByText(/same message whether or not the email exists/i)).toBeInTheDocument();
+  });
+
+  it('shows a helpful message (not a raw error code) when sign-in hits a server 500', async () => {
+    server.use(http.post('/api/auth/login', () => HttpResponse.json({ error: 'internal-error' }, { status: 500 })));
+    const user = userEvent.setup();
+    const { onAuth } = renderAuth();
+
+    await user.type(screen.getByLabelText(/email address/i), 'owner@demo.local');
+    await user.type(screen.getByLabelText(/^password$/i), 'wedding123');
+    await user.click(screen.getByRole('button', { name: /sign in securely/i }));
+
+    expect(await screen.findByText(/server hit an internal error/i)).toBeInTheDocument();
+    expect(screen.queryByText(/internal-error/i)).not.toBeInTheDocument();
+    expect(onAuth).not.toHaveBeenCalled();
   });
 });

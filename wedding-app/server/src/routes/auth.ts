@@ -175,15 +175,27 @@ export async function authRoutes(app: FastifyInstance) {
     }
     usersRepo.clearFailedLogin(user.id);
     // Rehash-on-login: transparently upgrade legacy-work-factor hashes without
-    // invalidating the session about to be issued.
+    // invalidating the session about to be issued. This is an opportunistic,
+    // non-critical optimization — a failure here (read-only DB, disk full,
+    // exotic schema drift) must NEVER turn a valid credential into a 500.
+    // Fail open: log + audit the failure and continue issuing the session.
     if (needsRehash({ iterations: user.password_iterations })) {
-      const upgraded = hashPassword(parsed.data.password);
-      usersRepo.upgradePasswordHash(user.id, upgraded.passwordHash, upgraded.passwordSalt, upgraded.iterations);
-      auditRepo.log({
-        actorUserId: user.id, actorLabel: user.email,
-        action: 'user.password.rehashed', ip: req.ip,
-        details: { fromIterations: user.password_iterations ?? 120000, toIterations: upgraded.iterations },
-      });
+      try {
+        const upgraded = hashPassword(parsed.data.password);
+        usersRepo.upgradePasswordHash(user.id, upgraded.passwordHash, upgraded.passwordSalt, upgraded.iterations);
+        auditRepo.log({
+          actorUserId: user.id, actorLabel: user.email,
+          action: 'user.password.rehashed', ip: req.ip,
+          details: { fromIterations: user.password_iterations ?? 120000, toIterations: upgraded.iterations },
+        });
+      } catch (err) {
+        req.log.error({ err, userId: user.id }, 'rehash-on-login upgrade failed; continuing with existing hash');
+        auditRepo.log({
+          actorUserId: user.id, actorLabel: user.email,
+          action: 'user.password.rehash.failed', ip: req.ip,
+          details: { error: err instanceof Error ? err.message : String(err) },
+        });
+      }
     }
     auditRepo.log({
       actorUserId: user.id, actorLabel: user.email,

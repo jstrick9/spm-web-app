@@ -9,7 +9,9 @@ A complete, self-hosted operating system for modern wedding venues. Built with *
 ```bash
 cd wedding-app
 npm run install:all     # install server + client deps
-npm run migrate         # apply all database migrations
+npm run migrate         # apply all database migrations (optional: the server
+                        # auto-applies pending migrations on every boot, so a
+                        # fresh pull + restart is enough to heal an existing DB)
 npm run seed            # create deterministic demo data
 
 # In two terminals:

@@ -10,6 +10,7 @@
  *   - Budget items, timeline, contracts, inventory
  */
 import { hashPassword } from '../lib/crypto.js';
+import { applyAllMigrations } from './migrate.js';
 import {
   eventsRepo, guestsRepo, orgsRepo, usersRepo,
   catalogRepo, vendorsRepo, timelineRepo, staffTasksRepo,
@@ -20,6 +21,10 @@ import { contractsRepo } from './repos/contracts.js';
 import { inventoryRepo } from './repos/inventory.js';
 import { emailTemplatesRepo } from './repos/emailTemplates.js';
 import { emailAutomationsRepo } from './repos/emailAutomations.js';
+
+// Self-healing: apply pending migrations so `npm run seed` works against a
+// database that predates newer migrations (idempotent via schema_version).
+applyAllMigrations();
 
 rolesRepo.ensureSystemRoles();
 
