@@ -1,7 +1,8 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { render, screen, waitFor } from '@testing-library/react';
+import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { EventContractsTab } from './EventContractsTab';
+import { sdk } from '../../../sdk';
 
 vi.mock('../../../sdk', () => ({
   sdk: {
@@ -22,6 +23,9 @@ vi.mock('../../../sdk', () => ({
       send: vi.fn().mockResolvedValue({ contract: { id: 'c3', status: 'sent' } }),
       sign: vi.fn().mockResolvedValue({ contract: { id: 'c2', status: 'signed' } }),
       delete: vi.fn().mockResolvedValue(undefined),
+      decideObligation: vi.fn().mockResolvedValue({ obligation: {} }),
+      approveGoNoGoFlag: vi.fn().mockResolvedValue({ flag: {} }),
+      resolveGoNoGoFlag: vi.fn().mockResolvedValue({ flag: {} }),
     },
   },
 }));
@@ -89,5 +93,32 @@ describe('EventContractsTab', () => {
     await waitFor(() => {
       expect(screen.getByText('New Contract')).toBeTruthy();
     });
+  });
+
+  // MODULE-06 FI-03/FI-04: obligation approve/dismiss + go/no-go owner approval.
+  it('offers obligation decisions and go/no-go owner approval', async () => {
+    localStorage.setItem('wvi_registration_role', 'venue_manager');
+    (sdk.contracts.financialLegal as any).mockResolvedValue({
+      financialLegal: {
+        escalations: [],
+        goNoGoFlags: [{ id: 'flag-1', source_type: 'contract', source_id: null, severity: 'blocked', status: 'open', label: 'Unsigned ops contract blocks event', detail: null, created_at: '2026-01-01' }],
+        obligationExtracts: [{ id: 'ob-1', contract_id: 'c1', obligation_key: 'insurance', label: 'Insurance / COI', excerpt: 'Insurance COI required', confidence: 'high', status: 'detected' }],
+        paymentDueRisk: { overdue: 0, dueSoon: 0, pendingCents: 0 },
+      },
+    });
+    render(<EventContractsTab eventId="e1" />, { wrapper: wrap() });
+    await waitFor(() => {
+      // Renders in both the extractor row and the contract clause badges.
+      expect(screen.getAllByText('Insurance / COI').length).toBeGreaterThan(0);
+    });
+    expect(screen.getByRole('button', { name: /^Approve$/ })).toBeTruthy();
+    expect(screen.getByRole('button', { name: /^Dismiss$/ })).toBeTruthy();
+    expect(screen.getByRole('button', { name: /approve \(owner\)/i })).toBeTruthy();
+
+    fireEvent.click(screen.getByRole('button', { name: /^Approve$/ }));
+    await waitFor(() => expect(sdk.contracts.decideObligation).toHaveBeenCalledWith('c1', 'ob-1', 'approved'));
+
+    fireEvent.click(screen.getByRole('button', { name: /approve \(owner\)/i }));
+    await waitFor(() => expect(sdk.contracts.approveGoNoGoFlag).toHaveBeenCalledWith('e1', 'flag-1'));
   });
 });

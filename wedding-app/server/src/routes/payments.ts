@@ -17,7 +17,7 @@ import type { FastifyInstance } from 'fastify';
 import { requireAuth } from '../middleware/auth.js';
 import { can } from '../lib/rbac.js';
 import { Forbidden, NotFound, BadRequest } from '../lib/errors.js';
-import { paymentLinksRepo, auditRepo } from '../db/repos/index.js';
+import { paymentLinksRepo, auditRepo, eventsRepo } from '../db/repos/index.js';
 import { integrationsRepo } from '../db/repos/integrations.js';
 import { openSecret } from '../lib/secrets.js';
 import { parseJson } from '../lib/json.js';
@@ -28,8 +28,12 @@ import { verifySquareSignature } from '../integrations/providers/square.js';
 import { broadcastSSE } from './sse.js';
 
 export async function paymentRoutes(app: FastifyInstance) {
-  // Capture the raw body (as a string) for THIS plugin's routes only, so we
-  // can verify provider HMAC signatures over the exact bytes received.
+  // MODULE-06 FI-10: NOTE — Fastify content-type parsers are APP-WIDE (not
+  // encapsulated per plugin). This raw-body capture is therefore global; it is
+  // behavior-compatible with the default parser (same JSON.parse semantics,
+  // empty body → {}) and only ADDS `rawBody` for webhook signature checks.
+  // Kept here rather than in index.ts so the webhook code that depends on it
+  // stays colocated.
   app.addContentTypeParser(
     'application/json',
     { parseAs: 'string' },
@@ -49,7 +53,8 @@ export async function paymentRoutes(app: FastifyInstance) {
     const { id } = req.params as { id: string };
     const link = paymentLinksRepo.findById(id);
     if (!link) throw NotFound();
-    if (!can(req.auth!.memberships, { organizationId: link.organization_id }, 'budget.manage')) throw Forbidden();
+    const orgMap = eventsRepo.orgMapForUser(req.auth!.userId);
+    if (!can(req.auth!.memberships, { organizationId: link.organization_id }, 'budget.manage', orgMap)) throw Forbidden();
 
     try {
       const { checkoutUrl } = await createCheckout(id);
@@ -69,7 +74,8 @@ export async function paymentRoutes(app: FastifyInstance) {
   });
 
   // ── Stripe webhook ──
-  app.post('/api/payments/webhooks/stripe/:integrationId', async (req, reply) => {
+  // MODULE-06 FI-10: public endpoint — rate-limit like every other public surface.
+  app.post('/api/payments/webhooks/stripe/:integrationId', { config: { rateLimit: { max: 60, timeWindow: '1 minute' } } }, async (req, reply) => {
     const { integrationId } = req.params as { integrationId: string };
     const integration = integrationsRepo.findById(integrationId);
     if (!integration || integration.provider !== 'stripe') return reply.code(404).send({ error: 'not-found' });
@@ -99,7 +105,7 @@ export async function paymentRoutes(app: FastifyInstance) {
   });
 
   // ── Square webhook ──
-  app.post('/api/payments/webhooks/square/:integrationId', async (req, reply) => {
+  app.post('/api/payments/webhooks/square/:integrationId', { config: { rateLimit: { max: 60, timeWindow: '1 minute' } } }, async (req, reply) => {
     const { integrationId } = req.params as { integrationId: string };
     const integration = integrationsRepo.findById(integrationId);
     if (!integration || integration.provider !== 'square') return reply.code(404).send({ error: 'not-found' });

@@ -195,6 +195,26 @@ describe('System role grants', () => {
     expect(staffDef.permissions).not.toContain('staff.manage');
   });
 
+  it('finance permission split: planner manages finance, manager escalates, staff/couple cannot', () => {
+    const plannerDef = SYSTEM_ROLE_DEFINITIONS.find(r => r.key === 'planner')!;
+    const managerDef = SYSTEM_ROLE_DEFINITIONS.find(r => r.key === 'manager')!;
+    const staffDef = SYSTEM_ROLE_DEFINITIONS.find(r => r.key === 'staff')!;
+    const coupleDef = SYSTEM_ROLE_DEFINITIONS.find(r => r.key === 'couple')!;
+    // MODULE-06 FI-01: the finance role countersigns contracts.
+    expect(plannerDef.permissions).toContain('contracts.sign');
+    expect(plannerDef.permissions).toContain('budget.manage');
+    expect(plannerDef.permissions).toContain('contracts.manage');
+    // The ops manager is finance view-only but can escalate (FI-11).
+    expect(managerDef.permissions).toContain('budget.view');
+    expect(managerDef.permissions).not.toContain('budget.manage');
+    expect(managerDef.permissions).not.toContain('contracts.manage');
+    expect(managerDef.permissions).toContain('financial_legal.escalate');
+    // View-only roles can neither sign nor escalate.
+    expect(staffDef.permissions).not.toContain('contracts.sign');
+    expect(staffDef.permissions).not.toContain('financial_legal.escalate');
+    expect(coupleDef.permissions).not.toContain('financial_legal.escalate');
+  });
+
   it('couple role has no timeline.view — couples use the sanitized couple-schedule', () => {
     const coupleDef = SYSTEM_ROLE_DEFINITIONS.find(r => r.key === 'couple')!;
     expect(coupleDef.permissions).toContain('layouts.view');

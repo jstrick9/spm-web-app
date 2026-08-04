@@ -36,6 +36,15 @@ export const contractsSdk = {
   createGoNoGoFlag(eventId: string, input: { sourceType?: 'contract' | 'payment' | 'legal' | 'manual'; sourceId?: string; severity?: 'warning' | 'blocked'; label: string; detail?: string }) {
     return api.post(`/api/events/${eventId}/financial-legal/go-no-go-flags`, input);
   },
+  approveGoNoGoFlag(eventId: string, flagId: string) {
+    return api.post(`/api/events/${eventId}/financial-legal/go-no-go-flags/${flagId}/approve`, {});
+  },
+  resolveGoNoGoFlag(eventId: string, flagId: string) {
+    return api.post(`/api/events/${eventId}/financial-legal/go-no-go-flags/${flagId}/resolve`, {});
+  },
+  decideObligation(contractId: string, obligationId: string, status: 'approved' | 'dismissed') {
+    return api.post(`/api/contracts/${contractId}/obligations/${obligationId}`, { status });
+  },
   extractObligations(id: string) {
     return api.post(`/api/contracts/${id}/extract-obligations`, {});
   },

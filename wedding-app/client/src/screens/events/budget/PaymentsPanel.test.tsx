@@ -55,6 +55,18 @@ describe('PaymentsPanel', () => {
     await waitFor(() => expect(openSpy).toHaveBeenCalledWith('https://checkout.stripe.com/c/abc', '_blank', 'noopener,noreferrer'));
   });
 
+  it('shows field-level error and disabled create for zero/invalid amounts (MODULE-06 FI-14)', async () => {
+    render(<PaymentsPanel eventId="e1" />, { wrapper: wrap() });
+    await waitFor(() => {
+      expect(screen.getByRole('button', { name: /new payment/i })).toBeTruthy();
+    });
+    fireEvent.click(screen.getByRole('button', { name: /new payment/i }));
+    const amount = await screen.findByPlaceholderText('0.00');
+    fireEvent.change(amount, { target: { value: '0' } });
+    expect(await screen.findByText(/enter an amount greater than zero/i)).toBeTruthy();
+    expect(screen.getByRole('button', { name: /^create$/i })).toBeDisabled();
+  });
+
   it('hides "New Payment" and "Collect Payment" without budget.manage', async () => {
     canManage = false;
     render(<PaymentsPanel eventId="e1" />, { wrapper: wrap() });

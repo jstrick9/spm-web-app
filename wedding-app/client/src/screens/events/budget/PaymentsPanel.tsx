@@ -383,6 +383,10 @@ export function PaymentsPanel({ eventId }: Props) {
                     <Label>Amount ($)</Label>
                     <Input type="number" min={0} step={0.01} value={amount}
                       onChange={(e) => setAmount(e.target.value)} placeholder="0.00" className="mt-1 bg-white border-[#e1d5c9] text-xs h-9" />
+                    {/* MODULE-06 FI-14: field-level feedback instead of a generic toast on 400 */}
+                    {amount && (Number.isNaN(parseFloat(amount)) || parseFloat(amount) <= 0) && (
+                      <p className="mt-1 text-xs text-danger">Enter an amount greater than zero.</p>
+                    )}
                   </div>
                   <div>
                     <Label htmlFor="pay-provider">Provider</Label>

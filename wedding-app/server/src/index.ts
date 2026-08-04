@@ -159,6 +159,16 @@ export async function buildApp() {
         message: decorated.message,
       });
     }
+    // MODULE-06 FI-10 (app-wide): @fastify/rate-limit rejects with a bare
+    // Error carrying statusCode 429 and no `code`. Without this branch every
+    // rate-limited route (login, register, public portals, webhooks) returned
+    // 500 internal-error instead of 429 — misread by clients as a server fault.
+    if (typeof decorated.statusCode === 'number' && decorated.statusCode >= 400 && decorated.statusCode < 500) {
+      return reply.code(decorated.statusCode).send({
+        error: decorated.code ?? 'request-rejected',
+        message: decorated.message,
+      });
+    }
     if ((err as { validation?: unknown }).validation) {
       return reply.code(400).send({
         error: 'invalid-input',

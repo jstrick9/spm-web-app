@@ -113,6 +113,7 @@ export type PermissionId =
   | 'contracts.view'
   | 'contracts.manage'
   | 'contracts.sign'
+  | 'financial_legal.escalate'
 
   // ─── Gallery / mood boards ────────────────────────────
   | 'gallery.view'
@@ -255,6 +256,9 @@ export const PERMISSION_CATALOG: ReadonlyArray<PermissionDefinition> = [
   { id: 'contracts.view',        label: 'View contracts',         description: 'See contract list and details', category: 'contracts' },
   { id: 'contracts.manage',      label: 'Manage contracts',       description: 'Create / edit / delete contracts', category: 'contracts' },
   { id: 'contracts.sign',        label: 'Sign contracts',         description: 'Apply an e-signature to a contract', category: 'contracts' },
+  // MODULE-06 FI-11: raising financial/legal escalations + go/no-go flags is
+  // a deliberate ops action — view-only roles (staff, couple) must not do it.
+  { id: 'financial_legal.escalate', label: 'Escalate financial/legal risks', description: 'Raise escalations and go/no-go flags on events', category: 'contracts' },
 
   // Gallery / mood boards
   { id: 'gallery.view',          label: 'View gallery',           description: 'See mood board images and categories', category: 'gallery' },
@@ -374,6 +378,7 @@ export const SYSTEM_ROLE_DEFINITIONS: ReadonlyArray<SystemRoleDefinition> = [
       'questions.view',
       'budget.view',
       'contracts.view',
+      'financial_legal.escalate',
       'gallery.view','gallery.manage',
       'invites.view','invites.manage','invites.send',
       'feedback.view','feedback.manage',
@@ -412,6 +417,11 @@ export const SYSTEM_ROLE_DEFINITIONS: ReadonlyArray<SystemRoleDefinition> = [
       'questions.view',
       'budget.view','budget.manage',
       'contracts.view','contracts.manage',
+      'financial_legal.escalate',
+      // MODULE-06 FI-01: the finance role (planner) may countersign contracts;
+      // couples sign through the couple-finance path; owner/admin get it via
+      // ALL_INTERNAL_PERMISSIONS. The ops-manager role stays finance view-only.
+      'contracts.sign',
       'gallery.view','gallery.manage',
       'invites.view','invites.manage','invites.send',
       'feedback.view','feedback.manage',

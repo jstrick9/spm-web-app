@@ -4,8 +4,10 @@
  */
 import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
+import { db } from '../db/database.js';
 import { requireAuth } from '../middleware/auth.js';
 import { can } from '../lib/rbac.js';
+import { broadcastSSE } from './sse.js';
 import { eventsRepo, auditRepo, vendorsRepo, healthActionStatesRepo } from '../db/repos/index.js';
 import { vendorRatingsRepo } from '../db/repos/vendorRatings.js';
 import { emailTemplatesRepo } from '../db/repos/emailTemplates.js';
@@ -139,16 +141,30 @@ export async function intelligenceRoutes(app: FastifyInstance) {
     if (!can(req.auth!.memberships, { eventId }, 'budget.manage', orgMap)) throw Forbidden();
     const parsed = z.object({
       contractId: z.string().optional(),
-      provider: z.enum(['manual','stripe','square','paypal']).optional(),
+      // MODULE-06 FI-15: only providers that can actually collect (or record
+      // manually) — 'paypal' rows could never produce a hosted checkout.
+      provider: z.enum(['manual','stripe','square']).optional(),
       amountCents: z.number().int().min(1),
       paymentUrl: z.string().url().optional(),
       externalId: z.string().optional(),
       metadata: z.record(z.any()).optional(),
     }).safeParse(req.body);
     if (!parsed.success) throw BadRequest('invalid-input', parsed.error.issues);
+    // MODULE-06 FI-08: a payment link tied to a contract must reference a
+    // contract that belongs to THIS event.
+    if (parsed.data.contractId) {
+      const contract = db.prepare(`SELECT id FROM contracts WHERE id = ? AND event_id = ?`).get(parsed.data.contractId, eventId);
+      if (!contract) throw BadRequest('contract-not-in-event', { contractId: parsed.data.contractId });
+    }
     const payment = paymentLinksRepo.create({
       organizationId: event.organization_id, eventId, ...parsed.data,
     });
+    auditRepo.log({
+      organizationId: event.organization_id, actorUserId: req.auth!.userId, actorLabel: req.auth!.email,
+      action: 'payment.create', targetType: 'payment_link', targetId: payment.id,
+      details: { provider: payment.provider, amountCents: payment.amount_cents, contractId: payment.contract_id }, ip: req.ip,
+    });
+    broadcastSSE(event.organization_id, 'payment.created', { eventId, paymentId: payment.id, provider: payment.provider }, req.auth!.userId);
     return reply.code(201).send({ payment });
   });
 
@@ -156,7 +172,8 @@ export async function intelligenceRoutes(app: FastifyInstance) {
     const { id } = req.params as { id: string };
     const payment = paymentLinksRepo.findById(id);
     if (!payment) throw NotFound();
-    if (!can(req.auth!.memberships, { organizationId: payment.organization_id }, 'budget.manage')) throw Forbidden();
+    const orgMap = eventsRepo.orgMapForUser(req.auth!.userId);
+    if (!can(req.auth!.memberships, { organizationId: payment.organization_id }, 'budget.manage', orgMap)) throw Forbidden();
     const parsed = z.object({
       status: z.enum(['pending','processing','completed','failed','refunded']),
       metadata: z.record(z.any()).optional(),
@@ -165,7 +182,7 @@ export async function intelligenceRoutes(app: FastifyInstance) {
       refundedCents: z.number().int().min(0).optional(),
     }).safeParse(req.body);
     if (!parsed.success) throw BadRequest('invalid-input', parsed.error.issues);
-    return { payment: paymentLinksRepo.updateStatus(
+    const updated = paymentLinksRepo.updateStatus(
       id,
       parsed.data.status,
       parsed.data.status === 'completed' ? new Date().toISOString() : undefined,
@@ -176,7 +193,14 @@ export async function intelligenceRoutes(app: FastifyInstance) {
         refundedCents: parsed.data.refundedCents,
         reconciledAt: new Date().toISOString(),
       },
-    ) };
+    );
+    auditRepo.log({
+      organizationId: payment.organization_id, actorUserId: req.auth!.userId, actorLabel: req.auth!.email,
+      action: 'payment.status_update', targetType: 'payment_link', targetId: id,
+      details: { from: payment.status, to: parsed.data.status }, ip: req.ip,
+    });
+    broadcastSSE(payment.organization_id, 'payment.updated', { eventId: payment.event_id, paymentId: id, status: parsed.data.status }, req.auth!.userId);
+    return { payment: updated };
   });
 
   // ═══ RECOMMENDATIONS ENGINE ═══════════════════════════

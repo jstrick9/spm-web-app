@@ -1,5 +1,6 @@
 import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
+import { db } from '../db/database.js';
 import { requireAuth } from '../middleware/auth.js';
 import { can } from '../lib/rbac.js';
 import { budgetRepo } from '../db/repos/budget.js';
@@ -39,6 +40,10 @@ export async function budgetRoutes(app: FastifyInstance) {
     if (!can(req.auth!.memberships, { eventId }, 'budget.manage', orgMap)) throw Forbidden();
     const parsed = itemSchema.safeParse(req.body);
     if (!parsed.success) throw BadRequest('invalid-input', parsed.error.issues);
+    if (parsed.data.vendorId) {
+      const vendor = db.prepare(`SELECT id FROM vendors WHERE id = ? AND organization_id = ?`).get(parsed.data.vendorId, event.organization_id);
+      if (!vendor) throw BadRequest('vendor-not-in-org', { vendorId: parsed.data.vendorId });
+    }
     const item = budgetRepo.create(event.organization_id, eventId, parsed.data, req.auth!.userId);
     auditRepo.log({
       organizationId: event.organization_id, actorUserId: req.auth!.userId,
@@ -54,10 +59,20 @@ export async function budgetRoutes(app: FastifyInstance) {
     const { id } = req.params as { id: string };
     const item = budgetRepo.findById(id);
     if (!item) throw NotFound();
-    if (!can(req.auth!.memberships, { organizationId: item.organization_id }, 'budget.manage')) throw Forbidden();
+    const orgMap = eventsRepo.orgMapForUser(req.auth!.userId);
+    if (!can(req.auth!.memberships, { eventId: item.event_id }, 'budget.manage', orgMap)) throw Forbidden();
     const parsed = itemSchema.partial().safeParse(req.body);
     if (!parsed.success) throw BadRequest('invalid-input', parsed.error.issues);
+    if (parsed.data.vendorId) {
+      const vendor = db.prepare(`SELECT id FROM vendors WHERE id = ? AND organization_id = ?`).get(parsed.data.vendorId, item.organization_id);
+      if (!vendor) throw BadRequest('vendor-not-in-org', { vendorId: parsed.data.vendorId });
+    }
     const updated = budgetRepo.update(id, parsed.data);
+    auditRepo.log({
+      organizationId: item.organization_id, actorUserId: req.auth!.userId,
+      actorLabel: req.auth!.email, action: 'budget.update',
+      targetType: 'budget_item', targetId: id, ip: req.ip, details: { fields: Object.keys(parsed.data) },
+    });
     broadcastSSE(item.organization_id, 'budget.updated', { eventId: item.event_id, itemId: id }, req.auth!.userId);
     return { item: updated };
   });
@@ -67,8 +82,14 @@ export async function budgetRoutes(app: FastifyInstance) {
     const { id } = req.params as { id: string };
     const item = budgetRepo.findById(id);
     if (!item) throw NotFound();
-    if (!can(req.auth!.memberships, { organizationId: item.organization_id }, 'budget.manage')) throw Forbidden();
+    const orgMap = eventsRepo.orgMapForUser(req.auth!.userId);
+    if (!can(req.auth!.memberships, { eventId: item.event_id }, 'budget.manage', orgMap)) throw Forbidden();
     budgetRepo.delete(id);
+    auditRepo.log({
+      organizationId: item.organization_id, actorUserId: req.auth!.userId,
+      actorLabel: req.auth!.email, action: 'budget.delete',
+      targetType: 'budget_item', targetId: id, ip: req.ip, details: { title: item.title },
+    });
     broadcastSSE(item.organization_id, 'budget.updated', { eventId: item.event_id }, req.auth!.userId);
     return reply.code(204).send();
   });

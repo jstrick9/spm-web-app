@@ -4,6 +4,7 @@ import { can } from '../../lib/rbac.js';
 import { BadRequest, Forbidden, NotFound } from '../../lib/errors.js';
 import type { FastifyInstance } from 'fastify';
 import { financeQuestionSchema, changeOrderSchema, coupleContractSignSchema, parseEventMetadata, safeContract, safePayment, safeRequest } from './shared.js';
+import { broadcastSSE } from '../sse.js';
 
 export async function coupleFinanceRoutes(app: FastifyInstance) {
   app.get('/api/events/:eventId/couple-finance', { preHandler: requireAuth }, async (req) => {
@@ -21,7 +22,9 @@ export async function coupleFinanceRoutes(app: FastifyInstance) {
     const pending = payments.filter((p) => ['pending', 'processing'].includes(p.status)).reduce((sum, p) => sum + p.amountCents, 0);
     const openBalance = Math.max(0, Math.max(totalContracted, totalPayments) - paid);
     const requests = coupleRequestsRepo.listForRequester(eventId, req.auth!.userId).map(safeRequest).filter((r) => ['finance_question', 'change_order_request'].includes(r.requestType));
-    auditRepo.log({ organizationId: event.organization_id, actorUserId: req.auth!.userId, actorLabel: req.auth!.email, action: 'couple.finance.view', targetType: 'event', targetId: eventId, ip: req.ip, details: { contractCount: contracts.length, paymentCount: payments.length } });
+    // MODULE-06 FI-13: no audit row per read — this endpoint is polled by the
+    // couple hub and per-GET audits would flood audit_logs with view noise.
+    // (Mutations — sign, questions, change orders — remain audited.)
     return {
       contracts,
       payments,
@@ -69,8 +72,12 @@ export async function coupleFinanceRoutes(app: FastifyInstance) {
     if (!contract || contract.event_id !== eventId) throw NotFound('contract-not-found');
     const parsed = coupleContractSignSchema.safeParse(req.body);
     if (!parsed.success) throw BadRequest('invalid-input', parsed.error.issues);
+    // MODULE-06 FI-09: an e-signature is evidentiary — never overwrite one.
+    if (contract.status === 'signed') throw BadRequest('contract-already-signed');
     const updated = contractsRepo.update(contractId, { status: 'signed', signedAt: new Date().toISOString(), signature: parsed.data.signature, signerIp: req.ip });
     auditRepo.log({ organizationId: event.organization_id, actorUserId: req.auth!.userId, actorLabel: req.auth!.email, action: 'couple.contract.sign', targetType: 'contract', targetId: contractId, ip: req.ip });
+    // MODULE-06 FI-07: the venue must see the signature land in real time.
+    broadcastSSE(event.organization_id, 'contract.signed', { eventId, contractId, signer: parsed.data.signature }, req.auth!.userId);
     return { contract: updated ? safeContract(updated) : null };
   });
 

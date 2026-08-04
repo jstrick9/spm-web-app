@@ -143,5 +143,52 @@ export function useRealtimeInvalidation(orgId: string | null) {
       const eventId = (e.payload as any)?.eventId;
       if (eventId) qc.invalidateQueries({ queryKey: ['event', eventId] });
     },
+    // ── Finance & contracts (MODULE-06 FI-07) ─────────────────────────
+    'contract.created': (e: SSEEvent) => {
+      const eventId = (e.payload as any)?.eventId;
+      if (eventId) {
+        qc.invalidateQueries({ queryKey: ['contracts', eventId] });
+        qc.invalidateQueries({ queryKey: ['financial-legal', eventId] });
+      }
+    },
+    'contract.updated': (e: SSEEvent) => {
+      const eventId = (e.payload as any)?.eventId;
+      if (eventId) {
+        qc.invalidateQueries({ queryKey: ['contracts', eventId] });
+        qc.invalidateQueries({ queryKey: ['financial-legal', eventId] });
+      }
+    },
+    'contract.deleted': (e: SSEEvent) => {
+      const eventId = (e.payload as any)?.eventId;
+      if (eventId) {
+        qc.invalidateQueries({ queryKey: ['contracts', eventId] });
+        qc.invalidateQueries({ queryKey: ['financial-legal', eventId] });
+      }
+    },
+    'contract.signed': (e: SSEEvent) => {
+      const eventId = (e.payload as any)?.eventId;
+      if (eventId) {
+        qc.invalidateQueries({ queryKey: ['contracts', eventId] });
+        qc.invalidateQueries({ queryKey: ['financial-legal', eventId] });
+      }
+    },
+    'payment.created': (e: SSEEvent) => {
+      const eventId = (e.payload as any)?.eventId;
+      if (eventId) {
+        qc.invalidateQueries({ queryKey: ['payment-links', eventId] });
+        qc.invalidateQueries({ queryKey: ['financial-legal', eventId] });
+      }
+    },
+    'payment.updated': (e: SSEEvent) => {
+      const eventId = (e.payload as any)?.eventId;
+      if (eventId) {
+        qc.invalidateQueries({ queryKey: ['payment-links', eventId] });
+        qc.invalidateQueries({ queryKey: ['financial-legal', eventId] });
+      }
+    },
+    'financial_legal.updated': (e: SSEEvent) => {
+      const eventId = (e.payload as any)?.eventId;
+      if (eventId) qc.invalidateQueries({ queryKey: ['financial-legal', eventId] });
+    },
   });
 }

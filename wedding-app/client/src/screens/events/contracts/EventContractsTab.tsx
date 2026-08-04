@@ -59,6 +59,11 @@ export function EventContractsTab({ eventId }: Props) {
   const qc = useQueryClient();
   const canManage = usePermission('contracts.manage');
   const canSign = usePermission('contracts.sign');
+  // MODULE-06 FI-03: owner-only gate for approving blocked go/no-go flags
+  // (org.manage is held by the owner role only — admins cannot destroy orgs).
+  const isOwner = usePermission('org.manage');
+  // MODULE-06 FI-11: raising escalations requires the dedicated permission.
+  const canEscalate = usePermission('financial_legal.escalate');
   const managerMode = typeof window !== 'undefined' && localStorage.getItem('wvi_registration_role') === 'venue_manager';
   const [createOpen, setCreateOpen] = useState(false);
   const [signTarget, setSignTarget] = useState<SdkContract | null>(null);
@@ -128,6 +133,27 @@ export function EventContractsTab({ eventId }: Props) {
     createEscalationMutation.mutate({ type, label, blocked });
   };
 
+  // MODULE-06 FI-03/FI-04: obligation decisions + go/no-go flag lifecycle.
+  const decideObligationMutation = useMutation({
+    mutationFn: ({ contractId, obligationId, status }: { contractId: string; obligationId: string; status: 'approved' | 'dismissed' }) =>
+      sdk.contracts.decideObligation(contractId, obligationId, status),
+    onSuccess: () => { qc.invalidateQueries({ queryKey: ['financial-legal', eventId] }); toast({ title: 'Obligation updated', variant: 'success' }); },
+    onError: (e: any) => toast({ title: 'Update failed', description: e.message, variant: 'destructive' }),
+  });
+
+  const flagActionMutation = useMutation({
+    mutationFn: ({ flagId, action }: { flagId: string; action: 'approve' | 'resolve' }) =>
+      action === 'approve' ? sdk.contracts.approveGoNoGoFlag(eventId, flagId) : sdk.contracts.resolveGoNoGoFlag(eventId, flagId),
+    onSuccess: () => { qc.invalidateQueries({ queryKey: ['financial-legal', eventId] }); toast({ title: 'Go/No-Go flag updated', variant: 'success' }); },
+    onError: (e: any) => toast({ title: 'Flag update failed', description: e.message, variant: 'destructive' }),
+  });
+
+  const extractObligationsMutation = useMutation({
+    mutationFn: (contractId: string) => sdk.contracts.extractObligations(contractId),
+    onSuccess: () => { qc.invalidateQueries({ queryKey: ['financial-legal', eventId] }); toast({ title: 'Obligations re-extracted', variant: 'success' }); },
+    onError: (e: any) => toast({ title: 'Extraction failed', description: e.message, variant: 'destructive' }),
+  });
+
   const handleCreate = (data: any) => {
     const amount = data.amountStr ? Number(String(data.amountStr).replace(/[^0-9.]/g, '')) : undefined;
     createMutation.mutate({
@@ -171,6 +197,11 @@ export function EventContractsTab({ eventId }: Props) {
           canManage={canManage}
           risks={risks}
           escalations={escalations}
+          isOwner={isOwner}
+          canEscalate={canEscalate}
+          onDecideObligation={(contractId, obligationId, status) => decideObligationMutation.mutate({ contractId, obligationId, status })}
+          onFlagAction={(flagId, action) => flagActionMutation.mutate({ flagId, action })}
+          onReextract={(contractId) => extractObligationsMutation.mutate(contractId)}
           noProceedFlags={noProceedFlags}
           backendExtracts={backendExtracts}
           onEscalate={addEscalation}
@@ -293,19 +324,24 @@ export function EventContractsTab({ eventId }: Props) {
 }
 
 
-function ManagerContractOperationsPanel({ contracts, canManage, risks, escalations, noProceedFlags, backendExtracts, onEscalate }: {
+function ManagerContractOperationsPanel({ contracts, canManage, isOwner, canEscalate, risks, escalations, noProceedFlags, backendExtracts, onEscalate, onDecideObligation, onFlagAction, onReextract }: {
   contracts: SdkContract[];
   canManage: boolean;
+  isOwner: boolean;
+  canEscalate: boolean;
   risks: ReturnType<typeof contractRisk>;
   escalations: FinancialLegalEscalation[];
   noProceedFlags: any[];
-  backendExtracts: Array<{ contract_id: string; obligation_key: string; label: string; excerpt: string | null; confidence: string }>;
+  backendExtracts: Array<{ id: string; contract_id: string; obligation_key: string; label: string; excerpt: string | null; confidence: string; status: string }>;
   onEscalate: (type: FinancialLegalEscalation['type'], label: string, blocked?: boolean) => void;
+  onDecideObligation: (contractId: string, obligationId: string, status: 'approved' | 'dismissed') => void;
+  onFlagAction: (flagId: string, action: 'approve' | 'resolve') => void;
+  onReextract: (contractId: string) => void;
 }) {
   const signed = contracts.filter(c => c.status === 'signed').length;
   const operationalObligations = backendExtracts.length
-    ? backendExtracts.map(extract => ({ contract: contracts.find(c => c.id === extract.contract_id), obligation: { key: extract.obligation_key, label: extract.label, icon: Scale }, excerpt: extract.excerpt, confidence: extract.confidence })).filter((row: any) => row.contract)
-    : contracts.flatMap(contract => contractObligations(contract).map(obligation => ({ contract, obligation }))); 
+    ? backendExtracts.map(extract => ({ contract: contracts.find(c => c.id === extract.contract_id), obligation: { key: extract.obligation_key, label: extract.label, icon: Scale }, excerpt: extract.excerpt, confidence: extract.confidence, status: extract.status, id: extract.id })).filter((row: any) => row.contract)
+    : contracts.flatMap(contract => contractObligations(contract).map(obligation => ({ contract, obligation, status: undefined, id: undefined }))); 
   const goNoGo = [
     { label: 'Venue/couple agreement fully executed', ok: contracts.some(c => c.status === 'signed') },
     { label: 'No expired contracts attached to event', ok: risks.expired.length === 0 },
@@ -334,18 +370,35 @@ function ManagerContractOperationsPanel({ contracts, canManage, risks, escalatio
           <div>
             <h3 className="mb-2 text-xs font-bold uppercase tracking-wider text-fg-subtle">Operations obligations extractor</h3>
             <div className="grid gap-2 sm:grid-cols-2">
-              {operationalObligations.slice(0, 8).map(({ contract, obligation }) => {
+              {operationalObligations.slice(0, 8).map(({ contract, obligation, status, id }) => {
                 const Icon = obligation.icon;
-                return <div key={`${contract?.id || 'contract'}-${obligation.key}`} className="rounded-lg border border-border bg-surface p-2 text-xs"><div className="font-bold text-brand flex items-center gap-1"><Icon className="h-3.5 w-3.5" />{obligation.label}</div><div className="text-fg-muted">{contract?.title}</div></div>;
+                return <div key={`${contract?.id || 'contract'}-${obligation.key}`} className="rounded-lg border border-border bg-surface p-2 text-xs">
+                  <div className="flex items-center justify-between gap-2">
+                    <div className="font-bold text-brand flex items-center gap-1"><Icon className="h-3.5 w-3.5" />{obligation.label}</div>
+                    {status && status !== 'detected' && <Badge variant={status === 'approved' ? 'success' : 'default'} className="text-[9px]">{status}</Badge>}
+                  </div>
+                  <div className="text-fg-muted">{contract?.title}</div>
+                  {canManage && status === 'detected' && id && contract?.id && (
+                    <div className="mt-1.5 flex gap-1.5">
+                      <Button size="xs" variant="outline" onClick={() => onDecideObligation(contract.id, id, 'approved')} className="text-[10px]">Approve</Button>
+                      <Button size="xs" variant="ghost" onClick={() => onDecideObligation(contract.id, id, 'dismissed')} className="text-[10px]">Dismiss</Button>
+                    </div>
+                  )}
+                </div>;
               })}
+              {canManage && contracts.length > 0 && backendExtracts.length === 0 && (
+                <Button size="xs" variant="outline" className="mt-1 justify-self-start" onClick={() => onReextract(contracts[0].id)}>
+                  <Sparkles className="h-3 w-3" /> Re-extract obligations
+                </Button>
+              )}
               {operationalObligations.length === 0 && <p className="rounded-lg border border-dashed border-border bg-surface p-3 text-xs text-fg-muted">No day-of operational clauses detected yet. Add contract content mentioning load-in, insurance, cleanup, alcohol, noise, or overtime.</p>}
             </div>
           </div>
-          <div className="flex flex-wrap gap-2">
+          {canEscalate && <div className="flex flex-wrap gap-2">
             {risks.pending.length > 0 && <Button size="sm" variant="outline" onClick={() => onEscalate('contract', `${risks.pending.length} contract(s) pending signature`)}><AlertTriangle className="h-4 w-4" /> Escalate pending signature</Button>}
             {risks.expired.length > 0 && <Button size="sm" variant="destructive" onClick={() => onEscalate('legal', `${risks.expired.length} expired contract(s) block event operations`, true)}>Do not proceed</Button>}
             {risks.unsignedOperational.length > 0 && <Button size="sm" variant="destructive" onClick={() => onEscalate('legal', 'Operational clauses exist in unsigned contracts', true)}>Block until owner approval</Button>}
-          </div>
+          </div>}
         </CardContent>
       </Card>
 
@@ -357,7 +410,15 @@ function ManagerContractOperationsPanel({ contracts, canManage, risks, escalatio
         <CardContent className="space-y-3">
           {goNoGo.map(item => <div key={item.label} className="flex gap-2 rounded-lg border border-border bg-surface p-2 text-sm"><span className={item.ok ? 'text-success' : 'text-danger'}>{item.ok ? '✓' : '!'}</span><span>{item.label}</span></div>)}
           {escalations.length > 0 && <div className="rounded-lg border border-warning/30 bg-warning-soft/20 p-3 text-xs text-warning"><strong>Open escalations:</strong><ul className="mt-1 space-y-1">{escalations.filter(e => e.status === 'open').slice(0, 4).map(e => <li key={e.id}>• {e.label}</li>)}</ul></div>}
-          {noProceedFlags.length > 0 && <div className="rounded-lg border border-danger/30 bg-danger-soft p-3 text-xs text-danger font-semibold">Do not proceed without owner approval: {noProceedFlags.filter(f => f.status === 'open').map(f => f.label).join(' · ')}</div>}
+          {noProceedFlags.filter(f => f.status === 'open').map(f => (
+            <div key={f.id} className="rounded-lg border border-danger/30 bg-danger-soft p-3 text-xs text-danger">
+              <div className="font-semibold">Do not proceed without owner approval: {f.label}</div>
+              <div className="mt-2 flex gap-1.5">
+                {isOwner && <Button size="xs" variant="outline" onClick={() => onFlagAction(f.id, 'approve')} className="text-[10px]">Approve (owner)</Button>}
+                {canManage && <Button size="xs" variant="ghost" onClick={() => onFlagAction(f.id, 'resolve')} className="text-[10px]">Resolve</Button>}
+              </div>
+            </div>
+          ))}
         </CardContent>
       </Card>
     </div>

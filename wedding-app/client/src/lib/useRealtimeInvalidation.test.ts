@@ -103,4 +103,32 @@ describe('useRealtimeInvalidation', () => {
     expect(spy).toHaveBeenCalledWith({ queryKey: ['staff-calendar'] });
     expect(spy).toHaveBeenCalledWith({ queryKey: ['staff-coverage'] });
   });
+
+  // MODULE-06 FI-07: contract + payment events must invalidate finance caches.
+  it('registers handlers for every contract and payment event', () => {
+    renderWithQC();
+    for (const type of ['contract.created', 'contract.updated', 'contract.deleted', 'contract.signed', 'payment.created', 'payment.updated', 'financial_legal.updated']) {
+      expect(capturedHandlers[type], type).toBeDefined();
+    }
+  });
+
+  it('contract.signed invalidates contracts + financial-legal for the event', () => {
+    renderWithQC();
+    const spy = vi.spyOn(qc, 'invalidateQueries');
+    capturedHandlers['contract.signed']({
+      id: 5, type: 'contract.signed', payload: { eventId: 'evt-7' }, actorUserId: null, timestamp: '',
+    });
+    expect(spy).toHaveBeenCalledWith({ queryKey: ['contracts', 'evt-7'] });
+    expect(spy).toHaveBeenCalledWith({ queryKey: ['financial-legal', 'evt-7'] });
+  });
+
+  it('payment.updated invalidates payment-links + financial-legal for the event', () => {
+    renderWithQC();
+    const spy = vi.spyOn(qc, 'invalidateQueries');
+    capturedHandlers['payment.updated']({
+      id: 6, type: 'payment.updated', payload: { eventId: 'evt-7' }, actorUserId: null, timestamp: '',
+    });
+    expect(spy).toHaveBeenCalledWith({ queryKey: ['payment-links', 'evt-7'] });
+    expect(spy).toHaveBeenCalledWith({ queryKey: ['financial-legal', 'evt-7'] });
+  });
 });
