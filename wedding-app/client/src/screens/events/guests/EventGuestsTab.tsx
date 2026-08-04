@@ -710,6 +710,14 @@ export function EventGuestsTab({ eventId }: Props) {
                     key={guest.id}
                     type="button"
                     onClick={() => handleRowClick(guest)}
+                    onKeyDown={(e) => {
+                      if (e.key !== 'ArrowDown' && e.key !== 'ArrowUp') return;
+                      e.preventDefault();
+                      const rows = Array.from((e.currentTarget.parentElement?.querySelectorAll('button[type="button"]') ?? []));
+                      const idx = rows.indexOf(e.currentTarget);
+                      const next = rows[idx + (e.key === 'ArrowDown' ? 1 : -1)] as HTMLButtonElement | undefined;
+                      next?.focus();
+                    }}
                     className="w-full rounded-xl border border-border bg-surface p-3 text-left shadow-sm"
                   >
                     <div className="flex items-start justify-between gap-2">

@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { render, screen, waitFor } from '@testing-library/react';
+import { render, screen, waitFor, fireEvent } from '@testing-library/react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { AuditLog } from './AuditLog';
 
@@ -97,6 +97,25 @@ describe('AuditLog', () => {
       const calls = (sdk.audit.list as any).mock.calls;
       expect(calls.some((c: any[]) => c[1]?.before === '2026-09-01T10:00:00Z')).toBe(true);
     });
+  });
+
+  it('passes an actor email search to the server and resets paging (UX-13)', async () => {
+    const { sdk } = await import('../../sdk');
+    (sdk.audit.list as any).mockResolvedValue({
+      logs: [{ id: 'a1', action: 'event.create', actor_label: 'owner@venue.com', target_type: 'event', target_id: 'e1', ip: '1.1.1.1', details: '{}', created_at: '2026-09-01T10:00:00Z' }],
+      total: 1, limit: 200, nextBefore: undefined,
+    });
+    render(<AuditLog orgId="org-1" />, { wrapper: wrap() });
+    await waitFor(() => expect(screen.getByPlaceholderText(/search actions/i)).toBeTruthy());
+    const input = screen.getByPlaceholderText(/search actions/i);
+    fireEvent.change(input, { target: { value: 'owner@venue.com' } });
+    await waitFor(() => {
+      const calls = (sdk.audit.list as any).mock.calls;
+      expect(calls.some((c: any[]) => c[1]?.actorEmail === 'owner@venue.com')).toBe(true);
+    });
+    // Paging resets when search changes
+    const calls = (sdk.audit.list as any).mock.calls;
+    expect(calls[calls.length - 1][1]?.before).toBeUndefined();
   });
 
   it('shows action filter chips', async () => {

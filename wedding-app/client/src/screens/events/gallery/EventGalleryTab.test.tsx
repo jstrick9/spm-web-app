@@ -64,6 +64,28 @@ describe('EventGalleryTab', () => {
     });
   });
 
+  it('swipes left/right to navigate the lightbox on touch (UX-13)', async () => {
+    render(<EventGalleryTab eventId="e1" />, { wrapper: wrap() });
+    await waitFor(() => {
+      expect(screen.getAllByRole('img').length).toBeGreaterThanOrEqual(2);
+    });
+    fireEvent.click(screen.getAllByRole('img')[0]);
+    await waitFor(() => expect(screen.getByLabelText(/next image/i)).toBeTruthy());
+
+    // Swipe left (dx < -40) advances to the next image
+    const overlay = screen.getByLabelText(/close image preview/i).parentElement!;
+    fireEvent.touchStart(overlay, { touches: [{ clientX: 300, clientY: 100 }] });
+    fireEvent.touchEnd(overlay, { changedTouches: [{ clientX: 100, clientY: 100 }] });
+    await waitFor(() => expect(screen.getByLabelText(/previous image/i)).toBeTruthy());
+    expect(screen.queryByLabelText(/next image/i)).toBeNull();
+
+    // Swipe right (dx > 40) returns to the first image
+    fireEvent.touchStart(overlay, { touches: [{ clientX: 100, clientY: 100 }] });
+    fireEvent.touchEnd(overlay, { changedTouches: [{ clientX: 300, clientY: 100 }] });
+    await waitFor(() => expect(screen.getByLabelText(/next image/i)).toBeTruthy());
+    expect(screen.queryByLabelText(/previous image/i)).toBeNull();
+  });
+
   it('renders gallery images from server', async () => {
     render(<EventGalleryTab eventId="e1" />, { wrapper: wrap() });
     await waitFor(() => {

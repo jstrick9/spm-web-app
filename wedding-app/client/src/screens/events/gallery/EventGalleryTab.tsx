@@ -61,6 +61,17 @@ export function EventGalleryTab({ eventId }: Props) {
     return () => window.removeEventListener('keydown', onKey);
   }, [lightbox, stepLightbox]);
 
+  // Touch swipe navigation for the lightbox (mobile parity).
+  const touchStartX = useRef<number | null>(null);
+  const onTouchStart = (e: React.TouchEvent) => { touchStartX.current = e.touches[0].clientX; };
+  const onTouchEnd = (e: React.TouchEvent) => {
+    if (touchStartX.current === null) return;
+    const dx = e.changedTouches[0].clientX - touchStartX.current;
+    touchStartX.current = null;
+    if (Math.abs(dx) < 40) return;
+    stepLightbox(dx < 0 ? 1 : -1);
+  };
+
   const deleteMutation = useMutation({
     mutationFn: (id: string) => sdk.gallery.delete(id),
     onSuccess: () => {
@@ -213,6 +224,8 @@ export function EventGalleryTab({ eventId }: Props) {
         <div
           className="fixed inset-0 z-50 bg-black/80 flex items-center justify-center p-8"
           onClick={() => setLightbox(null)}
+          onTouchStart={onTouchStart}
+          onTouchEnd={onTouchEnd}
         >
           <button className="absolute top-4 right-4 text-white hover:text-gray-300" onClick={() => setLightbox(null)} aria-label="Close image preview">
             <X className="h-6 w-6" />

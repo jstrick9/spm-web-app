@@ -5,7 +5,7 @@
  * event creates, guest changes, RSVP submissions, login/logout,
  * contract signatures, settings changes, etc.
  */
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { ClipboardList, Search, Filter, User, Clock, Shield, KeyRound, TabletSmartphone, UserCog, AlertTriangle } from 'lucide-react';
 import { sdk } from '../../sdk';
@@ -69,13 +69,16 @@ export function AuditLog({ orgId }: Props) {
   const currentUserQuery = useQuery({ queryKey: ['me', 'audit-role'], queryFn: () => sdk.auth.me(), staleTime: 60_000 });
   const managerMode = currentUserQuery.data ? (currentUserQuery.data.memberships?.some((membership: any) => membership.organizationId === orgId && String(membership.roleKey).toLowerCase() === 'manager') ?? false) : (typeof window !== 'undefined' && localStorage.getItem('wvi_registration_role') === 'venue_manager');
   const debouncedSearch = useDebouncedValue(search, 250);
+  // A new search starts from the newest page.
+  useEffect(() => { setBefore(undefined); }, [debouncedSearch]);
 
   const { data, isLoading } = useQuery({
-    queryKey: ['audit', orgId, actionFilter, before],
+    queryKey: ['audit', orgId, actionFilter, before, debouncedSearch],
     queryFn: () => sdk.audit.list(orgId, {
       limit: 200,
       action: actionFilter ?? undefined,
       before,
+      actorEmail: debouncedSearch.includes('@') ? debouncedSearch : undefined,
     }),
   });
 
