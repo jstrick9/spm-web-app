@@ -190,5 +190,47 @@ export function useRealtimeInvalidation(orgId: string | null) {
       const eventId = (e.payload as any)?.eventId;
       if (eventId) qc.invalidateQueries({ queryKey: ['financial-legal', eventId] });
     },
+    // ── Couple & guest portals (MODULE-07 CP-03/CP-06) ───────────────
+    'couple.request_created': (e: SSEEvent) => {
+      const eventId = (e.payload as any)?.eventId;
+      if (eventId) {
+        qc.invalidateQueries({ queryKey: ['couple-requests', eventId] });
+        qc.invalidateQueries({ queryKey: ['couple-inbox', eventId] });
+      }
+    },
+    'couple.request_updated': (e: SSEEvent) => {
+      const eventId = (e.payload as any)?.eventId;
+      if (eventId) {
+        qc.invalidateQueries({ queryKey: ['couple-requests', eventId] });
+        qc.invalidateQueries({ queryKey: ['couple-inbox', eventId] });
+        qc.invalidateQueries({ queryKey: ['couple-guest-portal', eventId] });
+      }
+    },
+    'couple.decision_created': (e: SSEEvent) => {
+      const eventId = (e.payload as any)?.eventId;
+      if (eventId) {
+        qc.invalidateQueries({ queryKey: ['couple-inbox', eventId] });
+        qc.invalidateQueries({ queryKey: ['couple-requests', eventId] });
+      }
+    },
+    'couple.document_uploaded': (e: SSEEvent) => {
+      const eventId = (e.payload as any)?.eventId;
+      if (eventId) qc.invalidateQueries({ queryKey: ['couple-documents', eventId] });
+    },
+    'couple.document_deleted': (e: SSEEvent) => {
+      const eventId = (e.payload as any)?.eventId;
+      if (eventId) qc.invalidateQueries({ queryKey: ['couple-documents', eventId] });
+    },
+    'couple.design_submitted': (e: SSEEvent) => {
+      const eventId = (e.payload as any)?.eventId;
+      if (eventId) {
+        qc.invalidateQueries({ queryKey: ['couple-design', eventId] });
+        qc.invalidateQueries({ queryKey: ['couple-requests', eventId] });
+      }
+    },
+    'guest_help.sla_breach': (e: SSEEvent) => {
+      const eventId = (e.payload as any)?.eventId;
+      if (eventId) qc.invalidateQueries({ queryKey: ['guest-help', eventId] });
+    },
   });
 }

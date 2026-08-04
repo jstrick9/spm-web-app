@@ -18,6 +18,7 @@ import { runAction } from '../integrations/runtime.js';
 import { scanUpcomingDeadlines } from './lifecycleEmails.js';
 import { runAuditRetention } from './retention.js';
 import { scanDueTimelineReminders } from './timelineReminders.js';
+import { scanGuestHelpSlaBreaches } from './guestHelpSla.js';
 import { hostname } from 'node:os';
 import { replayDueWebhookDeliveries } from '../webhooks/dispatcher.js';
 
@@ -43,6 +44,7 @@ let webhookRetryTimer: ReturnType<typeof setInterval> | null = null;
 let webhookPruneTimer: ReturnType<typeof setInterval> | null = null;
 let retentionTimer: ReturnType<typeof setInterval> | null = null;
 let reminderTimer: ReturnType<typeof setInterval> | null = null;
+let guestHelpSlaTimer: ReturnType<typeof setInterval> | null = null;
 
 export function startWorker(): void {
   if (tickTimer || reclaimTimer) return;     // already running
@@ -75,6 +77,10 @@ export function startWorker(): void {
   const runReminders = () => { try { scanDueTimelineReminders(); } catch (e) { logErr('timeline-reminders', e); } };
   reminderTimer = setInterval(runReminders, REMINDER_SCAN_INTERVAL_MS);
   setTimeout(runReminders, 3_000); // initial scan shortly after boot
+  // Guest help-request SLA breaches (MODULE-07 CP-06) — hourly is plenty.
+  const runGuestHelpSla = () => { try { scanGuestHelpSlaBreaches(); } catch (e) { logErr('guest-help-sla', e); } };
+  guestHelpSlaTimer = setInterval(runGuestHelpSla, 60 * 60 * 1000);
+  setTimeout(runGuestHelpSla, 10_000);
   scheduleNext();
 }
 
@@ -87,6 +93,7 @@ export function stopWorker(): void {
   if (webhookPruneTimer) { clearInterval(webhookPruneTimer); webhookPruneTimer = null; }
   if (retentionTimer) { clearInterval(retentionTimer); retentionTimer = null; }
   if (reminderTimer) { clearInterval(reminderTimer); reminderTimer = null; }
+  if (guestHelpSlaTimer) { clearInterval(guestHelpSlaTimer); guestHelpSlaTimer = null; }
 }
 
 function scheduleNext(): void {

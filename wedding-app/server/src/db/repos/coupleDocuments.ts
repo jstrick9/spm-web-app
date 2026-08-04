@@ -106,4 +106,13 @@ export const coupleDocumentsRepo = {
     ).run(input.filename, input.url, input.mimeType ?? current.mime_type, input.notes ?? current.notes, input.extractedSummary ?? current.extracted_summary, stringifyJson(appendHistory(current, input.actor ?? null, 'document.new_version', input.notes)), id);
     return this.findById(id);
   },
+
+  /** MODULE-07 CP-05: remove a document row; returns its stored URL so the
+   * caller can delete the backing file. */
+  delete(id: string): { url: string; filename: string } | null {
+    const current = db.prepare(`SELECT * FROM couple_documents WHERE id = ?`).get(id) as CoupleDocumentRow | undefined;
+    if (!current) return null;
+    db.prepare(`DELETE FROM couple_documents WHERE id = ?`).run(id);
+    return { url: current.url, filename: current.filename };
+  },
 };

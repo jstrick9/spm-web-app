@@ -1,13 +1,13 @@
 import { assetsRepo, auditRepo, coupleDocumentsRepo, eventsRepo } from '../../db/repos/index.js';
 import { requireAuth } from '../../middleware/auth.js';
 import { can } from '../../lib/rbac.js';
-import { saveDocumentDataUri } from '../../lib/fileStorage.js';
-import { privateFilePath } from '../../lib/fileStorage.js';
+import { saveDocumentDataUri, privateFilePath, deleteFile } from '../../lib/fileStorage.js';
 import { createReadStream } from 'node:fs';
 import { existsSync } from 'node:fs';
 import { BadRequest, Forbidden, NotFound } from '../../lib/errors.js';
 import type { FastifyInstance } from 'fastify';
-import { coupleDocumentUploadSchema, coupleDocumentUpdateSchema, extractDocumentSummary, safeDocument } from './shared.js';
+import { canWriteCoupleData, coupleDocumentUpdateSchema, coupleDocumentUploadSchema, extractDocumentSummary, safeDocument } from './shared.js';
+import { broadcastSSE } from '../sse.js';
 
 export async function coupleDocumentsRoutes(app: FastifyInstance) {
   app.get('/api/events/:eventId/couple-documents/:documentId/content', { preHandler: requireAuth }, async (req, reply) => {
@@ -51,7 +51,7 @@ export async function coupleDocumentsRoutes(app: FastifyInstance) {
     const event = eventsRepo.findById(eventId);
     if (!event) throw NotFound('event-not-found');
     const orgMap = eventsRepo.orgMapForUser(req.auth!.userId);
-    if (!can(req.auth!.memberships, { eventId }, 'events.view', orgMap)) throw Forbidden();
+    if (!canWriteCoupleData(req.auth!.memberships, eventId, orgMap)) throw Forbidden();
     const parsed = coupleDocumentUploadSchema.safeParse(req.body);
     if (!parsed.success) throw BadRequest('invalid-input', parsed.error.issues);
     const savedUrl = saveDocumentDataUri(parsed.data.dataUri, 'couple_doc');
@@ -59,6 +59,7 @@ export async function coupleDocumentsRoutes(app: FastifyInstance) {
     const doc = coupleDocumentsRepo.create({ organizationId: event.organization_id, eventId, filename: parsed.data.filename, url: savedUrl, mimeType: parsed.data.mimeType, category: parsed.data.category, visibility: parsed.data.visibility, notes: parsed.data.notes, extractedSummary, uploadedBy: req.auth!.userId });
     if (privateFilePath(savedUrl)) assetsRepo.create({ organization_id: event.organization_id, event_id: eventId, owner_type: 'couple_document', owner_id: doc.id, storage_key: savedUrl, original_filename: doc.filename, mime_type: doc.mime_type, visibility: 'private', publish_status: 'draft', created_by: req.auth!.userId });
     auditRepo.log({ organizationId: event.organization_id, actorUserId: req.auth!.userId, actorLabel: req.auth!.email, action: 'couple.document.upload', targetType: 'couple_document', targetId: doc.id, ip: req.ip, details: { eventId, category: doc.category, visibility: doc.visibility } });
+    broadcastSSE(event.organization_id, 'couple.document_uploaded', { eventId, documentId: doc.id, filename: doc.filename }, req.auth!.userId);
     return reply.code(201).send({ document: safeDocument(doc) });
   });
 
@@ -67,7 +68,7 @@ export async function coupleDocumentsRoutes(app: FastifyInstance) {
     const event = eventsRepo.findById(eventId);
     if (!event) throw NotFound('event-not-found');
     const orgMap = eventsRepo.orgMapForUser(req.auth!.userId);
-    if (!can(req.auth!.memberships, { eventId }, 'events.view', orgMap)) throw Forbidden();
+    if (!canWriteCoupleData(req.auth!.memberships, eventId, orgMap)) throw Forbidden();
     const current = coupleDocumentsRepo.findById(documentId);
     if (!current || current.event_id !== eventId) throw NotFound('document-not-found');
     const parsed = coupleDocumentUpdateSchema.safeParse(req.body);
@@ -81,15 +82,31 @@ export async function coupleDocumentsRoutes(app: FastifyInstance) {
     const event = eventsRepo.findById(eventId);
     if (!event) throw NotFound('event-not-found');
     const orgMap = eventsRepo.orgMapForUser(req.auth!.userId);
-    if (!can(req.auth!.memberships, { eventId }, 'events.view', orgMap)) throw Forbidden();
+    if (!canWriteCoupleData(req.auth!.memberships, eventId, orgMap)) throw Forbidden();
     const current = coupleDocumentsRepo.findById(documentId);
     if (!current || current.event_id !== eventId) throw NotFound('document-not-found');
     const parsed = coupleDocumentUploadSchema.pick({ filename: true, dataUri: true, mimeType: true, notes: true }).safeParse(req.body);
     if (!parsed.success) throw BadRequest('invalid-input', parsed.error.issues);
     const savedUrl = saveDocumentDataUri(parsed.data.dataUri, 'couple_doc');
+    // MODULE-07 CP-05: the superseded file must not be orphaned on disk.
+    if (privateFilePath(current.url)) deleteFile(current.url);
     const extractedSummary = extractDocumentSummary({ filename: parsed.data.filename, category: current.category, notes: parsed.data.notes });
     const updated = coupleDocumentsRepo.newVersion(documentId, { filename: parsed.data.filename, url: savedUrl, mimeType: parsed.data.mimeType, notes: parsed.data.notes, actor: req.auth!.userId, extractedSummary });
     return reply.code(201).send({ document: updated ? safeDocument(updated) : null });
+  });
+
+  app.delete('/api/events/:eventId/couple-documents/:documentId', { preHandler: requireAuth }, async (req, reply) => {
+    const { eventId, documentId } = req.params as { eventId: string; documentId: string };
+    const event = eventsRepo.findById(eventId);
+    if (!event) throw NotFound('event-not-found');
+    const orgMap = eventsRepo.orgMapForUser(req.auth!.userId);
+    if (!canWriteCoupleData(req.auth!.memberships, eventId, orgMap)) throw Forbidden();
+    const removed = coupleDocumentsRepo.delete(documentId);
+    if (!removed) throw NotFound('document-not-found');
+    if (privateFilePath(removed.url)) deleteFile(removed.url);
+    auditRepo.log({ organizationId: event.organization_id, actorUserId: req.auth!.userId, actorLabel: req.auth!.email, action: 'couple.document.delete', targetType: 'couple_document', targetId: documentId, ip: req.ip, details: { eventId, filename: removed.filename } });
+    broadcastSSE(event.organization_id, 'couple.document_deleted', { eventId, documentId }, req.auth!.userId);
+    return reply.code(204).send();
   });
 
   app.get('/api/events/:eventId/couple-documents/final-packet.txt', { preHandler: requireAuth }, async (req, reply) => {

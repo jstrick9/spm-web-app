@@ -1,4 +1,5 @@
-import { auditRepo, catalogRepo, contractsRepo, coupleAppointmentsRepo, coupleDocumentsRepo, couplePlanningRepo, coupleRequestsRepo, eventsRepo, guestsRepo, layoutsRepo, messagesRepo, paymentLinksRepo, rolesRepo, subEventsRepo, timelineRepo, usersRepo, vendorsRepo, venuesRepo } from '../../db/repos/index.js';
+import { auditRepo, catalogRepo, contractsRepo, coupleAppointmentsRepo, coupleDocumentsRepo, couplePlanningRepo, coupleRequestsRepo, eventsRepo, guestsRepo, layoutsRepo, messagesRepo, paymentLinksRepo, rolesRepo, subEventsRepo, teamInvitationsRepo, timelineRepo, usersRepo, vendorsRepo, venuesRepo } from '../../db/repos/index.js';
+import { deliverTeamInvitation } from '../../lib/teamInviteDelivery.js';
 import { db } from '../../db/database.js';
 import { uuid } from '../../lib/crypto.js';
 import { requireAuth } from '../../middleware/auth.js';
@@ -6,7 +7,8 @@ import { can } from '../../lib/rbac.js';
 import { z } from 'zod';
 import { BadRequest, Forbidden, NotFound } from '../../lib/errors.js';
 import type { FastifyInstance } from 'fastify';
-import { createRequestSchema, updateRequestSchema, coupleTimelineChangeSchema, coupleTimelineApprovalSchema, coupleLayoutCommentSchema, coupleLayoutApprovalSchema, appointmentRequestSchema, appointmentStatusSchema, appointmentSignoffSchema, coupleInboxMessageSchema, coupleDecisionSchema, advancedPlanningSchema, conciergeEscalationSchema, updatePlanningTaskSchema, coupleDesignPreferencesSchema, coupleProfileSchema, parseEventMetadata, isCoupleTimelineItem, safeTimelineItem, layoutItems, summarizeLayoutItem, designSummary, safeVendor, safeGuest, safeRequest, coupleReminderItems, upsertNormalizedAdvancedSections, coupleAdvancedPlanningSummary } from './shared.js';
+import { createRequestSchema, updateRequestSchema, coupleTimelineChangeSchema, coupleTimelineApprovalSchema, coupleLayoutCommentSchema, coupleLayoutApprovalSchema, appointmentRequestSchema, appointmentStatusSchema, appointmentSignoffSchema, coupleInboxMessageSchema, coupleDecisionSchema, advancedPlanningSchema, conciergeEscalationSchema, updatePlanningTaskSchema, coupleDesignPreferencesSchema, coupleProfileSchema, parseEventMetadata, isCoupleTimelineItem, safeTimelineItem, layoutItems, summarizeLayoutItem, designSummary, safeVendor, safeGuest, safeRequest, coupleReminderItems, upsertNormalizedAdvancedSections, coupleAdvancedPlanningSummary, canWriteCoupleData } from './shared.js';
+import { broadcastSSE } from '../sse.js';
 
 export async function couplePlanningRoutes(app: FastifyInstance) {
   app.get('/api/events/:eventId/couple-advanced-planning', { preHandler: requireAuth }, async (req) => {
@@ -15,7 +17,6 @@ export async function couplePlanningRoutes(app: FastifyInstance) {
     if (!event) throw NotFound('event-not-found');
     const orgMap = eventsRepo.orgMapForUser(req.auth!.userId);
     if (!can(req.auth!.memberships, { eventId }, 'events.view', orgMap)) throw Forbidden();
-    auditRepo.log({ organizationId: event.organization_id, actorUserId: req.auth!.userId, actorLabel: req.auth!.email, action: 'couple.advanced_planning.view', targetType: 'event', targetId: eventId, ip: req.ip });
     return coupleAdvancedPlanningSummary(event, req.auth!.userId);
   });
 
@@ -24,7 +25,7 @@ export async function couplePlanningRoutes(app: FastifyInstance) {
     const event = eventsRepo.findById(eventId);
     if (!event) throw NotFound('event-not-found');
     const orgMap = eventsRepo.orgMapForUser(req.auth!.userId);
-    if (!can(req.auth!.memberships, { eventId }, 'events.view', orgMap)) throw Forbidden();
+    if (!canWriteCoupleData(req.auth!.memberships, eventId, orgMap)) throw Forbidden();
     const parsed = advancedPlanningSchema.safeParse(req.body);
     if (!parsed.success) throw BadRequest('invalid-input', parsed.error.issues);
     upsertNormalizedAdvancedSections(event, parsed.data as Record<string, unknown>, req.auth!.userId);
@@ -43,7 +44,7 @@ export async function couplePlanningRoutes(app: FastifyInstance) {
     const event = eventsRepo.findById(eventId);
     if (!event) throw NotFound('event-not-found');
     const orgMap = eventsRepo.orgMapForUser(req.auth!.userId);
-    if (!can(req.auth!.memberships, { eventId }, 'events.view', orgMap)) throw Forbidden();
+    if (!canWriteCoupleData(req.auth!.memberships, eventId, orgMap)) throw Forbidden();
     const parsed = conciergeEscalationSchema.safeParse(req.body);
     if (!parsed.success) throw BadRequest('invalid-input', parsed.error.issues);
     const request = coupleRequestsRepo.create({ organizationId: event.organization_id, eventId, requesterUserId: req.auth!.userId, requestType: 'venue_question', note: parsed.data.question, metadata: { source: 'couple_advanced_planning', moduleKey: parsed.data.moduleKey, urgency: parsed.data.urgency, needsVenueApprovedAnswer: true } });
@@ -94,7 +95,7 @@ export async function couplePlanningRoutes(app: FastifyInstance) {
     const event = eventsRepo.findById(eventId);
     if (!event) throw NotFound('event-not-found');
     const orgMap = eventsRepo.orgMapForUser(req.auth!.userId);
-    if (!can(req.auth!.memberships, { eventId }, 'events.view', orgMap)) throw Forbidden();
+    if (!canWriteCoupleData(req.auth!.memberships, eventId, orgMap)) throw Forbidden();
     const planning = couplePlanningRepo.ensureDefaults({ organizationId: event.organization_id, eventId, weddingDate: event.start_date });
     const reminders = coupleReminderItems({ event, guests: guestsRepo.listForEvent(eventId), planning, payments: paymentLinksRepo.listForEvent(eventId), contracts: contractsRepo.listForEvent(eventId), documents: coupleDocumentsRepo.listForEvent(eventId), appointments: coupleAppointmentsRepo.listForEvent(eventId) });
     const digest = [`${event.title} — Wedding planning digest`, '', ...reminders.slice(0, 10).map((r) => `- ${r.title}: ${r.body}`)].join('\n');
@@ -110,7 +111,6 @@ export async function couplePlanningRoutes(app: FastifyInstance) {
     const orgMap = eventsRepo.orgMapForUser(req.auth!.userId);
     if (!can(req.auth!.memberships, { eventId }, 'events.view', orgMap)) throw Forbidden();
     const requests = coupleRequestsRepo.listForRequester(eventId, req.auth!.userId).map(safeRequest);
-    auditRepo.log({ organizationId: event.organization_id, actorUserId: req.auth!.userId, actorLabel: req.auth!.email, action: 'couple.privacy.view', targetType: 'event', targetId: eventId, ip: req.ip });
     return {
       scope: { eventId, eventTitle: event.title, access: 'event_scoped_couple_access_only' },
       policyPack: {
@@ -179,7 +179,7 @@ export async function couplePlanningRoutes(app: FastifyInstance) {
     const event = eventsRepo.findById(eventId);
     if (!event) throw NotFound('event-not-found');
     const orgMap = eventsRepo.orgMapForUser(req.auth!.userId);
-    if (!can(req.auth!.memberships, { eventId }, 'events.view', orgMap)) throw Forbidden();
+    if (!canWriteCoupleData(req.auth!.memberships, eventId, orgMap)) throw Forbidden();
     const parsed = appointmentRequestSchema.safeParse(req.body);
     if (!parsed.success) throw BadRequest('invalid-input', parsed.error.issues);
     const appointment = coupleAppointmentsRepo.create({ organizationId: event.organization_id, eventId, requesterUserId: req.auth!.userId, ...parsed.data });
@@ -192,7 +192,9 @@ export async function couplePlanningRoutes(app: FastifyInstance) {
     const event = eventsRepo.findById(eventId);
     if (!event) throw NotFound('event-not-found');
     const orgMap = eventsRepo.orgMapForUser(req.auth!.userId);
-    if (!can(req.auth!.memberships, { eventId }, 'events.view', orgMap)) throw Forbidden();
+    // Couples reschedule/cancel their own appointments; venue confirms them —
+    // staff (view-only) is excluded either way.
+    if (!canWriteCoupleData(req.auth!.memberships, eventId, orgMap)) throw Forbidden();
     const appointment = coupleAppointmentsRepo.findById(appointmentId);
     if (!appointment || appointment.event_id !== eventId) throw NotFound('appointment-not-found');
     const parsed = appointmentStatusSchema.safeParse(req.body);
@@ -205,7 +207,7 @@ export async function couplePlanningRoutes(app: FastifyInstance) {
     const event = eventsRepo.findById(eventId);
     if (!event) throw NotFound('event-not-found');
     const orgMap = eventsRepo.orgMapForUser(req.auth!.userId);
-    if (!can(req.auth!.memberships, { eventId }, 'events.view', orgMap)) throw Forbidden();
+    if (!canWriteCoupleData(req.auth!.memberships, eventId, orgMap)) throw Forbidden();
     const appointment = coupleAppointmentsRepo.findById(appointmentId);
     if (!appointment || appointment.event_id !== eventId) throw NotFound('appointment-not-found');
     const parsed = appointmentSignoffSchema.safeParse(req.body ?? {});
@@ -290,10 +292,11 @@ export async function couplePlanningRoutes(app: FastifyInstance) {
     const event = eventsRepo.findById(eventId);
     if (!event) throw NotFound('event-not-found');
     const orgMap = eventsRepo.orgMapForUser(req.auth!.userId);
-    if (!can(req.auth!.memberships, { eventId }, 'events.view', orgMap)) throw Forbidden();
+    if (!canWriteCoupleData(req.auth!.memberships, eventId, orgMap)) throw Forbidden();
     const parsed = coupleDecisionSchema.safeParse(req.body);
     if (!parsed.success) throw BadRequest('invalid-input', parsed.error.issues);
     const request = coupleRequestsRepo.create({ organizationId: event.organization_id, eventId, requesterUserId: req.auth!.userId, requestType: 'decision_needed', note: parsed.data.detail, metadata: { title: parsed.data.title, dueDate: parsed.data.dueDate, source: 'couple_inbox' } });
+    broadcastSSE(event.organization_id, 'couple.decision_created', { eventId, requestId: request.id, title: parsed.data.title }, req.auth!.userId);
     return reply.code(201).send({ decision: safeRequest(request) });
   });
 
@@ -330,7 +333,7 @@ export async function couplePlanningRoutes(app: FastifyInstance) {
     const event = eventsRepo.findById(eventId);
     if (!event) throw NotFound('event-not-found');
     const orgMap = eventsRepo.orgMapForUser(req.auth!.userId);
-    if (!can(req.auth!.memberships, { eventId }, 'events.view', orgMap)) throw Forbidden();
+    if (!canWriteCoupleData(req.auth!.memberships, eventId, orgMap)) throw Forbidden();
     const parsed = coupleDesignPreferencesSchema.safeParse(req.body);
     if (!parsed.success) throw BadRequest('invalid-input', parsed.error.issues);
     const metadata = parseEventMetadata(event);
@@ -346,7 +349,7 @@ export async function couplePlanningRoutes(app: FastifyInstance) {
     const event = eventsRepo.findById(eventId);
     if (!event) throw NotFound('event-not-found');
     const orgMap = eventsRepo.orgMapForUser(req.auth!.userId);
-    if (!can(req.auth!.memberships, { eventId }, 'events.view', orgMap)) throw Forbidden();
+    if (!canWriteCoupleData(req.auth!.memberships, eventId, orgMap)) throw Forbidden();
     const parsed = z.object({ note: z.string().max(2000).optional() }).safeParse(req.body ?? {});
     if (!parsed.success) throw BadRequest('invalid-input', parsed.error.issues);
     const metadata = parseEventMetadata(event);
@@ -385,7 +388,7 @@ export async function couplePlanningRoutes(app: FastifyInstance) {
     const event = eventsRepo.findById(eventId);
     if (!event) throw NotFound('event-not-found');
     const orgMap = eventsRepo.orgMapForUser(req.auth!.userId);
-    if (!can(req.auth!.memberships, { eventId }, 'events.view', orgMap)) throw Forbidden();
+    if (!canWriteCoupleData(req.auth!.memberships, eventId, orgMap)) throw Forbidden();
     const parsed = z.object({ category: z.string().min(1).max(120), note: z.string().max(2000).optional(), preferredVendorId: z.string().optional() }).safeParse(req.body);
     if (!parsed.success) throw BadRequest('invalid-input', parsed.error.issues);
     const request = coupleRequestsRepo.create({ organizationId: event.organization_id, eventId, requesterUserId: req.auth!.userId, requestType: 'vendor_request', note: parsed.data.note, metadata: { category: parsed.data.category, preferredVendorId: parsed.data.preferredVendorId, source: 'couple_vendor_board' } });
@@ -397,7 +400,7 @@ export async function couplePlanningRoutes(app: FastifyInstance) {
     const event = eventsRepo.findById(eventId);
     if (!event) throw NotFound('event-not-found');
     const orgMap = eventsRepo.orgMapForUser(req.auth!.userId);
-    if (!can(req.auth!.memberships, { eventId }, 'events.view', orgMap)) throw Forbidden();
+    if (!canWriteCoupleData(req.auth!.memberships, eventId, orgMap)) throw Forbidden();
     const parsed = z.object({ vendorId: z.string().optional(), question: z.string().min(1).max(2000) }).safeParse(req.body);
     if (!parsed.success) throw BadRequest('invalid-input', parsed.error.issues);
     const request = coupleRequestsRepo.create({ organizationId: event.organization_id, eventId, requesterUserId: req.auth!.userId, requestType: 'vendor_question', note: parsed.data.question, metadata: { vendorId: parsed.data.vendorId, source: 'couple_vendor_board' } });
@@ -409,7 +412,7 @@ export async function couplePlanningRoutes(app: FastifyInstance) {
     const event = eventsRepo.findById(eventId);
     if (!event) throw NotFound('event-not-found');
     const orgMap = eventsRepo.orgMapForUser(req.auth!.userId);
-    if (!can(req.auth!.memberships, { eventId }, 'events.view', orgMap)) throw Forbidden();
+    if (!canWriteCoupleData(req.auth!.memberships, eventId, orgMap)) throw Forbidden();
     const parsed = z.object({ plannerName: z.string().max(160).optional(), plannerEmail: z.string().email().optional(), note: z.string().max(2000).optional() }).safeParse(req.body);
     if (!parsed.success) throw BadRequest('invalid-input', parsed.error.issues);
     const request = coupleRequestsRepo.create({ organizationId: event.organization_id, eventId, requesterUserId: req.auth!.userId, requestType: 'planner_collaboration', targetEmail: parsed.data.plannerEmail, targetName: parsed.data.plannerName, note: parsed.data.note, metadata: { source: 'couple_planner_hub' } });
@@ -475,7 +478,7 @@ export async function couplePlanningRoutes(app: FastifyInstance) {
     const event = eventsRepo.findById(eventId);
     if (!event) throw NotFound('event-not-found');
     const orgMap = eventsRepo.orgMapForUser(req.auth!.userId);
-    if (!can(req.auth!.memberships, { eventId }, 'events.view', orgMap)) throw Forbidden();
+    if (!canWriteCoupleData(req.auth!.memberships, eventId, orgMap)) throw Forbidden();
     const parsed = coupleLayoutCommentSchema.safeParse(req.body);
     if (!parsed.success) throw BadRequest('invalid-input', parsed.error.issues);
     const request = coupleRequestsRepo.create({ organizationId: event.organization_id, eventId, requesterUserId: req.auth!.userId, requestType: 'event_change_request', note: parsed.data.note, metadata: { source: 'couple_layout_comment', x: parsed.data.x, y: parsed.data.y, areaLabel: parsed.data.areaLabel } });
@@ -487,7 +490,7 @@ export async function couplePlanningRoutes(app: FastifyInstance) {
     const event = eventsRepo.findById(eventId);
     if (!event) throw NotFound('event-not-found');
     const orgMap = eventsRepo.orgMapForUser(req.auth!.userId);
-    if (!can(req.auth!.memberships, { eventId }, 'events.view', orgMap)) throw Forbidden();
+    if (!canWriteCoupleData(req.auth!.memberships, eventId, orgMap)) throw Forbidden();
     const parsed = coupleLayoutApprovalSchema.safeParse(req.body);
     if (!parsed.success) throw BadRequest('invalid-input', parsed.error.issues);
     const metadata = parseEventMetadata(event);
@@ -534,7 +537,7 @@ export async function couplePlanningRoutes(app: FastifyInstance) {
     const event = eventsRepo.findById(eventId);
     if (!event) throw NotFound('event-not-found');
     const orgMap = eventsRepo.orgMapForUser(req.auth!.userId);
-    if (!can(req.auth!.memberships, { eventId }, 'events.view', orgMap)) throw Forbidden();
+    if (!canWriteCoupleData(req.auth!.memberships, eventId, orgMap)) throw Forbidden();
     const parsed = coupleTimelineChangeSchema.safeParse(req.body);
     if (!parsed.success) throw BadRequest('invalid-input', parsed.error.issues);
     const request = coupleRequestsRepo.create({ organizationId: event.organization_id, eventId, requesterUserId: req.auth!.userId, requestType: 'event_change_request', note: parsed.data.reason || parsed.data.requestedChange, metadata: { source: 'couple_timeline', timelineItemId: parsed.data.timelineItemId, requestedChange: parsed.data.requestedChange } });
@@ -546,7 +549,7 @@ export async function couplePlanningRoutes(app: FastifyInstance) {
     const event = eventsRepo.findById(eventId);
     if (!event) throw NotFound('event-not-found');
     const orgMap = eventsRepo.orgMapForUser(req.auth!.userId);
-    if (!can(req.auth!.memberships, { eventId }, 'events.view', orgMap)) throw Forbidden();
+    if (!canWriteCoupleData(req.auth!.memberships, eventId, orgMap)) throw Forbidden();
     const parsed = coupleTimelineApprovalSchema.safeParse(req.body);
     if (!parsed.success) throw BadRequest('invalid-input', parsed.error.issues);
     const metadata = parseEventMetadata(event);
@@ -610,7 +613,7 @@ export async function couplePlanningRoutes(app: FastifyInstance) {
     const event = eventsRepo.findById(eventId);
     if (!event) throw NotFound('event-not-found');
     const orgMap = eventsRepo.orgMapForUser(req.auth!.userId);
-    if (!can(req.auth!.memberships, { eventId }, 'events.view', orgMap)) throw Forbidden();
+    if (!canWriteCoupleData(req.auth!.memberships, eventId, orgMap)) throw Forbidden();
     const parsed = updatePlanningTaskSchema.safeParse(req.body);
     if (!parsed.success) throw BadRequest('invalid-input', parsed.error.issues);
     const task = couplePlanningRepo.findById(taskId);
@@ -625,7 +628,7 @@ export async function couplePlanningRoutes(app: FastifyInstance) {
     const event = eventsRepo.findById(eventId);
     if (!event) throw NotFound('event-not-found');
     const orgMap = eventsRepo.orgMapForUser(req.auth!.userId);
-    if (!can(req.auth!.memberships, { eventId }, 'events.view', orgMap)) throw Forbidden();
+    if (!canWriteCoupleData(req.auth!.memberships, eventId, orgMap)) throw Forbidden();
     const task = couplePlanningRepo.findById(taskId);
     if (!task || task.event_id !== eventId) throw NotFound('task-not-found');
     const parsed = z.object({ question: z.string().min(1).max(2000) }).safeParse(req.body);
@@ -653,7 +656,7 @@ export async function couplePlanningRoutes(app: FastifyInstance) {
     const event = eventsRepo.findById(eventId);
     if (!event) throw NotFound('event-not-found');
     const orgMap = eventsRepo.orgMapForUser(req.auth!.userId);
-    if (!can(req.auth!.memberships, { eventId }, 'events.view', orgMap)) throw Forbidden();
+    if (!canWriteCoupleData(req.auth!.memberships, eventId, orgMap)) throw Forbidden();
     const parsed = coupleProfileSchema.safeParse(req.body);
     if (!parsed.success) throw BadRequest('invalid-input', parsed.error.issues);
     const metadata = parseEventMetadata(event);
@@ -694,7 +697,7 @@ export async function couplePlanningRoutes(app: FastifyInstance) {
     const event = eventsRepo.findById(eventId);
     if (!event) throw NotFound('event-not-found');
     const orgMap = eventsRepo.orgMapForUser(req.auth!.userId);
-    if (!can(req.auth!.memberships, { eventId }, 'events.view', orgMap)) throw Forbidden();
+    if (!canWriteCoupleData(req.auth!.memberships, eventId, orgMap)) throw Forbidden();
     const parsed = createRequestSchema.safeParse(req.body);
     if (!parsed.success) throw BadRequest('invalid-input', parsed.error.issues);
     if (['partner_invite', 'planner_request'].includes(parsed.data.requestType) && !parsed.data.targetEmail) {
@@ -723,8 +726,19 @@ export async function couplePlanningRoutes(app: FastifyInstance) {
       ip: req.ip,
       details: { eventId, requestType: request.request_type, targetEmail: request.target_email },
     });
+    broadcastSSE(event.organization_id, 'couple.request_created', { eventId, requestId: request.id, requestType: request.request_type }, req.auth!.userId);
     return reply.code(201).send({ request: safeRequest(request) });
   });
+
+  // CP-07: best-effort email delivery of the generated invitation link.
+  const deliverInvitation = async (token: string, event: any, email: string, logger: { error: (obj: unknown, msg: string) => void }) => {
+    try {
+      const invitation = teamInvitationsRepo.findValidByToken(token);
+      if (invitation) await deliverTeamInvitation({ invitation, token });
+    } catch (err) {
+      logger.error({ err, eventId: event.id, email }, 'partner/planner invitation delivery failed');
+    }
+  };
 
   app.patch('/api/events/:eventId/couple-requests/:requestId', { preHandler: requireAuth }, async (req) => {
     const { eventId, requestId } = req.params as { eventId: string; requestId: string };
@@ -739,15 +753,26 @@ export async function couplePlanningRoutes(app: FastifyInstance) {
     const metadata = { ...(() => { try { return JSON.parse(current.metadata || '{}'); } catch { return {}; } })(), ...(parsed.data.metadata ?? {}), reviewNote: parsed.data.note };
     const updated = coupleRequestsRepo.updateStatus(requestId, parsed.data.status, req.auth!.userId, metadata)!;
 
-    if (parsed.data.status === 'approved' && updated.request_type === 'partner_invite' && updated.target_email) {
+    // MODULE-07 CP-07: partner/planner invitations must work for people who
+    // don't have an account yet — approval silently did nothing before.
+    let inviteToken: string | null = null;
+    if (parsed.data.status === 'approved' && ['partner_invite', 'planner_request'].includes(updated.request_type) && updated.target_email) {
       const existing = usersRepo.findByEmail(updated.target_email);
-      const coupleRole = rolesRepo.findByKey(null, 'couple');
-      if (existing && coupleRole) eventsRepo.addMember({ eventId, userId: existing.id, roleId: coupleRole.id });
-    }
-    if (parsed.data.status === 'approved' && updated.request_type === 'planner_request' && updated.target_email) {
-      const existing = usersRepo.findByEmail(updated.target_email);
-      const plannerRole = rolesRepo.findByKey(null, 'planner');
-      if (existing && plannerRole) eventsRepo.addMember({ eventId, userId: existing.id, roleId: plannerRole.id });
+      const role = rolesRepo.findByKey(null, updated.request_type === 'partner_invite' ? 'couple' : 'planner');
+      if (existing && role) {
+        eventsRepo.addMember({ eventId, userId: existing.id, roleId: role.id });
+      } else if (role) {
+        const invite = teamInvitationsRepo.create({
+          organizationId: event.organization_id,
+          email: updated.target_email,
+          roleId: role.id,
+          invitedBy: req.auth!.userId,
+          eventId,
+          invitationType: 'event',
+        });
+        inviteToken = invite.token;
+        deliverInvitation(invite.token, event, updated.target_email, req.log);
+      }
     }
 
     auditRepo.log({
@@ -760,7 +785,8 @@ export async function couplePlanningRoutes(app: FastifyInstance) {
       ip: req.ip,
       details: { eventId, requestType: updated.request_type, status: updated.status },
     });
-    return { request: safeRequest(updated) };
+    broadcastSSE(event.organization_id, 'couple.request_updated', { eventId, requestId, requestType: updated.request_type, status: updated.status, invitationToken: inviteToken ?? null }, req.auth!.userId);
+    return { request: safeRequest(updated), invitationToken: inviteToken ?? null };
   });
 
 }

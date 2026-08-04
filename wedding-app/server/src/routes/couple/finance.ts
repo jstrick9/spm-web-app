@@ -3,7 +3,7 @@ import { requireAuth } from '../../middleware/auth.js';
 import { can } from '../../lib/rbac.js';
 import { BadRequest, Forbidden, NotFound } from '../../lib/errors.js';
 import type { FastifyInstance } from 'fastify';
-import { financeQuestionSchema, changeOrderSchema, coupleContractSignSchema, parseEventMetadata, safeContract, safePayment, safeRequest } from './shared.js';
+import { canWriteCoupleData, changeOrderSchema, coupleContractSignSchema, financeQuestionSchema, parseEventMetadata, safeContract, safePayment, safeRequest } from './shared.js';
 import { broadcastSSE } from '../sse.js';
 
 export async function coupleFinanceRoutes(app: FastifyInstance) {
@@ -67,7 +67,7 @@ export async function coupleFinanceRoutes(app: FastifyInstance) {
     const event = eventsRepo.findById(eventId);
     if (!event) throw NotFound('event-not-found');
     const orgMap = eventsRepo.orgMapForUser(req.auth!.userId);
-    if (!can(req.auth!.memberships, { eventId }, 'events.view', orgMap)) throw Forbidden();
+    if (!canWriteCoupleData(req.auth!.memberships, eventId, orgMap)) throw Forbidden();
     const contract = contractsRepo.findById(contractId);
     if (!contract || contract.event_id !== eventId) throw NotFound('contract-not-found');
     const parsed = coupleContractSignSchema.safeParse(req.body);

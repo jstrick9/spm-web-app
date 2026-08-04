@@ -3,7 +3,7 @@ import { requireAuth } from '../../middleware/auth.js';
 import { can } from '../../lib/rbac.js';
 import { BadRequest, Forbidden, NotFound } from '../../lib/errors.js';
 import type { FastifyInstance } from 'fastify';
-import { coupleSeatingSchema, coupleGuestSchema, importPreviewSchema, safeGuest, parseCsvLine } from './shared.js';
+import { canWriteCoupleData, coupleGuestSchema, coupleSeatingSchema, importPreviewSchema, parseCsvLine, safeGuest } from './shared.js';
 
 export async function coupleGuestsRoutes(app: FastifyInstance) {
   app.patch('/api/events/:eventId/couple-guests/:guestId/seating', { preHandler: requireAuth }, async (req) => {
@@ -11,7 +11,7 @@ export async function coupleGuestsRoutes(app: FastifyInstance) {
     const event = eventsRepo.findById(eventId);
     if (!event) throw NotFound('event-not-found');
     const orgMap = eventsRepo.orgMapForUser(req.auth!.userId);
-    if (!can(req.auth!.memberships, { eventId }, 'events.view', orgMap)) throw Forbidden();
+    if (!canWriteCoupleData(req.auth!.memberships, eventId, orgMap)) throw Forbidden();
     const guest = guestsRepo.findById(guestId);
     if (!guest || guest.event_id !== eventId) throw NotFound('guest-not-found');
     const parsed = coupleSeatingSchema.safeParse(req.body);
@@ -70,7 +70,6 @@ export async function coupleGuestsRoutes(app: FastifyInstance) {
     if (!can(req.auth!.memberships, { eventId }, 'events.view', orgMap)) throw Forbidden();
     const guests = guestsRepo.listForEvent(eventId).map(safeGuest);
     const counts = guestsRepo.countByStatus(eventId);
-    auditRepo.log({ organizationId: event.organization_id, actorUserId: req.auth!.userId, actorLabel: req.auth!.email, action: 'couple.guests.view', targetType: 'event', targetId: eventId, ip: req.ip, details: { guestCount: guests.length } });
     const householdMap = new Map<string, typeof guests>();
     for (const guest of guests) {
       const key = guest.householdName || guest.partyName || guest.fullName;

@@ -5,7 +5,7 @@ import { requireAuth } from '../../middleware/auth.js';
 import { can } from '../../lib/rbac.js';
 import { BadRequest, Forbidden, NotFound } from '../../lib/errors.js';
 import type { FastifyInstance } from 'fastify';
-import { postEventSurveySchema, postEventLostItemSchema, postEventReviewSchema, postEventReviewLinksSchema, postEventBulkActionSchema, postEventFollowUpSchema, parseEventMetadata, safeRequest, couplePostEventSummary, addDaysIso, enrichPostEventRequest, connectedIntegrationId, htmlEscape } from './shared.js';
+import { addDaysIso, canWriteCoupleData, connectedIntegrationId, couplePostEventSummary, enrichPostEventRequest, htmlEscape, parseEventMetadata, postEventBulkActionSchema, postEventFollowUpSchema, postEventLostItemSchema, postEventReviewLinksSchema, postEventReviewSchema, postEventSurveySchema, safeRequest } from './shared.js';
 
 export async function couplePostEventRoutes(app: FastifyInstance) {
   app.get('/api/events/:eventId/couple-post-event', { preHandler: requireAuth }, async (req) => {
@@ -14,7 +14,6 @@ export async function couplePostEventRoutes(app: FastifyInstance) {
     if (!event) throw NotFound('event-not-found');
     const orgMap = eventsRepo.orgMapForUser(req.auth!.userId);
     if (!can(req.auth!.memberships, { eventId }, 'events.view', orgMap)) throw Forbidden();
-    auditRepo.log({ organizationId: event.organization_id, actorUserId: req.auth!.userId, actorLabel: req.auth!.email, action: 'couple.post_event.view', targetType: 'event', targetId: eventId, ip: req.ip });
     return couplePostEventSummary({ event, userId: req.auth!.userId });
   });
 
@@ -23,7 +22,7 @@ export async function couplePostEventRoutes(app: FastifyInstance) {
     const event = eventsRepo.findById(eventId);
     if (!event) throw NotFound('event-not-found');
     const orgMap = eventsRepo.orgMapForUser(req.auth!.userId);
-    if (!can(req.auth!.memberships, { eventId }, 'events.view', orgMap)) throw Forbidden();
+    if (!canWriteCoupleData(req.auth!.memberships, eventId, orgMap)) throw Forbidden();
     const parsed = postEventSurveySchema.safeParse(req.body);
     if (!parsed.success) throw BadRequest('invalid-input', parsed.error.issues);
     const metadata = parseEventMetadata(event);
@@ -50,7 +49,7 @@ export async function couplePostEventRoutes(app: FastifyInstance) {
     const event = eventsRepo.findById(eventId);
     if (!event) throw NotFound('event-not-found');
     const orgMap = eventsRepo.orgMapForUser(req.auth!.userId);
-    if (!can(req.auth!.memberships, { eventId }, 'events.view', orgMap)) throw Forbidden();
+    if (!canWriteCoupleData(req.auth!.memberships, eventId, orgMap)) throw Forbidden();
     const parsed = postEventLostItemSchema.safeParse(req.body);
     if (!parsed.success) throw BadRequest('invalid-input', parsed.error.issues);
     const request = coupleRequestsRepo.create({ organizationId: event.organization_id, eventId, requesterUserId: req.auth!.userId, requestType: 'post_event_lost_item', note: parsed.data.itemDescription, metadata: { source: 'couple_post_event_closeout', lastSeenLocation: parsed.data.lastSeenLocation, contactPreference: parsed.data.contactPreference, contactValue: parsed.data.contactValue } });
@@ -63,7 +62,7 @@ export async function couplePostEventRoutes(app: FastifyInstance) {
     const event = eventsRepo.findById(eventId);
     if (!event) throw NotFound('event-not-found');
     const orgMap = eventsRepo.orgMapForUser(req.auth!.userId);
-    if (!can(req.auth!.memberships, { eventId }, 'events.view', orgMap)) throw Forbidden();
+    if (!canWriteCoupleData(req.auth!.memberships, eventId, orgMap)) throw Forbidden();
     const parsed = postEventReviewSchema.safeParse(req.body);
     if (!parsed.success) throw BadRequest('invalid-input', parsed.error.issues);
     const metadata = parseEventMetadata(event);

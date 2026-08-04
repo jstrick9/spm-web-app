@@ -1,7 +1,7 @@
 import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
 import { requireAuth } from '../../middleware/auth.js';
-import { can } from '../../lib/rbac.js';
+import { can, type Membership } from '../../lib/rbac.js';
 import { auditRepo, assetsRepo, catalogRepo, contractsRepo, coupleAppointmentsRepo, coupleDocumentsRepo, couplePlanningRepo, coupleRequestsRepo, eventsRepo, guestsRepo, layoutsRepo, inventoryRepo, jobsRepo, messagesRepo, paymentLinksRepo, portalConfigRepo, rolesRepo, subEventsRepo, timelineRepo, usersRepo, vendorsRepo, venuesRepo } from '../../db/repos/index.js';
 import { saveDocumentDataUri, privateFilePath } from '../../lib/fileStorage.js';
 import { createReadStream, existsSync } from 'node:fs';
@@ -739,3 +739,18 @@ export function htmlEscape(value: string) {
   return value.replace(/[&<>"]/g, (ch) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[ch] || ch));
 }
 
+
+/**
+ * MODULE-07 CP-01: couple-owned data may be written by (a) the couple member
+ * themselves (event-scoped 'couple' role) or (b) venue roles with events.edit
+ * (planner/manager/owner/admin) acting in a support capacity. View-only roles
+ * (staff) can READ couple data via events.view but must not edit it.
+ */
+export function canWriteCoupleData(
+  memberships: ReadonlyArray<Membership & { roleKey?: string }>,
+  eventId: string,
+  orgMap: Record<string, string>,
+): boolean {
+  if (memberships.some((m) => m.eventId === eventId && String(m.roleKey ?? '').toLowerCase() === 'couple')) return true;
+  return can(memberships, { eventId }, 'events.edit', orgMap);
+}

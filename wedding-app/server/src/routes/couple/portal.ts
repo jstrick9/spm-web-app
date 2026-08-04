@@ -6,7 +6,7 @@ import { can } from '../../lib/rbac.js';
 import { z } from 'zod';
 import { BadRequest, Forbidden, NotFound } from '../../lib/errors.js';
 import type { FastifyInstance } from 'fastify';
-import { notificationPrefsSchema, parseEventMetadata, safeRequest } from './shared.js';
+import { canWriteCoupleData, notificationPrefsSchema, parseEventMetadata, safeRequest } from './shared.js';
 
 export async function couplePortalRoutes(app: FastifyInstance) {
   app.get('/api/events/:eventId/couple-notification-preferences', { preHandler: requireAuth }, async (req) => {
@@ -16,10 +16,14 @@ export async function couplePortalRoutes(app: FastifyInstance) {
     const orgMap = eventsRepo.orgMapForUser(req.auth!.userId);
     if (!can(req.auth!.memberships, { eventId }, 'events.view', orgMap)) throw Forbidden();
     const existing = db.prepare(`SELECT * FROM couple_notification_preferences WHERE event_id = ? AND user_id = ?`).get(eventId, req.auth!.userId) as any;
+    // MODULE-07 CP-04: GET is pure — no row is created on read (PATCH creates).
     if (existing) return { preferences: existing };
-    const id = uuid();
-    db.prepare(`INSERT INTO couple_notification_preferences (id, organization_id, event_id, user_id) VALUES (?, ?, ?, ?)`).run(id, event.organization_id, eventId, req.auth!.userId);
-    return { preferences: db.prepare(`SELECT * FROM couple_notification_preferences WHERE id = ?`).get(id) };
+    return { preferences: {
+      id: null, organization_id: event.organization_id, event_id: eventId, user_id: req.auth!.userId,
+      email_enabled: 1, sms_enabled: 0, in_app_enabled: 1, digest_frequency: 'weekly',
+      quiet_hours: null, decision_alerts: 1, due_task_alerts: 1, message_alerts: 1,
+      created_at: null, updated_at: null,
+    } };
   });
 
   app.patch('/api/events/:eventId/couple-notification-preferences', { preHandler: requireAuth }, async (req) => {
@@ -27,7 +31,7 @@ export async function couplePortalRoutes(app: FastifyInstance) {
     const event = eventsRepo.findById(eventId);
     if (!event) throw NotFound('event-not-found');
     const orgMap = eventsRepo.orgMapForUser(req.auth!.userId);
-    if (!can(req.auth!.memberships, { eventId }, 'events.view', orgMap)) throw Forbidden();
+    if (!canWriteCoupleData(req.auth!.memberships, eventId, orgMap)) throw Forbidden();
     const parsed = notificationPrefsSchema.safeParse(req.body);
     if (!parsed.success) throw BadRequest('invalid-input', parsed.error.issues);
     const id = (db.prepare(`SELECT id FROM couple_notification_preferences WHERE event_id = ? AND user_id = ?`).get(eventId, req.auth!.userId) as any)?.id || uuid();

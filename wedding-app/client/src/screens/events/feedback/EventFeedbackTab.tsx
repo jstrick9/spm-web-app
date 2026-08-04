@@ -50,7 +50,19 @@ export function EventFeedbackTab({ eventId }: Props) {
 
   const updateCloseoutRequest = useMutation({
     mutationFn: (input: { requestId: string; status: 'approved' | 'completed' | 'rejected'; note?: string }) => sdk.couple.updateRequest(eventId, input.requestId, { status: input.status, note: input.note }),
-    onSuccess: () => { qc.invalidateQueries({ queryKey: ['event-post-event-review-queue', eventId] }); toast({ title: 'Closeout request updated', variant: 'success' }); },
+    onSuccess: (res: any) => {
+      qc.invalidateQueries({ queryKey: ['couple-requests', eventId] });
+      qc.invalidateQueries({ queryKey: ['event-post-event-review-queue', eventId] });
+      // MODULE-07 CP-07: when approving a partner/planner invite for someone
+      // without an account, the server returns the invitation link to share.
+      const token = res?.invitationToken as string | undefined;
+      if (token) {
+        const url = `${window.location.origin}/#/?inviteToken=${encodeURIComponent(token)}`;
+        toast({ title: 'Invitation link generated', description: url, variant: 'success' });
+        navigator.clipboard?.writeText(url).catch(() => {});
+      }
+      toast({ title: 'Closeout request updated', variant: 'success' });
+    },
     onError: (e: any) => toast({ title: 'Could not update request', description: e.message, variant: 'destructive' }),
   });
 

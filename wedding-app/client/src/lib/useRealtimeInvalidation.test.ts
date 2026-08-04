@@ -131,4 +131,36 @@ describe('useRealtimeInvalidation', () => {
     expect(spy).toHaveBeenCalledWith({ queryKey: ['payment-links', 'evt-7'] });
     expect(spy).toHaveBeenCalledWith({ queryKey: ['financial-legal', 'evt-7'] });
   });
+
+  // MODULE-07 CP-03/CP-06: couple + guest-portal events invalidate the hubs.
+  it('registers handlers for every couple and guest-help event', () => {
+    renderWithQC();
+    for (const type of [
+      'couple.request_created', 'couple.request_updated', 'couple.decision_created',
+      'couple.document_uploaded', 'couple.document_deleted', 'couple.design_submitted',
+      'guest_help.sla_breach',
+    ]) {
+      expect(capturedHandlers[type], type).toBeDefined();
+    }
+  });
+
+  it('couple.request_updated invalidates requests, inbox, and portal state', () => {
+    renderWithQC();
+    const spy = vi.spyOn(qc, 'invalidateQueries');
+    capturedHandlers['couple.request_updated']({
+      id: 7, type: 'couple.request_updated', payload: { eventId: 'evt-8' }, actorUserId: null, timestamp: '',
+    });
+    expect(spy).toHaveBeenCalledWith({ queryKey: ['couple-requests', 'evt-8'] });
+    expect(spy).toHaveBeenCalledWith({ queryKey: ['couple-inbox', 'evt-8'] });
+    expect(spy).toHaveBeenCalledWith({ queryKey: ['couple-guest-portal', 'evt-8'] });
+  });
+
+  it('couple.document_uploaded invalidates the documents list', () => {
+    renderWithQC();
+    const spy = vi.spyOn(qc, 'invalidateQueries');
+    capturedHandlers['couple.document_uploaded']({
+      id: 8, type: 'couple.document_uploaded', payload: { eventId: 'evt-8' }, actorUserId: null, timestamp: '',
+    });
+    expect(spy).toHaveBeenCalledWith({ queryKey: ['couple-documents', 'evt-8'] });
+  });
 });
