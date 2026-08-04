@@ -17,6 +17,15 @@ import { Skeleton } from '../../ui/Skeleton';
 
 interface Props { orgId: string }
 
+/**
+ * MODULE-05 ST-16: events are stored as venue-local 'YYYY-MM-DD' dates, so
+ * "today"/week keys must come from LOCAL date components — toISOString()
+ * (UTC) mislabels events for non-UTC venues in the evening hours.
+ */
+export function localDateKey(d: Date): string {
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+}
+
 export function TodayView({ orgId }: Props) {
   const eventsQ = useQuery({
     queryKey: ['events', orgId],
@@ -33,7 +42,7 @@ export function TodayView({ orgId }: Props) {
   const events = eventsQ.data?.events ?? [];
   const vendors = vendorsQ.data?.vendors ?? [];
   const today = new Date();
-  const todayStr = today.toISOString().slice(0, 10);
+  const todayStr = localDateKey(today);
 
   // Events happening today
   const todayEvents = events.filter(e => e.start_date === todayStr);
@@ -44,7 +53,7 @@ export function TodayView({ orgId }: Props) {
     for (let i = 0; i < 7; i++) {
       const d = new Date(today);
       d.setDate(d.getDate() + i);
-      const ds = d.toISOString().slice(0, 10);
+      const ds = localDateKey(d);
       days.push({ date: d, dateStr: ds, events: events.filter(e => e.start_date === ds) });
     }
     return days;

@@ -435,7 +435,9 @@ export const SYSTEM_ROLE_DEFINITIONS: ReadonlyArray<SystemRoleDefinition> = [
       'guests.view','guests.couple.manage','guests.manage','guests.assign','guests.import','guests.export',
       'rsvp.view','rsvp.submit',
       'portal.guest.view',
-      'timeline.view',
+      // MODULE-05 ST-02: couples do NOT hold timeline.view — the full internal
+      // timeline (notes, vendor ids, assignments) is ops-internal. Couples get
+      // the sanitized schedule via /api/events/:id/couple-schedule.
       'messages.view','messages.send',
       'calendar.view',
       'notifications.manage',
@@ -445,7 +447,7 @@ export const SYSTEM_ROLE_DEFINITIONS: ReadonlyArray<SystemRoleDefinition> = [
     id: SYSTEM_ROLE_IDS.staff,
     key: 'staff',
     name: 'Staff',
-    description: 'Day-of operations. View most things; manage timeline + own staff tasks.',
+    description: 'Day-of operations. View most things; manage timeline and their own staff tasks (assignee self-service).',
     hierarchy: 30,
     permissions: [
       'events.view',
@@ -457,7 +459,9 @@ export const SYSTEM_ROLE_DEFINITIONS: ReadonlyArray<SystemRoleDefinition> = [
       'vendors.view',
       'vendors.checkin.view','vendors.checkin.manage',
       'timeline.view','timeline.manage',
-      'staff.view','staff.manage',
+      // MODULE-05 ST-08: staff role manages its OWN tasks (status/checklist/notes
+      // via assignee self-service), not org-wide staff ops (no staff.manage).
+      'staff.view',
       'budget.view',
       'gallery.view',
       'feedback.view',

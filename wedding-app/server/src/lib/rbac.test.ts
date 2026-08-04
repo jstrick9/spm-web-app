@@ -42,6 +42,8 @@ describe('rbac.resolvePermissions', () => {
     expect(can(m, { eventId: 'evt1' }, 'guests.import')).toBe(true);
     expect(can(m, { eventId: 'evt1' }, 'guests.export')).toBe(true);
     expect(can(m, { eventId: 'evt1' }, 'org.manage')).toBe(false);
+    // MODULE-05 ST-02: couples must NOT see the full internal timeline.
+    expect(can(m, { eventId: 'evt1' }, 'timeline.view')).toBe(false);
   });
 
   it('org admin has perms on events in their org via the orgMap bridge', () => {

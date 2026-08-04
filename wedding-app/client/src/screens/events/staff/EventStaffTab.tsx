@@ -20,6 +20,7 @@ import { Label } from '../../../ui/Label';
 import { cn } from '../../../ui/lib/cn';
 import { StaffTaskFormDialog } from './StaffTaskFormDialog';
 import { useToast } from '../../../ui/Toast';
+import { usePermission } from '../../../lib/usePermission';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '../../../ui/Dialog';
 import { VenueManagerStaffingCommandCenter, CrewContactCard, StaffMiniMetric } from './staffPanels';
 interface Props {
@@ -31,6 +32,10 @@ interface Props {
 export function EventStaffTab({ eventId, organizationId }: Props) {
   const qc = useQueryClient();
   const { toast } = useToast();
+  // MODULE-05 ST-17: permission-based gating (was a raw roleKey allow-list).
+  // Declared with the other hooks — before any early return — to keep the
+  // hook order stable across renders.
+  const canManageStaff = usePermission('staff.manage');
   
   // Navigation tabs: 'tasks' | 'scheduler'
   const [activeSubTab, setActiveSubTab] = useState<'tasks' | 'scheduler'>('tasks');
@@ -509,7 +514,7 @@ Owner notification rule: ${ownerNotify || incidentSeverity === 'critical' ? 'not
   const whatNowQueue = [...blockedTasks, ...criticalOpenTasks, ...tasks.filter(t => t.status === 'in-progress'), ...tasks.filter(t => t.status === 'not-started')]
     .filter((task, index, arr) => arr.findIndex(t => t.id === task.id) === index)
     .slice(0, 5);
-  const canManageAvailability = meData?.memberships?.some((membership: any) => membership.organizationId === organizationId && ['owner', 'admin', 'manager'].includes(String(membership.roleKey).toLowerCase()));
+  const canManageAvailability = canManageStaff;
   const availabilityStaff = ((membersData as any)?.members || []).filter((member: any) => ['staff', 'manager', 'owner', 'admin'].includes(String(member.role_key || member.roleKey || '').toLowerCase()));
 
   const liveCrew = shifts.filter((s: any) => s.clocked_in_at && !s.clocked_out_at).length;
@@ -537,10 +542,10 @@ Owner notification rule: ${ownerNotify || incidentSeverity === 'critical' ? 'not
 
       {activeSubTab === 'tasks' ? (
         /* Refined Tasks Kanban Panel */
-      <StaffTasksKanban priorityFilter={priorityFilter} setPriorityFilter={setPriorityFilter} statusFilter={statusFilter} setStatusFilter={setStatusFilter} setEditTask={setEditTask} swipingTaskId={swipingTaskId} swipeOffset={swipeOffset} isSwiping={isSwiping} blockNextClick={blockNextClick} setCreateOpen={setCreateOpen} setMapOverlayOpen={setMapOverlayOpen} handleTouchStart={handleTouchStart} handleTouchMove={handleTouchMove} handleTouchEnd={handleTouchEnd} toggleTaskStatus={toggleTaskStatus} handleDragStart={handleDragStart} handleDragEnd={handleDragEnd} handleDragOver={handleDragOver} handleDragLeave={handleDragLeave} handleDrop={handleDrop} tasks={tasks} phases={phases} filteredTasks={filteredTasks} totalTasksCount={totalTasksCount} completedTasksCount={completedTasksCount} completionRatio={completionRatio} activeLayout={activeLayout} handleKeyboardMove={handleKeyboardMove} />
+      <StaffTasksKanban priorityFilter={priorityFilter} setPriorityFilter={setPriorityFilter} statusFilter={statusFilter} setStatusFilter={setStatusFilter} setEditTask={setEditTask} swipingTaskId={swipingTaskId} swipeOffset={swipeOffset} isSwiping={isSwiping} blockNextClick={blockNextClick} setCreateOpen={setCreateOpen} setMapOverlayOpen={setMapOverlayOpen} handleTouchStart={handleTouchStart} handleTouchMove={handleTouchMove} handleTouchEnd={handleTouchEnd} toggleTaskStatus={toggleTaskStatus} handleDragStart={handleDragStart} handleDragEnd={handleDragEnd} handleDragOver={handleDragOver} handleDragLeave={handleDragLeave} handleDrop={handleDrop} tasks={tasks} phases={phases} filteredTasks={filteredTasks} totalTasksCount={totalTasksCount} completedTasksCount={completedTasksCount} completionRatio={completionRatio} activeLayout={activeLayout} handleKeyboardMove={handleKeyboardMove} canManage={canManageStaff} />
       ) : (
         /* Shifts Scheduler Panel (Phase 1) */
-      <StaffShiftsScheduler newShiftRole={newShiftRole} setNewShiftRole={setNewShiftRole} addShiftOpen={addShiftOpen} setAddShiftOpen={setAddShiftOpen} newShiftStaffId={newShiftStaffId} setNewShiftStaffId={setNewShiftStaffId} newShiftStartsAt={newShiftStartsAt} setNewShiftStartsAt={setNewShiftStartsAt} newShiftEndsAt={newShiftEndsAt} setNewShiftEndsAt={setNewShiftEndsAt} newShiftNotes={newShiftNotes} setNewShiftNotes={setNewShiftNotes} newShiftContactName={newShiftContactName} setNewShiftContactName={setNewShiftContactName} newShiftContactPhone={newShiftContactPhone} setNewShiftContactPhone={setNewShiftContactPhone} newShiftContactEmail={newShiftContactEmail} setNewShiftContactEmail={setNewShiftContactEmail} newShiftRadioChannel={newShiftRadioChannel} setNewShiftRadioChannel={setNewShiftRadioChannel} newShiftHandoffNotes={newShiftHandoffNotes} setNewShiftHandoffNotes={setNewShiftHandoffNotes} newShiftAvailabilityOverrideReason={newShiftAvailabilityOverrideReason} setNewShiftAvailabilityOverrideReason={setNewShiftAvailabilityOverrideReason} meData={meData} createShiftMutation={createShiftMutation} deleteShiftMutation={deleteShiftMutation} clockInMutation={clockInMutation} clockOutMutation={clockOutMutation} shifts={shifts} members={members} hasCoordinator={hasCoordinator} hasSetup={hasSetup} hasCleaning={hasCleaning} />
+      <StaffShiftsScheduler newShiftRole={newShiftRole} setNewShiftRole={setNewShiftRole} addShiftOpen={addShiftOpen} setAddShiftOpen={setAddShiftOpen} newShiftStaffId={newShiftStaffId} setNewShiftStaffId={setNewShiftStaffId} newShiftStartsAt={newShiftStartsAt} setNewShiftStartsAt={setNewShiftStartsAt} newShiftEndsAt={newShiftEndsAt} setNewShiftEndsAt={setNewShiftEndsAt} newShiftNotes={newShiftNotes} setNewShiftNotes={setNewShiftNotes} newShiftContactName={newShiftContactName} setNewShiftContactName={setNewShiftContactName} newShiftContactPhone={newShiftContactPhone} setNewShiftContactPhone={setNewShiftContactPhone} newShiftContactEmail={newShiftContactEmail} setNewShiftContactEmail={setNewShiftContactEmail} newShiftRadioChannel={newShiftRadioChannel} setNewShiftRadioChannel={setNewShiftRadioChannel} newShiftHandoffNotes={newShiftHandoffNotes} setNewShiftHandoffNotes={setNewShiftHandoffNotes} newShiftAvailabilityOverrideReason={newShiftAvailabilityOverrideReason} setNewShiftAvailabilityOverrideReason={setNewShiftAvailabilityOverrideReason} meData={meData} createShiftMutation={createShiftMutation} deleteShiftMutation={deleteShiftMutation} clockInMutation={clockInMutation} clockOutMutation={clockOutMutation} shifts={shifts} members={members} hasCoordinator={hasCoordinator} hasSetup={hasSetup} hasCleaning={hasCleaning} canManage={canManageStaff} />
       )}
 
       <StaffOverlayDialogs editTask={editTask} setEditTask={setEditTask} incidentSeverity={incidentSeverity} setIncidentSeverity={setIncidentSeverity} createOpen={createOpen} setCreateOpen={setCreateOpen} mapOverlayOpen={mapOverlayOpen} setMapOverlayOpen={setMapOverlayOpen} setupWizardOpen={setupWizardOpen} setSetupWizardOpen={setSetupWizardOpen} incidentOpen={incidentOpen} setIncidentOpen={setIncidentOpen} incidentText={incidentText} setIncidentText={setIncidentText} ownerNotify={ownerNotify} setOwnerNotify={setOwnerNotify} applyStaffSetupTemplate={applyStaffSetupTemplate} createIncidentMutation={createIncidentMutation} activeLayout={activeLayout} renderMiniMapSvg={renderMiniMapSvg} eventId={eventId} organizationId={organizationId} />

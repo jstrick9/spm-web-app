@@ -39,6 +39,9 @@ const EVENT_META: Record<string, { title: string; message: (p: any) => string; l
   'layout.reopen.requested': { title: 'Layout Reopen Requested', message: () => 'A planner or couple requested changes to an approved layout.', linkUrl: (p) => `/events/${p.eventId}?tab=layout` },
   'layout.review.decided': { title: 'Venue Layout Decision', message: (p) => `Your layout was ${p.decision === 'changes_requested' ? 'returned for changes' : p.decision}. Open the revision review for details.`, linkUrl: (p) => `/events/${p.eventId}?tab=layout` },
   'webhook.test':    { title: 'Webhook Test',            message: () => 'A test webhook was dispatched.',         linkUrl: () => '/system/integrations' },
+  // MODULE-05 ST-06/ST-15: day-of timeline cues + emergency broadcasts.
+  'timeline.reminder': { title: 'Timeline reminder',     message: (p) => `${p.title || 'A timeline item'} is coming up — review the run of show.`, linkUrl: (p) => `/events/${p.eventId}?tab=timeline` },
+  'event.emergency_broadcast': { title: '⚠ Emergency broadcast', message: (p) => p.message || 'Emergency announcement from the event team.', linkUrl: (p) => `/events/${p.eventId}?tab=emergency` },
 };
 
 function severityFor(type: string): Notification['severity'] {

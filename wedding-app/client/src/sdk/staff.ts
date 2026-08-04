@@ -63,7 +63,7 @@ export const staffSdk = {
   createShift(orgId: string, input: { staffId: string; areaId?: string; role?: string; startsAt: string; endsAt: string; notes?: string; eventId?: string; contactName?: string; contactPhone?: string; contactEmail?: string; radioChannel?: string; handoffNotes?: string; availabilityOverrideReason?: string }): Promise<{ shift: any }> {
     return api.post(`/api/orgs/${orgId}/staff/shifts`, input);
   },
-  updateShift(shiftId: string, patch: { contactName?: string; contactPhone?: string; contactEmail?: string; radioChannel?: string; handoffNotes?: string; notes?: string }): Promise<{ shift: any }> {
+  updateShift(shiftId: string, patch: { staffId?: string; areaId?: string; role?: string; startsAt?: string; endsAt?: string; eventId?: string; contactName?: string; contactPhone?: string; contactEmail?: string; radioChannel?: string; handoffNotes?: string; notes?: string; availabilityOverrideReason?: string }): Promise<{ shift: any }> {
     return api.patch(`/api/staff/shifts/${shiftId}`, patch);
   },
   deleteShift(shiftId: string): Promise<void> {

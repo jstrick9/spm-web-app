@@ -49,9 +49,11 @@ export interface StaffShiftsSchedulerProps {
   hasCoordinator: any;
   hasSetup: any;
   hasCleaning: any;
+  /** MODULE-05 ST-08: shift scheduling is manager-gated. */
+  canManage?: boolean;
 }
 
-export function StaffShiftsScheduler({ newShiftRole, setNewShiftRole, addShiftOpen, setAddShiftOpen, newShiftStaffId, setNewShiftStaffId, newShiftStartsAt, setNewShiftStartsAt, newShiftEndsAt, setNewShiftEndsAt, newShiftNotes, setNewShiftNotes, newShiftContactName, setNewShiftContactName, newShiftContactPhone, setNewShiftContactPhone, newShiftContactEmail, setNewShiftContactEmail, newShiftRadioChannel, setNewShiftRadioChannel, newShiftHandoffNotes, setNewShiftHandoffNotes, newShiftAvailabilityOverrideReason, setNewShiftAvailabilityOverrideReason, meData, createShiftMutation, deleteShiftMutation, clockInMutation, clockOutMutation, shifts, members, hasCoordinator, hasSetup, hasCleaning }: StaffShiftsSchedulerProps) {
+export function StaffShiftsScheduler({ newShiftRole, setNewShiftRole, addShiftOpen, setAddShiftOpen, newShiftStaffId, setNewShiftStaffId, newShiftStartsAt, setNewShiftStartsAt, newShiftEndsAt, setNewShiftEndsAt, newShiftNotes, setNewShiftNotes, newShiftContactName, setNewShiftContactName, newShiftContactPhone, setNewShiftContactPhone, newShiftContactEmail, setNewShiftContactEmail, newShiftRadioChannel, setNewShiftRadioChannel, newShiftHandoffNotes, setNewShiftHandoffNotes, newShiftAvailabilityOverrideReason, setNewShiftAvailabilityOverrideReason, meData, createShiftMutation, deleteShiftMutation, clockInMutation, clockOutMutation, shifts, members, hasCoordinator, hasSetup, hasCleaning, canManage = true }: StaffShiftsSchedulerProps) {
   return (
     <>
         <div className="space-y-6 animate-in fade-in duration-200">
@@ -59,9 +61,11 @@ export function StaffShiftsScheduler({ newShiftRole, setNewShiftRole, addShiftOp
            {/* Shift Scheduler Title */}
            <div className="flex items-center justify-between">
               <h2 className="text-sm font-bold uppercase tracking-wider text-fg-subtle font-serif">Staff Shifts Grid</h2>
-              <Button onClick={() => setAddShiftOpen(!addShiftOpen)} className="font-bold">
-                 <Plus className="w-4 h-4 mr-1" /> {addShiftOpen ? 'Close Scheduler' : 'Schedule Staff Shift'}
-              </Button>
+              {canManage ? (
+                 <Button onClick={() => setAddShiftOpen(!addShiftOpen)} className="font-bold">
+                    <Plus className="w-4 h-4 mr-1" /> {addShiftOpen ? 'Close Scheduler' : 'Schedule Staff Shift'}
+                 </Button>
+              ) : <span className="text-xs text-fg-muted">Shift scheduling is managed by venue leadership.</span>}
            </div>
 
            {/* Dynamic Role Coverage Auditor */}

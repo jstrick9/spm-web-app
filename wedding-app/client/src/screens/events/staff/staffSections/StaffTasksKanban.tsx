@@ -16,6 +16,8 @@ export interface StaffTasksKanbanProps {
   isSwiping: boolean;
   blockNextClick: boolean;
   setCreateOpen: React.Dispatch<React.SetStateAction<any>>;
+  /** MODULE-05 ST-08: create/edit affordances are manager-gated (staff role self-serves status only). */
+  canManage?: boolean;
   setMapOverlayOpen: React.Dispatch<React.SetStateAction<any>>;
   handleTouchStart: any;
   handleTouchMove: any;
@@ -36,7 +38,7 @@ export interface StaffTasksKanbanProps {
   handleKeyboardMove: any;
 }
 
-export function StaffTasksKanban({ priorityFilter, setPriorityFilter, statusFilter, setStatusFilter, setEditTask, swipingTaskId, swipeOffset, isSwiping, blockNextClick, setCreateOpen, setMapOverlayOpen, handleTouchStart, handleTouchMove, handleTouchEnd, toggleTaskStatus, handleDragStart, handleDragEnd, handleDragOver, handleDragLeave, handleDrop, tasks, phases, filteredTasks, totalTasksCount, completedTasksCount, completionRatio, activeLayout, handleKeyboardMove }: StaffTasksKanbanProps) {
+export function StaffTasksKanban({ priorityFilter, setPriorityFilter, statusFilter, setStatusFilter, setEditTask, swipingTaskId, swipeOffset, isSwiping, blockNextClick, setCreateOpen, setMapOverlayOpen, handleTouchStart, handleTouchMove, handleTouchEnd, toggleTaskStatus, handleDragStart, handleDragEnd, handleDragOver, handleDragLeave, handleDrop, tasks, phases, filteredTasks, totalTasksCount, completedTasksCount, completionRatio, activeLayout, handleKeyboardMove, canManage = true }: StaffTasksKanbanProps) {
   return (
     <>
         <div className="space-y-6 animate-in fade-in duration-200">
@@ -110,7 +112,7 @@ export function StaffTasksKanban({ priorityFilter, setPriorityFilter, statusFilt
                 <p className="text-sm text-fg-muted max-w-sm mt-1 mb-4">
                   Adjust your priority or status filters, or create a brand new task.
                 </p>
-                <Button variant="outline" onClick={() => setCreateOpen(true)}>Create task</Button>
+                {canManage && <Button variant="outline" onClick={() => setCreateOpen(true)}>Create task</Button>}
               </div>
             </Card>
           ) : (

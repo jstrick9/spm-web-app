@@ -66,4 +66,41 @@ describe('useRealtimeInvalidation', () => {
       renderHook(() => useRealtimeInvalidation(null), { wrapper });
     }).not.toThrow();
   });
+
+  // MODULE-05 ST-14: staff + timeline SSE events must invalidate caches.
+  it('registers handlers for every staff and timeline event', () => {
+    renderWithQC();
+    for (const type of [
+      'staff.task_created', 'staff.task_updated', 'staff.task_deleted',
+      'staff.shift_created', 'staff.shift_updated', 'staff.shift_deleted',
+      'staff.clock_in', 'staff.clock_out',
+      'staff.availability.created', 'staff.availability.deleted',
+      'timeline.created', 'timeline.updated', 'timeline.deleted',
+      'timeline.reminder', 'event.emergency_broadcast',
+    ]) {
+      expect(capturedHandlers[type], type).toBeDefined();
+    }
+  });
+
+  it('timeline.created invalidates timeline, readiness, and ops for the event', () => {
+    renderWithQC();
+    const spy = vi.spyOn(qc, 'invalidateQueries');
+    capturedHandlers['timeline.created']({
+      id: 3, type: 'timeline.created', payload: { eventId: 'evt-9' }, actorUserId: null, timestamp: '',
+    });
+    expect(spy).toHaveBeenCalledWith({ queryKey: ['timeline'] });
+    expect(spy).toHaveBeenCalledWith({ queryKey: ['event-readiness', 'evt-9'] });
+    expect(spy).toHaveBeenCalledWith({ queryKey: ['timeline-ops', 'evt-9'] });
+  });
+
+  it('staff.shift_created invalidates shifts, calendar, and coverage caches', () => {
+    renderWithQC();
+    const spy = vi.spyOn(qc, 'invalidateQueries');
+    capturedHandlers['staff.shift_created']({
+      id: 4, type: 'staff.shift_created', payload: {}, actorUserId: null, timestamp: '',
+    });
+    expect(spy).toHaveBeenCalledWith({ queryKey: ['staffShifts'] });
+    expect(spy).toHaveBeenCalledWith({ queryKey: ['staff-calendar'] });
+    expect(spy).toHaveBeenCalledWith({ queryKey: ['staff-coverage'] });
+  });
 });

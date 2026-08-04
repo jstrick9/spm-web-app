@@ -97,7 +97,7 @@ export const staffTasksRepo = {
     return this.findById(id)!;
   },
 
-  update(id: string, patch: Partial<StaffTaskInput>): StaffTaskRow | undefined {
+  update(id: string, patch: Partial<StaffTaskInput>, completedBy?: string | null): StaffTaskRow | undefined {
     const fields: string[] = [];
     const values: unknown[] = [];
     const scalar: Record<string, string> = {
@@ -122,9 +122,15 @@ export const staffTasksRepo = {
         values.push(stringifyJson((patch as Record<string, unknown>)[k]));
       }
     }
-    // Auto-set completed_at when status flips to completed
+    // Auto-set completed_at when status flips to completed; clear it when a
+    // task is reopened (MODULE-05 ST-19 — stale completion timestamps).
     if (patch.status === 'completed') {
       fields.push(`completed_at = datetime('now')`);
+      fields.push(`completed_by = ?`);
+      values.push(completedBy ?? null);
+    } else if (patch.status !== undefined) { // not 'completed' (handled above)
+      fields.push(`completed_at = NULL`);
+      fields.push(`completed_by = NULL`);
     }
     if (fields.length === 0) return this.findById(id);
     values.push(id);
@@ -228,12 +234,18 @@ export const staffShiftsRepo = {
   },
 
   update(id: string, patch: Partial<{
+    staffId: string; areaId: string | null; role: StaffShiftRow['role'];
+    startsAt: string; endsAt: string; eventId: string | null;
     contactName: string; contactPhone: string; contactEmail: string;
     radioChannel: string; handoffNotes: string; notes: string;
+    availabilityOverrideReason: string | null;
   }>): StaffShiftRow | undefined {
     const map: Record<string, string> = {
+      staffId: 'staff_id', areaId: 'area_id', role: 'role',
+      startsAt: 'starts_at', endsAt: 'ends_at', eventId: 'event_id',
       contactName: 'contact_name', contactPhone: 'contact_phone', contactEmail: 'contact_email',
       radioChannel: 'radio_channel', handoffNotes: 'handoff_notes', notes: 'notes',
+      availabilityOverrideReason: 'availability_override_reason',
     };
     const fields: string[] = [];
     const values: unknown[] = [];

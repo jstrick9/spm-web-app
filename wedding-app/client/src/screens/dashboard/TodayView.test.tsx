@@ -1,7 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, waitFor } from '@testing-library/react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { TodayView } from './TodayView';
+import { TodayView, localDateKey } from './TodayView';
 
 // vi.mock factories are hoisted — cannot reference variables declared below.
 // Use inline date calculations instead.
@@ -65,5 +65,18 @@ describe('TodayView', () => {
     await waitFor(() => {
       expect(screen.getByText('TODAY')).toBeTruthy();
     });
+  });
+
+  // MODULE-05 ST-16: "today" keys must be VENUE-LOCAL. At 11:30 PM EDT on
+  // Aug 4, the UTC date is already Aug 5 — localDateKey must still say
+  // 2026-08-04 for a venue in America/New_York (UTC-keyed code would have
+  // produced 2026-08-05 and hidden the event from Today's Events).
+  it('localDateKey uses venue-local components, not UTC', () => {
+    vi.stubEnv('TZ', 'America/New_York');
+    const lateEvening = new Date('2026-08-04T23:30:00-04:00');
+    expect(localDateKey(lateEvening)).toBe('2026-08-04');
+    // Sanity: the same instant in UTC is already Aug 5.
+    expect(lateEvening.toISOString().slice(0, 10)).toBe('2026-08-05');
+    vi.unstubAllEnvs();
   });
 });

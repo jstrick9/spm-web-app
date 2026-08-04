@@ -17,12 +17,14 @@ import { webhooksRepo } from '../db/repos/webhooks.js';
 import { runAction } from '../integrations/runtime.js';
 import { scanUpcomingDeadlines } from './lifecycleEmails.js';
 import { runAuditRetention } from './retention.js';
+import { scanDueTimelineReminders } from './timelineReminders.js';
 import { hostname } from 'node:os';
 import { replayDueWebhookDeliveries } from '../webhooks/dispatcher.js';
 
 const POLL_INTERVAL_MS = 1000;          // how often to look for new jobs
 const RECLAIM_INTERVAL_MS = 60_000;     // how often to reclaim stuck jobs
 const RSVP_SCAN_INTERVAL_MS = 6 * 60 * 60 * 1000; // lifecycle reminder scan (6h)
+const REMINDER_SCAN_INTERVAL_MS = 60_000;         // day-of timeline reminder dispatch (60s)
 const WORKER_ID = `${process.pid}@${hostname()}`;
 
 // Handler registry: kind → function
@@ -40,6 +42,7 @@ let rsvpScanTimer: ReturnType<typeof setInterval> | null = null;
 let webhookRetryTimer: ReturnType<typeof setInterval> | null = null;
 let webhookPruneTimer: ReturnType<typeof setInterval> | null = null;
 let retentionTimer: ReturnType<typeof setInterval> | null = null;
+let reminderTimer: ReturnType<typeof setInterval> | null = null;
 
 export function startWorker(): void {
   if (tickTimer || reclaimTimer) return;     // already running
@@ -67,6 +70,11 @@ export function startWorker(): void {
   const sweepAudit = () => { try { runAuditRetention(); } catch (e) { logErr('audit-retention', e); } };
   retentionTimer = setInterval(sweepAudit, 24 * 60 * 60 * 1000);
   setTimeout(sweepAudit, 15_000);
+  // Day-of timeline reminder dispatch (MODULE-05 ST-06): due in_app reminders
+  // become SSE broadcasts; email reminders go out once SMTP is connected.
+  const runReminders = () => { try { scanDueTimelineReminders(); } catch (e) { logErr('timeline-reminders', e); } };
+  reminderTimer = setInterval(runReminders, REMINDER_SCAN_INTERVAL_MS);
+  setTimeout(runReminders, 3_000); // initial scan shortly after boot
   scheduleNext();
 }
 
@@ -78,6 +86,7 @@ export function stopWorker(): void {
   if (webhookRetryTimer) { clearInterval(webhookRetryTimer); webhookRetryTimer = null; }
   if (webhookPruneTimer) { clearInterval(webhookPruneTimer); webhookPruneTimer = null; }
   if (retentionTimer) { clearInterval(retentionTimer); retentionTimer = null; }
+  if (reminderTimer) { clearInterval(reminderTimer); reminderTimer = null; }
 }
 
 function scheduleNext(): void {

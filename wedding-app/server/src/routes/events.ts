@@ -437,6 +437,22 @@ export async function eventRoutes(app: FastifyInstance) {
     });
     broadcastSSE(event.organization_id, "event.updated", { eventId, title: updated?.title }, req.auth!.userId);
 
+    // MODULE-05 ST-15: the emergency "broadcast announcement" must actually
+    // be broadcast (SSE + audit), not silently stored in metadata. Only fires
+    // when the announcement text is non-empty AND changed.
+    const prevMeta: Record<string, unknown> = (() => { try { return JSON.parse(event.metadata || '{}') as Record<string, unknown>; } catch { return {}; } })();
+    const prevBroadcast = typeof prevMeta.emergency_broadcast_announcement === 'string' ? prevMeta.emergency_broadcast_announcement.trim() : '';
+    const nextMeta = (patch.metadata ?? prevMeta) as Record<string, unknown>;
+    const nextBroadcast = typeof nextMeta.emergency_broadcast_announcement === 'string' ? nextMeta.emergency_broadcast_announcement.trim() : '';
+    if (nextBroadcast && nextBroadcast !== prevBroadcast) {
+      auditRepo.log({
+        organizationId: event.organization_id, actorUserId: req.auth!.userId, actorLabel: req.auth!.email,
+        action: 'event.emergency.broadcast', targetType: 'event', targetId: eventId, ip: req.ip,
+        details: { message: nextBroadcast },
+      });
+      broadcastSSE(event.organization_id, 'event.emergency_broadcast', { eventId, message: nextBroadcast, title: updated?.title }, req.auth!.userId);
+    }
+
     // Lifecycle email: when an event transitions INTO 'completed', fire the
     // thank-you automation (no-op if the org hasn't configured/enabled one or
     // has no connected SMTP integration). Idempotent — only on the transition.

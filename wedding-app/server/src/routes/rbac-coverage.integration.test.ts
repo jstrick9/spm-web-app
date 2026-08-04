@@ -181,7 +181,7 @@ describe('System role grants', () => {
     expect(coupleDef.permissions).toContain('events.view');
   });
 
-  it('staff has check-in + timeline + messaging but NOT admin', () => {
+  it('staff has check-in + timeline + messaging but NOT admin or org-wide staff management', () => {
     const staffDef = SYSTEM_ROLE_DEFINITIONS.find(r => r.key === 'staff')!;
     expect(staffDef.permissions).toContain('vendors.checkin.view');
     expect(staffDef.permissions).toContain('vendors.checkin.manage');
@@ -189,6 +189,19 @@ describe('System role grants', () => {
     expect(staffDef.permissions).toContain('messages.send');
     expect(staffDef.permissions).not.toContain('org.manage');
     expect(staffDef.permissions).not.toContain('roles.manage');
+    // MODULE-05 ST-08: the staff role manages its OWN tasks (assignee
+    // self-service) — org-wide staff management stays with owner/admin/manager.
+    expect(staffDef.permissions).toContain('staff.view');
+    expect(staffDef.permissions).not.toContain('staff.manage');
+  });
+
+  it('couple role has no timeline.view — couples use the sanitized couple-schedule', () => {
+    const coupleDef = SYSTEM_ROLE_DEFINITIONS.find(r => r.key === 'couple')!;
+    expect(coupleDef.permissions).toContain('layouts.view');
+    expect(coupleDef.permissions).toContain('guests.couple.manage');
+    // MODULE-05 ST-02: the full internal timeline (notes, vendor ids,
+    // assignments) is ops-internal; couples read couple-schedule instead.
+    expect(coupleDef.permissions).not.toContain('timeline.view');
   });
 
   it('vendor has only portal + messages + notifications', () => {
