@@ -2,6 +2,7 @@ import type { FastifyInstance } from 'fastify';
 import { broadcastWebhook } from "../webhooks/dispatcher.js";
 import { requireAuth } from '../middleware/auth.js';
 import { can } from '../lib/rbac.js';
+import { db } from '../db/database.js';
 import { sseEventsRepo } from '../db/repos/index.js';
 import { Forbidden } from '../lib/errors.js';
 
@@ -72,7 +73,7 @@ export async function sseRoutes(app: FastifyInstance) {
     const { orgId } = req.params as { orgId: string };
     if (!can(req.auth!.memberships, { organizationId: orgId }, "org.view")) throw Forbidden();
     const token = app.jwt.sign(
-      { sub: req.auth!.userId, email: req.auth!.email, memberships: req.auth!.memberships, sseOnly: true },
+      { sub: req.auth!.userId, email: req.auth!.email, memberships: req.auth!.memberships, sseOnly: true, sv: req.auth!.sessionVersion },
       { expiresIn: "5m" }
     );
     return { token, expiresIn: 300 };
@@ -87,12 +88,28 @@ export async function sseRoutes(app: FastifyInstance) {
       return reply.code(401).send({ error: 'Token required' });
     }
 
-    // Verify the JWT
-    let decoded: { userId: string; email: string; memberships: any[] };
+    // Verify the JWT — SO-03: ONLY the short-lived sseOnly token (5 min,
+    // issued by /sse-token) may be used in a URL; the main long-lived JWT
+    // must not appear in query strings / access logs.
+    let decoded: { sub: string; email?: string; memberships?: any[]; sseOnly?: boolean; sv?: number };
     try {
       decoded = app.jwt.verify(query.token) as any;
     } catch {
       return reply.code(401).send({ error: 'Invalid token' });
+    }
+    if (decoded.sseOnly !== true) {
+      return reply.code(401).send({ error: 'Use a short-lived SSE token' });
+    }
+
+    // Re-validate the user row: a disabled/suspended user's token (issued up
+    // to 5 min ago) must not keep streaming.
+    const userRow = db.prepare(`SELECT id, session_version, status FROM users WHERE id = ?`)
+      .get(decoded.sub) as { id: string; session_version: number; status: string } | undefined;
+    if (!userRow || userRow.status !== 'active') {
+      return reply.code(401).send({ error: 'user-disabled' });
+    }
+    if (userRow.session_version !== (decoded as any).sv) {
+      return reply.code(401).send({ error: 'session-invalidated' });
     }
 
     // RBAC check
@@ -130,7 +147,7 @@ export async function sseRoutes(app: FastifyInstance) {
     // Register this client for live updates
     const client: SSEClient = {
       orgId,
-      userId: decoded.userId,
+      userId: decoded.sub,
       send: (data: string) => {
         try { reply.raw.write(data); } catch { /* disconnected */ }
       },

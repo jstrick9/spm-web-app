@@ -8,6 +8,7 @@ A complete, self-hosted operating system for modern wedding venues. Built with *
 
 ```bash
 cd wedding-app
+cp .env.example .env    # set JWT_SECRET + WEDDING_SECRETS_KEY (openssl rand -hex 32)
 npm run install:all     # install server + client deps
 npm run migrate         # apply all database migrations (optional: the server
                         # auto-applies pending migrations on every boot, so a
@@ -18,6 +19,24 @@ npm run seed            # create deterministic demo data
 npm run dev:server      # Fastify on http://localhost:3000
 npm run dev:client      # Vite dev server on http://localhost:5173
 ```
+
+### Environment variables
+
+Copy `.env.example` to `.env` and fill in the required secrets (generate each
+with `openssl rand -hex 32`):
+
+- `JWT_SECRET` — signs sessions; the server refuses to start in production
+  without it.
+- `WEDDING_SECRETS_KEY` — AES-256-GCM master key that encrypts integration and
+  webhook secrets at rest. **Losing it loses every stored credential.**
+- `BASE_URL` — public origin used for payment checkout returns and portal links.
+- `LOGIN_LOCKOUT_MS`, `TRUSTED_PROXIES`, `AUDIT_RETENTION_DAYS`,
+  `WEBHOOK_DELIVERY_RETENTION_DAYS` — security/retention knobs documented in
+  the file itself.
+
+For bare-metal (non-Docker) runs, load the file with
+`export $(grep -v '^#' .env | xargs)` before starting the server. Docker
+Compose reads `.env` automatically.
 
 Login: `owner@demo.local` / `wedding123`
 

@@ -45,7 +45,7 @@ export const usersRepo = {
     return this.findById(id)!;
   },
 
-  recordFailedLogin(userId: string, lockMs = 30_000, maxFailures = 5): void {
+  recordFailedLogin(userId: string, lockMs = Number(process.env.LOGIN_LOCKOUT_MS ?? 300_000) || 300_000, maxFailures = 5): void {
     const u = this.findById(userId);
     if (!u) return;
     const next = u.failed_login_count + 1;

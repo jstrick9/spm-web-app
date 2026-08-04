@@ -13,6 +13,7 @@ declare module 'fastify' {
     auth?: {
       userId: string;
       email: string;
+      sessionVersion: number;
       memberships: Array<Membership & { roleKey: string; roleName: string; eventOrganizationId?: string }>;
     };
   }
@@ -69,6 +70,7 @@ export async function requireAuth(
   req.auth = {
     userId: userRow.id,
     email: userRow.email,
+    sessionVersion: userRow.session_version,
     memberships: [
       ...orgMems.map((m) => ({
         organizationId: m.organization_id,

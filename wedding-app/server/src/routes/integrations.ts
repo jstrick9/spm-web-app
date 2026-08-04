@@ -110,6 +110,13 @@ export async function integrationRoutes(app: FastifyInstance) {
         throw BadRequest('invalid-secrets', secParse.error.issues);
       }
 
+      // SO-02: fail with clear guidance instead of a raw 500 when the master
+      // key is unset (bare-metal dev runs without WEDDING_SECRETS_KEY).
+      // Test mode auto-generates a key (like getMasterKey), so only enforce
+      // the env var outside tests.
+      if (!process.env.WEDDING_SECRETS_KEY && process.env.NODE_ENV !== 'test') {
+        throw BadRequest('secrets-key-not-configured', 'WEDDING_SECRETS_KEY is not set. Generate one with `openssl rand -hex 32` and add it to your .env before connecting integrations.');
+      }
       const sealed = sealSecret(secParse.data);
       const row = integrationsRepo.upsert({
         organizationId: orgId,

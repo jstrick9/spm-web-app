@@ -54,3 +54,48 @@ SQLite is appropriate for the documented single-VPS, single-process deployment. 
 ## Outbound webhook egress
 
 The application validates configured URLs and resolved addresses before delivery. Also restrict outbound network access at the VPS/firewall layer to DNS plus required HTTPS destinations. Do not permit unrestricted access to private RFC1918, loopback, link-local, or cloud metadata networks.
+
+## Periodic jobs (in-process worker)
+
+The worker loop runs these automatically; verify they appear in logs after boot:
+
+| Job | Interval | Purpose |
+|---|---|---|
+| Webhook retry replay | 1s | Durable retries of failed outbound deliveries |
+| Lifecycle RSVP scan | 6h + boot | Finds events whose RSVP deadline is `offset_days` away and fires the automation |
+| Timeline reminder dispatch | 60s | Due in-app timeline reminders → SSE; email reminders → SMTP when connected |
+| Guest help-request SLA scan | 60min | Flags overdue open help requests (audit + SSE, deduped) |
+| Webhook delivery prune | 24h | `WEBHOOK_DELIVERY_RETENTION_DAYS` (default 90) |
+| Audit retention sweep | 24h | Report-only unless `AUDIT_RETENTION_DAYS` is set |
+
+## Schema migrations are automatic
+
+The server applies pending migrations on every boot (`schema_version`-tracked,
+idempotent) and **refuses to start** if a migration fails. Deploys are
+pull + restart; the manual `npm run migrate` remains available for operators
+who prefer to apply ahead of a restart. Roll back by restoring the previous
+database snapshot (migrations are forward-only).
+
+## Rotating a webhook signing secret
+
+`PATCH /api/webhooks/:id` with `{ secret: "new-value" }` re-seals the secret
+(AES-256-GCM under `WEDDING_SECRETS_KEY`); the old value is immediately
+invalid for outbound signatures and inbound verification. If you rotate
+`WEDDING_SECRETS_KEY` itself, re-encrypt stored secrets with the rotation
+script and update the key in `.env` — losing the key loses every stored
+credential.
+
+## Account lockout
+
+After 5 failed logins an account is locked for `LOGIN_LOCKOUT_MS`
+(default 300000 = 5 minutes; set in `.env`). Login is also rate-limited to
+10/min per IP. To unlock an account immediately (support action): clear
+`failed_login_count` and `locked_until` on the user row, or wait out the
+window.
+
+## Deployment gate
+
+`./test.sh` (repo-root-relative) runs the full gate: server + client
+typecheck, unit suites, and client production build. `deploy.sh` wraps the
+git-flow (feature → develop → staging → main) and runs the gate before every
+merge. Both scripts are self-locating and work from any checkout.

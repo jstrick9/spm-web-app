@@ -1,8 +1,15 @@
 #!/bin/bash
-export PATH="/opt/homebrew/opt/node@20/bin:/opt/homebrew/bin:$PATH"
-REPO="$HOME/ai-workspace/spm-web-app"
+# Self-locating deploy tool: derives the repo root from this script's own
+# location so it works from any checkout on any machine.
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+if command -v node >/dev/null 2>&1; then
+  :
+elif [ -x /opt/homebrew/opt/node@20/bin/node ]; then
+  export PATH="/opt/homebrew/opt/node@20/bin:/opt/homebrew/bin:$PATH"
+fi
+REPO="$SCRIPT_DIR"
 APP="$REPO/wedding-app"
-cd $REPO
+cd "$REPO"
 
 print_header() {
   echo ""
