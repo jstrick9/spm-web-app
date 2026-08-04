@@ -175,8 +175,8 @@ export function EventInvitesTab({ eventId }: Props) {
                     <div className="flex justify-between items-center">
                       <Badge variant="outline" className="text-[10px] uppercase bg-surface">{block.type}</Badge>
                       <div className="flex gap-1">
-                        <button onClick={() => moveBlock(i, 'up')} disabled={i === 0} className="p-1 hover:bg-surface rounded text-fg-muted disabled:opacity-30"><ChevronUp className="w-3 h-3" /></button>
-                        <button onClick={() => moveBlock(i, 'down')} disabled={i === blocks.length - 1} className="p-1 hover:bg-surface rounded text-fg-muted disabled:opacity-30"><ChevronDown className="w-3 h-3" /></button>
+                        <button onClick={() => moveBlock(i, 'up')} disabled={i === 0} aria-label="Move block up" className="p-1 hover:bg-surface rounded text-fg-muted disabled:opacity-30"><ChevronUp className="w-3 h-3" /></button>
+                        <button onClick={() => moveBlock(i, 'down')} disabled={i === blocks.length - 1} aria-label="Move block down" className="p-1 hover:bg-surface rounded text-fg-muted disabled:opacity-30"><ChevronDown className="w-3 h-3" /></button>
                         <button onClick={() => removeBlock(block.id)} className="p-1 hover:bg-danger/10 hover:text-danger rounded text-fg-muted"><Trash2 className="w-3 h-3" /><span className="sr-only">Remove block</span></button>
                       </div>
                     </div>

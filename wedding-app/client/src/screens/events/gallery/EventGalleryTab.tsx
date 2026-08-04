@@ -195,7 +195,7 @@ export function EventGalleryTab({ eventId }: Props) {
           className="fixed inset-0 z-50 bg-black/80 flex items-center justify-center p-8"
           onClick={() => setLightbox(null)}
         >
-          <button className="absolute top-4 right-4 text-white hover:text-gray-300" onClick={() => setLightbox(null)}>
+          <button className="absolute top-4 right-4 text-white hover:text-gray-300" onClick={() => setLightbox(null)} aria-label="Close image preview">
             <X className="h-6 w-6" />
           </button>
           <img

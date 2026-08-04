@@ -281,7 +281,7 @@ export function LodgingBuilder({ eventId, venueId, venueName, venueWidth, venueH
             <Button size="sm" onClick={() => onSave(floors)} className="bg-success hover:bg-success/90 font-bold">
               Save Lodging
             </Button>
-            <button onClick={onClose} className="p-1.5 hover:bg-white/10 rounded-lg text-white/80">
+            <button onClick={onClose} className="p-1.5 hover:bg-white/10 rounded-lg text-white/80" aria-label="Close lodging editor">
               <X className="h-5 w-5" />
             </button>
           </div>

@@ -361,7 +361,7 @@ export function VenueBuilder({ orgId }: Props) {
     if (!dataUrl) { toast({ title: 'Export unavailable', variant: 'destructive' }); return; }
     const popup = window.open('', '_blank'); if (!popup) return;
     const title = String(selectedVenue?.name || 'Venue scaffold').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c] || c));
-    popup.document.write(`<!doctype html><title>${title}</title><style>body{font-family:system-ui;padding:24px}img{max-width:100%;height:auto}</style><h1>${title}</h1><p>${selectedVenue?.width || ''} × ${selectedVenue?.height || ''} ${selectedVenue?.unit_system === 'metric' ? 'm' : 'ft'} · revision ${selectedVenue?.revision || 1}</p><img src="${dataUrl}" onload="window.print()">`);
+    popup.document.write(`<!doctype html><title>${title}</title><style>body{font-family:system-ui;padding:24px}img{max-width:100%;height:auto}</style><h1>${title}</h1><p>${selectedVenue?.width || ''} × ${selectedVenue?.height || ''} ${selectedVenue?.unit_system === 'metric' ? 'm' : 'ft'} · revision ${selectedVenue?.revision || 1}</p><img src="${dataUrl}" alt="${title}" onload="window.print()">`);
     popup.document.close();
   };
 

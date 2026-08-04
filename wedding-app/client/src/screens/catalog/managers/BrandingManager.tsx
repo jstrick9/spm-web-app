@@ -253,35 +253,35 @@ export function BrandingManager({ orgId }: { orgId: string }) {
                   <div>
                     <Label className="text-[10px]">Brand Accent</Label>
                     <div className="flex items-center gap-2 mt-1.5">
-                      <input type="color" value={brandColor} onChange={(e) => setBrandColor(e.target.value)} className="h-9 w-12 border rounded cursor-pointer" />
+                      <input type="color" value={brandColor} aria-label="Brand color" onChange={(e) => setBrandColor(e.target.value)} className="h-9 w-12 border rounded cursor-pointer" />
                       <Input value={brandColor} onChange={(e) => setBrandColor(e.target.value)} className="h-9 text-[10px] uppercase font-mono" />
                     </div>
                   </div>
                   <div>
                     <Label className="text-[10px]">Background</Label>
                     <div className="flex items-center gap-2 mt-1.5">
-                      <input type="color" value={bgColor} onChange={(e) => setBgColor(e.target.value)} className="h-9 w-12 border rounded cursor-pointer" />
+                      <input type="color" value={bgColor} aria-label="Background color" onChange={(e) => setBgColor(e.target.value)} className="h-9 w-12 border rounded cursor-pointer" />
                       <Input value={bgColor} onChange={(e) => setBgColor(e.target.value)} className="h-9 text-[10px] uppercase font-mono" />
                     </div>
                   </div>
                   <div>
                     <Label className="text-[10px]">Header Text</Label>
                     <div className="flex items-center gap-2 mt-1.5">
-                      <input type="color" value={headerTextColor} onChange={(e) => setHeaderTextColor(e.target.value)} className="h-9 w-12 border rounded cursor-pointer" />
+                      <input type="color" value={headerTextColor} aria-label="Header text color" onChange={(e) => setHeaderTextColor(e.target.value)} className="h-9 w-12 border rounded cursor-pointer" />
                       <Input value={headerTextColor} onChange={(e) => setHeaderTextColor(e.target.value)} className="h-9 text-[10px] uppercase font-mono" />
                     </div>
                   </div>
                   <div>
                     <Label className="text-[10px]">Body Text</Label>
                     <div className="flex items-center gap-2 mt-1.5">
-                      <input type="color" value={bodyTextColor} onChange={(e) => setBodyTextColor(e.target.value)} className="h-9 w-12 border rounded cursor-pointer" />
+                      <input type="color" value={bodyTextColor} aria-label="Body text color" onChange={(e) => setBodyTextColor(e.target.value)} className="h-9 w-12 border rounded cursor-pointer" />
                       <Input value={bodyTextColor} onChange={(e) => setBodyTextColor(e.target.value)} className="h-9 text-[10px] uppercase font-mono" />
                     </div>
                   </div>
                   <div>
                     <Label className="text-[10px]">Accent Text</Label>
                     <div className="flex items-center gap-2 mt-1.5">
-                      <input type="color" value={accentTextColor} onChange={(e) => setAccentTextColor(e.target.value)} className="h-9 w-12 border rounded cursor-pointer" />
+                      <input type="color" value={accentTextColor} aria-label="Accent text color" onChange={(e) => setAccentTextColor(e.target.value)} className="h-9 w-12 border rounded cursor-pointer" />
                       <Input value={accentTextColor} onChange={(e) => setAccentTextColor(e.target.value)} className="h-9 text-[10px] uppercase font-mono" />
                     </div>
                   </div>

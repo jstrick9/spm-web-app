@@ -47,6 +47,7 @@ export function VendorTourOverlay({ tourCompleted, tourStep, tourSteps, handleNe
               onClick={handleCompleteTour} 
               className="absolute right-3.5 top-3.5 text-fg-inverse/50 hover:text-fg-inverse"
               title="Dismiss Walkthrough"
+              aria-label="Dismiss walkthrough tour"
             >
               <X className="w-4 h-4" />
             </button>

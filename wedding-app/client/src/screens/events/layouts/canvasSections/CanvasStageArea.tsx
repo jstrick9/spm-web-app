@@ -73,7 +73,7 @@ export function CanvasStageArea({ routePoints, setRoutePoints, showHelpGuide, se
             <div className="absolute top-4 left-1/2 -translate-x-1/2 z-20 bg-brand-soft border border-brand text-brand-strong px-4 py-2 rounded-full shadow-lg flex items-center gap-2 animate-in slide-in-from-top-4 font-bold">
               <ArrowLeftRight className="w-4 h-4 animate-bounce" />
               <span className="text-sm">Viewing Revision {viewingVersion.revision} Diff Overlay</span>
-              <button onClick={() => setViewingVersion(null)} className="ml-2 bg-brand/20 p-1 rounded-full hover:bg-brand/30 transition-colors"><X className="w-3 h-3" /></button>
+              <button onClick={() => setViewingVersion(null)} aria-label="Close revision diff overlay" className="ml-2 bg-brand/20 p-1 rounded-full hover:bg-brand/30 transition-colors"><X className="w-3 h-3" /></button>
             </div>
           )}
 

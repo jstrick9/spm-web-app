@@ -214,7 +214,7 @@ export function CanvasSidebar({ guestSearch, setGuestSearch, items, selectedId, 
                      
                      return (
                        <div key={item.id} className={cn("flex items-center gap-2 p-2 rounded text-xs border", isSelected ? "bg-brand-soft border-brand text-brand-strong" : "bg-surface border-border")}>
-                          <button className="text-fg-subtle hover:text-fg cursor-grab active:cursor-grabbing"><GripVertical className="w-3 h-3" /></button>
+                          <button className="text-fg-subtle hover:text-fg cursor-grab active:cursor-grabbing" aria-label={`Drag ${item.label || item.type}`}><GripVertical className="w-3 h-3" /></button>
                           <span className="truncate flex-1 font-semibold cursor-pointer" onClick={() => setSelectedId(item.id)}>{item.label || item.type}</span>
                           
                           <div className="flex flex-col gap-1 items-end">
