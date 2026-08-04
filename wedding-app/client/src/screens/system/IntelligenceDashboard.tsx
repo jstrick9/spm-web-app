@@ -474,7 +474,7 @@ export function SmartRateAdvisoryCard({ seasonalDemand }: { seasonalDemand: any[
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-xs font-semibold text-fg">
            
            {/* Section A: Demand Insights */}
-           <div className="md:col-span-2 space-y-3 bg-[#FDFBF7] p-4 rounded-xl border border-[#e1d5c9] shadow-sm">
+           <div className="md:col-span-2 space-y-3 bg-paper p-4 rounded-xl border border-paper-border shadow-sm">
               <h4 className="font-serif font-bold text-brand uppercase tracking-wider border-b pb-1">Demand Predictions</h4>
               <div className="space-y-2 text-fg-muted font-medium leading-relaxed">
                  <p>
@@ -489,7 +489,7 @@ export function SmartRateAdvisoryCard({ seasonalDemand }: { seasonalDemand: any[
            </div>
 
            {/* Section B: Yield Calculator */}
-           <div className="bg-white p-4 rounded-xl border border-[#e1d5c9] space-y-3 shadow-sm">
+           <div className="bg-white p-4 rounded-xl border border-paper-border space-y-3 shadow-sm">
               <h4 className="font-serif font-bold text-fg border-b pb-1">Yield Optimizer</h4>
               <div className="space-y-2">
                  <label className="text-[10px] text-fg-subtle block">Your Weekend Base Rate ($)</label>
@@ -497,7 +497,7 @@ export function SmartRateAdvisoryCard({ seasonalDemand }: { seasonalDemand: any[
                    type="number" 
                    value={baseRate} 
                    onChange={e => setBaseRate(parseInt(e.target.value) || 0)} 
-                   className="h-8 text-xs bg-surface border-[#e1d5c9] font-bold" 
+                   className="h-8 text-xs bg-surface border-paper-border font-bold" 
                  />
                  <div className="space-y-1 text-[11px] pt-1 text-fg-muted font-medium">
                     <div className="flex justify-between">

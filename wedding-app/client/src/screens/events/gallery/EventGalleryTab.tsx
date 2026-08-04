@@ -15,6 +15,7 @@ import { Card, CardContent } from '../../../ui/Card';
 import { Badge } from '../../../ui/Badge';
 import { Skeleton } from '../../../ui/Skeleton';
 import { useToast } from '../../../ui/Toast';
+import { usePrompt } from '../../../ui/usePrompt';
 import { usePermission } from '../../../lib/usePermission';
 import { cn } from '../../../ui/lib/cn';
 
@@ -23,6 +24,7 @@ interface Props { eventId: string }
 const CATEGORIES = ['florals', 'linens', 'lighting', 'vibe', 'ceremony', 'reception', 'other'] as const;
 
 export function EventGalleryTab({ eventId }: Props) {
+  const { ask, askConfirm, promptNode } = usePrompt();
   const { toast } = useToast();
   const qc = useQueryClient();
   const canManage = usePermission('gallery.manage');
@@ -82,6 +84,7 @@ export function EventGalleryTab({ eventId }: Props) {
 
   return (
     <div className="space-y-5">
+      {promptNode}
       {/* Toolbar */}
       <div className="flex items-center justify-between flex-wrap gap-3">
         <div className="flex items-center gap-1.5 flex-wrap">
@@ -161,7 +164,7 @@ export function EventGalleryTab({ eventId }: Props) {
                 </button>
                 {canManage && (
                   <button
-                    onClick={() => { if (window.confirm('Remove this image?')) deleteMutation.mutate(img.id); }}
+                    onClick={async () => { if (await askConfirm({ title: 'Remove this image?', destructive: true })) deleteMutation.mutate(img.id); }}
                     className="p-1 rounded bg-black/50 text-white hover:bg-red-600" aria-label="Remove image"
                   >
                     <X className="h-3 w-3" aria-hidden="true" />

@@ -221,7 +221,7 @@ export function GuestPortalManager({ orgId }: { orgId: string }) {
           </div>
 
           {/* White-Label Configurations Card (Phase 4) */}
-          <div className="bg-white p-4 rounded-xl border border-[#e1d5c9] space-y-4 font-semibold text-xs">
+          <div className="bg-white p-4 rounded-xl border border-paper-border space-y-4 font-semibold text-xs">
             <h4 className="text-xs font-bold text-fg flex items-center gap-1.5 font-serif text-brand">
               🛡️ Client White-Label Parameters
             </h4>
@@ -237,22 +237,22 @@ export function GuestPortalManager({ orgId }: { orgId: string }) {
                   id="remove-branding"
                   checked={removePlatformBranding}
                   onChange={(e) => setRemovePlatformBranding(e.target.checked)}
-                  className="rounded border-[#e1d5c9] text-brand accent-brand h-4 w-4 cursor-pointer"
+                  className="rounded border-paper-border text-brand accent-brand h-4 w-4 cursor-pointer"
                 />
               </div>
 
               <div className="space-y-3 pt-2 border-t border-border/40">
                  <div>
                     <Label htmlFor="custom-copyright" className="text-[10px] text-fg-subtle">Custom Copyright String</Label>
-                    <Input id="custom-copyright" placeholder="e.g. © 2026 Seven Paths Manor. All rights reserved." value={customCopyrightString} onChange={e => setCustomCopyrightString(e.target.value)} className="h-9 mt-1 text-xs bg-surface border-[#e1d5c9]" />
+                    <Input id="custom-copyright" placeholder="e.g. © 2026 Seven Paths Manor. All rights reserved." value={customCopyrightString} onChange={e => setCustomCopyrightString(e.target.value)} className="h-9 mt-1 text-xs bg-surface border-paper-border" />
                  </div>
                  <div>
                     <Label htmlFor="map-directions" className="text-[10px] text-fg-subtle">Custom Map Directions Link</Label>
-                    <Input id="map-directions" placeholder="e.g. https://maps.google.com/?q=Seven+Paths+Manor" value={mapDirectionsLink} onChange={e => setMapDirectionsLink(e.target.value)} className="h-9 mt-1 text-xs bg-surface border-[#e1d5c9]" />
+                    <Input id="map-directions" placeholder="e.g. https://maps.google.com/?q=Seven+Paths+Manor" value={mapDirectionsLink} onChange={e => setMapDirectionsLink(e.target.value)} className="h-9 mt-1 text-xs bg-surface border-paper-border" />
                  </div>
                  <div>
                     <Label htmlFor="support-email" className="text-[10px] text-fg-subtle">Support Email Override</Label>
-                    <Input id="support-email" type="email" placeholder="coordinator@sevenpathsmanor.com" value={supportEmailOverride} onChange={e => setSupportEmailOverride(e.target.value)} className="h-9 mt-1 text-xs bg-surface border-[#e1d5c9]" />
+                    <Input id="support-email" type="email" placeholder="coordinator@sevenpathsmanor.com" value={supportEmailOverride} onChange={e => setSupportEmailOverride(e.target.value)} className="h-9 mt-1 text-xs bg-surface border-paper-border" />
                  </div>
               </div>
             </div>
@@ -261,7 +261,7 @@ export function GuestPortalManager({ orgId }: { orgId: string }) {
 
         <div className="space-y-4">
           <Label className="text-xs font-bold uppercase tracking-wider text-fg-subtle">Visual Guest Portal Simulation</Label>
-          <div className="rounded-2xl border border-border bg-[#FDFBF7] shadow-md p-6 min-h-[400px] flex flex-col justify-between font-serif">
+          <div className="rounded-2xl border border-border bg-paper shadow-md p-6 min-h-[400px] flex flex-col justify-between font-serif">
             <div className="space-y-4">
               <div className="border-b border-border/40 pb-3 flex justify-between items-center text-xs text-fg-subtle">
                 <span>🔒 RSVP Security Enabled</span>

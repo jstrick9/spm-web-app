@@ -30,6 +30,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "../../../ui/Card";
 import { Skeleton } from "../../../ui/Skeleton";
 import { Badge } from "../../../ui/Badge";
 import { useToast } from "../../../ui/Toast";
+import { usePrompt } from "../../../ui/usePrompt";
 import { DataTable, type Column } from "../../../ui/DataTable";
 import { Link } from "lucide-react";
 import { SdkVendor } from "../../../sdk/types";
@@ -49,6 +50,7 @@ interface Props {
 import { VendorOperationsBoard, VendorLayoutPacketReview, PreferredVendorComplianceDashboard, VendorExceptionMetric, VendorManagerPanel, VendorActionList } from './vendorPanels';
 
 export function EventVendorsTab({ eventId, organizationId }: Props) {
+  const { ask, promptNode } = usePrompt();
   const { toast } = useToast();
   const qc = useQueryClient();
   const [search, setSearch] = useState("");
@@ -572,9 +574,9 @@ export function EventVendorsTab({ eventId, organizationId }: Props) {
                 <button
                   type="button"
                   disabled={coiReview.isPending}
-                  onClick={() => {
-                    const note = window.prompt("What changes are needed on this COI?");
-                    coiReview.mutate({ vendorId: v.id, status: "changes_requested", note: note || undefined });
+                  onClick={async () => {
+                    const note = await ask({ title: "Request COI changes", label: "What changes are needed on this COI?", multiline: true, required: true });
+                    if (note) coiReview.mutate({ vendorId: v.id, status: "changes_requested", note });
                   }}
                   className="text-[9px] font-bold text-warning hover:underline disabled:opacity-50"
                 >
@@ -809,6 +811,7 @@ export function EventVendorsTab({ eventId, organizationId }: Props) {
 
   return (
     <div className="space-y-6">
+      {promptNode}
       <Card className="border-brand/20 bg-brand-soft/10">
         <CardContent className="p-4 space-y-3">
           <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">

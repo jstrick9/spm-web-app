@@ -15,8 +15,10 @@ import { Label } from '../../../ui/Label';
 import { Skeleton } from '../../../ui/Skeleton';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '../../../ui/Tabs';
 import { useToast } from '../../../ui/Toast';
+import { usePrompt } from '../../../ui/usePrompt';
 
 export function DecorManager({ orgId }: { orgId: string }) {
+  const { askConfirm, promptNode } = usePrompt();
   const qc = useQueryClient();
   const { toast } = useToast();
   
@@ -182,6 +184,7 @@ export function DecorManager({ orgId }: { orgId: string }) {
 
   return (
     <div className="space-y-6">
+      {promptNode}
       {/* Tab Segment Selector */}
       <div className="flex border-b border-border gap-2">
         <button
@@ -353,7 +356,7 @@ export function DecorManager({ orgId }: { orgId: string }) {
                 const spec = typeof it.spec === 'string' ? JSON.parse(it.spec || '{}') : (it.spec || {});
                 const mappedCategory = categories.find((c: any) => c.id === it.category_id);
                 return (
-                  <Card key={it.id} className="border border-border p-3.5 flex items-center justify-between gap-3 bg-[#FDFBF7] shadow-sm">
+                  <Card key={it.id} className="border border-border p-3.5 flex items-center justify-between gap-3 bg-paper shadow-sm">
                     <div className="flex items-center gap-3">
                       {it.image_path ? (
                         <img src={it.image_path} alt={it.name} className="h-12 w-12 object-cover rounded-md border border-border shadow-sm" />
@@ -400,7 +403,7 @@ export function DecorManager({ orgId }: { orgId: string }) {
                         variant="ghost"
                         size="icon"
                         className="h-8 w-8 text-danger hover:bg-danger/10"
-                        onClick={() => { if (window.confirm(`Delete ${it.name}? This decor item cannot be restored.`)) deleteItemMutation.mutate(it.id); }}
+                        onClick={async () => { if (await askConfirm({ title: `Delete ${it.name}?`, description: 'This decor item cannot be restored.', destructive: true })) deleteItemMutation.mutate(it.id); }}
                       >
                         <Trash2 className="w-4 h-4" />
                       </Button>
@@ -454,7 +457,7 @@ export function DecorManager({ orgId }: { orgId: string }) {
               </div>
             ) : (
               categories.map((c: any) => (
-                <Card key={c.id} className="border border-border p-3.5 flex items-center justify-between gap-3 bg-[#FDFBF7] shadow-sm">
+                <Card key={c.id} className="border border-border p-3.5 flex items-center justify-between gap-3 bg-paper shadow-sm">
                   <div className="flex items-center gap-3">
                     <span className="text-2xl">{c.icon || '🌸'}</span>
                     <div>
@@ -466,7 +469,7 @@ export function DecorManager({ orgId }: { orgId: string }) {
                     variant="ghost"
                     size="icon"
                     className="h-8 w-8 text-danger hover:bg-danger/10"
-                    onClick={() => { if (window.confirm(`Delete ${c.name}? Decor items may need to be reassigned.`)) deleteCategoryMutation.mutate(c.id); }}
+                    onClick={async () => { if (await askConfirm({ title: `Delete ${c.name}?`, description: 'Decor items may need to be reassigned.', destructive: true })) deleteCategoryMutation.mutate(c.id); }}
                   >
                     <Trash2 className="w-4 h-4" />
                   </Button>

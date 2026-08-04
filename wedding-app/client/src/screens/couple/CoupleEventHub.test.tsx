@@ -72,6 +72,26 @@ describe('CoupleEventHub', () => {
   });
 
   // MODULE-07 CP-05: couples can remove their own documents.
+  it('uploads a real chosen file (not only the sample)', async () => {
+    render(<CoupleEventHub eventId="e1" />, { wrapper: wrapper() });
+    await waitFor(() => {
+      expect(screen.getByText('menu.pdf')).toBeTruthy();
+    });
+    const file = new File(['%PDF-1.4 test'], 'contract.pdf', { type: 'application/pdf' });
+    const input = screen.getByLabelText(/choose a document file/i) as HTMLInputElement;
+    fireEvent.change(input, { target: { files: [file] } });
+    await waitFor(() => {
+      expect((screen.getByPlaceholderText('Filename') as HTMLInputElement).value).toBe('contract.pdf');
+    });
+    fireEvent.click(screen.getByRole('button', { name: /^Upload$/ }));
+    await waitFor(() => {
+      const call = (sdk.couple.uploadDocument as any).mock.calls[0];
+      expect(call[1].filename).toBe('contract.pdf');
+      expect(call[1].dataUri.startsWith('data:application/pdf;base64,')).toBe(true);
+    });
+  });
+
+  // MODULE-07 CP-05: couples can remove their own documents.
   it('removes a document via the delete button', async () => {
     render(<CoupleEventHub eventId="e1" />, { wrapper: wrapper() });
     await waitFor(() => {

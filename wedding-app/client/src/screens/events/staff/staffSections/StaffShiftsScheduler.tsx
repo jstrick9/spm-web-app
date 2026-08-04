@@ -5,6 +5,7 @@ import { Badge } from '../../../../ui/Badge';
 import { Input } from '../../../../ui/Input';
 import { Label } from '../../../../ui/Label';
 import { cn } from '../../../../ui/lib/cn';
+import { usePrompt } from '../../../../ui/usePrompt';
 
 const ROLE_COLORS: Record<string, string> = {
   coordinator: 'bg-amber-100 text-amber-800 border-amber-200',
@@ -54,8 +55,10 @@ export interface StaffShiftsSchedulerProps {
 }
 
 export function StaffShiftsScheduler({ newShiftRole, setNewShiftRole, addShiftOpen, setAddShiftOpen, newShiftStaffId, setNewShiftStaffId, newShiftStartsAt, setNewShiftStartsAt, newShiftEndsAt, setNewShiftEndsAt, newShiftNotes, setNewShiftNotes, newShiftContactName, setNewShiftContactName, newShiftContactPhone, setNewShiftContactPhone, newShiftContactEmail, setNewShiftContactEmail, newShiftRadioChannel, setNewShiftRadioChannel, newShiftHandoffNotes, setNewShiftHandoffNotes, newShiftAvailabilityOverrideReason, setNewShiftAvailabilityOverrideReason, meData, createShiftMutation, deleteShiftMutation, clockInMutation, clockOutMutation, shifts, members, hasCoordinator, hasSetup, hasCleaning, canManage = true }: StaffShiftsSchedulerProps) {
+  const { ask, askConfirm, promptNode } = usePrompt();
   return (
     <>
+      {promptNode}
         <div className="space-y-6 animate-in fade-in duration-200">
            
            {/* Shift Scheduler Title */}
@@ -70,7 +73,7 @@ export function StaffShiftsScheduler({ newShiftRole, setNewShiftRole, addShiftOp
 
            {/* Dynamic Role Coverage Auditor */}
            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-              <Card className="bg-white border-[#e1d5c9]">
+              <Card className="bg-white border-paper-border">
                  <CardContent className="p-4 flex items-center justify-between gap-3 text-xs">
                     <div>
                        <div className="text-[10px] text-fg-subtle uppercase font-bold tracking-wider">Lead Coordinator</div>
@@ -82,7 +85,7 @@ export function StaffShiftsScheduler({ newShiftRole, setNewShiftRole, addShiftOp
                  </CardContent>
               </Card>
 
-              <Card className="bg-white border-[#e1d5c9]">
+              <Card className="bg-white border-paper-border">
                  <CardContent className="p-4 flex items-center justify-between gap-3 text-xs">
                     <div>
                        <div className="text-[10px] text-fg-subtle uppercase font-bold tracking-wider">Setup Crew</div>
@@ -94,7 +97,7 @@ export function StaffShiftsScheduler({ newShiftRole, setNewShiftRole, addShiftOp
                  </CardContent>
               </Card>
 
-              <Card className="bg-white border-[#e1d5c9]">
+              <Card className="bg-white border-paper-border">
                  <CardContent className="p-4 flex items-center justify-between gap-3 text-xs">
                     <div>
                        <div className="text-[10px] text-fg-subtle uppercase font-bold tracking-wider">Cleaning Crew</div>
@@ -130,7 +133,7 @@ export function StaffShiftsScheduler({ newShiftRole, setNewShiftRole, addShiftOp
                                 const isClockedIn = s.clocked_in_at && !s.clocked_out_at;
                                 const isClockedOut = s.clocked_in_at && s.clocked_out_at;
                                 return (
-                                   <div key={s.id} className="bg-white p-4 rounded-xl border border-[#e1d5c9] flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 font-semibold text-xs text-fg">
+                                   <div key={s.id} className="bg-white p-4 rounded-xl border border-paper-border flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 font-semibold text-xs text-fg">
                                       <div>
                                          <div className="flex gap-2 items-center">
                                             <Badge className={cn("py-0.5 px-2 font-bold tracking-tight rounded-full uppercase text-[9px]", ROLE_COLORS[s.role] || ROLE_COLORS.other)}>
@@ -191,8 +194,8 @@ export function StaffShiftsScheduler({ newShiftRole, setNewShiftRole, addShiftOp
                     )}
 
                     {/* Live On-Site Crew Roster */}
-                    <Card className="bg-white border-[#e1d5c9] shadow-sm">
-                       <CardHeader className="pb-2 border-b border-[#e1d5c9]/50 flex flex-row items-center justify-between">
+                    <Card className="bg-white border-paper-border shadow-sm">
+                       <CardHeader className="pb-2 border-b border-paper-border/50 flex flex-row items-center justify-between">
                           <div>
                              <CardTitle className="font-serif font-bold text-sm text-fg flex items-center gap-1.5">
                                 👥 On-Site Crew Roster (Live)
@@ -201,7 +204,7 @@ export function StaffShiftsScheduler({ newShiftRole, setNewShiftRole, addShiftOp
                                 Real-time operations staffing log.
                              </CardDescription>
                           </div>
-                          <Badge variant="outline" className="bg-[#FDFBF7] text-brand border-[#e1d5c9] font-black text-xs px-2.5 py-0.5">
+                          <Badge variant="outline" className="bg-paper text-brand border-paper-border font-black text-xs px-2.5 py-0.5">
                              {liveOnSiteCrew.length} Active Crew On-Site
                           </Badge>
                        </CardHeader>
@@ -216,12 +219,12 @@ export function StaffShiftsScheduler({ newShiftRole, setNewShiftRole, addShiftOp
                                 return (
                                    <div key={s.id} className={cn(
                                       "p-3 rounded-xl border flex items-center justify-between gap-3 font-semibold text-xs text-fg transition-all",
-                                      isClockedIn ? "border-success bg-emerald-50/20 shadow-xs" : "border-[#e1d5c9] bg-[#FDFBF7]/20"
+                                      isClockedIn ? "border-success bg-emerald-50/20 shadow-xs" : "border-paper-border bg-paper/20"
                                    )}>
                                       <div className="flex items-center gap-2.5">
                                          <div className={cn(
                                             "h-8 w-8 rounded-full flex items-center justify-center text-xs font-serif shadow-xs border",
-                                            isClockedIn ? "bg-success/20 text-success border-success/30 animate-pulse" : "bg-surface-2 text-fg-subtle border-[#e1d5c9]"
+                                            isClockedIn ? "bg-success/20 text-success border-success/30 animate-pulse" : "bg-surface-2 text-fg-subtle border-paper-border"
                                          )}>
                                             {name.charAt(0).toUpperCase()}
                                          </div>
@@ -268,7 +271,7 @@ export function StaffShiftsScheduler({ newShiftRole, setNewShiftRole, addShiftOp
 
            {/* Schedule Shift Form */}
            {addShiftOpen && (
-              <div className="bg-white p-5 rounded-2xl border border-[#e1d5c9] space-y-4 shadow-md font-semibold text-xs text-fg animate-in slide-in-from-top-4">
+              <div className="bg-white p-5 rounded-2xl border border-paper-border space-y-4 shadow-md font-semibold text-xs text-fg animate-in slide-in-from-top-4">
                  <h4 className="text-xs font-bold text-fg uppercase tracking-wider font-serif border-b pb-2 flex items-center gap-1.5 text-brand">
                     <Sparkles className="w-4 h-4 text-brand animate-pulse" /> Create Crew Shift Assignment
                  </h4>
@@ -277,7 +280,7 @@ export function StaffShiftsScheduler({ newShiftRole, setNewShiftRole, addShiftOp
                     <div className="sm:col-span-2">
                        <Label className="text-[10px] text-fg-subtle">Assigned Staff Member</Label>
                        <select
-                         className="h-9 w-full rounded-lg border border-[#e1d5c9] bg-surface px-2 text-xs mt-1 font-semibold"
+                         className="h-9 w-full rounded-lg border border-paper-border bg-surface px-2 text-xs mt-1 font-semibold"
                          value={newShiftStaffId}
                          onChange={(e) => setNewShiftStaffId(e.target.value)}
                        >
@@ -291,7 +294,7 @@ export function StaffShiftsScheduler({ newShiftRole, setNewShiftRole, addShiftOp
                     <div>
                        <Label className="text-[10px] text-fg-subtle">Role / Division</Label>
                        <select
-                         className="h-9 w-full rounded-lg border border-[#e1d5c9] bg-surface px-2 text-xs mt-1 font-semibold"
+                         className="h-9 w-full rounded-lg border border-paper-border bg-surface px-2 text-xs mt-1 font-semibold"
                          value={newShiftRole}
                          onChange={(e) => setNewShiftRole(e.target.value as any)}
                        >
@@ -305,39 +308,39 @@ export function StaffShiftsScheduler({ newShiftRole, setNewShiftRole, addShiftOp
 
                     <div>
                        <Label className="text-[10px] text-fg-subtle">Shift Notes</Label>
-                       <Input value={newShiftNotes} onChange={e => setNewShiftNotes(e.target.value)} placeholder="Assign to East Lawn..." className="h-9 mt-1 text-xs border-[#e1d5c9]" />
+                       <Input value={newShiftNotes} onChange={e => setNewShiftNotes(e.target.value)} placeholder="Assign to East Lawn..." className="h-9 mt-1 text-xs border-paper-border" />
                     </div>
 
                     <div>
                        <Label className="text-[10px] text-fg-subtle">Contact Name</Label>
-                       <Input value={newShiftContactName} onChange={e => setNewShiftContactName(e.target.value)} placeholder="Radio lead" className="h-9 mt-1 text-xs border-[#e1d5c9]" />
+                       <Input value={newShiftContactName} onChange={e => setNewShiftContactName(e.target.value)} placeholder="Radio lead" className="h-9 mt-1 text-xs border-paper-border" />
                     </div>
                     <div>
                        <Label className="text-[10px] text-fg-subtle">Phone / SMS</Label>
-                       <Input value={newShiftContactPhone} onChange={e => setNewShiftContactPhone(e.target.value)} placeholder="555-210-1001" className="h-9 mt-1 text-xs border-[#e1d5c9]" />
+                       <Input value={newShiftContactPhone} onChange={e => setNewShiftContactPhone(e.target.value)} placeholder="555-210-1001" className="h-9 mt-1 text-xs border-paper-border" />
                     </div>
                     <div>
                        <Label className="text-[10px] text-fg-subtle">Email</Label>
-                       <Input value={newShiftContactEmail} onChange={e => setNewShiftContactEmail(e.target.value)} placeholder="lead@example.com" className="h-9 mt-1 text-xs border-[#e1d5c9]" />
+                       <Input value={newShiftContactEmail} onChange={e => setNewShiftContactEmail(e.target.value)} placeholder="lead@example.com" className="h-9 mt-1 text-xs border-paper-border" />
                     </div>
                     <div>
                        <Label className="text-[10px] text-fg-subtle">Radio Channel</Label>
-                       <Input value={newShiftRadioChannel} onChange={e => setNewShiftRadioChannel(e.target.value)} placeholder="Ops 1" className="h-9 mt-1 text-xs border-[#e1d5c9]" />
+                       <Input value={newShiftRadioChannel} onChange={e => setNewShiftRadioChannel(e.target.value)} placeholder="Ops 1" className="h-9 mt-1 text-xs border-paper-border" />
                     </div>
                     <div>
                        <Label className="text-[10px] text-fg-subtle">Handoff Notes</Label>
-                       <Input value={newShiftHandoffNotes} onChange={e => setNewShiftHandoffNotes(e.target.value)} placeholder="Open blockers / owner notes" className="h-9 mt-1 text-xs border-[#e1d5c9]" />
-                       <Input value={newShiftAvailabilityOverrideReason} onChange={e => setNewShiftAvailabilityOverrideReason(e.target.value)} placeholder="Availability override reason (required if outside hours)" className="h-9 mt-1 text-xs border-[#e1d5c9]" />
+                       <Input value={newShiftHandoffNotes} onChange={e => setNewShiftHandoffNotes(e.target.value)} placeholder="Open blockers / owner notes" className="h-9 mt-1 text-xs border-paper-border" />
+                       <Input value={newShiftAvailabilityOverrideReason} onChange={e => setNewShiftAvailabilityOverrideReason(e.target.value)} placeholder="Availability override reason (required if outside hours)" className="h-9 mt-1 text-xs border-paper-border" />
                     </div>
 
                     <div>
                        <Label className="text-[10px] text-fg-subtle">Shift Starts At</Label>
-                       <Input type="datetime-local" value={newShiftStartsAt} onChange={e => setNewShiftStartsAt(e.target.value)} className="h-9 mt-1 text-xs border-[#e1d5c9]" />
+                       <Input type="datetime-local" value={newShiftStartsAt} onChange={e => setNewShiftStartsAt(e.target.value)} className="h-9 mt-1 text-xs border-paper-border" />
                     </div>
 
                     <div>
                        <Label className="text-[10px] text-fg-subtle">Shift Ends At</Label>
-                       <Input type="datetime-local" value={newShiftEndsAt} onChange={e => setNewShiftEndsAt(e.target.value)} className="h-9 mt-1 text-xs border-[#e1d5c9]" />
+                       <Input type="datetime-local" value={newShiftEndsAt} onChange={e => setNewShiftEndsAt(e.target.value)} className="h-9 mt-1 text-xs border-paper-border" />
                     </div>
                  </div>
 
@@ -354,14 +357,14 @@ export function StaffShiftsScheduler({ newShiftRole, setNewShiftRole, addShiftOp
            {/* Scheduled Shifts Timeline List */}
            <div className="space-y-3">
               {shifts.length === 0 ? (
-                 <div className="text-center p-12 border border-dashed border-[#e1d5c9] rounded-2xl text-xs text-fg-subtle bg-white font-serif">
+                 <div className="text-center p-12 border border-dashed border-paper-border rounded-2xl text-xs text-fg-subtle bg-white font-serif">
                     No active staff shifts scheduled for this event yet.
                  </div>
               ) : (
                  shifts.map((s: any) => {
                     const staffMember = members.find((m: any) => m.userId === s.staff_id);
                     return (
-                       <Card key={s.id} className="border-[#e1d5c9] bg-white shadow-xs p-4 flex items-center justify-between gap-4 font-semibold text-xs text-fg">
+                       <Card key={s.id} className="border-paper-border bg-white shadow-xs p-4 flex items-center justify-between gap-4 font-semibold text-xs text-fg">
                           <div className="flex items-center gap-3">
                              <div className="h-10 w-10 bg-brand-soft/20 text-brand rounded-full flex items-center justify-center text-lg shadow-sm border border-brand/10">
                                 <UserCheck className="w-5 h-5" />
@@ -386,8 +389,8 @@ export function StaffShiftsScheduler({ newShiftRole, setNewShiftRole, addShiftOp
                              variant="ghost" 
                              size="icon" 
                              className="h-8 w-8 text-danger hover:bg-danger/10 shrink-0"
-                             onClick={() => {
-                                if (window.confirm('Delete this staff shift?')) {
+                             onClick={async () => {
+                                if (await askConfirm({ title: 'Delete this staff shift?', destructive: true })) {
                                    deleteShiftMutation.mutate(s.id);
                                 }
                              }}

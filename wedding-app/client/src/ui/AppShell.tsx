@@ -72,6 +72,7 @@ import {
 import { drain as drainWriteQueue } from "../dual-write/writeQueue";
 
 import { NAV_ITEM_META, NAV_PERMISSION_IDS } from './appShellNavigation';
+import { usePrompt } from './usePrompt';
 
 export interface AppShellProps {
   user: SdkUser;
@@ -88,6 +89,7 @@ export function AppShell({
   onOpenCommandPalette,
   children,
 }: AppShellProps) {
+  const { ask, askConfirm, promptNode } = usePrompt();
   const branding = useBranding();
   const rawNavItems = useNavItems();
   const canManagePlatform = usePermission("platform.manage");
@@ -141,12 +143,8 @@ export function AppShell({
       .finally(() => setIsSyncingData(false));
   };
 
-  const handleClearCache = () => {
-    if (
-      window.confirm(
-        "Are you sure you want to purge local cache? This will clear local offline message logs but preserve server data.",
-      )
-    ) {
+  const handleClearCache = async () => {
+    if (await askConfirm({ title: 'Purge local cache?', description: 'This will clear local offline message logs but preserve server data.', destructive: true })) {
       toast({
         title: "Purging local caches...",
         description: "Purged 14.2 MB of local assets.",
@@ -235,6 +233,7 @@ export function AppShell({
 
   return (
     <div className={cn("min-h-screen bg-bg text-fg pb-9 print:min-h-0 print:bg-surface print:text-black", showDayOfShell && "pb-28 md:pb-24", largeOutdoorType && "text-[18px] md:text-[17px]")}>
+      {promptNode}
       {/* Skip-to-main accessibility link */}
       <a
         href="#main-content"

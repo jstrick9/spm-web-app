@@ -50,8 +50,8 @@ export interface PortalAccessSecurityCardProps {
 
 export function PortalAccessSecurityCard({ hasPassword, newPassword, setNewPassword, accessStartsAt, setAccessStartsAt, accessEndsAt, setAccessEndsAt, gracePeriodHours, setGracePeriodHours, setIsDirty, ownerApprovalRequired, setOwnerApprovalRequired, data, handleTogglePassword, guests }: PortalAccessSecurityCardProps) {
   return (
-          <Card className="bg-[#FDFBF7] border border-[#e1d5c9] shadow-sm rounded-2xl overflow-hidden">
-            <CardHeader className="pb-3 border-b border-[#e1d5c9]">
+          <Card className="bg-paper border border-paper-border shadow-sm rounded-2xl overflow-hidden">
+            <CardHeader className="pb-3 border-b border-paper-border">
               <CardTitle className="text-base font-serif font-black text-brand flex items-center gap-2">
                 <Lock className="w-4 h-4 text-brand" /> Access &amp; Security
               </CardTitle>
@@ -149,7 +149,7 @@ export function PortalAccessSecurityCard({ hasPassword, newPassword, setNewPassw
                           setNewPassword(e.target.value);
                           setIsDirty(true);
                         }}
-                        className="bg-[#FDFBF7]"
+                        className="bg-paper"
                       />
                       {data?.config?.password_hash && !newPassword && (
                         <p className="text-xs text-emerald-600 font-bold">

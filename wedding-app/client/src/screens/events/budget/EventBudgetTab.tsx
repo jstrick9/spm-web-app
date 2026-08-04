@@ -20,6 +20,7 @@ import { Label } from '../../../ui/Label';
 import { StatCard } from '../../../ui/StatCard';
 import { Skeleton } from '../../../ui/Skeleton';
 import { useToast } from '../../../ui/Toast';
+import { usePrompt } from '../../../ui/usePrompt';
 import {
   Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle, DialogTrigger,
 } from '../../../ui/Dialog';
@@ -37,6 +38,7 @@ function fmt(cents: number | null): string {
 }
 
 export function EventBudgetTab({ eventId, organizationId }: Props) {
+  const { ask, askConfirm, promptNode } = usePrompt();
   const { toast } = useToast();
   const qc = useQueryClient();
   const canManage = usePermission('budget.manage');
@@ -131,6 +133,7 @@ export function EventBudgetTab({ eventId, organizationId }: Props) {
 
   return (
     <div className="space-y-6">
+      {promptNode}
       <Card className="border-brand/20 bg-brand-soft/20">
         <CardContent className="p-4 text-sm text-fg-muted space-y-2">
           <h2 className="font-bold text-brand">First-time owner guide: budget vs contract vs payment link</h2>
@@ -174,7 +177,7 @@ export function EventBudgetTab({ eventId, organizationId }: Props) {
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
          
          {/* Left Card: Circular Progress Ring & Goal Tracking */}
-         <Card className="border-[#e1d5c9] bg-[#FDFBF7] shadow-sm flex flex-col sm:flex-row items-center justify-between p-6 gap-6 rounded-2xl relative overflow-hidden">
+         <Card className="border-paper-border bg-paper shadow-sm flex flex-col sm:flex-row items-center justify-between p-6 gap-6 rounded-2xl relative overflow-hidden">
             <div className="space-y-2 flex-1 z-10">
                <h3 className="font-serif font-black text-sm text-brand flex items-center gap-1.5">
                   🎨 Budget Allocation Goal
@@ -184,15 +187,15 @@ export function EventBudgetTab({ eventId, organizationId }: Props) {
                </p>
                
                <div className="pt-2 grid grid-cols-2 gap-2 text-xs font-semibold text-fg-subtle leading-normal">
-                  <div className="bg-white p-2.5 rounded-xl border border-[#e1d5c9] shadow-xs">
+                  <div className="bg-white p-2.5 rounded-xl border border-paper-border shadow-xs">
                      <span className="text-[10px] block uppercase font-bold">Actual Total</span>
                      <span className="text-sm font-black text-fg font-serif">{fmt(totals.actual)}</span>
                   </div>
-                  <div className="bg-white p-2.5 rounded-xl border border-[#e1d5c9] shadow-xs">
+                  <div className="bg-white p-2.5 rounded-xl border border-paper-border shadow-xs">
                      <span className="text-[10px] block uppercase font-bold text-success">Paid Balance</span>
                      <span className="text-sm font-black text-success font-serif">{fmt(totals.paid)}</span>
                   </div>
-                  <div className="bg-white p-2.5 rounded-xl border border-[#e1d5c9] shadow-xs col-span-2">
+                  <div className="bg-white p-2.5 rounded-xl border border-paper-border shadow-xs col-span-2">
                      <span className="text-[10px] block uppercase font-bold text-brand">Pending Balances</span>
                      <span className="text-sm font-black text-brand font-serif">{fmt(remaining)}</span>
                   </div>
@@ -234,15 +237,15 @@ export function EventBudgetTab({ eventId, organizationId }: Props) {
          </Card>
 
          {/* Right Card: Taxes, Gratuity & Variable Guest Calculator */}
-         <Card className="border-[#e1d5c9] bg-[#FDFBF7] shadow-sm p-6 rounded-2xl space-y-4">
-            <div className="pb-2 border-b border-[#e1d5c9]/50 flex justify-between items-center">
+         <Card className="border-paper-border bg-paper shadow-sm p-6 rounded-2xl space-y-4">
+            <div className="pb-2 border-b border-paper-border/50 flex justify-between items-center">
                <div>
                   <h3 className="font-serif font-black text-sm text-brand">
                      📈 Fees &amp; Catering Calculator
                   </h3>
                   <p className="text-[10px] text-fg-subtle">Project taxes, gratuity charges, and guest-count-dependent catering budgets.</p>
                </div>
-               <Badge variant="outline" className="bg-[#FDFBF7] text-brand border-[#e1d5c9] font-black text-[10px] py-0.5 px-2">
+               <Badge variant="outline" className="bg-paper text-brand border-paper-border font-black text-[10px] py-0.5 px-2">
                   {guestCount} Guests
                </Badge>
             </div>
@@ -254,7 +257,7 @@ export function EventBudgetTab({ eventId, organizationId }: Props) {
                      type="number" 
                      value={cateringCostPerGuest} 
                      onChange={(e) => setCateringCostPerGuest(parseFloat(e.target.value) || 0)} 
-                     className="mt-1 bg-white border-[#e1d5c9] text-xs h-8"
+                     className="mt-1 bg-white border-paper-border text-xs h-8"
                   />
                </div>
                <div>
@@ -264,7 +267,7 @@ export function EventBudgetTab({ eventId, organizationId }: Props) {
                      step={0.01} 
                      value={taxRate} 
                      onChange={(e) => setTaxRate(parseFloat(e.target.value) || 0)} 
-                     className="mt-1 bg-white border-[#e1d5c9] text-xs h-8"
+                     className="mt-1 bg-white border-paper-border text-xs h-8"
                   />
                </div>
                <div>
@@ -273,13 +276,13 @@ export function EventBudgetTab({ eventId, organizationId }: Props) {
                      type="number" 
                      value={serviceCharge} 
                      onChange={(e) => setServiceCharge(parseFloat(e.target.value) || 0)} 
-                     className="mt-1 bg-white border-[#e1d5c9] text-xs h-8"
+                     className="mt-1 bg-white border-paper-border text-xs h-8"
                   />
                </div>
             </div>
 
             {/* Calculations Output */}
-            <div className="bg-white p-3 rounded-xl border border-[#e1d5c9] text-xs font-semibold text-fg-subtle leading-normal space-y-1">
+            <div className="bg-white p-3 rounded-xl border border-paper-border text-xs font-semibold text-fg-subtle leading-normal space-y-1">
                <div className="flex justify-between">
                   <span>Base Contracts Subtotal:</span>
                   <span className="font-bold text-fg">${projections.baseBudget.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
@@ -370,7 +373,7 @@ export function EventBudgetTab({ eventId, organizationId }: Props) {
                         {canManage && (
                           <td className="px-4 py-3">
                             <button
-                              onClick={() => { if (window.confirm('Remove this budget item?')) deleteMutation.mutate(item.id); }}
+                              onClick={async () => { if (await askConfirm({ title: 'Remove this budget item?', destructive: true })) deleteMutation.mutate(item.id); }}
                               className="p-1 text-fg-subtle hover:text-danger rounded"
                               title="Remove" aria-label="Remove item"
                             >

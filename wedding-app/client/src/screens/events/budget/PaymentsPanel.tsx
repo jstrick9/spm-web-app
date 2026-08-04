@@ -361,8 +361,8 @@ export function PaymentsPanel({ eventId }: Props) {
   ];
 
   return (
-    <Card className="border-[#e1d5c9] bg-[#FDFBF7]">
-      <CardHeader className="flex flex-row items-center justify-between space-y-0 border-b border-[#e1d5c9] pb-4">
+    <Card className="border-paper-border bg-paper">
+      <CardHeader className="flex flex-row items-center justify-between space-y-0 border-b border-paper-border pb-4">
         <CardTitle className="text-base flex items-center gap-2 font-serif text-brand font-black">
           <CreditCard className="h-4 w-4 text-brand" /> Payments Ledger
         </CardTitle>
@@ -376,13 +376,13 @@ export function PaymentsPanel({ eventId }: Props) {
               <DialogTrigger asChild>
                 <Button size="sm"><Plus className="h-4 w-4 mr-1" /> New Payment</Button>
               </DialogTrigger>
-              <DialogContent className="bg-[#FDFBF7] border border-[#e1d5c9]">
+              <DialogContent className="bg-paper border border-paper-border">
                 <DialogHeader><DialogTitle className="font-serif font-bold text-lg text-fg">New Payment Link</DialogTitle></DialogHeader>
                 <div className="space-y-4 font-semibold text-xs text-fg">
                   <div>
                     <Label>Amount ($)</Label>
                     <Input type="number" min={0} step={0.01} value={amount}
-                      onChange={(e) => setAmount(e.target.value)} placeholder="0.00" className="mt-1 bg-white border-[#e1d5c9] text-xs h-9" />
+                      onChange={(e) => setAmount(e.target.value)} placeholder="0.00" className="mt-1 bg-white border-paper-border text-xs h-9" />
                     {/* MODULE-06 FI-14: field-level feedback instead of a generic toast on 400 */}
                     {amount && (Number.isNaN(parseFloat(amount)) || parseFloat(amount) <= 0) && (
                       <p className="mt-1 text-xs text-danger">Enter an amount greater than zero.</p>
@@ -392,7 +392,7 @@ export function PaymentsPanel({ eventId }: Props) {
                     <Label htmlFor="pay-provider">Provider</Label>
                     <select id="pay-provider" value={provider}
                       onChange={(e) => setProvider(e.target.value as typeof provider)}
-                      className="mt-1 w-full h-10 px-3 rounded-lg border border-[#e1d5c9] bg-white text-xs font-semibold cursor-pointer">
+                      className="mt-1 w-full h-10 px-3 rounded-lg border border-paper-border bg-white text-xs font-semibold cursor-pointer">
                       <option value="stripe">Stripe (hosted checkout)</option>
                       <option value="square">Square (hosted checkout)</option>
                       <option value="manual">Manual (record only)</option>
@@ -400,7 +400,7 @@ export function PaymentsPanel({ eventId }: Props) {
                   </div>
                   <div>
                     <Label htmlFor="pay-milestone">Milestone / Invoice Label</Label>
-                    <Input id="pay-milestone" value={milestone} onChange={(e) => setMilestone(e.target.value)} placeholder="Deposit, Installment 1, Final Balance" className="mt-1 bg-white border-[#e1d5c9] text-xs h-9" />
+                    <Input id="pay-milestone" value={milestone} onChange={(e) => setMilestone(e.target.value)} placeholder="Deposit, Installment 1, Final Balance" className="mt-1 bg-white border-paper-border text-xs h-9" />
                   </div>
                   <div>
                     <Label htmlFor="pay-due-date">Payment Due Date / Milestone (Optional)</Label>
@@ -409,11 +409,11 @@ export function PaymentsPanel({ eventId }: Props) {
                       id="pay-due-date" 
                       value={dueDate}
                       onChange={(e) => setDueDate(e.target.value)} 
-                      className="mt-1 bg-white border-[#e1d5c9] text-xs h-9" 
+                      className="mt-1 bg-white border-paper-border text-xs h-9" 
                     />
                   </div>
                 </div>
-                <DialogFooter className="border-t border-[#e1d5c9] pt-4 mt-2">
+                <DialogFooter className="border-t border-paper-border pt-4 mt-2">
                   <Button variant="ghost" onClick={() => setAddOpen(false)}>Cancel</Button>
                   <Button
                     onClick={() => createMutation.mutate()}
@@ -442,17 +442,17 @@ export function PaymentsPanel({ eventId }: Props) {
         {totals.pending > 0 && <div className="rounded-lg border border-warning/30 bg-warning-soft p-3 text-sm text-warning font-semibold">Balance due alert: {money(totals.pending)} remains pending for this event.</div>}
 
         <div className="grid grid-cols-3 gap-3">
-          <StatCard label="Total Contracted" value={money(totals.total)} className="bg-white border-[#e1d5c9] shadow-sm font-serif" />
+          <StatCard label="Total Contracted" value={money(totals.total)} className="bg-white border-paper-border shadow-sm font-serif" />
           <StatCard label="Paid Balance" value={money(totals.paid)} className="bg-white border-success/20 shadow-sm font-serif text-success" />
-          <StatCard label="Pending Balance" value={money(totals.pending)} className="bg-white border-[#e1d5c9] shadow-sm font-serif" />
+          <StatCard label="Pending Balance" value={money(totals.pending)} className="bg-white border-paper-border shadow-sm font-serif" />
         </div>
         {payments.length === 0 ? (
-          <p className="text-sm text-fg-subtle py-12 text-center border border-dashed border-[#e1d5c9] rounded-xl bg-white font-serif italic">
+          <p className="text-sm text-fg-subtle py-12 text-center border border-dashed border-paper-border rounded-xl bg-white font-serif italic">
             No payments yet. Create one and collect via Stripe or Square.
           </p>
         ) : (
           <>
-            <DataTable data={payments} columns={columns} getRowKey={(p) => p.id} className="border-[#e1d5c9] bg-white" />
+            <DataTable data={payments} columns={columns} getRowKey={(p) => p.id} className="border-paper-border bg-white" />
             {canManage && (
               <div className="rounded-xl border border-border bg-white p-4 space-y-3">
                 <h3 className="text-sm font-bold text-brand">Payment reconciliation notes / partial & refund states</h3>

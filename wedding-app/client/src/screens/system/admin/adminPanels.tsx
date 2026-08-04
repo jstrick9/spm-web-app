@@ -10,6 +10,7 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '../..
 import { Button } from '../../../ui/Button';
 import { Badge } from '../../../ui/Badge';
 import { useToast } from '../../../ui/Toast';
+import { usePrompt } from '../../../ui/usePrompt';
 import { Input } from '../../../ui/Input';
 import { Label } from '../../../ui/Label';
 import { cn } from '../../../ui/lib/cn';
@@ -238,6 +239,7 @@ function summarizeAdminDiff(previousConfig: PartialPlatformConfig | undefined, n
 }
 
 export function AdminConfigurationManager({ orgId, section }: { orgId: string; section: AdminConfigSection }) {
+  const { ask, askConfirm, promptNode } = usePrompt();
   const qc = useQueryClient();
   const { toast } = useToast();
   const configQuery = useQuery({ queryKey: ['platformConfig', orgId, 'admin'], queryFn: () => sdk.platformConfig.getOrg(orgId) });
@@ -263,8 +265,8 @@ export function AdminConfigurationManager({ orgId, section }: { orgId: string; s
     onError: (error: any) => toast({ title: 'Could not save admin configuration', description: error?.message, variant: 'destructive' }),
   });
 
-  const restoreDefaults = () => {
-    if (!window.confirm('Restore admin defaults for setup checklist, policies, templates, notifications, and data retention? Review the diff before saving.')) return;
+  const restoreDefaults = async () => {
+    if (!(await askConfirm({ title: 'Restore admin defaults?', description: 'Setup checklist, policies, templates, notifications, and data retention will be reset. Review the diff before saving.', destructive: true }))) return;
     setDraft(SYSTEM_DEFAULTS.admin);
     toast({ title: 'Defaults restored in draft', description: 'Review the diff and click Save changes to persist.' });
   };
@@ -273,6 +275,7 @@ export function AdminConfigurationManager({ orgId, section }: { orgId: string; s
 
   return (
     <div className="space-y-4">
+      {promptNode}
       <Card className="border-border bg-surface">
         <CardHeader>
           <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
@@ -282,7 +285,7 @@ export function AdminConfigurationManager({ orgId, section }: { orgId: string; s
             </div>
             <div className="flex flex-wrap gap-2">
               <Button variant="outline" size="sm" onClick={restoreDefaults}><RefreshCcw className="h-4 w-4" /> Restore defaults</Button>
-              <Button size="sm" disabled={!isDirty || saveMutation.isPending} isLoading={saveMutation.isPending} onClick={() => { if (window.confirm(`Save admin configuration changes?\n\n${diffs.join('\n') || 'No differences detected.'}`)) saveMutation.mutate(); }}>
+              <Button size="sm" disabled={!isDirty || saveMutation.isPending} isLoading={saveMutation.isPending} onClick={async () => { if (await askConfirm({ title: 'Save admin configuration changes?', description: diffs.join('\n') || 'No differences detected.' })) saveMutation.mutate(); }}>
                 Save changes
               </Button>
             </div>
@@ -571,12 +574,12 @@ export function LayoutApprovalQueue({ orgId }: { orgId: string }) {
 }
 
 export function OwnerChangeRequestQueue({ orgId, canDecide = true }: { orgId: string; canDecide?: boolean }) {
-  const qc = useQueryClient(); const { toast } = useToast();
+  const qc = useQueryClient(); const { toast } = useToast(); const { ask, promptNode } = usePrompt();
   const requestsQuery = useQuery({ queryKey: ['admin-change-requests', orgId, 'owner-review'], queryFn: () => sdk.platformConfig.listAdminChangeRequests(orgId) });
-  const decisionMutation = useMutation({ mutationFn: ({ id, status }: { id: string; status: 'approved' | 'rejected' | 'resolved' }) => sdk.platformConfig.updateAdminChangeRequest(orgId, id, { status, responseNote: window.prompt('Optional decision note') || null }), onSuccess: () => { qc.invalidateQueries({ queryKey: ['admin-change-requests', orgId] }); toast({ title: 'Change request updated', variant: 'success' }); } });
+  const decisionMutation = useMutation({ mutationFn: ({ id, status, responseNote }: { id: string; status: 'approved' | 'rejected' | 'resolved'; responseNote?: string | null }) => sdk.platformConfig.updateAdminChangeRequest(orgId, id, { status, responseNote: responseNote ?? null }), onSuccess: () => { qc.invalidateQueries({ queryKey: ['admin-change-requests', orgId] }); toast({ title: 'Change request updated', variant: 'success' }); } });
   const open = requestsQuery.data?.requests?.filter((request) => request.status === 'open') ?? [];
   if (!open.length) return null;
-  return <Card className="border-warning/30"><CardHeader><CardTitle>Admin change requests awaiting review</CardTitle><CardDescription>Approve, reject, or resolve venue-manager requests with an auditable decision.</CardDescription></CardHeader><CardContent className="space-y-2">{open.map((request) => <div key={request.id} className="flex flex-wrap items-center justify-between gap-2 rounded border border-border p-3 text-sm"><div><strong>{request.title}</strong><p className="text-fg-muted">{request.area} · {request.reason || 'No reason provided'}</p></div><div className="flex gap-1">{canDecide && <><Button size="xs" onClick={() => decisionMutation.mutate({ id: request.id, status: 'approved' })}>Approve</Button><Button size="xs" variant="outline" onClick={() => decisionMutation.mutate({ id: request.id, status: 'rejected' })}>Reject</Button><Button size="xs" variant="ghost" onClick={() => decisionMutation.mutate({ id: request.id, status: 'resolved' })}>Resolve</Button></>}</div></div>)}</CardContent></Card>;
+  return <Card className="border-warning/30"><CardHeader><CardTitle>Admin change requests awaiting review</CardTitle><CardDescription>Approve, reject, or resolve venue-manager requests with an auditable decision.</CardDescription></CardHeader><CardContent className="space-y-2">{open.map((request) => <div key={request.id} className="flex flex-wrap items-center justify-between gap-2 rounded border border-border p-3 text-sm"><div><strong>{request.title}</strong><p className="text-fg-muted">{request.area} · {request.reason || 'No reason provided'}</p></div><div className="flex gap-1">{canDecide && <><Button size="xs" onClick={async () => { const note = await ask({ title: 'Approve this request', label: 'Optional decision note', multiline: true }); if (note == null) return; decisionMutation.mutate({ id: request.id, status: 'approved', responseNote: note || null }); }}>Approve</Button><Button size="xs" variant="outline" onClick={async () => { const note = await ask({ title: 'Reject this request', label: 'Reason for rejection', multiline: true }); if (note == null) return; decisionMutation.mutate({ id: request.id, status: 'rejected', responseNote: note || null }); }}>Reject</Button><Button size="xs" variant="ghost" onClick={() => decisionMutation.mutate({ id: request.id, status: 'resolved' })}>Resolve</Button></>}</div></div>)}</CardContent></Card>;
 }
 
 // ─── Backup Snapshot Archiver ────────────────────────────────────────────────

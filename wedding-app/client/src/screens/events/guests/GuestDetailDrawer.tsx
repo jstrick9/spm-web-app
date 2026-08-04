@@ -61,12 +61,12 @@ export function GuestDetailDrawer({ guest, open, onOpenChange, onDeleted }: Prop
   return (
     <>
       <Sheet open={open} onOpenChange={onOpenChange}>
-        <SheetContent side="right" width="lg" className="bg-[#FDFBF7] border-l border-[#e1d5c9] shadow-2xl animate-in slide-in-from-right duration-300">
+        <SheetContent side="right" width="lg" className="bg-paper border-l border-paper-border shadow-2xl animate-in slide-in-from-right duration-300">
           {!guest ? (
-            <SheetBody className="bg-[#FDFBF7]"><Skeleton className="h-40 w-full rounded-xl" /></SheetBody>
+            <SheetBody className="bg-paper"><Skeleton className="h-40 w-full rounded-xl" /></SheetBody>
           ) : (
             <>
-              <SheetHeader className="border-b border-[#e1d5c9]">
+              <SheetHeader className="border-b border-paper-border">
                 <div className="flex items-start justify-between gap-3">
                   <div className="min-w-0 flex-1">
                     <SheetTitle className="font-serif font-bold text-2xl text-fg">{guest.full_name}</SheetTitle>
@@ -74,7 +74,7 @@ export function GuestDetailDrawer({ guest, open, onOpenChange, onDeleted }: Prop
                       <span className="inline-flex flex-wrap items-center gap-2 mt-1">
                         <RsvpBadge status={guest.rsvp_status} />
                         {guest.party_name && (
-                          <Badge variant="outline" className="border-[#e1d5c9] text-fg bg-white">Party: {guest.party_name}</Badge>
+                          <Badge variant="outline" className="border-paper-border text-fg bg-white">Party: {guest.party_name}</Badge>
                         )}
                         {guest.plus_one_allowed === 1 && (
                           <Badge variant="brand">+1 allowed</Badge>
@@ -85,7 +85,7 @@ export function GuestDetailDrawer({ guest, open, onOpenChange, onDeleted }: Prop
                 </div>
               </SheetHeader>
 
-              <SheetBody className="space-y-6 bg-[#FDFBF7]">
+              <SheetBody className="space-y-6 bg-paper">
                 {/* Contact info */}
                 <section className="space-y-3">
                   <h4 className="text-xs font-bold uppercase tracking-wider text-fg-subtle font-serif">Contact</h4>
@@ -127,10 +127,10 @@ export function GuestDetailDrawer({ guest, open, onOpenChange, onDeleted }: Prop
                 )}
 
                 {(issueTags.length > 0 || serviceLog.length > 0) && (
-                  <section className="space-y-3 rounded-xl border border-[#e1d5c9] bg-white p-4 shadow-sm">
+                  <section className="space-y-3 rounded-xl border border-paper-border bg-white p-4 shadow-sm">
                     <h4 className="text-xs font-bold uppercase tracking-wider text-fg-subtle font-serif">Manager service log</h4>
                     {issueTags.length > 0 && <div className="flex flex-wrap gap-1">{issueTags.map((tag: string) => <Badge key={tag} variant="warning" className="text-[10px] capitalize">{tag.replace(/_/g, ' ')}</Badge>)}</div>}
-                    <div className="space-y-1">{serviceLog.slice().reverse().slice(0, 4).map((entry: any) => <div key={entry.id || entry.at} className="rounded bg-[#FDFBF7] p-2 text-xs text-fg-muted"><strong>{entry.kind}</strong>: {entry.note}<div className="text-[10px] text-fg-subtle">{entry.at ? new Date(entry.at).toLocaleString() : ''}</div></div>)}</div>
+                    <div className="space-y-1">{serviceLog.slice().reverse().slice(0, 4).map((entry: any) => <div key={entry.id || entry.at} className="rounded bg-paper p-2 text-xs text-fg-muted"><strong>{entry.kind}</strong>: {entry.note}<div className="text-[10px] text-fg-subtle">{entry.at ? new Date(entry.at).toLocaleString() : ''}</div></div>)}</div>
                     <p className="text-[10px] text-fg-subtle">Visibility: manager service notes, issue tags, and audit metadata are internal to authenticated users with guest permissions. They are not shown in the public guest portal.</p>
                   </section>
                 )}
@@ -145,7 +145,7 @@ export function GuestDetailDrawer({ guest, open, onOpenChange, onDeleted }: Prop
                   ) : (
                     <ul className="space-y-2">
                       {myRsvps.map((r) => (
-                        <li key={r.id} className="rounded-xl border border-[#e1d5c9] bg-white p-3 text-xs shadow-sm">
+                        <li key={r.id} className="rounded-xl border border-paper-border bg-white p-3 text-xs shadow-sm">
                           <div className="flex items-center justify-between">
                             <span className="font-bold text-fg">
                               {r.attending ? 'Attending' : 'Declined'}
@@ -154,7 +154,7 @@ export function GuestDetailDrawer({ guest, open, onOpenChange, onDeleted }: Prop
                             <span className="text-[10px] text-fg-subtle font-semibold">{new Date(r.submitted_at).toLocaleString()}</span>
                           </div>
                           {r.notes && (
-                            <p className="mt-2 text-fg-muted text-xs flex items-start gap-1 bg-[#FDFBF7] p-2 rounded border border-[#e1d5c9]/40 italic">
+                            <p className="mt-2 text-fg-muted text-xs flex items-start gap-1 bg-paper p-2 rounded border border-paper-border/40 italic">
                               <MessageSquare className="h-3 w-3 mt-0.5 shrink-0 text-brand" />
                               <span>"{r.notes}"</span>
                             </p>
@@ -166,7 +166,7 @@ export function GuestDetailDrawer({ guest, open, onOpenChange, onDeleted }: Prop
                 </section>
 
                 {/* Portal access */}
-                <section className="space-y-2 rounded-xl border border-[#e1d5c9] bg-white p-4 shadow-sm">
+                <section className="space-y-2 rounded-xl border border-paper-border bg-white p-4 shadow-sm">
                   <h4 className="text-xs font-bold uppercase tracking-wider text-fg-subtle font-serif">Guest portal</h4>
                   <p className="text-xs text-fg-muted leading-relaxed font-semibold">
                     {guest.allow_portal_access === 1
@@ -183,7 +183,7 @@ export function GuestDetailDrawer({ guest, open, onOpenChange, onDeleted }: Prop
                 </section>
               </SheetBody>
 
-              <SheetFooter className="border-t border-[#e1d5c9]">
+              <SheetFooter className="border-t border-paper-border">
                 <Button variant="destructive" onClick={() => setDeleteOpen(true)}>
                   <Trash2 className="h-4 w-4 mr-1.5" /> Delete Guest
                 </Button>
@@ -220,7 +220,7 @@ function DetailRow({
   icon, label, value,
 }: { icon?: React.ReactNode; label: string; value: string | null | undefined }) {
   return (
-    <div className="flex items-center gap-3 bg-white border border-[#e1d5c9] p-3 rounded-xl shadow-xs">
+    <div className="flex items-center gap-3 bg-white border border-paper-border p-3 rounded-xl shadow-xs">
       <span className="text-brand shrink-0">{icon}</span>
       <span className="text-[10px] text-fg-subtle w-16 uppercase font-bold tracking-wider">{label}</span>
       <span className={value ? 'text-fg font-semibold truncate' : 'text-fg-subtle italic'}>
@@ -232,7 +232,7 @@ function DetailRow({
 
 function NoteCard({ icon, title, body }: { icon: React.ReactNode; title: string; body: string }) {
   return (
-    <div className="rounded-xl border border-[#e1d5c9] bg-white p-3.5 shadow-xs">
+    <div className="rounded-xl border border-paper-border bg-white p-3.5 shadow-xs">
       <div className="flex items-center gap-2 text-xs font-bold text-fg-muted mb-1.5 font-serif">
         {icon}{title}
       </div>

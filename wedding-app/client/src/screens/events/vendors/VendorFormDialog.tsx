@@ -177,7 +177,7 @@ export function VendorFormDialog({ open, onOpenChange, eventId, organizationId, 
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-md max-h-[90vh] overflow-y-auto bg-[#FDFBF7] border border-[#e1d5c9] rounded-2xl shadow-xl">
+      <DialogContent className="max-w-md max-h-[90vh] overflow-y-auto bg-paper border border-paper-border rounded-2xl shadow-xl">
         <DialogHeader>
           <DialogTitle className="font-serif font-bold text-xl text-fg">{isEdit ? 'Edit Vendor Details' : 'Add New Vendor'}</DialogTitle>
         </DialogHeader>
@@ -190,7 +190,7 @@ export function VendorFormDialog({ open, onOpenChange, eventId, organizationId, 
               render={({ field }) => (
                 <FormItem>
                   <FormLabel className="text-xs">Company / Vendor Name *</FormLabel>
-                  <FormControl><Input {...field} autoFocus className="bg-white border-[#e1d5c9] h-9 text-xs" /></FormControl>
+                  <FormControl><Input {...field} autoFocus className="bg-white border-paper-border h-9 text-xs" /></FormControl>
                   <FormMessage />
                 </FormItem>
               )}
@@ -203,7 +203,7 @@ export function VendorFormDialog({ open, onOpenChange, eventId, organizationId, 
                   render={({ field }) => (
                     <FormItem>
                       <FormLabel className="text-xs">Category</FormLabel>
-                      <FormControl><select {...field} className="bg-white border border-[#e1d5c9] h-9 text-xs rounded-md px-2 w-full"><option value="">Select template</option><option value="catering">Catering</option><option value="florals">Florals</option><option value="photography">Photography</option><option value="entertainment">DJ / Entertainment</option><option value="rentals">Rentals</option><option value="transportation">Transportation</option><option value="officiant">Officiant</option><option value="other">Other</option></select></FormControl>
+                      <FormControl><select {...field} className="bg-white border border-paper-border h-9 text-xs rounded-md px-2 w-full"><option value="">Select template</option><option value="catering">Catering</option><option value="florals">Florals</option><option value="photography">Photography</option><option value="entertainment">DJ / Entertainment</option><option value="rentals">Rentals</option><option value="transportation">Transportation</option><option value="officiant">Officiant</option><option value="other">Other</option></select></FormControl>
                       <FormMessage />
                     </FormItem>
                   )}
@@ -214,14 +214,14 @@ export function VendorFormDialog({ open, onOpenChange, eventId, organizationId, 
                   render={({ field }) => (
                     <FormItem>
                       <FormLabel className="text-xs">Contract Amount</FormLabel>
-                      <FormControl><Input placeholder="$0.00" {...field} className="bg-white border-[#e1d5c9] h-9 text-xs" /></FormControl>
+                      <FormControl><Input placeholder="$0.00" {...field} className="bg-white border-paper-border h-9 text-xs" /></FormControl>
                       <FormMessage />
                     </FormItem>
                   )}
                 />
             </div>
 
-            <div className="space-y-3 pt-2 border-t border-[#e1d5c9]/40">
+            <div className="space-y-3 pt-2 border-t border-paper-border/40">
                <h4 className="text-xs font-bold text-fg uppercase tracking-wider font-serif">Contact Information</h4>
                
                <FormField
@@ -230,7 +230,7 @@ export function VendorFormDialog({ open, onOpenChange, eventId, organizationId, 
                   render={({ field }) => (
                     <FormItem>
                       <FormLabel className="text-xs">Primary Contact Name</FormLabel>
-                      <FormControl><Input {...field} className="bg-white border-[#e1d5c9] h-9 text-xs" /></FormControl>
+                      <FormControl><Input {...field} className="bg-white border-paper-border h-9 text-xs" /></FormControl>
                       <FormMessage />
                     </FormItem>
                   )}
@@ -243,7 +243,7 @@ export function VendorFormDialog({ open, onOpenChange, eventId, organizationId, 
                       render={({ field }) => (
                         <FormItem>
                           <FormLabel className="text-xs">Email Address</FormLabel>
-                          <FormControl><Input type="email" {...field} className="bg-white border-[#e1d5c9] h-9 text-xs" /></FormControl>
+                          <FormControl><Input type="email" {...field} className="bg-white border-paper-border h-9 text-xs" /></FormControl>
                           <FormMessage />
                         </FormItem>
                       )}
@@ -254,7 +254,7 @@ export function VendorFormDialog({ open, onOpenChange, eventId, organizationId, 
                       render={({ field }) => (
                         <FormItem>
                           <FormLabel className="text-xs">Phone Number</FormLabel>
-                          <FormControl><Input type="tel" {...field} className="bg-white border-[#e1d5c9] h-9 text-xs" /></FormControl>
+                          <FormControl><Input type="tel" {...field} className="bg-white border-paper-border h-9 text-xs" /></FormControl>
                           <FormMessage />
                         </FormItem>
                       )}
@@ -263,7 +263,7 @@ export function VendorFormDialog({ open, onOpenChange, eventId, organizationId, 
             </div>
 
             {/* Certificate of Insurance (COI) Compliance Form Panel */}
-            <div className="space-y-3 pt-4 border-t border-[#e1d5c9] bg-white p-4 rounded-xl border">
+            <div className="space-y-3 pt-4 border-t border-paper-border bg-white p-4 rounded-xl border">
                <h4 className="text-xs font-bold text-fg uppercase tracking-wider font-serif text-brand flex items-center gap-1.5">
                   🛡️ Certificate of Insurance (COI)
                </h4>
@@ -278,7 +278,7 @@ export function VendorFormDialog({ open, onOpenChange, eventId, organizationId, 
                           type="checkbox" 
                           checked={field.value} 
                           onChange={field.onChange} 
-                          className="rounded border-[#e1d5c9] text-brand focus:ring-brand h-4 w-4 cursor-pointer" 
+                          className="rounded border-paper-border text-brand focus:ring-brand h-4 w-4 cursor-pointer" 
                         />
                       </FormControl>
                       <FormLabel className="cursor-pointer text-xs font-semibold text-fg">COI Document Received &amp; Verified</FormLabel>
@@ -293,7 +293,7 @@ export function VendorFormDialog({ open, onOpenChange, eventId, organizationId, 
                       render={({ field }) => (
                         <FormItem>
                           <FormLabel className="text-[10px] text-fg-subtle">Insurer / Carrier Name</FormLabel>
-                          <FormControl><Input placeholder="e.g. Liberty Mutual" {...field} className="bg-white border-[#e1d5c9] h-8 text-xs" /></FormControl>
+                          <FormControl><Input placeholder="e.g. Liberty Mutual" {...field} className="bg-white border-paper-border h-8 text-xs" /></FormControl>
                           <FormMessage />
                         </FormItem>
                       )}
@@ -304,7 +304,7 @@ export function VendorFormDialog({ open, onOpenChange, eventId, organizationId, 
                       render={({ field }) => (
                         <FormItem>
                           <FormLabel className="text-[10px] text-fg-subtle">Policy Number</FormLabel>
-                          <FormControl><Input placeholder="e.g. GL-9102831" {...field} className="bg-white border-[#e1d5c9] h-8 text-xs" /></FormControl>
+                          <FormControl><Input placeholder="e.g. GL-9102831" {...field} className="bg-white border-paper-border h-8 text-xs" /></FormControl>
                           <FormMessage />
                         </FormItem>
                       )}
@@ -315,7 +315,7 @@ export function VendorFormDialog({ open, onOpenChange, eventId, organizationId, 
                       render={({ field }) => (
                         <FormItem>
                           <FormLabel className="text-[10px] text-fg-subtle">Policy Expiration Date</FormLabel>
-                          <FormControl><Input type="date" {...field} className="bg-white border-[#e1d5c9] h-8 text-xs" /></FormControl>
+                          <FormControl><Input type="date" {...field} className="bg-white border-paper-border h-8 text-xs" /></FormControl>
                           <FormMessage />
                         </FormItem>
                       )}
@@ -326,7 +326,7 @@ export function VendorFormDialog({ open, onOpenChange, eventId, organizationId, 
                       render={({ field }) => (
                         <FormItem>
                           <FormLabel className="text-[10px] text-fg-subtle">General Liability Limit</FormLabel>
-                          <FormControl><Input placeholder="e.g. $1,000,000" {...field} className="bg-white border-[#e1d5c9] h-8 text-xs" /></FormControl>
+                          <FormControl><Input placeholder="e.g. $1,000,000" {...field} className="bg-white border-paper-border h-8 text-xs" /></FormControl>
                           <FormMessage />
                         </FormItem>
                       )}
@@ -334,20 +334,20 @@ export function VendorFormDialog({ open, onOpenChange, eventId, organizationId, 
                 </div>
             </div>
 
-            <div className="space-y-3 pt-4 border-t border-[#e1d5c9] bg-white p-4 rounded-xl border">
+            <div className="space-y-3 pt-4 border-t border-paper-border bg-white p-4 rounded-xl border">
               <h4 className="text-xs font-bold uppercase tracking-wider font-serif text-brand">Vendor requirements, route & document vault</h4>
               <FormField control={form.control} name="insuranceRequirements" render={({ field }) => (
-                <FormItem><FormLabel className="text-[10px] text-fg-subtle">Insurance requirements configuration</FormLabel><FormControl><textarea {...field} rows={2} className="w-full rounded-md border border-[#e1d5c9] bg-white p-2 text-xs" /></FormControl><FormMessage /></FormItem>
+                <FormItem><FormLabel className="text-[10px] text-fg-subtle">Insurance requirements configuration</FormLabel><FormControl><textarea {...field} rows={2} className="w-full rounded-md border border-paper-border bg-white p-2 text-xs" /></FormControl><FormMessage /></FormItem>
               )} />
               <FormField control={form.control} name="loadInRoute" render={({ field }) => (
-                <FormItem><FormLabel className="text-[10px] text-fg-subtle">Arrival / load-in route planner</FormLabel><FormControl><Input placeholder="e.g. Use north gate, loading dock B, no guest driveway" {...field} className="bg-white border-[#e1d5c9] h-8 text-xs" /></FormControl><FormMessage /></FormItem>
+                <FormItem><FormLabel className="text-[10px] text-fg-subtle">Arrival / load-in route planner</FormLabel><FormControl><Input placeholder="e.g. Use north gate, loading dock B, no guest driveway" {...field} className="bg-white border-paper-border h-8 text-xs" /></FormControl><FormMessage /></FormItem>
               )} />
               <FormField control={form.control} name="documentsText" render={({ field }) => (
-                <FormItem><FormLabel className="text-[10px] text-fg-subtle">Vendor document vault (one per line: Name|URL)</FormLabel><FormControl><textarea {...field} rows={3} className="w-full rounded-md border border-[#e1d5c9] bg-white p-2 text-xs" placeholder="Contract packet|https://..." /></FormControl><FormMessage /></FormItem>
+                <FormItem><FormLabel className="text-[10px] text-fg-subtle">Vendor document vault (one per line: Name|URL)</FormLabel><FormControl><textarea {...field} rows={3} className="w-full rounded-md border border-paper-border bg-white p-2 text-xs" placeholder="Contract packet|https://..." /></FormControl><FormMessage /></FormItem>
               )} />
             </div>
 
-            <DialogFooter className="pt-4 mt-2 border-t border-[#e1d5c9]">
+            <DialogFooter className="pt-4 mt-2 border-t border-paper-border">
               <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>Cancel</Button>
               <Button type="submit" disabled={mutation.isPending}>
                 {mutation.isPending ? 'Saving...' : isEdit ? 'Save Changes' : 'Add Vendor'}

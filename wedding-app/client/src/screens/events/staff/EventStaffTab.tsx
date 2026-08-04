@@ -439,7 +439,7 @@ Owner notification rule: ${ownerNotify || incidentSeverity === 'critical' ? 'not
       const itemsList = Array.isArray(payload?.items) ? payload.items : [];
       
       return (
-        <svg viewBox="0 0 800 600" width="100%" height="auto" className="bg-[#FDFBF7] border border-[#e1d5c9] rounded-2xl overflow-hidden shadow-inner p-2">
+        <svg viewBox="0 0 800 600" width="100%" height="auto" className="bg-paper border border-paper-border rounded-2xl overflow-hidden shadow-inner p-2">
           <defs>
              <pattern id="dotGrid" width="20" height="20" patternUnits="userSpaceOnUse">
                 <circle cx="2" cy="2" r="1" fill="#e1d5c9" opacity="0.4" />

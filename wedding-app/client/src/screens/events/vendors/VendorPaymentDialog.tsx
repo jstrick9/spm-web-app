@@ -8,6 +8,7 @@ import { Form, FormField, FormItem, FormLabel, FormControl, FormMessage } from '
 import { Input } from '../../../ui/Input';
 import { Button } from '../../../ui/Button';
 import { useToast } from '../../../ui/Toast';
+import { usePrompt } from '../../../ui/usePrompt';
 import { vendorsSdk } from '../../../sdk/vendors';
 import { Trash2 } from 'lucide-react';
 
@@ -36,6 +37,7 @@ interface Props {
 }
 
 export function VendorPaymentDialog({ open, onOpenChange, vendorId, vendorName, eventId }: Props) {
+  const { ask, askConfirm, promptNode } = usePrompt();
   const qc = useQueryClient();
   const { toast } = useToast();
 
@@ -94,6 +96,7 @@ export function VendorPaymentDialog({ open, onOpenChange, vendorId, vendorName, 
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
+      {promptNode}
       <DialogContent className="max-w-md">
         <DialogHeader>
           <DialogTitle>Log Payment for {vendorName}</DialogTitle>
@@ -116,8 +119,8 @@ export function VendorPaymentDialog({ open, onOpenChange, vendorId, vendorName, 
                 </div>
                 <button
                   type="button"
-                  onClick={() => {
-                    if (window.confirm('Remove this payment and adjust the paid total?')) {
+                  onClick={async () => {
+                    if (await askConfirm({ title: 'Remove this payment?', description: 'The vendor paid total will be adjusted.', destructive: true })) {
                       deletePayment.mutate(p.id);
                     }
                   }}

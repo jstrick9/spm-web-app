@@ -11,6 +11,9 @@
   --color-surface-2:     rgb(var(--color-surface-2));
   --color-border:        rgb(var(--color-border));
   --color-border-strong: rgb(var(--color-border-strong));
+  --color-paper:         rgb(var(--color-paper));
+  --color-paper-border:  rgb(var(--color-paper-border));
+  --color-paper-ink:     rgb(var(--color-paper-ink));
 
   --color-fg:         rgb(var(--color-fg));
   --color-fg-muted:   rgb(var(--color-fg-muted));

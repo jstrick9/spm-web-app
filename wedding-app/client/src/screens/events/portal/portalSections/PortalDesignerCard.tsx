@@ -211,8 +211,8 @@ export interface PortalDesignerCardProps {
 
 export function PortalDesignerCard({ welcomeTitle, setWelcomeTitle, tagline, setTagline, customBrandColor, setCustomBrandColor, enableSongRequests, setEnableSongRequests, enableDietaryDetails, setEnableDietaryDetails, enableLodgingChoices, setEnableLodgingChoices, faqText, setFaqText, transportationText, setTransportationText, registryLinks, setRegistryLinks, giftLinksText, setGiftLinksText, cardsGiftTableLocation, setCardsGiftTableLocation, registryGiftNote, setRegistryGiftNote, venueAddress, setVenueAddress, mapUrl, setMapUrl, parkingEntrance, setParkingEntrance, dropoffPoint, setDropoffPoint, rideshareInstructions, setRideshareInstructions, shuttleSchedule, setShuttleSchedule, shuttlePickupLocation, setShuttlePickupLocation, shuttleDropoffLocation, setShuttleDropoffLocation, lastShuttleReminder, setLastShuttleReminder, roomBlockDetails, setRoomBlockDetails, accessibleParking, setAccessibleParking, mobilityDropoff, setMobilityDropoff, accessibleEntrance, setAccessibleEntrance, accessibleRestroom, setAccessibleRestroom, accessibleSeating, setAccessibleSeating, accessibilityHelpText, setAccessibilityHelpText, accessibilityContactLabel, setAccessibilityContactLabel, accessibilityContactEmail, setAccessibilityContactEmail, accessibilityContactPhone, setAccessibilityContactPhone, privacySummary, setPrivacySummary, dataRetentionStatement, setDataRetentionStatement, privacyContactLabel, setPrivacyContactLabel, privacyContactEmail, setPrivacyContactEmail, privacyRequestsEnabled, setPrivacyRequestsEnabled, reminderGuestFriendlyCopy, setReminderGuestFriendlyCopy, defaultQuietHoursStart, setDefaultQuietHoursStart, defaultQuietHoursEnd, setDefaultQuietHoursEnd, rsvpReminderEnabled, setRsvpReminderEnabled, scheduleReminderEnabled, setScheduleReminderEnabled, rainPlanReminderEnabled, setRainPlanReminderEnabled, shuttleReminderEnabled, setShuttleReminderEnabled, dayBeforeReminderEnabled, setDayBeforeReminderEnabled, dayOfReminderEnabled, setDayOfReminderEnabled, dayOfModeEnabled, setDayOfModeEnabled, dayOfModeTitle, setDayOfModeTitle, dayOfContactLabel, setDayOfContactLabel, dayOfContactEmail, setDayOfContactEmail, dayOfContactPhone, setDayOfContactPhone, dayOfPushCopy, setDayOfPushCopy, guestMemoryEnabled, setGuestMemoryEnabled, guestPhotoUploadEnabled, setGuestPhotoUploadEnabled, guestPostEventFeedbackEnabled, setGuestPostEventFeedbackEnabled, postEventThankYouTitle, setPostEventThankYouTitle, postEventThankYouMessage, setPostEventThankYouMessage, memoryPhotoLinksText, setMemoryPhotoLinksText, guestPhotoConsentCopy, setGuestPhotoConsentCopy, guestPhotoModerationCopy, setGuestPhotoModerationCopy, guestNpsQuestion, setGuestNpsQuestion, destinationTravelFaq, setDestinationTravelFaq, weatherRainPlanNote, setWeatherRainPlanNote, seatingPrivacyMode, setSeatingPrivacyMode, wayfindingLabelsText, setWayfindingLabelsText, outdoorMapNote, setOutdoorMapNote, indoorRainPlanMapNote, setIndoorRainPlanMapNote, accessibilityRouteDetails, setAccessibilityRouteDetails, arPreviewUrl, setArPreviewUrl, arPreviewDescription, setArPreviewDescription, dressCodeSummary, setDressCodeSummary, dressCodeExamples, setDressCodeExamples, dressCodeWeather, setDressCodeWeather, dressCodeRainPlan, setDressCodeRainPlan, kidsPolicy, setKidsPolicy, plusOneRules, setPlusOneRules, phonePhotoPolicy, setPhonePhotoPolicy, smokingVapingPolicy, setSmokingVapingPolicy, barAlcoholPolicy, setBarAlcoholPolicy, guestFaqItemsText, setGuestFaqItemsText, faqLanguagesText, setFaqLanguagesText, guestQuestionsEnabled, setGuestQuestionsEnabled, guestQuestionContactLabel, setGuestQuestionContactLabel, guestQuestionContactEmail, setGuestQuestionContactEmail, rsvpEditWindowDays, setRsvpEditWindowDays, mealOptionsText, setMealOptionsText, rsvpTheme, setRsvpTheme, setIsDirty, data, guests }: PortalDesignerCardProps) {
   return (
-          <Card className="bg-[#FDFBF7] border border-[#e1d5c9] shadow-sm rounded-2xl overflow-hidden">
-            <CardHeader className="pb-3 border-b border-[#e1d5c9]">
+          <Card className="bg-paper border border-paper-border shadow-sm rounded-2xl overflow-hidden">
+            <CardHeader className="pb-3 border-b border-paper-border">
               <CardTitle className="text-base flex items-center gap-2 text-brand font-black font-serif">
                 🎨 Invitation &amp; RSVP Page Designer
               </CardTitle>
@@ -274,7 +274,7 @@ export function PortalDesignerCard({ welcomeTitle, setWelcomeTitle, tagline, set
                   A/B Page Layout Theme
                 </Label>
                 <select
-                  className="w-full text-xs p-2.5 rounded-lg border border-[#e1d5c9] bg-white font-semibold"
+                  className="w-full text-xs p-2.5 rounded-lg border border-paper-border bg-white font-semibold"
                   value={rsvpTheme}
                   onChange={(e) => {
                     setRsvpTheme(e.target.value);
@@ -303,7 +303,7 @@ export function PortalDesignerCard({ welcomeTitle, setWelcomeTitle, tagline, set
                     setWelcomeTitle(e.target.value);
                     setIsDirty(true);
                   }}
-                  className="mt-1 bg-[#FDFBF7] border-[#e1d5c9] text-xs h-9 font-semibold"
+                  className="mt-1 bg-paper border-paper-border text-xs h-9 font-semibold"
                 />
               </div>
 
@@ -317,7 +317,7 @@ export function PortalDesignerCard({ welcomeTitle, setWelcomeTitle, tagline, set
                     setTagline(e.target.value);
                     setIsDirty(true);
                   }}
-                  className="mt-1 bg-[#FDFBF7] border-[#e1d5c9] text-xs h-9 font-semibold"
+                  className="mt-1 bg-paper border-paper-border text-xs h-9 font-semibold"
                 />
               </div>
 
@@ -333,7 +333,7 @@ export function PortalDesignerCard({ welcomeTitle, setWelcomeTitle, tagline, set
                       setCustomBrandColor(e.target.value);
                       setIsDirty(true);
                     }}
-                    className="h-9 w-9 rounded-md border border-[#e1d5c9] cursor-pointer bg-white"
+                    className="h-9 w-9 rounded-md border border-paper-border cursor-pointer bg-white"
                   />
                   <Input
                     value={customBrandColor}
@@ -341,7 +341,7 @@ export function PortalDesignerCard({ welcomeTitle, setWelcomeTitle, tagline, set
                       setCustomBrandColor(e.target.value);
                       setIsDirty(true);
                     }}
-                    className="bg-[#FDFBF7] border-[#e1d5c9] text-xs h-9 w-28 uppercase font-semibold"
+                    className="bg-paper border-paper-border text-xs h-9 w-28 uppercase font-semibold"
                   />
                 </div>
               </div>
@@ -351,7 +351,7 @@ export function PortalDesignerCard({ welcomeTitle, setWelcomeTitle, tagline, set
                   Interactive RSVP Form Custom fields
                 </h4>
 
-                <label className="flex items-center gap-2.5 cursor-pointer p-2 rounded-lg hover:bg-surface-2 transition-colors bg-[#FDFBF7] border rounded-xl p-3 border-[#e1d5c9]/60">
+                <label className="flex items-center gap-2.5 cursor-pointer p-2 rounded-lg hover:bg-surface-2 transition-colors bg-paper border rounded-xl p-3 border-paper-border/60">
                   <input
                     type="checkbox"
                     checked={enableSongRequests}
@@ -359,7 +359,7 @@ export function PortalDesignerCard({ welcomeTitle, setWelcomeTitle, tagline, set
                       setEnableSongRequests(e.target.checked);
                       setIsDirty(true);
                     }}
-                    className="rounded border-[#e1d5c9] text-brand accent-brand h-4 w-4 cursor-pointer"
+                    className="rounded border-paper-border text-brand accent-brand h-4 w-4 cursor-pointer"
                   />
                   <div>
                     <div>Collect Song &amp; Music Requests</div>
@@ -369,7 +369,7 @@ export function PortalDesignerCard({ welcomeTitle, setWelcomeTitle, tagline, set
                   </div>
                 </label>
 
-                <label className="flex items-center gap-2.5 cursor-pointer p-2 rounded-lg hover:bg-surface-2 transition-colors bg-[#FDFBF7] border rounded-xl p-3 border-[#e1d5c9]/60">
+                <label className="flex items-center gap-2.5 cursor-pointer p-2 rounded-lg hover:bg-surface-2 transition-colors bg-paper border rounded-xl p-3 border-paper-border/60">
                   <input
                     type="checkbox"
                     checked={enableDietaryDetails}
@@ -377,7 +377,7 @@ export function PortalDesignerCard({ welcomeTitle, setWelcomeTitle, tagline, set
                       setEnableDietaryDetails(e.target.checked);
                       setIsDirty(true);
                     }}
-                    className="rounded border-[#e1d5c9] text-brand accent-brand h-4 w-4 cursor-pointer"
+                    className="rounded border-paper-border text-brand accent-brand h-4 w-4 cursor-pointer"
                   />
                   <div>
                     <div>Collect Detailed Dietary Restrictions</div>
@@ -387,7 +387,7 @@ export function PortalDesignerCard({ welcomeTitle, setWelcomeTitle, tagline, set
                   </div>
                 </label>
 
-                <label className="flex items-center gap-2.5 cursor-pointer p-2 rounded-lg hover:bg-surface-2 transition-colors bg-[#FDFBF7] border rounded-xl p-3 border-[#e1d5c9]/60">
+                <label className="flex items-center gap-2.5 cursor-pointer p-2 rounded-lg hover:bg-surface-2 transition-colors bg-paper border rounded-xl p-3 border-paper-border/60">
                   <input
                     type="checkbox"
                     checked={enableLodgingChoices}
@@ -395,7 +395,7 @@ export function PortalDesignerCard({ welcomeTitle, setWelcomeTitle, tagline, set
                       setEnableLodgingChoices(e.target.checked);
                       setIsDirty(true);
                     }}
-                    className="rounded border-[#e1d5c9] text-brand accent-brand h-4 w-4 cursor-pointer"
+                    className="rounded border-paper-border text-brand accent-brand h-4 w-4 cursor-pointer"
                   />
                   <div>
                     <div>Collect Overnight Lodging Requests</div>

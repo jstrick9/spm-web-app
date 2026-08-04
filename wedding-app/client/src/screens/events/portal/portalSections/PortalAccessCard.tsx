@@ -41,8 +41,8 @@ export interface PortalAccessCardProps {
 
 export function PortalAccessCard({ localEnabled, toast, handleToggleEnable, portalUrl, guests }: PortalAccessCardProps) {
   return (
-          <Card className="bg-[#FDFBF7] border border-[#e1d5c9] shadow-sm rounded-2xl overflow-hidden">
-            <CardHeader className="flex flex-row items-start justify-between pb-4 border-b border-[#e1d5c9]">
+          <Card className="bg-paper border border-paper-border shadow-sm rounded-2xl overflow-hidden">
+            <CardHeader className="flex flex-row items-start justify-between pb-4 border-b border-paper-border">
               <div>
                 <CardTitle className="text-lg flex items-center gap-2 font-serif font-black text-brand">
                   <Globe className="w-5 h-5 text-brand" /> Public Guest Portal
@@ -71,19 +71,19 @@ export function PortalAccessCard({ localEnabled, toast, handleToggleEnable, port
             </CardHeader>
 
             <CardContent className="space-y-6 pt-6 bg-white">
-              <div className="bg-[#FDFBF7] rounded-xl p-4 flex flex-col sm:flex-row gap-4 items-start sm:items-center justify-between border border-[#e1d5c9]">
+              <div className="bg-paper rounded-xl p-4 flex flex-col sm:flex-row gap-4 items-start sm:items-center justify-between border border-paper-border">
                 <div className="space-y-1">
                   <Label className="flex items-center gap-2 mb-1 text-xs font-bold text-fg-muted uppercase tracking-wider">
                     <LinkIcon className="w-4 h-4 text-brand" /> Shareable Link
                   </Label>
-                  <div className="text-xs font-mono text-fg-subtle select-all bg-white px-3 py-1.5 rounded border border-[#e1d5c9]">
+                  <div className="text-xs font-mono text-fg-subtle select-all bg-white px-3 py-1.5 rounded border border-paper-border">
                     {portalUrl}
                   </div>
                 </div>
                 <div className="flex gap-2">
                   <Button
                     variant="outline"
-                    className="text-xs font-bold border-[#e1d5c9]"
+                    className="text-xs font-bold border-paper-border"
                     onClick={() => {
                       navigator.clipboard.writeText(portalUrl);
                       toast({
@@ -97,7 +97,7 @@ export function PortalAccessCard({ localEnabled, toast, handleToggleEnable, port
                   <a href={portalUrl} target="_blank" rel="noreferrer">
                     <Button
                       variant="secondary"
-                      className="text-xs font-bold bg-[#2C2A29] hover:bg-[#3d3b3a] text-white"
+                      className="text-xs font-bold bg-paper-ink hover:bg-[#3d3b3a] text-white"
                     >
                       <ExternalLink className="w-4 h-4 mr-1" /> Visit
                     </Button>

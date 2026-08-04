@@ -196,7 +196,7 @@ export function EventInvitesTab({ eventId }: Props) {
             <div className={cn("w-full max-w-lg min-h-[500px] shadow-2xl transition-all duration-500 overflow-hidden relative",
               template === 'formal' ? "bg-white font-serif text-center border-[8px] border-double border-gray-200 p-12 text-gray-900" :
               template === 'modern' ? "bg-zinc-900 font-sans text-left p-10 text-white rounded-xl" :
-              "bg-[#fdfbf7] font-serif text-center border-4 border-[#e1d5c9] p-10 text-[#2c3e2e]"
+              "bg-paper font-serif text-center border-4 border-paper-border p-10 text-[#2c3e2e]"
             )}>
               <div className="relative z-10 flex flex-col gap-6">
                 {blocks.map((block) => {

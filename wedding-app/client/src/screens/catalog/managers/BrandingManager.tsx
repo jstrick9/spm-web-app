@@ -11,8 +11,10 @@ import { Button } from '../../../ui/Button';
 import { Input } from '../../../ui/Input';
 import { Label } from '../../../ui/Label';
 import { useToast } from '../../../ui/Toast';
+import { usePrompt } from '../../../ui/usePrompt';
 
 export function BrandingManager({ orgId }: { orgId: string }) {
+  const { ask, askConfirm, promptNode } = usePrompt();
   const { toast } = useToast();
   const [orgName, setOrgName] = useState('Seven Paths Manor');
   const [supportEmail, setSupportEmail] = useState('hello@sevenpathsmanor.com');
@@ -64,8 +66,7 @@ export function BrandingManager({ orgId }: { orgId: string }) {
     }
   };
 
-  const handleReset = () => {
-    if (window.confirm('Reset all branding settings to factory defaults?')) {
+  const handleReset = async () => {   if (await askConfirm({ title: 'Reset all branding settings?', destructive: true })) {
       setOrgName('Seven Paths Manor');
       setSupportEmail('hello@sevenpathsmanor.com');
       setPhone('(555) 019-2831');
@@ -114,6 +115,7 @@ export function BrandingManager({ orgId }: { orgId: string }) {
 
   return (
     <div className="space-y-6">
+      {promptNode}
       <div className="grid grid-cols-1 lg:grid-cols-5 gap-6">
         
         {/* Accordion Configurations Form */}
@@ -289,7 +291,7 @@ export function BrandingManager({ orgId }: { orgId: string }) {
           </div>
 
           {/* Section 5: Typography Advanced Selection */}
-          <div className="rounded-xl border border-[#e1d5c9] bg-white shadow-sm overflow-hidden">
+          <div className="rounded-xl border border-paper-border bg-white shadow-sm overflow-hidden">
             <button
               onClick={() => setActiveSection(activeSection === 'typography' ? null : 'typography')}
               className="w-full flex items-center justify-between p-4 bg-surface-2/40 border-b border-border text-xs font-bold text-fg uppercase tracking-wider text-left font-serif"
@@ -357,7 +359,7 @@ export function BrandingManager({ orgId }: { orgId: string }) {
           <Label className="text-xs font-bold uppercase tracking-wider text-fg-subtle flex items-center gap-1.5 font-serif">
              <Eye className="h-4 w-4 text-brand animate-pulse" /> Live Brand Simulator
           </Label>
-          <div className="rounded-2xl border border-[#e1d5c9] bg-white shadow-md overflow-hidden min-h-[500px] flex flex-col justify-between" style={{ backgroundColor: bgColor }}>
+          <div className="rounded-2xl border border-paper-border bg-white shadow-md overflow-hidden min-h-[500px] flex flex-col justify-between" style={{ backgroundColor: bgColor }}>
             
             {/* Header Simulator */}
             <div className="p-4 text-white flex items-center gap-3" style={{ backgroundColor: brandColor, color: headerTextColor }}>

@@ -13,6 +13,7 @@ import { TimelineItemFormDialog } from './TimelineItemFormDialog';
 import { cn } from '../../../ui/lib/cn';
 import { format, parseISO } from 'date-fns';
 import { useToast } from '../../../ui/Toast';
+import { usePrompt } from '../../../ui/usePrompt';
 
 import { ApprovalStatus, TimelineAudience, TimelineSnapshotItem, TimelineSnapshot, TimelineDiffEntry, ManagerTimelineState, DEFAULT_MANAGER_TIMELINE_STATE, managerTimelineStorageKey, readManagerTimelineState, writeManagerTimelineState, managerStateFromTimelineOps, timelineMetadata, buildTimelineSnapshot, compareTimelineSnapshots } from './timelineState';
 import { ManagerTimelineCommandCenter, ManagerTimelineItemActions, TimelineTemplatePanel, TimelineIntelligencePanels, ReadinessCard, TIMELINE_TEMPLATES, type TimelineTemplateId } from './timelinePanels';
@@ -23,6 +24,7 @@ interface Props {
 }
 
 export function EventTimelineTab({ eventId, organizationId }: Props) {
+  const { ask, askConfirm, promptNode } = usePrompt();
   const qc = useQueryClient();
   const { toast } = useToast();
   const [createOpen, setCreateOpen] = useState(false);
@@ -327,6 +329,7 @@ export function EventTimelineTab({ eventId, organizationId }: Props) {
   if (isLoading) {
     return (
       <Card>
+      {promptNode}
         <CardContent className="pt-6 space-y-4">
           {Array.from({ length: 4 }).map((_, i) => <Skeleton key={i} className="h-16 w-full" />)}
         </CardContent>
@@ -389,7 +392,7 @@ export function EventTimelineTab({ eventId, organizationId }: Props) {
               <Button 
                 variant="outline" 
                 size="sm" 
-                className="font-bold border-[#e1d5c9] bg-white hover:bg-brand-soft/20 text-brand text-[10px]"
+                className="font-bold border-paper-border bg-white hover:bg-brand-soft/20 text-brand text-[10px]"
                 onClick={() => handleTriggerAutomation()}
                 disabled={isSyncing}
               >
@@ -407,7 +410,7 @@ export function EventTimelineTab({ eventId, organizationId }: Props) {
       </div>
 
       {sortedItems.length === 0 ? (
-        <Card className="border-[#e1d5c9] bg-[#FDFBF7]">
+        <Card className="border-paper-border bg-paper">
           <div className="py-12 flex flex-col items-center text-center">
             <Clock className="w-12 h-12 text-fg-subtle mb-4" />
             <h3 className="text-lg font-medium font-serif text-fg">No timeline events</h3>
@@ -447,7 +450,7 @@ export function EventTimelineTab({ eventId, organizationId }: Props) {
                 
                 {/* Content Card */}
                 <Card className={cn(
-                  "w-[calc(100%-4rem)] md:w-[calc(50%-2.5rem)] hover:shadow-md transition-shadow border-[#e1d5c9] active:cursor-grabbing cursor-grab",
+                  "w-[calc(100%-4rem)] md:w-[calc(50%-2.5rem)] hover:shadow-md transition-shadow border-paper-border active:cursor-grabbing cursor-grab",
                   isCompleted && "opacity-70"
                 )}>
                   <CardContent className="p-4 flex gap-4 relative bg-white">
@@ -457,7 +460,7 @@ export function EventTimelineTab({ eventId, organizationId }: Props) {
                            <Move className="w-3.5 h-3.5 text-fg-subtle" />
                            {timeFormatted}
                         </span>
-                        <Badge variant="outline" className="text-[10px] capitalize bg-[#FDFBF7] text-brand border-[#e1d5c9] font-bold">{item.category}</Badge>
+                        <Badge variant="outline" className="text-[10px] capitalize bg-paper text-brand border-paper-border font-bold">{item.category}</Badge>
                       </div>
                       <h4 className={cn("text-sm font-bold text-fg truncate font-serif", isCompleted && "line-through text-fg-subtle")}>
                         {item.title}
@@ -474,7 +477,7 @@ export function EventTimelineTab({ eventId, organizationId }: Props) {
                       {item.metadata && (() => {
                         try {
                           const meta = JSON.parse(item.metadata);
-                          if (meta.notes) return <p className="text-xs text-fg-muted font-semibold mt-2.5 bg-[#FDFBF7] p-2.5 border rounded-lg italic">"{meta.notes}"</p>;
+                          if (meta.notes) return <p className="text-xs text-fg-muted font-semibold mt-2.5 bg-paper p-2.5 border rounded-lg italic">"{meta.notes}"</p>;
                         } catch {}
                         return null;
                       })()}
@@ -504,8 +507,8 @@ export function EventTimelineTab({ eventId, organizationId }: Props) {
                           </DropdownMenuItem>
                           <DropdownMenuItem 
                             className="text-danger focus:text-danger focus:bg-danger/10"
-                            onClick={() => {
-                              if (window.confirm('Delete this timeline item?')) {
+                            onClick={async () => {
+                              if (await askConfirm({ title: 'Delete this timeline item?', destructive: true })) {
                                 deleteItem.mutate(item.id);
                               }
                             }}

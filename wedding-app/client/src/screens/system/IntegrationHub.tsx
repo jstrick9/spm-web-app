@@ -20,6 +20,7 @@ import { Badge } from '../../ui/Badge';
 import { Input } from '../../ui/Input';
 import { Label } from '../../ui/Label';
 import { useToast } from '../../ui/Toast';
+import { usePrompt } from '../../ui/usePrompt';
 import { sdk } from '../../sdk';
 import type { SdkIntegration, SdkIntegrationProvider, IntegrationStatus } from '../../sdk/integrations';
 import type { SdkWebhook } from '../../sdk/webhooks';
@@ -125,6 +126,7 @@ const EMAIL_PRESETS = {
 } as const;
 
 export function IntegrationHub({ orgId }: Props) {
+  const { ask, askConfirm, promptNode } = usePrompt();
   const { toast } = useToast();
   const qc = useQueryClient();
   // IN-07: permission-based (no raw roleKey); managers/custom roles with
@@ -196,6 +198,7 @@ export function IntegrationHub({ orgId }: Props) {
 
   return (
     <>
+      {promptNode}
       <PageHeader title="Integration Hub" description="Connect calendars, email, payments, lead sources, automations, SMS, weather, and e-signature tools." />
       <PageBody>
         <div className="space-y-5">
@@ -286,7 +289,7 @@ export function IntegrationHub({ orgId }: Props) {
                 deliveriesQuery={deliveriesQuery}
                 testWebhook={(id) => testWebhookMutation.mutate(id)}
                 toggleWebhook={(id, isActive) => toggleMutation.mutate({ id, isActive })}
-                deleteWebhook={(id) => { if (window.confirm('Delete this webhook?')) deleteMutation.mutate(id); }}
+                deleteWebhook={async (id) => { if (await askConfirm({ title: 'Delete this webhook?', destructive: true })) deleteMutation.mutate(id); }}
                 addOpen={addOpen}
                 onAddOpenChange={setAddOpen}
               />

@@ -41,8 +41,8 @@ export interface PortalSmsRemindersCardProps {
 
 export function PortalSmsRemindersCard({ enableSmsReminders, setEnableSmsReminders, smsTemplate, setSmsTemplate, setIsDirty, guests }: PortalSmsRemindersCardProps) {
   return (
-          <Card className="bg-[#FDFBF7] border border-[#e1d5c9] shadow-sm rounded-2xl overflow-hidden">
-            <CardHeader className="pb-3 border-b border-[#e1d5c9]">
+          <Card className="bg-paper border border-paper-border shadow-sm rounded-2xl overflow-hidden">
+            <CardHeader className="pb-3 border-b border-paper-border">
               <div className="flex justify-between items-center">
                 <CardTitle className="text-base flex items-center gap-2 text-brand font-black font-serif">
                   <MessageSquare className="w-4 h-4 text-brand" /> Automated
@@ -86,7 +86,7 @@ export function PortalSmsRemindersCard({ enableSmsReminders, setEnableSmsReminde
                     <textarea
                       id="smsTemplateInput"
                       rows={3}
-                      className="w-full text-xs p-2.5 rounded-lg border border-[#e1d5c9] bg-[#FDFBF7] font-semibold text-fg-muted focus-visible:outline-none"
+                      className="w-full text-xs p-2.5 rounded-lg border border-paper-border bg-paper font-semibold text-fg-muted focus-visible:outline-none"
                       value={smsTemplate}
                       onChange={(e) => {
                         setSmsTemplate(e.target.value);

@@ -241,8 +241,8 @@ export function RunSheet({ eventId }: Props) {
         {(dayOfMode || mobileViewport) && <MobileContactLookup vendors={vendorContacts} tasks={staffContacts} search={phoneSearch} onSearchChange={setPhoneSearch} />}
 
         {/* COORDINATOR LIVE WEDDING PACE CONTROL DASHBOARD (NON-PRINT) */}
-        <Card className="print:hidden bg-[#FDFBF7] border-2 border-[#e1d5c9] shadow-md rounded-2xl overflow-hidden">
-          <CardHeader className="pb-4 border-b border-[#e1d5c9]">
+        <Card className="print:hidden bg-paper border-2 border-paper-border shadow-md rounded-2xl overflow-hidden">
+          <CardHeader className="pb-4 border-b border-paper-border">
             <div className="flex justify-between items-center">
               <div className="space-y-1">
                 <CardTitle className="text-base font-serif font-black text-brand flex items-center gap-2">
@@ -267,7 +267,7 @@ export function RunSheet({ eventId }: Props) {
 
             <div className="flex gap-2 items-center w-full sm:w-auto">
               <select
-                className="text-xs p-2 rounded-lg border border-[#e1d5c9] bg-white text-fg font-semibold flex-1 sm:flex-none min-w-[200px]"
+                className="text-xs p-2 rounded-lg border border-paper-border bg-white text-fg font-semibold flex-1 sm:flex-none min-w-[200px]"
                 value={activeTimelineItemId}
                 onChange={(e) => handleUpdateActiveTimelineItem(e.target.value)}
               >
@@ -293,7 +293,7 @@ export function RunSheet({ eventId }: Props) {
         </Card>
 
         {/* THE PRINTABLE PACKET BODY */}
-        <div className="bg-[#FDFBF7] text-[#2C2A29] p-8 sm:p-10 shadow-lg border border-[#e1d5c9] rounded-2xl print:border-none print:shadow-none print:p-0">
+        <div className="bg-paper text-paper-ink p-8 sm:p-10 shadow-lg border border-paper-border rounded-2xl print:border-none print:shadow-none print:p-0">
           
           {/* Header */}
           <div className="border-b-2 border-black pb-6 mb-8 flex justify-between items-start flex-wrap gap-4">
@@ -314,7 +314,7 @@ export function RunSheet({ eventId }: Props) {
 
             {/* Layout Approval indicator */}
             {activeLayout && (
-              <div className="bg-white border border-[#e1d5c9] p-3 rounded-xl shadow-xs text-xs font-semibold shrink-0">
+              <div className="bg-white border border-paper-border p-3 rounded-xl shadow-xs text-xs font-semibold shrink-0">
                  <div className="text-[9px] uppercase font-bold tracking-wider text-fg-subtle">Design Approval</div>
                  <div className="flex items-center gap-1.5 mt-1 text-fg">
                     <span className="font-bold text-sm font-serif">{activeLayout.name}</span>
@@ -342,14 +342,14 @@ export function RunSheet({ eventId }: Props) {
           {/* Section 1: Setup Checklist (Grounded on active canvas details!) */}
           {layoutChecklist?.hasData && (
             <div className="mb-10 print:break-inside-avoid">
-              <h2 className="text-lg font-serif font-black uppercase tracking-wider mb-4 border-b border-[#e1d5c9] pb-2 flex items-center gap-2 text-brand">
+              <h2 className="text-lg font-serif font-black uppercase tracking-wider mb-4 border-b border-paper-border pb-2 flex items-center gap-2 text-brand">
                 <ClipboardList className="w-5 h-5 text-brand" /> Physical Floorplan Setup Checklist
               </h2>
               
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6 text-sm">
                 
                 {/* Department A: Layout & Seating Crew */}
-                <div className="space-y-3.5 bg-white p-4 rounded-xl border border-[#e1d5c9] shadow-xs">
+                <div className="space-y-3.5 bg-white p-4 rounded-xl border border-paper-border shadow-xs">
                    <h3 className="font-serif font-bold text-fg border-b pb-1 flex items-center justify-between">
                       <span>🔨 Layout &amp; Seating Crew</span>
                       <span className="text-[10px] text-brand">Tables / Chairs</span>
@@ -372,19 +372,19 @@ export function RunSheet({ eventId }: Props) {
 
                       {layoutChecklist.tables.map(([name, count]) => (
                         <div key={name} className="flex gap-2.5 items-start">
-                           <div className="w-4 h-4 border-2 border-[#e1d5c9] rounded-md shrink-0 mt-0.5 print:border-black"></div>
+                           <div className="w-4 h-4 border-2 border-paper-border rounded-md shrink-0 mt-0.5 print:border-black"></div>
                            <span className="font-semibold text-fg-muted">Place <strong className="text-fg">{count}x</strong> {name} on stage grids</span>
                         </div>
                       ))}
                       {layoutChecklist.chairs.map(([name, count]) => (
                         <div key={name} className="flex gap-2.5 items-start">
-                           <div className="w-4 h-4 border-2 border-[#e1d5c9] rounded-md shrink-0 mt-0.5 print:border-black"></div>
+                           <div className="w-4 h-4 border-2 border-paper-border rounded-md shrink-0 mt-0.5 print:border-black"></div>
                            <span className="font-semibold text-fg-muted">Align and anchor <strong className="text-fg">{count}x</strong> {name}</span>
                         </div>
                       ))}
                       {layoutChecklist.hasDanceFloor && (
                         <div className="flex gap-2.5 items-start">
-                           <div className="w-4 h-4 border-2 border-[#e1d5c9] rounded-md shrink-0 mt-0.5 print:border-black"></div>
+                           <div className="w-4 h-4 border-2 border-paper-border rounded-md shrink-0 mt-0.5 print:border-black"></div>
                            <span className="font-semibold text-fg-muted">Assemble and lock center **Dance Floor** modules</span>
                         </div>
                       )}
@@ -392,7 +392,7 @@ export function RunSheet({ eventId }: Props) {
                 </div>
 
                 {/* Department B: Florals & Catering Setup */}
-                <div className="space-y-3.5 bg-white p-4 rounded-xl border border-[#e1d5c9] shadow-xs">
+                <div className="space-y-3.5 bg-white p-4 rounded-xl border border-paper-border shadow-xs">
                    <h3 className="font-serif font-bold text-fg border-b pb-1 flex items-center justify-between">
                       <span>🌸 Floral &amp; Linens Team</span>
                       <span className="text-[10px] text-brand">Decor / Linens</span>
@@ -411,13 +411,13 @@ export function RunSheet({ eventId }: Props) {
 
                       {layoutChecklist.decors.map(([name, count]) => (
                         <div key={name} className="flex gap-2.5 items-start">
-                           <div className="w-4 h-4 border-2 border-[#e1d5c9] rounded-md shrink-0 mt-0.5 print:border-black"></div>
+                           <div className="w-4 h-4 border-2 border-paper-border rounded-md shrink-0 mt-0.5 print:border-black"></div>
                            <span className="font-semibold text-fg-muted">Position <strong className="text-fg">{count}x</strong> {name} table centerpieces</span>
                         </div>
                       ))}
                       {layoutChecklist.tables.map(([name]) => (
                         <div key={name} className="flex gap-2.5 items-start">
-                           <div className="w-4 h-4 border-2 border-[#e1d5c9] rounded-md shrink-0 mt-0.5 print:border-black"></div>
+                           <div className="w-4 h-4 border-2 border-paper-border rounded-md shrink-0 mt-0.5 print:border-black"></div>
                            <span className="font-semibold text-fg-muted">Drape luxury linen tablecloth options on all {name}s</span>
                         </div>
                       ))}
@@ -430,7 +430,7 @@ export function RunSheet({ eventId }: Props) {
 
           {/* Section 2: Timeline */}
           <div className="mb-10 print:break-inside-avoid">
-            <h2 className="text-lg font-serif font-black uppercase tracking-wider mb-4 border-b border-[#e1d5c9] pb-2 text-brand">Run of Show (Milestones)</h2>
+            <h2 className="text-lg font-serif font-black uppercase tracking-wider mb-4 border-b border-paper-border pb-2 text-brand">Run of Show (Milestones)</h2>
             <div className="space-y-0">
               {timeline.length === 0 ? (
                  <p className="text-gray-500 italic text-sm">No timeline events scheduled.</p>
@@ -483,7 +483,7 @@ export function RunSheet({ eventId }: Props) {
 
           {/* Section 3: Vendors */}
           <div className="mb-10 print:break-inside-avoid">
-            <h2 className="text-lg font-serif font-black uppercase tracking-wider mb-4 border-b border-[#e1d5c9] pb-2 flex items-center gap-2 text-brand">
+            <h2 className="text-lg font-serif font-black uppercase tracking-wider mb-4 border-b border-paper-border pb-2 flex items-center gap-2 text-brand">
               <Truck className="w-5 h-5" /> Vendor Directory
             </h2>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
@@ -491,7 +491,7 @@ export function RunSheet({ eventId }: Props) {
                  <p className="text-gray-500 italic text-sm">No vendors listed.</p>
                ) : (
                  vendors.map(v => (
-                   <div key={v.id} className="border border-[#e1d5c9] p-4 rounded-xl bg-white shadow-xs">
+                   <div key={v.id} className="border border-paper-border p-4 rounded-xl bg-white shadow-xs">
                       <div className="font-bold text-fg text-sm">{v.name}</div>
                       <div className="text-[10px] uppercase font-bold tracking-wider text-brand mb-2">{v.category}</div>
                       {v.contact_name && <div className="text-xs font-semibold text-fg-muted">Contact: {v.contact_name}</div>}
@@ -505,13 +505,13 @@ export function RunSheet({ eventId }: Props) {
 
           {/* SECTION 4: PARTNER VENDOR SUB-CHECKLISTS (NEW ADDITION) */}
           <div className="mb-10 print:break-inside-avoid">
-            <h2 className="text-lg font-serif font-black uppercase tracking-wider mb-4 border-b border-[#e1d5c9] pb-2 flex items-center gap-2 text-brand">
+            <h2 className="text-lg font-serif font-black uppercase tracking-wider mb-4 border-b border-paper-border pb-2 flex items-center gap-2 text-brand">
               <Sparkles className="w-5 h-5 text-brand" /> Vendor-Specific Execution Checklists
             </h2>
             <div className="grid grid-cols-1 md:grid-cols-3 gap-5 text-xs font-semibold">
               
               {/* CATERING CHECKLIST */}
-              <div className="border border-[#e1d5c9] rounded-xl p-4 bg-white space-y-3 shadow-xs">
+              <div className="border border-paper-border rounded-xl p-4 bg-white space-y-3 shadow-xs">
                 <span className="font-serif font-bold text-brand block border-b pb-1">🍷 Catering &amp; Bar Lead</span>
                 <div className="space-y-2 text-fg-muted font-semibold">
                   <div className="flex gap-2"><div className="w-3.5 h-3.5 border rounded-sm shrink-0 mt-0.5"></div><span>Verify linen drop length on buffet tables</span></div>
@@ -521,7 +521,7 @@ export function RunSheet({ eventId }: Props) {
               </div>
 
               {/* FLORALS CHECKLIST */}
-              <div className="border border-[#e1d5c9] rounded-xl p-4 bg-white space-y-3 shadow-xs">
+              <div className="border border-paper-border rounded-xl p-4 bg-white space-y-3 shadow-xs">
                 <span className="font-serif font-bold text-brand block border-b pb-1">🌸 Florals &amp; Decor Team</span>
                 <div className="space-y-2 text-fg-muted font-semibold">
                   <div className="flex gap-2"><div className="w-3.5 h-3.5 border rounded-sm shrink-0 mt-0.5"></div><span>Secure centerpiece tall vases to pins</span></div>
@@ -531,7 +531,7 @@ export function RunSheet({ eventId }: Props) {
               </div>
 
               {/* ENTERTAINMENT CHECKLIST */}
-              <div className="border border-[#e1d5c9] rounded-xl p-4 bg-white space-y-3 shadow-xs">
+              <div className="border border-paper-border rounded-xl p-4 bg-white space-y-3 shadow-xs">
                 <span className="font-serif font-bold text-brand block border-b pb-1">🎵 AV &amp; Production Crews</span>
                 <div className="space-y-2 text-fg-muted font-semibold">
                   <div className="flex gap-2"><div className="w-3.5 h-3.5 border rounded-sm shrink-0 mt-0.5"></div><span>Execute wireless mic frequency sound check</span></div>
@@ -545,7 +545,7 @@ export function RunSheet({ eventId }: Props) {
 
           {/* Section 5: Staff Tasks */}
           <div className="print:break-inside-avoid mb-10">
-            <h2 className="text-lg font-serif font-black uppercase tracking-wider mb-4 border-b border-[#e1d5c9] pb-2 flex items-center gap-2 text-brand">
+            <h2 className="text-lg font-serif font-black uppercase tracking-wider mb-4 border-b border-paper-border pb-2 flex items-center gap-2 text-brand">
               <CheckSquare className="w-5 h-5" /> Staff Operations
             </h2>
             {['pre-event', 'during-event', 'post-event'].map(phase => {
@@ -558,7 +558,7 @@ export function RunSheet({ eventId }: Props) {
                     <div className="space-y-3">
                        {phaseTasks.map(task => (
                          <div key={task.id} className="flex gap-3">
-                            <div className="w-5 h-5 border-2 border-[#e1d5c9] rounded-md shrink-0 mt-0.5 print:border-black"></div>
+                            <div className="w-5 h-5 border-2 border-paper-border rounded-md shrink-0 mt-0.5 print:border-black"></div>
                             <div className="text-sm">
                                <div className="font-bold text-fg">{task.title}</div>
                                {task.description && <div className="text-xs text-fg-subtle font-semibold mt-0.5">{task.description}</div>}

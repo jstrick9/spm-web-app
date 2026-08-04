@@ -9,6 +9,7 @@ import { Input } from '../../../ui/Input';
 import { Button } from '../../../ui/Button';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../../../ui/Select';
 import { useToast } from '../../../ui/Toast';
+import { usePrompt } from '../../../ui/usePrompt';
 import { staffSdk } from '../../../sdk/staff';
 import type { SdkStaffTask } from '../../../sdk/types';
 
@@ -34,6 +35,7 @@ interface Props {
 }
 
 export function StaffTaskFormDialog({ open, onOpenChange, eventId, organizationId, task }: Props) {
+  const { ask, askConfirm, promptNode } = usePrompt();
   const qc = useQueryClient();
   const { toast } = useToast();
   const isEdit = !!task;
@@ -96,6 +98,7 @@ export function StaffTaskFormDialog({ open, onOpenChange, eventId, organizationI
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
+      {promptNode}
       <DialogContent className="max-w-md">
         <DialogHeader>
           <DialogTitle>{isEdit ? 'Edit Task' : 'New Staff Task'}</DialogTitle>
@@ -220,7 +223,7 @@ export function StaffTaskFormDialog({ open, onOpenChange, eventId, organizationI
                 <Button 
                   type="button" 
                   variant="destructive" 
-                  onClick={() => window.confirm('Delete this task?') && deleteMutation.mutate()}
+                  onClick={async () => { if (await askConfirm({ title: 'Delete this task?', destructive: true })) deleteMutation.mutate(); }}
                   disabled={deleteMutation.isPending}
                 >
                   Delete

@@ -425,7 +425,7 @@ export function CatalogManager({ orgId, kind }: { orgId: string; kind: Exclude<C
                   </div>
                 )}
                 {kind === 'wall_style' && (
-                  <div className="h-16 w-16 bg-[#FDFBF7] rounded-lg border border-border flex flex-col items-center justify-center relative shadow-sm overflow-hidden shrink-0" style={{ borderLeft: `5px solid ${spec.color || '#999999'}` }}>
+                  <div className="h-16 w-16 bg-paper rounded-lg border border-border flex flex-col items-center justify-center relative shadow-sm overflow-hidden shrink-0" style={{ borderLeft: `5px solid ${spec.color || '#999999'}` }}>
                      <span className="text-2xl">🧱</span>
                      <span className="text-[8px] absolute bottom-0.5 capitalize text-fg-subtle font-bold tracking-tight">{spec.texture || 'plaster'}</span>
                   </div>
@@ -454,7 +454,7 @@ export function CatalogManager({ orgId, kind }: { orgId: string; kind: Exclude<C
                   </div>
                 )}
                 {kind === 'spacing' && (
-                  <div className="h-16 w-16 bg-[#FDFBF7] rounded-lg border border-border/80 flex flex-col items-center justify-center relative shadow-sm overflow-hidden shrink-0">
+                  <div className="h-16 w-16 bg-paper rounded-lg border border-border/80 flex flex-col items-center justify-center relative shadow-sm overflow-hidden shrink-0">
                     <div className="grid grid-cols-3 gap-1.5 opacity-60 p-1">
                       <div className="w-2.5 h-2.5 rounded bg-brand-soft border border-brand/20" />
                       <div className="w-2.5 h-2.5 rounded bg-brand-soft border border-brand/20" />

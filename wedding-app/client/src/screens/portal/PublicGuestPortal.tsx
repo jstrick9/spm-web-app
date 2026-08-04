@@ -24,10 +24,12 @@ import { ApiError, sdk }           from '../../sdk';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '../../ui/Card';
 import { Button }                  from '../../ui/Button';
 import { Label }                   from '../../ui/Label';
+import { usePrompt }              from '../../ui/usePrompt';
 import { Map as MapIcon, Home, Send, CloudRain, HelpCircle, Bus, Gift, Mail, Contrast, Languages, RefreshCw, ShieldAlert, Type } from 'lucide-react';
 import { Badge }                   from '../../ui/Badge';
 import { cn }                      from '../../ui/lib/cn';
-import type { Poll }               from '../../sdk/feedback.js';
+import type {
+  Poll }               from '../../sdk/feedback.js';
 import type {
   PortalInfoResponse,
   PortalGuestEntry,
@@ -63,6 +65,7 @@ type Palette = typeof DEFAULT_PALETTE;
 // ── PublicGuestPortal ─────────────────────────────────────────────────────
 
 export function PublicGuestPortal({ eventId }: { eventId: string }) {
+  const { ask, askForm, askConfirm, promptNode } = usePrompt();
   // ── State — fully typed, zero `any` ─────────────────────────────────────
   const [info,            setInfo]           = useState<PortalInfoResponse['event'] | null>(null);
   const [guests,          setGuests]         = useState<PortalGuestEntry[]>([]);
@@ -249,9 +252,9 @@ export function PublicGuestPortal({ eventId }: { eventId: string }) {
     }
   }
 
-  const handleTabChange = (nextTab: typeof activeTab) => {
+  const handleTabChange = async (nextTab: typeof activeTab) => {
     if (activeTab === 'rsvp' && !done && (selectedGuestId || notes) && isFormDirty) {
-      if (!window.confirm("You have unsaved RSVP responses. Are you sure you want to discard your draft?")) {
+      if (!(await askConfirm({ title: 'Discard your draft?', description: 'You have unsaved RSVP responses. Are you sure you want to discard your draft?', destructive: true }))) {
         return;
       }
     }
@@ -272,15 +275,25 @@ export function PublicGuestPortal({ eventId }: { eventId: string }) {
   }
 
   async function requestGuestHelp(kind: 'cannot_find_name' | 'wrong_guest' | 'expired_or_revoked' | 'other') {
-    const email = window.prompt('Email where the venue/couple can reach you', lookupEmail || '') || undefined;
-    const message = window.prompt('Optional note', kind === 'wrong_guest' ? 'This invitation link is not for me.' : '') || undefined;
-    const res = await sdk.portal.requestHelp(eventId, { kind, name: lookupQuery || activeGuest?.fullName, email, message, guestId: selectedGuestId || undefined });
+    const values = await askForm({
+      title: kind === 'cannot_find_name' ? 'I cannot find my name' : kind === 'wrong_guest' ? 'This invitation is not for me' : 'Request help',
+      fields: [
+        { key: 'email', label: 'Email where the venue/couple can reach you', defaultValue: lookupEmail || '' },
+        { key: 'message', label: 'Optional note', multiline: true, defaultValue: kind === 'wrong_guest' ? 'This invitation link is not for me.' : '' },
+      ],
+    });
+    if (!values) return;
+    const res = await sdk.portal.requestHelp(eventId, { kind, name: lookupQuery || activeGuest?.fullName, email: values.email || undefined, message: values.message || undefined, guestId: selectedGuestId || undefined });
     setLookupMessage(res.message);
   }
 
   async function resendSecureLink() {
-    const email = lookupEmail || window.prompt('Enter your email address to request your secure RSVP link') || '';
-    if (!email) return;
+    let email = lookupEmail;
+    if (!email) {
+      const asked = await ask({ title: 'Request your secure RSVP link', label: 'Email address', required: true });
+      if (!asked) return;
+      email = asked;
+    }
     const res = await sdk.portal.resendLink(eventId, { email, name: lookupQuery || undefined });
     setLookupMessage(res.message);
   }
@@ -351,6 +364,7 @@ export function PublicGuestPortal({ eventId }: { eventId: string }) {
       className={cn("min-h-screen font-serif flex flex-col relative pb-20", largeTextMode && "text-lg")}
       style={{ background: portalPalette.bg, color: portalPalette.fg, ...themeVars }}
     >
+      {promptNode}
       {/* Header */}
       <header
         className="py-6 px-4 text-center sticky top-0 z-10 shadow-sm"

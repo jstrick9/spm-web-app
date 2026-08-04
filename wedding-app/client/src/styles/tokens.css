@@ -29,6 +29,11 @@
     --color-border:        232 226 220;
     --color-border-strong: 209 199 188;
 
+    /* ─── "Paper" surfaces (warm editorial cards/run sheets) ── */
+    --color-paper:         253 251 247;   /* warm cream */
+    --color-paper-border:  225 213 201;   /* soft beige */
+    --color-paper-ink:      44  42  41;   /* warm near-black */
+
     /* ─── Text ─────────────────────────────────────── */
     --color-fg:            28 25 22;       /* near-black, warm */
     --color-fg-muted:      89 82 76;
@@ -93,6 +98,11 @@
     --color-surface-2:     34 28 36;
     --color-border:        58 50 64;
     --color-border-strong: 85 73 92;
+
+    /* ─── "Paper" surfaces (dark mode) ── */
+    --color-paper:          30  28  27;
+    --color-paper-border:   60  54  48;
+    --color-paper-ink:     236 231 224;
 
     --color-fg:            245 240 240;
     --color-fg-muted:      176 168 168;

@@ -11,6 +11,7 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '../..
 import { Badge } from '../../../ui/Badge';
 import { Skeleton } from '../../../ui/Skeleton';
 import { useToast } from '../../../ui/Toast';
+import { usePrompt } from '../../../ui/usePrompt';
 import { usePermission } from '../../../lib/usePermission';
 import { StatCard } from '../../../ui/StatCard';
 import { ContractFormDialog } from './ContractFormDialog';
@@ -55,6 +56,7 @@ function contractRisk(contracts: SdkContract[]) {
 }
 
 export function EventContractsTab({ eventId }: Props) {
+  const { ask, askConfirm, promptNode } = usePrompt();
   const { toast } = useToast();
   const qc = useQueryClient();
   const canManage = usePermission('contracts.manage');
@@ -183,6 +185,7 @@ export function EventContractsTab({ eventId }: Props) {
 
   return (
     <div className="space-y-6">
+      {promptNode}
       <Card className="border-brand/20 bg-brand-soft/20">
         <CardContent className="p-4 text-sm text-fg-muted space-y-2">
           <h2 className="font-bold text-brand">Contracts, signatures, and audit certificates</h2>
@@ -276,7 +279,7 @@ export function EventContractsTab({ eventId }: Props) {
                         <Download className="h-3 w-3" />
                       </Button>
                       {canManage && (
-                        <button onClick={() => { if (window.confirm('Delete this contract?')) deleteMutation.mutate(c.id); }} className="p-1 text-fg-subtle hover:text-danger rounded">
+                        <button onClick={async () => { if (await askConfirm({ title: 'Delete this contract?', destructive: true })) deleteMutation.mutate(c.id); }} className="p-1 text-fg-subtle hover:text-danger rounded">
                           <Trash2 className="h-3.5 w-3.5" />
                         </button>
                       )}

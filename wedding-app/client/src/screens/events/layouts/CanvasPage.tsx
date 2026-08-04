@@ -15,6 +15,7 @@ import { vendorsSdk } from '../../../sdk/vendors';
 import { Button } from '../../../ui/Button';
 import { Badge } from '../../../ui/Badge';
 import { useToast } from '../../../ui/Toast';
+import { usePrompt } from '../../../ui/usePrompt';
 import { Input } from '../../../ui/Input';
 import { Label } from '../../../ui/Label';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '../../../ui/Dialog';
@@ -39,6 +40,7 @@ import { usePermission } from '../../../lib/usePermission';
 import { MobileLayoutReview, LayoutReadinessPanel } from './canvasPanels';
 
 export function CanvasPage({ event }: Props) {
+  const { ask, askConfirm, promptNode } = usePrompt();
   const { toast } = useToast();
   const canApproveLayout = usePermission('layouts.publish');
   const stageRef = useRef<any>(null);
@@ -828,8 +830,8 @@ export function CanvasPage({ event }: Props) {
     } catch (e: any) { setReservationConflict(e.message || 'Inventory reservation conflict'); toast({ title: 'Inventory reservation needs review', description: e.message, variant: 'destructive' }); }
   };
 
-  const handleRestoreVersion = (version: any) => {
-    if (window.confirm('Restore this layout version? Unsaved changes will be lost.')) {
+  const handleRestoreVersion = async (version: any) => {
+    if (await askConfirm({ title: 'Restore this layout version?', description: 'Unsaved changes will be lost.', destructive: true })) {
       setItems(JSON.parse(version.payload).items || []);
       setViewingVersion(null);
       setHasChanges(true);
@@ -1050,8 +1052,8 @@ export function CanvasPage({ event }: Props) {
     setDrawnPoints([]);
   };
 
-  const generateAILayout = () => {
-    if (!window.confirm('This will replace your current layout with an AI generated suggestion based on your guest count. Proceed?')) {
+  const generateAILayout = async () => {
+    if (!(await askConfirm({ title: 'Replace layout with an AI suggestion?', description: 'This will replace your current layout with an AI generated suggestion based on your guest count.', destructive: true }))) {
       return;
     }
 
@@ -1212,7 +1214,7 @@ export function CanvasPage({ event }: Props) {
       <LayoutReadinessPanel diagnostics={layoutDiagnostics} items={items} layout={layout} event={event} hasChanges={hasChanges} selectedId={selectedId} setSelectedId={setSelectedId} nudgeItem={nudgeItem} rainPlanCompare={rainPlanCompare} setRainPlanCompare={setRainPlanCompare} vendorSpecificView={vendorSpecificView} setVendorSpecificView={setVendorSpecificView} managerOps={managerLayoutOps} onToggleFloorWalkCheck={toggleFloorWalkCheck} onRecordVarianceEvidence={recordVarianceEvidence} onSetRainPlanActive={setRainPlanActive} setupPacketUrl={setupPacketUrl} onCreateSetupPacket={createSignedSetupPacket} />
 
       <div className="flex items-center justify-between rounded-lg border border-border bg-surface px-3 py-2 text-xs"><span><strong>Venue-owned structure & safety</strong> is protected from event edits.</span><span className="flex gap-3"><label className="flex items-center gap-2"><input type="checkbox" checked={showProtectedLayers} onChange={(e) => setShowProtectedLayers(e.target.checked)}/> Show protected layers</label><label className="flex items-center gap-2"><input type="checkbox" checked={showCommentPins} onChange={(e) => setShowCommentPins(e.target.checked)}/> Show comment pins</label></span></div>
-      <div className="flex w-full h-[600px] border border-[#e1d5c9] rounded-lg bg-surface overflow-hidden shadow-md">
+      <div className="flex w-full h-[600px] border border-paper-border rounded-lg bg-surface overflow-hidden shadow-md">
         {/* Sidebar Catalog / Guests */}
       <CanvasSidebar guestSearch={guestSearch} setGuestSearch={setGuestSearch} items={items} selectedId={selectedId} setSelectedId={setSelectedId} sidebarTab={sidebarTab} setSidebarTab={setSidebarTab} paletteCategory={paletteCategory} setPaletteCategory={setPaletteCategory} viewingVersion={viewingVersion} setHasChanges={setHasChanges} packageGuests={packageGuests} setPackageGuests={setPackageGuests} serviceStyle={serviceStyle} setServiceStyle={setServiceStyle} setSetupGroupOpen={setSetupGroupOpen} showVendorOverlay={showVendorOverlay} setShowVendorOverlay={setShowVendorOverlay} draggedGuestRef={draggedGuestRef} inventoryData={inventoryData} guests={guests} DECOR_ITEMS={DECOR_ITEMS} layout={layout} versions={versions} vendors={vendors} allowedTemplateCategories={allowedTemplateCategories} allowedTemplateInventory={allowedTemplateInventory} pushState={pushState} reconcileMappedInventory={reconcileMappedInventory} saveLayout={saveLayout} handleAddStickyNote={handleAddStickyNote} CATALOG_ITEMS={CATALOG_ITEMS} handleAddItem={handleAddItem} addWeddingPackage={addWeddingPackage} handleRestoreVersion={handleRestoreVersion} handlePreviewVersion={handlePreviewVersion} event={event} />
 

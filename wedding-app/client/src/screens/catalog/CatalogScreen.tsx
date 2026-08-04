@@ -97,7 +97,7 @@ export function CatalogScreen({ orgId }: Props) {
 
           {/* Configuration area */}
           <div className="lg:col-span-3">
-            <Card className="min-h-[550px] border border-border bg-[#FDFBF7] shadow-lg">
+            <Card className="min-h-[550px] border border-border bg-paper shadow-lg">
               <CardHeader className="pb-4 border-b border-border/40">
                 <CardTitle className="text-lg font-serif font-bold text-fg flex items-center gap-2">
                   <span className="text-xl">{KINDS.find((k) => k.id === activeTab)?.icon}</span>

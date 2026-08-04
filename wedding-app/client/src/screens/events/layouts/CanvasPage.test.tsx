@@ -118,10 +118,13 @@ describe('CanvasPage', () => {
     const statusSelect = screen.getByRole('combobox');
     expect((statusSelect as HTMLSelectElement).value).toBe('pending');
 
-    // Simulate change
-    vi.spyOn(window, 'confirm').mockImplementation(() => true);
+    // Simulate change — the in-app confirm dialog appears (replaces native confirm).
     fireEvent.change(statusSelect, { target: { value: 'approved' } });
-    
+    await waitFor(() => {
+      expect(screen.getByText(/change layout status to approved/i)).toBeTruthy();
+    });
+    fireEvent.click(screen.getByRole('button', { name: /confirm/i }));
+
     await waitFor(() => {
        expect(layoutsSdk.save).toHaveBeenCalledWith('l1', expect.anything(), { approvalStatus: 'approved' });
     });

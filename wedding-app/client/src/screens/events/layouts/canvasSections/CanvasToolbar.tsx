@@ -23,7 +23,7 @@ export interface CanvasToolbarProps {
 
 export function CanvasToolbar({ snapToGrid, setSnapToGrid, showClearanceRings, setShowClearanceRings, drawingMode, setDrawingMode, drawnPoints, setDrawnPoints, undoStack, redoStack, handleUndo, handleRedo, finalizeCustomWall }: CanvasToolbarProps) {
   return (
-      <div className="flex flex-wrap items-center justify-between p-3 bg-[#FDFBF7] rounded-xl border border-[#e1d5c9] gap-3 shadow-md animate-in fade-in duration-200">
+      <div className="flex flex-wrap items-center justify-between p-3 bg-paper rounded-xl border border-paper-border gap-3 shadow-md animate-in fade-in duration-200">
         <div className="flex items-center gap-2.5">
           <Button 
             variant="outline" 
@@ -31,7 +31,7 @@ export function CanvasToolbar({ snapToGrid, setSnapToGrid, showClearanceRings, s
             onClick={handleUndo} 
             disabled={undoStack.length === 0} 
             title="Undo (⌘Z)"
-            className="border-[#e1d5c9] hover:bg-brand-soft/20 text-fg-muted hover:text-fg font-semibold transition-all"
+            className="border-paper-border hover:bg-brand-soft/20 text-fg-muted hover:text-fg font-semibold transition-all"
           >
             <Undo2 className="h-4 w-4 mr-1 text-brand" /> Undo {undoStack.length > 0 && <span className="text-[10px] bg-brand-soft text-brand-strong px-1.5 py-0.5 rounded-full ml-1 font-bold">{undoStack.length}</span>}
           </Button>
@@ -41,14 +41,14 @@ export function CanvasToolbar({ snapToGrid, setSnapToGrid, showClearanceRings, s
             onClick={handleRedo} 
             disabled={redoStack.length === 0} 
             title="Redo (⌘Y)"
-            className="border-[#e1d5c9] hover:bg-brand-soft/20 text-fg-muted hover:text-fg font-semibold transition-all"
+            className="border-paper-border hover:bg-brand-soft/20 text-fg-muted hover:text-fg font-semibold transition-all"
           >
             <Redo2 className="h-4 w-4 mr-1 text-brand" /> Redo {redoStack.length > 0 && <span className="text-[10px] bg-brand-soft text-brand-strong px-1.5 py-0.5 rounded-full ml-1 font-bold">{redoStack.length}</span>}
           </Button>
         </div>
 
         <div className="flex items-center gap-4">
-          <div className="flex items-center gap-2 bg-[#FDFBF7] px-3.5 py-2 rounded-xl border border-[#e1d5c9] text-xs font-semibold shadow-xs">
+          <div className="flex items-center gap-2 bg-paper px-3.5 py-2 rounded-xl border border-paper-border text-xs font-semibold shadow-xs">
             <Grid className="h-4 w-4 text-brand" />
             <span className="text-fg-subtle">Grid Snapping (20px)</span>
             <input
@@ -56,11 +56,11 @@ export function CanvasToolbar({ snapToGrid, setSnapToGrid, showClearanceRings, s
               aria-label="Grid Snapping (20px)"
               checked={snapToGrid}
               onChange={(e) => setSnapToGrid(e.target.checked)}
-              className="rounded border-[#e1d5c9] text-brand accent-brand h-4 w-4 ml-1 cursor-pointer"
+              className="rounded border-paper-border text-brand accent-brand h-4 w-4 ml-1 cursor-pointer"
             />
           </div>
 
-          <div className="flex items-center gap-2 bg-[#FDFBF7] px-3.5 py-2 rounded-xl border border-[#e1d5c9] text-xs font-semibold shadow-xs">
+          <div className="flex items-center gap-2 bg-paper px-3.5 py-2 rounded-xl border border-paper-border text-xs font-semibold shadow-xs">
             <GripVertical className="h-4 w-4 text-brand" />
             <span className="text-fg-subtle">Spacing Safety Rings</span>
             <input
@@ -68,7 +68,7 @@ export function CanvasToolbar({ snapToGrid, setSnapToGrid, showClearanceRings, s
               aria-label="Spacing Safety Rings"
               checked={showClearanceRings}
               onChange={(e) => setShowClearanceRings(e.target.checked)}
-              className="rounded border-[#e1d5c9] text-brand accent-brand h-4 w-4 ml-1 cursor-pointer"
+              className="rounded border-paper-border text-brand accent-brand h-4 w-4 ml-1 cursor-pointer"
             />
           </div>
 

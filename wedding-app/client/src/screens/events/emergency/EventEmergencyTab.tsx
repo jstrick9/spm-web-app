@@ -297,10 +297,10 @@ export function EventEmergencyTab({ eventId }: Props) {
   const isFullyCompliant = PLAN_B_COMPLIANCE_CHECKS.every(check => !!complianceStatus[check.id]);
 
   return (
-    <div className="space-y-6 text-[#2C2A29] animate-in fade-in duration-200">
+    <div className="space-y-6 text-paper-ink animate-in fade-in duration-200">
       
       {/* WEATHER CONTINGENCY BANNER & COMMAND CENTER */}
-      <Card className="bg-[#FDFBF7] text-[#2C2A29] border-2 border-[#e1d5c9] shadow-md overflow-hidden rounded-2xl">
+      <Card className="bg-paper text-paper-ink border-2 border-paper-border shadow-md overflow-hidden rounded-2xl">
         <div className="p-6 sm:p-8 flex flex-col md:flex-row justify-between items-start md:items-center gap-6">
           <div className="space-y-2 max-w-xl">
             <span className="text-[10px] uppercase font-bold tracking-widest text-brand inline-flex items-center gap-1.5 bg-[#e1d5c9]/30 px-2.5 py-1 rounded-full">
@@ -318,7 +318,7 @@ export function EventEmergencyTab({ eventId }: Props) {
               onClick={() => handleUpdatePlan('plan-a')}
               className={cn(
                 "font-bold py-5 sm:py-6 px-6 text-sm transition-all rounded-xl shadow-xs flex-1",
-                activePlan === 'plan-a' && "bg-[#2C2A29] text-white hover:bg-[#3d3a39]"
+                activePlan === 'plan-a' && "bg-paper-ink text-white hover:bg-[#3d3a39]"
               )}
             >
               ☀️ Plan A: Outdoor Garden
@@ -355,8 +355,8 @@ export function EventEmergencyTab({ eventId }: Props) {
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
 
         {/* MASS ANNOUNCEMENT BROADCAST CENTER */}
-        <Card className="lg:col-span-6 bg-[#FDFBF7] border border-[#e1d5c9] shadow-sm rounded-2xl overflow-hidden">
-          <CardHeader className="pb-3 border-b border-[#e1d5c9]">
+        <Card className="lg:col-span-6 bg-paper border border-paper-border shadow-sm rounded-2xl overflow-hidden">
+          <CardHeader className="pb-3 border-b border-paper-border">
             <CardTitle className="text-base font-serif font-black text-brand flex items-center gap-2">
               <Megaphone className="w-4 h-4 text-brand" /> Mass Emergency Broadcasts
             </CardTitle>
@@ -401,7 +401,7 @@ export function EventEmergencyTab({ eventId }: Props) {
                     onChange={(e) => setBroadcastText(e.target.value)}
                     required
                   />
-                  <Button type="submit" className="font-bold flex items-center gap-1 shrink-0 bg-[#2C2A29] hover:bg-[#3e3b39]">
+                  <Button type="submit" className="font-bold flex items-center gap-1 shrink-0 bg-paper-ink hover:bg-[#3e3b39]">
                     <Megaphone className="w-4 h-4" /> Broadcast
                   </Button>
                 </div>
@@ -411,8 +411,8 @@ export function EventEmergencyTab({ eventId }: Props) {
         </Card>
 
         {/* PLAN B COMPLIANCE REGULATION AUDITOR */}
-        <Card className="lg:col-span-6 bg-[#FDFBF7] border border-[#e1d5c9] shadow-sm rounded-2xl overflow-hidden">
-          <CardHeader className="pb-3 border-b border-[#e1d5c9] flex flex-row justify-between items-center">
+        <Card className="lg:col-span-6 bg-paper border border-paper-border shadow-sm rounded-2xl overflow-hidden">
+          <CardHeader className="pb-3 border-b border-paper-border flex flex-row justify-between items-center">
             <div>
               <CardTitle className="text-base font-serif font-black text-brand flex items-center gap-2">
                 <ShieldCheck className="w-4 h-4 text-brand" /> Plan B Safety Compliance Auditor
@@ -443,7 +443,7 @@ export function EventEmergencyTab({ eventId }: Props) {
                     onClick={() => handleToggleCompliance(check.id)}
                     className={cn(
                       "flex items-center gap-3 p-2.5 rounded-xl border cursor-pointer bg-white transition-all",
-                      isChecked ? "border-emerald-200 bg-emerald-50/10" : "border-[#e1d5c9] hover:border-brand"
+                      isChecked ? "border-emerald-200 bg-emerald-50/10" : "border-paper-border hover:border-brand"
                     )}
                   >
                     <div className={cn(
@@ -481,8 +481,8 @@ export function EventEmergencyTab({ eventId }: Props) {
         
         {/* LEFT COLUMN: ACTIVE INCIDENTS LOGGER */}
         <div className="lg:col-span-7 space-y-6">
-          <Card className="bg-[#FDFBF7] border border-[#e1d5c9] shadow-sm rounded-2xl overflow-hidden">
-            <CardHeader className="pb-4 border-b border-[#e1d5c9] flex flex-row items-center justify-between">
+          <Card className="bg-paper border border-paper-border shadow-sm rounded-2xl overflow-hidden">
+            <CardHeader className="pb-4 border-b border-paper-border flex flex-row items-center justify-between">
               <div>
                 <CardTitle className="text-lg font-serif font-black text-brand flex items-center gap-2">
                   <Siren className="w-5 h-5 text-brand" /> On-Site Incident Log
@@ -582,7 +582,7 @@ export function EventEmergencyTab({ eventId }: Props) {
 
               {/* Incidents List */}
               {incidents.length === 0 ? (
-                <div className="text-center py-12 text-fg-subtle bg-white rounded-xl border border-dashed border-[#e1d5c9] p-6">
+                <div className="text-center py-12 text-fg-subtle bg-white rounded-xl border border-dashed border-paper-border p-6">
                   <Activity className="w-10 h-10 mx-auto text-brand/30 mb-2.5" />
                   <p className="font-serif font-black text-brand text-base">All Operational Systems Normal</p>
                   <p className="text-xs font-semibold max-w-sm mx-auto mt-1">
@@ -597,7 +597,7 @@ export function EventEmergencyTab({ eventId }: Props) {
                       <div 
                         key={inc.id} 
                         className={cn(
-                          "border-l-4 p-4 rounded-r-xl bg-white shadow-xs border border-y border-r border-[#e1d5c9] transition-all relative",
+                          "border-l-4 p-4 rounded-r-xl bg-white shadow-xs border border-y border-r border-paper-border transition-all relative",
                           inc.severity === 'critical' && !isResolved && "border-l-rose-600 bg-rose-50/20",
                           inc.severity === 'major' && !isResolved && "border-l-amber-500 bg-amber-50/20",
                           inc.severity === 'minor' && !isResolved && "border-l-indigo-400",
@@ -700,8 +700,8 @@ export function EventEmergencyTab({ eventId }: Props) {
 
         {/* RIGHT COLUMN: EMERGENCY SURVIVAL KIT CHECKLIST */}
         <div className="lg:col-span-5 space-y-6">
-          <Card className="bg-[#FDFBF7] border border-[#e1d5c9] shadow-sm rounded-2xl overflow-hidden">
-            <CardHeader className="pb-4 border-b border-[#e1d5c9]">
+          <Card className="bg-paper border border-paper-border shadow-sm rounded-2xl overflow-hidden">
+            <CardHeader className="pb-4 border-b border-paper-border">
               <div className="flex justify-between items-center">
                 <CardTitle className="text-lg font-serif font-black text-brand flex items-center gap-2">
                   <HeartPulse className="w-5 h-5 text-brand" /> Coordinator Survival Kit
@@ -723,7 +723,7 @@ export function EventEmergencyTab({ eventId }: Props) {
                   <div 
                     key={item.id} 
                     onClick={() => handleToggleKitItem(item.id, item.status)}
-                    className="flex justify-between items-center p-3 rounded-xl bg-white border border-[#e1d5c9] shadow-xs cursor-pointer hover:border-brand hover:shadow-sm transition-all group"
+                    className="flex justify-between items-center p-3 rounded-xl bg-white border border-paper-border shadow-xs cursor-pointer hover:border-brand hover:shadow-sm transition-all group"
                   >
                     <div className="flex items-center gap-2.5">
                       <div className={cn(
@@ -761,8 +761,8 @@ export function EventEmergencyTab({ eventId }: Props) {
       </div>
 
       {/* EMERGENCY QUICK-DIAL CONTACT REGISTRY */}
-      <Card className="bg-[#FDFBF7] border border-[#e1d5c9] shadow-sm rounded-2xl overflow-hidden">
-        <CardHeader className="pb-4 border-b border-[#e1d5c9]">
+      <Card className="bg-paper border border-paper-border shadow-sm rounded-2xl overflow-hidden">
+        <CardHeader className="pb-4 border-b border-paper-border">
           <CardTitle className="text-lg font-serif font-black text-brand flex items-center gap-2">
             <Phone className="w-5 h-5 text-brand" /> Emergency Quick-Dial Contacts
           </CardTitle>
@@ -774,7 +774,7 @@ export function EventEmergencyTab({ eventId }: Props) {
           
           <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 xl:grid-cols-5 gap-4">
             {EMERGENCY_CONTACTS.map((contact, idx) => (
-              <div key={idx} className="border border-[#e1d5c9] p-4 rounded-xl bg-white shadow-xs flex flex-col justify-between hover:shadow-md transition-all">
+              <div key={idx} className="border border-paper-border p-4 rounded-xl bg-white shadow-xs flex flex-col justify-between hover:shadow-md transition-all">
                 <div>
                   <span className="text-[10px] uppercase font-bold tracking-wider text-brand block mb-1">
                     {contact.role}
@@ -785,12 +785,12 @@ export function EventEmergencyTab({ eventId }: Props) {
 
                 <div className="flex gap-1.5 mt-auto border-t pt-3">
                   <a href={`tel:${contact.phone}`} className="flex-1">
-                    <Button variant="outline" size="xs" className="w-full text-[10px] font-bold h-7 py-0 px-2 flex items-center justify-center gap-1 text-brand border-[#e1d5c9] hover:bg-brand-soft/20">
+                    <Button variant="outline" size="xs" className="w-full text-[10px] font-bold h-7 py-0 px-2 flex items-center justify-center gap-1 text-brand border-paper-border hover:bg-brand-soft/20">
                       <Phone className="w-3 h-3" /> Call
                     </Button>
                   </a>
                   <a href={`sms:${contact.phone}`} className="flex-1">
-                    <Button variant="outline" size="xs" className="w-full text-[10px] font-bold h-7 py-0 px-2 flex items-center justify-center gap-1 text-[#2C2A29] border-[#e1d5c9] hover:bg-gray-100">
+                    <Button variant="outline" size="xs" className="w-full text-[10px] font-bold h-7 py-0 px-2 flex items-center justify-center gap-1 text-paper-ink border-paper-border hover:bg-gray-100">
                       <MessageSquare className="w-3 h-3" /> Text
                     </Button>
                   </a>

@@ -42,7 +42,7 @@ export interface PortalPhoneMockupProps {
 
 export function PortalPhoneMockup({ welcomeTitle, tagline, customBrandColor, enableSongRequests, enableDietaryDetails, enableLodgingChoices, rsvpTheme }: PortalPhoneMockupProps) {
   return (
-          <Card className="border-[#e1d5c9] bg-[#FDFBF7] shadow-lg overflow-hidden flex flex-col items-center p-6 min-h-[500px] w-full rounded-2xl">
+          <Card className="border-paper-border bg-paper shadow-lg overflow-hidden flex flex-col items-center p-6 min-h-[500px] w-full rounded-2xl">
             <h3 className="font-serif font-black text-xs uppercase tracking-wider text-brand mb-4 flex items-center gap-1.5 self-start">
               📱 Live Mobile RSVP Preview
             </h3>
@@ -59,7 +59,7 @@ export function PortalPhoneMockup({ welcomeTitle, tagline, customBrandColor, ena
                   rsvpTheme === "modern_minimalist" &&
                     "bg-white text-black font-sans border-0",
                   rsvpTheme === "classic_vintage" &&
-                    "bg-[#FDFBF7] text-[#2C2A29] font-serif border-4 border-double border-[#e1d5c9] p-3",
+                    "bg-paper text-paper-ink font-serif border-4 border-double border-paper-border p-3",
                   rsvpTheme === "bohemian_chic" &&
                     "bg-orange-50/30 text-amber-950 font-serif border border-orange-200/50",
                 )}
@@ -71,7 +71,7 @@ export function PortalPhoneMockup({ welcomeTitle, tagline, customBrandColor, ena
                     rsvpTheme === "modern_minimalist" &&
                       "border-b border-black/10",
                     rsvpTheme === "classic_vintage" &&
-                      "border-b border-[#e1d5c9]",
+                      "border-b border-paper-border",
                     rsvpTheme === "bohemian_chic" &&
                       "border-b border-orange-200",
                   )}
@@ -105,7 +105,7 @@ export function PortalPhoneMockup({ welcomeTitle, tagline, customBrandColor, ena
                     className={cn(
                       "text-[10px] uppercase font-bold text-fg-subtle border-b pb-1",
                       rsvpTheme === "modern_minimalist" && "border-black/15",
-                      rsvpTheme === "classic_vintage" && "border-[#e1d5c9]",
+                      rsvpTheme === "classic_vintage" && "border-paper-border",
                     )}
                   >
                     Guest RSVP Form

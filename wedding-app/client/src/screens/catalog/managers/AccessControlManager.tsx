@@ -11,8 +11,10 @@ import { Button } from '../../../ui/Button';
 import { Input } from '../../../ui/Input';
 import { Label } from '../../../ui/Label';
 import { useToast } from '../../../ui/Toast';
+import { usePrompt } from '../../../ui/usePrompt';
 
 export function AccessControlManager({ orgId }: { orgId: string }) {
+  const { ask, askConfirm, promptNode } = usePrompt();
   const qc = useQueryClient();
   const { toast } = useToast();
   
@@ -163,6 +165,7 @@ export function AccessControlManager({ orgId }: { orgId: string }) {
 
   return (
     <div className="space-y-6">
+      {promptNode}
       
       {/* Quick Add Presets Panel */}
       <div className="bg-surface-2/60 p-4 rounded-xl border border-border flex flex-col sm:flex-row sm:items-center justify-between gap-3 shadow-xs animate-in fade-in duration-200">
@@ -238,8 +241,8 @@ export function AccessControlManager({ orgId }: { orgId: string }) {
                       </select>
                     </div>
                   </div>
-                  <Button variant="ghost" size="icon" className="h-8 w-8 text-danger hover:bg-danger/10 shrink-0" onClick={() => {
-                     if (window.confirm(`Revoke staff access for ${m.fullName || m.email}?`)) {
+                  <Button variant="ghost" size="icon" className="h-8 w-8 text-danger hover:bg-danger/10 shrink-0" onClick={async () => {
+                     if (await askConfirm({ title: `Revoke staff access for ${m.fullName || m.email}?`, destructive: true })) {
                        removeMutation.mutate(m.userId);
                      }
                   }}>

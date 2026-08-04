@@ -97,12 +97,12 @@ export function CanvasStageArea({ routePoints, setRoutePoints, showHelpGuide, se
                <Activity className="w-4 h-4 mr-1 text-indigo-600 animate-pulse" /> AI Smart Seating
              </Button>
              <Button variant="outline" size="sm" className="font-bold" onClick={resetView}>Reset View</Button>
-             <Button variant="outline" size="sm" className="font-bold border-[#e1d5c9] bg-white hover:bg-brand-soft/20 text-brand" onClick={() => setShowHelpGuide(!showHelpGuide)}>
+             <Button variant="outline" size="sm" className="font-bold border-paper-border bg-white hover:bg-brand-soft/20 text-brand" onClick={() => setShowHelpGuide(!showHelpGuide)}>
                {showHelpGuide ? '📖 Hide Guide' : '📖 Help Guide'}
              </Button>
              
              {/* Multi-Format Blueprint Exporters (Phase 6) */}
-             <div className="flex gap-1 items-center border border-[#e1d5c9] bg-white p-1 rounded-xl shadow-xs print:hidden">
+             <div className="flex gap-1 items-center border border-paper-border bg-white p-1 rounded-xl shadow-xs print:hidden">
                 <Button variant="ghost" size="xs" className="text-[10px] font-bold h-7 py-0.5 px-2.5 rounded-lg hover:bg-brand-soft/20 text-brand" onClick={exportToPNG} title="Export as High-Resolution PNG for Printing">
                    📸 PNG
                 </Button>
@@ -525,7 +525,7 @@ export function CanvasStageArea({ routePoints, setRoutePoints, showHelpGuide, se
 
         {/* Collapsible Canvas Help Guide Overlay */}
         {showHelpGuide && (
-          <div className="absolute bottom-4 left-4 right-4 z-20 bg-[#FDFBF7] border border-[#e1d5c9] p-4 rounded-xl shadow-lg flex flex-col md:flex-row gap-4 items-start md:items-center justify-between animate-in slide-in-from-bottom-4 duration-200">
+          <div className="absolute bottom-4 left-4 right-4 z-20 bg-paper border border-paper-border p-4 rounded-xl shadow-lg flex flex-col md:flex-row gap-4 items-start md:items-center justify-between animate-in slide-in-from-bottom-4 duration-200">
             <div className="space-y-1">
                <h4 className="font-serif font-black text-xs text-brand uppercase tracking-wider flex items-center gap-1">
                   📖 Interactive Canvas User Guide
@@ -547,7 +547,7 @@ export function CanvasStageArea({ routePoints, setRoutePoints, showHelpGuide, se
 
         {autoArrangeOpen && (
            <Dialog open={autoArrangeOpen} onOpenChange={setAutoArrangeOpen}>
-              <DialogContent className="max-w-xl bg-[#FDFBF7] border border-[#e1d5c9] rounded-2xl shadow-xl">
+              <DialogContent className="max-w-xl bg-paper border border-paper-border rounded-2xl shadow-xl">
                  <DialogHeader>
                     <DialogTitle className="font-serif font-bold text-lg text-brand flex items-center gap-1.5">
                        🧠 AI Smart Seating Auto-Arranger
@@ -564,7 +564,7 @@ export function CanvasStageArea({ routePoints, setRoutePoints, showHelpGuide, se
                        <select
                           value={affinityRule}
                           onChange={(e) => setAffinityRule(e.target.value as any)}
-                          className="mt-1.5 w-full h-10 px-3 rounded-lg border border-[#e1d5c9] bg-white text-xs font-semibold cursor-pointer"
+                          className="mt-1.5 w-full h-10 px-3 rounded-lg border border-paper-border bg-white text-xs font-semibold cursor-pointer"
                        >
                           <option value="together">🟢 Keep Parties &amp; Families Together (Recommended)</option>
                           <option value="spread">🟡 Spread Out Groups (Socialize &amp; Mingle)</option>
@@ -572,7 +572,7 @@ export function CanvasStageArea({ routePoints, setRoutePoints, showHelpGuide, se
                     </div>
 
                     {/* Summary of Unassigned Guests & Groups */}
-                    <div className="bg-white p-4 rounded-xl border border-[#e1d5c9] space-y-2.5">
+                    <div className="bg-white p-4 rounded-xl border border-paper-border space-y-2.5">
                        <h4 className="text-[10px] uppercase tracking-wider font-bold text-brand">Detected Guest Clusters</h4>
                        {(() => {
                           const unassigned = guests.filter(g => !items.some(i => i.guestId === g.id));
@@ -588,7 +588,7 @@ export function CanvasStageArea({ routePoints, setRoutePoints, showHelpGuide, se
                                 <p className="text-fg-subtle text-[11px] font-semibold">{unassigned.length} unassigned guests in {partiesList.length} clusters ready to seat.</p>
                                 <div className="max-h-24 overflow-y-auto pr-1 flex flex-wrap gap-1.5 pt-1">
                                    {partiesList.map(([name, count]) => (
-                                      <Badge key={name} variant="outline" className="bg-[#FDFBF7] text-fg-subtle border-[#e1d5c9] text-[9px] py-0.5 px-2">
+                                      <Badge key={name} variant="outline" className="bg-paper text-fg-subtle border-paper-border text-[9px] py-0.5 px-2">
                                          {name}: {count}
                                       </Badge>
                                    ))}
@@ -599,7 +599,7 @@ export function CanvasStageArea({ routePoints, setRoutePoints, showHelpGuide, se
                     </div>
                  </div>
 
-                 <DialogFooter className="border-t border-[#e1d5c9] pt-4 mt-2">
+                 <DialogFooter className="border-t border-paper-border pt-4 mt-2">
                     <Button variant="ghost" onClick={() => setAutoArrangeOpen(false)}>Cancel</Button>
                     <Button onClick={runAutoArranger} className="bg-brand text-brand-fg font-bold">
                        ⚡ Run AI Seating

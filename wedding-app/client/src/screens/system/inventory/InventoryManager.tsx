@@ -15,6 +15,7 @@ import { Badge } from '../../../ui/Badge';
 import { StatCard } from '../../../ui/StatCard';
 import { Skeleton } from '../../../ui/Skeleton';
 import { useToast } from '../../../ui/Toast';
+import { usePrompt } from '../../../ui/usePrompt';
 import {
   Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle, DialogTrigger,
 } from '../../../ui/Dialog';
@@ -29,6 +30,7 @@ const CONDITION_BADGE: Record<string, 'success' | 'warning' | 'danger' | 'defaul
 };
 
 export function InventoryManager({ orgId }: Props) {
+  const { ask, askConfirm, promptNode } = usePrompt();
   const { toast } = useToast();
   const qc = useQueryClient();
   const [search, setSearch] = useState('');
@@ -65,6 +67,7 @@ export function InventoryManager({ orgId }: Props) {
 
   return (
     <>
+      {promptNode}
       <PageHeader
         title="Inventory Manager"
         description="Track physical assets, stock levels, and maintenance status."
@@ -152,7 +155,7 @@ export function InventoryManager({ orgId }: Props) {
                           </Badge>
                         </td>
                         <td className="px-4 py-3">
-                          <button onClick={() => { if (window.confirm('Remove this inventory item?')) deleteMutation.mutate(item.id); }} className="p-1 text-fg-subtle hover:text-danger rounded">
+                          <button onClick={async () => { if (await askConfirm({ title: 'Remove this inventory item?', destructive: true })) deleteMutation.mutate(item.id); }} className="p-1 text-fg-subtle hover:text-danger rounded">
                             <Trash2 className="h-3.5 w-3.5" />
                           </button>
                         </td>

@@ -9,7 +9,7 @@ export interface StaffSubTabsProps {
 export function StaffSubTabs({ activeSubTab, setActiveSubTab, tasks }: StaffSubTabsProps) {
   return (
     <>
-      <div className="flex border-b border-[#e1d5c9] gap-2">
+      <div className="flex border-b border-paper-border gap-2">
         <button
           onClick={() => setActiveSubTab('tasks')}
           className={[

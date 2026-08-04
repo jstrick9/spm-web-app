@@ -9,6 +9,7 @@ import { Input } from '../../../ui/Input';
 import { cn } from '../../../ui/lib/cn';
 import { sdk } from '../../../sdk';
 import { useToast } from '../../../ui/Toast';
+import { usePrompt } from '../../../ui/usePrompt';
 import { Skeleton } from '../../../ui/Skeleton';
 import { QuestionFormDialog } from './QuestionFormDialog';
 import type { SdkEventQuestion } from '../../../sdk/types';
@@ -18,6 +19,7 @@ interface Props {
 }
 
 export function EventQuestionsStudio({ orgId }: Props) {
+  const { ask, askConfirm, promptNode } = usePrompt();
   const qc = useQueryClient();
   const { toast } = useToast();
   
@@ -180,6 +182,7 @@ export function EventQuestionsStudio({ orgId }: Props) {
   if (isLoading) {
     return (
       <PageBody>
+      {promptNode}
          <Skeleton className="h-12 w-full mb-4" />
          <Skeleton className="h-[400px] w-full" />
       </PageBody>
@@ -223,8 +226,8 @@ export function EventQuestionsStudio({ orgId }: Props) {
 
             {/* Search & Category Tabbed Filters (Phase 6) */}
             {questions.length > 0 && (
-               <div className="space-y-3 bg-[#FDFBF7] p-4 rounded-2xl border border-[#e1d5c9] shadow-sm">
-                  <div className="flex border-b border-[#e1d5c9] gap-2 overflow-x-auto pb-1.5 scrollbar-thin">
+               <div className="space-y-3 bg-paper p-4 rounded-2xl border border-paper-border shadow-sm">
+                  <div className="flex border-b border-paper-border gap-2 overflow-x-auto pb-1.5 scrollbar-thin">
                     <button
                       onClick={() => setSelectedGroup('all')}
                       className={cn(
@@ -253,7 +256,7 @@ export function EventQuestionsStudio({ orgId }: Props) {
                         placeholder="Search questions by text or group name..." 
                         value={questionSearch}
                         onChange={(e) => setQuestionSearch(e.target.value)}
-                        className="text-xs border-[#e1d5c9] h-9"
+                        className="text-xs border-paper-border h-9"
                      />
                   </div>
                </div>
@@ -275,7 +278,7 @@ export function EventQuestionsStudio({ orgId }: Props) {
                   <div key={groupName} className="space-y-3 animate-in fade-in duration-200">
                      <h3 className="font-semibold text-sm flex items-center gap-2 border-b border-border pb-2 font-serif text-fg">
                        {groupName}
-                       <Badge variant="outline" className="bg-[#FDFBF7] text-brand border-[#e1d5c9] font-bold text-[10px]">{filteredGrouped[groupName].length}</Badge>
+                       <Badge variant="outline" className="bg-paper text-brand border-paper-border font-bold text-[10px]">{filteredGrouped[groupName].length}</Badge>
                      </h3>
                      <div className="bg-surface border border-border rounded-lg shadow-sm overflow-hidden divide-y divide-border bg-white">
                         {filteredGrouped[groupName]
@@ -305,8 +308,8 @@ export function EventQuestionsStudio({ orgId }: Props) {
                                  <Button variant="ghost" size="icon" className="w-8 h-8 text-fg-muted hover:text-fg" onClick={() => setEditQuestion(q)}>
                                     <Edit2 className="w-4 h-4" />
                                  </Button>
-                                 <Button variant="ghost" size="icon" className="w-8 h-8 text-danger hover:bg-danger/10" onClick={() => {
-                                    if(window.confirm('Delete this question?')) deleteMutation.mutate(q.id);
+                                 <Button variant="ghost" size="icon" className="w-8 h-8 text-danger hover:bg-danger/10" onClick={async () => {
+                                    if (await askConfirm({ title: 'Delete this question?', destructive: true })) deleteMutation.mutate(q.id);
                                  }}>
                                     <Trash2 className="w-4 h-4" />
                                  </Button>

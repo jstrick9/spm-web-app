@@ -267,10 +267,10 @@ export function LodgingBuilder({ eventId, venueId, venueName, venueWidth, venueH
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4 animate-in fade-in duration-200">
-      <div className="bg-[#FDFBF7] rounded-2xl shadow-2xl flex flex-col w-full max-w-[96vw] h-[94vh] overflow-hidden border border-[#e1d5c9]">
+      <div className="bg-paper rounded-2xl shadow-2xl flex flex-col w-full max-w-[96vw] h-[94vh] overflow-hidden border border-paper-border">
         
         {/* Luxury Header */}
-        <div className="p-4 border-b border-[#e1d5c9] flex justify-between items-center bg-[#4A1942] text-white">
+        <div className="p-4 border-b border-paper-border flex justify-between items-center bg-brand text-white">
           <div>
             <h2 className="text-lg font-serif font-bold flex items-center gap-2">
               <Home className="h-5 w-5 text-brand" /> 🏨 Lodging & Room Allocation Builder
@@ -291,8 +291,8 @@ export function LodgingBuilder({ eventId, venueId, venueName, venueWidth, venueH
         <div className="grid grid-cols-1 xl:grid-cols-[280px_1fr_380px] h-full min-h-0 flex-1">
           
           {/* Left Panel: Floor / Room selector */}
-          <div className="border-r border-[#e1d5c9] bg-[#FDFBF7]/60 overflow-y-auto p-4 space-y-4">
-            <div className="rounded-xl border border-[#e1d5c9] bg-white p-4 space-y-3 shadow-sm">
+          <div className="border-r border-paper-border bg-paper/60 overflow-y-auto p-4 space-y-4">
+            <div className="rounded-xl border border-paper-border bg-white p-4 space-y-3 shadow-sm">
               <div className="flex items-center justify-between">
                 <h3 className="text-xs font-bold text-fg-subtle uppercase tracking-wider">Floors</h3>
                 <Button size="xs" variant="outline" onClick={addFloor}>+ Add Floor</Button>
@@ -342,7 +342,7 @@ export function LodgingBuilder({ eventId, venueId, venueName, venueWidth, venueH
               </div>
             )}
 
-            <div className="rounded-xl border border-[#e1d5c9] bg-white p-4 space-y-3 shadow-sm">
+            <div className="rounded-xl border border-paper-border bg-white p-4 space-y-3 shadow-sm">
               <div className="flex items-center justify-between">
                 <h3 className="text-xs font-bold text-fg-subtle uppercase tracking-wider">Rooms</h3>
                 <Button size="xs" variant="outline" onClick={addRoom} disabled={!activeFloor}>+ Add Room</Button>
@@ -356,7 +356,7 @@ export function LodgingBuilder({ eventId, venueId, venueName, venueWidth, venueH
                       onClick={() => { setSelectedRoomId(room.id); setSelectedFurnitureId(null); }}
                       className={[
                         'w-full text-left p-3 rounded-lg border text-xs font-semibold transition-all space-y-1.5',
-                        selectedRoomId === room.id ? 'bg-brand/10 border-brand/40 text-brand' : 'bg-white border-[#e1d5c9] hover:bg-[#FDFBF7]'
+                        selectedRoomId === room.id ? 'bg-brand/10 border-brand/40 text-brand' : 'bg-white border-paper-border hover:bg-paper'
                       ].join(' ')}
                     >
                       <div className="flex justify-between items-center">
@@ -378,11 +378,11 @@ export function LodgingBuilder({ eventId, venueId, venueName, venueWidth, venueH
           </div>
 
           {/* Center Panel: Interactive Map grid */}
-          <div className="relative bg-[#FDFBF7]/40 min-h-0 overflow-auto p-6 flex items-center justify-center border-r border-[#e1d5c9]">
+          <div className="relative bg-paper/40 min-h-0 overflow-auto p-6 flex items-center justify-center border-r border-paper-border">
             {activeFloor && (
               <div
                 ref={canvasRef}
-                className="relative bg-white border border-[#e1d5c9] shadow-md rounded-xl overflow-hidden origin-top"
+                className="relative bg-white border border-paper-border shadow-md rounded-xl overflow-hidden origin-top"
                 style={{ width: activeFloor.width * SCALE, height: activeFloor.height * SCALE, transform: `scale(${zoom})` }}
                 onClick={() => { setSelectedRoomId(null); setSelectedFurnitureId(null); }}
               >
@@ -479,7 +479,7 @@ export function LodgingBuilder({ eventId, venueId, venueName, venueWidth, venueH
             )}
 
             {/* Quick Grid Controls overlay */}
-            <div className="absolute bottom-4 right-4 rounded-xl bg-white shadow-md border border-[#e1d5c9] p-3 flex gap-3 items-center text-xs">
+            <div className="absolute bottom-4 right-4 rounded-xl bg-white shadow-md border border-paper-border p-3 flex gap-3 items-center text-xs">
               <label className="flex items-center gap-1 cursor-pointer font-semibold"><input type="checkbox" checked={showGrid} onChange={(e) => setShowGrid(e.target.checked)} className="rounded border-border" /> Grid</label>
               <label className="flex items-center gap-1 cursor-pointer font-semibold"><input type="checkbox" checked={snapToGrid} onChange={(e) => setSnapToGrid(e.target.checked)} className="rounded border-border" /> Snap</label>
               <div className="flex items-center gap-2">
@@ -491,10 +491,10 @@ export function LodgingBuilder({ eventId, venueId, venueName, venueWidth, venueH
           </div>
 
           {/* Right Panel: Custom assignment settings */}
-          <div className="border-l border-[#e1d5c9] bg-[#FDFBF7]/60 overflow-y-auto p-4 space-y-4">
+          <div className="border-l border-paper-border bg-paper/60 overflow-y-auto p-4 space-y-4">
             {selectedRoom ? (
-              <div className="rounded-xl border border-[#e1d5c9] bg-white overflow-hidden shadow-sm">
-                <div className="grid grid-cols-4 border-b border-[#e1d5c9] text-center text-xs">
+              <div className="rounded-xl border border-paper-border bg-white overflow-hidden shadow-sm">
+                <div className="grid grid-cols-4 border-b border-paper-border text-center text-xs">
                   {[
                     { id: 'room', label: 'Room' },
                     { id: 'guests', label: 'Guests' },
@@ -569,13 +569,13 @@ export function LodgingBuilder({ eventId, venueId, venueName, venueWidth, venueH
                             placeholder="Search guest names..." 
                             value={lodgingGuestSearch}
                             onChange={(e) => setLodgingGuestSearch(e.target.value)}
-                            className="h-8 text-xs border-[#e1d5c9]"
+                            className="h-8 text-xs border-paper-border"
                           />
                           {uniqueParties.length > 0 && (
                             <select
                               value={lodgingPartyFilter}
                               onChange={(e) => setLodgingPartyFilter(e.target.value)}
-                              className="w-full h-8 text-xs border border-[#e1d5c9] bg-white rounded-lg px-2 font-semibold text-fg"
+                              className="w-full h-8 text-xs border border-paper-border bg-white rounded-lg px-2 font-semibold text-fg"
                             >
                               <option value="all">All Groups / Parties</option>
                               {uniqueParties.map(p => (

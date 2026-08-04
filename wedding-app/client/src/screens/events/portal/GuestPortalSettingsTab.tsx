@@ -52,8 +52,10 @@ interface Props {
 
 // Decomposed panels (see portalSettingsPanels.tsx).
 import { ManagerPortalQaPanel } from './portalSettingsPanels';
+import { usePrompt } from '../../../ui/usePrompt';
 
 export function GuestPortalSettingsTab({ eventId }: Props) {
+  const { ask, askConfirm, promptNode } = usePrompt();
   const qc = useQueryClient();
   const { toast } = useToast();
 
@@ -457,9 +459,9 @@ export function GuestPortalSettingsTab({ eventId }: Props) {
     },
   });
 
-  const handleToggleEnable = () => {
+  const handleToggleEnable = async () => {
     const managerMode = (() => { try { return localStorage.getItem('wvi_registration_role') === 'venue_manager'; } catch { return false; } })();
-    if (managerMode && !window.confirm('Confirm sensitive portal change. Portal enablement/access changes can affect guests and require owner/admin visibility. Continue?')) return;
+    if (managerMode && !(await askConfirm({ title: 'Confirm sensitive portal change?', description: 'Portal enablement/access changes can affect guests and require owner/admin visibility.', destructive: true }))) return;
     if (!localEnabled && ownerApprovalRequired) {
       setPendingPortalChange("Enable guest portal");
       setIsDirty(true);
@@ -548,6 +550,7 @@ export function GuestPortalSettingsTab({ eventId }: Props) {
   if (isLoading) {
     return (
       <div className="space-y-6">
+      {promptNode}
         <Skeleton className="h-48 w-full" />
         <Skeleton className="h-48 w-full" />
       </div>

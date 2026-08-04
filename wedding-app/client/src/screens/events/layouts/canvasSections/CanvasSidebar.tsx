@@ -12,6 +12,7 @@ import { Label } from '../../../../ui/Label';
 import { LAYOUT_OBJECT_PALETTE, LAYOUT_PALETTE_CATEGORIES, type LayoutPaletteCategory } from '.././layoutObjectPalette';
 import { generateWeddingPackage, WEDDING_LAYOUT_PACKAGES, type WeddingLayoutPackage } from '.././weddingLayoutPackages';
 import type { SdkEvent } from '../../../../sdk/types';
+import { usePrompt } from '../../../../ui/usePrompt';
 
 export interface CanvasSidebarProps {
   guestSearch: string;
@@ -54,9 +55,11 @@ export interface CanvasSidebarProps {
 }
 
 export function CanvasSidebar({ guestSearch, setGuestSearch, items, selectedId, setSelectedId, sidebarTab, setSidebarTab, paletteCategory, setPaletteCategory, viewingVersion, setHasChanges, packageGuests, setPackageGuests, serviceStyle, setServiceStyle, setSetupGroupOpen, showVendorOverlay, setShowVendorOverlay, draggedGuestRef, inventoryData, guests, DECOR_ITEMS, layout, versions, vendors, allowedTemplateCategories, allowedTemplateInventory, pushState, reconcileMappedInventory, saveLayout, handleAddStickyNote, CATALOG_ITEMS, handleAddItem, addWeddingPackage, handleRestoreVersion, handlePreviewVersion, event }: CanvasSidebarProps) {
+  const { ask, askConfirm, promptNode } = usePrompt();
   return (
-        <div className="w-64 border-r border-[#e1d5c9] bg-[#FDFBF7] flex flex-col overflow-hidden">
-          <div className="flex flex-col border-b border-[#e1d5c9] bg-[#FDFBF7] px-1">
+        <div className="w-64 border-r border-paper-border bg-paper flex flex-col overflow-hidden">
+      {promptNode}
+          <div className="flex flex-col border-b border-paper-border bg-paper px-1">
             <div className="flex w-full">
               <button className={cn("flex-1 py-2 text-[10px] font-medium border-b-2 transition-colors", sidebarTab === 'catalog' ? 'border-brand text-fg' : 'border-transparent text-fg-muted hover:text-fg')} onClick={() => setSidebarTab('catalog')}>Items</button>
               <button className={cn("flex-1 py-2 text-[10px] font-medium border-b-2 transition-colors", sidebarTab === 'decor' ? 'border-brand text-fg' : 'border-transparent text-fg-muted hover:text-fg')} onClick={() => setSidebarTab('decor')}><Flower2 className="w-3 h-3 mx-auto mb-0.5" />Decor</button>
@@ -69,7 +72,7 @@ export function CanvasSidebar({ guestSearch, setGuestSearch, items, selectedId, 
             </div>
           </div>
 
-          <div className="flex-1 overflow-y-auto p-4 flex flex-col gap-4 bg-[#FDFBF7]">
+          <div className="flex-1 overflow-y-auto p-4 flex flex-col gap-4 bg-paper">
             {sidebarTab === 'catalog' && (
               <div className="flex flex-col gap-2">
                 <div className="rounded-lg border border-brand/20 bg-brand-soft/20 p-2.5">
@@ -124,9 +127,10 @@ export function CanvasSidebar({ guestSearch, setGuestSearch, items, selectedId, 
                         <select 
                           className="text-xs bg-surface-2 border border-border rounded px-2 py-1 w-full"
                           value={layout.approval_status}
-                          onChange={(e) => {
-                             if (window.confirm(`Change layout status to ${e.target.value}?`)) {
-                                saveLayout.mutate({ ...JSON.parse(layout.payload as any), approvalStatus: e.target.value });
+                          onChange={async (e) => {
+                             const nextStatus = e.target.value;
+                             if (await askConfirm({ title: `Change layout status to ${nextStatus}?` })) {
+                                saveLayout.mutate({ ...JSON.parse(layout.payload as any), approvalStatus: nextStatus });
                              }
                           }}
                         >
@@ -239,7 +243,7 @@ export function CanvasSidebar({ guestSearch, setGuestSearch, items, selectedId, 
                    if (activeItem.type === 'sticky_note') {
                      const isResolved = activeItem.resolved === true;
                      return (
-                       <div className="mt-4 pt-4 border-t border-border space-y-3 bg-[#FDFBF7] p-4 rounded-xl border border-[#e1d5c9] text-xs font-semibold">
+                       <div className="mt-4 pt-4 border-t border-border space-y-3 bg-paper p-4 rounded-xl border border-paper-border text-xs font-semibold">
                           <div className="text-xs font-bold text-fg-muted uppercase tracking-wider font-serif text-brand flex items-center gap-1.5">
                              📌 Sticky Note Comment
                           </div>
@@ -249,7 +253,7 @@ export function CanvasSidebar({ guestSearch, setGuestSearch, items, selectedId, 
                             <label className="text-fg-subtle block mb-1">Author / Signer</label>
                             <input 
                               type="text" 
-                              className="w-full bg-surface border border-[#e1d5c9] rounded px-2.5 py-1.5 font-semibold"
+                              className="w-full bg-surface border border-paper-border rounded px-2.5 py-1.5 font-semibold"
                               value={activeItem.author || ''}
                               onChange={(e) => {
                                 pushState(items.map(i => i.id === selectedId ? {...i, author: e.target.value} : i));
@@ -260,7 +264,7 @@ export function CanvasSidebar({ guestSearch, setGuestSearch, items, selectedId, 
                           <div>
                             <label className="text-fg-subtle block mb-1">Note Comment Text</label>
                             <textarea
-                              className="w-full bg-surface border border-[#e1d5c9] rounded px-2.5 py-1.5 min-h-[70px] text-xs font-semibold"
+                              className="w-full bg-surface border border-paper-border rounded px-2.5 py-1.5 min-h-[70px] text-xs font-semibold"
                               value={activeItem.text || ''}
                               onChange={(e) => {
                                 pushState(items.map(i => i.id === selectedId ? {...i, text: e.target.value} : i));
@@ -298,7 +302,7 @@ export function CanvasSidebar({ guestSearch, setGuestSearch, items, selectedId, 
                    
                    if (activeItem.type === 'custom_wall') {
                      return (
-                       <div className="mt-4 pt-4 border-t border-border space-y-3 bg-[#FDFBF7] p-4 rounded-xl border border-[#e1d5c9] text-xs font-semibold">
+                       <div className="mt-4 pt-4 border-t border-border space-y-3 bg-paper p-4 rounded-xl border border-paper-border text-xs font-semibold">
                           <div className="text-xs font-bold text-fg-muted uppercase tracking-wider font-serif">Drawn Wall Properties</div>
                           
                           <div>
@@ -362,7 +366,7 @@ export function CanvasSidebar({ guestSearch, setGuestSearch, items, selectedId, 
                               />
                               <input 
                                 type="text"
-                                className="w-full bg-surface border border-[#e1d5c9] rounded px-2 py-1 h-8"
+                                className="w-full bg-surface border border-paper-border rounded px-2 py-1 h-8"
                                 value={activeItem.color || '#374151'}
                                 onChange={(e) => {
                                   pushState(items.map(i => i.id === selectedId ? {...i, color: e.target.value} : i));
@@ -381,7 +385,7 @@ export function CanvasSidebar({ guestSearch, setGuestSearch, items, selectedId, 
                    }
                    
                    return (
-                     <div className="mt-4 pt-4 border-t border-[#e1d5c9] space-y-3 bg-[#FDFBF7] p-4 rounded-xl border border-[#e1d5c9] text-xs font-semibold">
+                     <div className="mt-4 pt-4 border-t border-paper-border space-y-3 bg-paper p-4 rounded-xl border border-paper-border text-xs font-semibold">
                         <div className="text-xs font-bold text-fg-muted uppercase tracking-wider font-serif">Transform Properties</div>
                         
                         {/* Dynamic Custom Property Editors based on Type */}
@@ -390,7 +394,7 @@ export function CanvasSidebar({ guestSearch, setGuestSearch, items, selectedId, 
                               <label className="text-fg-subtle block mb-1">Item Label / Name</label>
                               <input 
                                 type="text" 
-                                className="w-full bg-surface border border-[#e1d5c9] rounded px-2.5 py-1.5"
+                                className="w-full bg-surface border border-paper-border rounded px-2.5 py-1.5"
                                 value={activeItem.label || ''}
                                 onChange={(e) => {
                                   pushState(items.map(i => i.id === selectedId ? {...i, label: e.target.value} : i));
@@ -398,14 +402,14 @@ export function CanvasSidebar({ guestSearch, setGuestSearch, items, selectedId, 
                               />
                            </div>
 
-                           {['round_table', 'rect_table', 'chair', 'decor'].includes(activeItem.type) && <div><label className="text-fg-subtle block mb-1">Venue inventory mapping</label><select aria-label="Venue inventory mapping" className="w-full bg-surface border border-[#e1d5c9] rounded px-2 py-1" value={activeItem.inventoryItemId || ''} onChange={(e) => { const inventoryItemId = e.target.value || undefined; const nextItems = items.map((item) => item.id === selectedId ? { ...item, inventoryItemId } : item); pushState(nextItems); reconcileMappedInventory(nextItems); }}><option value="">Not reserved from venue inventory</option>{(inventoryData?.items || []).filter((item: any) => { try { const type = JSON.parse(item.spec || '{}').objectType; return ((activeItem.type.includes('table') && type === 'table') || (activeItem.type === 'chair' && type === 'chair') || (activeItem.type === 'decor' && type === 'decor')) && (!allowedTemplateInventory || allowedTemplateInventory.has(item.id)); } catch { return false; } }).map((item: any) => <option key={item.id} value={item.id}>{item.name} · {item.available_count} available</option>)}</select></div>}
+                           {['round_table', 'rect_table', 'chair', 'decor'].includes(activeItem.type) && <div><label className="text-fg-subtle block mb-1">Venue inventory mapping</label><select aria-label="Venue inventory mapping" className="w-full bg-surface border border-paper-border rounded px-2 py-1" value={activeItem.inventoryItemId || ''} onChange={(e) => { const inventoryItemId = e.target.value || undefined; const nextItems = items.map((item) => item.id === selectedId ? { ...item, inventoryItemId } : item); pushState(nextItems); reconcileMappedInventory(nextItems); }}><option value="">Not reserved from venue inventory</option>{(inventoryData?.items || []).filter((item: any) => { try { const type = JSON.parse(item.spec || '{}').objectType; return ((activeItem.type.includes('table') && type === 'table') || (activeItem.type === 'chair' && type === 'chair') || (activeItem.type === 'decor' && type === 'decor')) && (!allowedTemplateInventory || allowedTemplateInventory.has(item.id)); } catch { return false; } }).map((item: any) => <option key={item.id} value={item.id}>{item.name} · {item.available_count} available</option>)}</select></div>}
                            {(activeItem.type === 'round_table' || activeItem.type === 'rect_table') && (
                               <div className="grid grid-cols-2 gap-2 mt-1">
                                  <div>
                                     <label className="text-fg-subtle block mb-1">Seating Capacity</label>
                                     <input 
                                       type="number" 
-                                      className="w-full bg-surface border border-[#e1d5c9] rounded px-2 py-1"
+                                      className="w-full bg-surface border border-paper-border rounded px-2 py-1"
                                       value={activeItem.capacity || 8}
                                       onChange={(e) => {
                                         pushState(items.map(i => i.id === selectedId ? {...i, capacity: parseInt(e.target.value)} : i));
@@ -417,7 +421,7 @@ export function CanvasSidebar({ guestSearch, setGuestSearch, items, selectedId, 
                                        <label className="text-fg-subtle block mb-1">Diameter (px)</label>
                                        <input 
                                          type="number" 
-                                         className="w-full bg-surface border border-[#e1d5c9] rounded px-2 py-1"
+                                         className="w-full bg-surface border border-paper-border rounded px-2 py-1"
                                          value={activeItem.radius ? activeItem.radius * 2 : 60}
                                          onChange={(e) => {
                                            pushState(items.map(i => i.id === selectedId ? {...i, radius: parseFloat(e.target.value) / 2} : i));
@@ -429,7 +433,7 @@ export function CanvasSidebar({ guestSearch, setGuestSearch, items, selectedId, 
                                        <label className="text-fg-subtle block mb-1">Width (px)</label>
                                        <input 
                                          type="number" 
-                                         className="w-full bg-surface border border-[#e1d5c9] rounded px-2 py-1"
+                                         className="w-full bg-surface border border-paper-border rounded px-2 py-1"
                                          value={activeItem.width || 120}
                                          onChange={(e) => {
                                            pushState(items.map(i => i.id === selectedId ? {...i, width: parseFloat(e.target.value)} : i));
@@ -444,7 +448,7 @@ export function CanvasSidebar({ guestSearch, setGuestSearch, items, selectedId, 
                               <div className="mt-1">
                                  <label className="text-fg-subtle block mb-1">Assign Guest Directly</label>
                                  <select
-                                   className="w-full bg-surface border border-[#e1d5c9] rounded px-2 py-1.5 text-xs mt-1"
+                                   className="w-full bg-surface border border-paper-border rounded px-2 py-1.5 text-xs mt-1"
                                    value={activeItem.guestId || ''}
                                    onChange={(e) => {
                                       const selectedGuestId = e.target.value;
@@ -487,7 +491,7 @@ export function CanvasSidebar({ guestSearch, setGuestSearch, items, selectedId, 
                                    />
                                    <input 
                                      type="text"
-                                     className="w-full bg-surface border border-[#e1d5c9] rounded px-2 py-1 h-8"
+                                     className="w-full bg-surface border border-paper-border rounded px-2 py-1 h-8"
                                      value={activeItem.color || '#D4AF37'}
                                      onChange={(e) => {
                                        pushState(items.map(i => i.id === selectedId ? {...i, color: e.target.value} : i));
@@ -503,7 +507,7 @@ export function CanvasSidebar({ guestSearch, setGuestSearch, items, selectedId, 
                               <label className="text-fg-subtle block mb-1">X Coordinate</label>
                               <input 
                                 type="number" 
-                                className="w-full bg-surface border border-[#e1d5c9] rounded px-2 py-1"
+                                className="w-full bg-surface border border-paper-border rounded px-2 py-1"
                                 value={Math.round(activeItem.x || 0)}
                                 onChange={(e) => {
                                   pushState(items.map(i => i.id === selectedId ? {...i, x: parseFloat(e.target.value)} : i));
@@ -724,7 +728,7 @@ export function CanvasSidebar({ guestSearch, setGuestSearch, items, selectedId, 
                       placeholder="Search guests..." 
                       value={guestSearch} 
                       onChange={(e) => setGuestSearch(e.target.value)}
-                      className="text-xs h-8 border-[#e1d5c9]"
+                      className="text-xs h-8 border-paper-border"
                     />
                   </div>
                   <p className="text-xs text-fg-subtle mb-1 font-bold">{unassigned.length} unassigned guests matching</p>

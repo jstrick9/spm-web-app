@@ -14,8 +14,10 @@ import { Input } from '../../../ui/Input';
 import { Label } from '../../../ui/Label';
 import { Skeleton } from '../../../ui/Skeleton';
 import { useToast } from '../../../ui/Toast';
+import { usePrompt } from '../../../ui/usePrompt';
 
 export function VenueManager({ orgId }: { orgId: string }) {
+  const { askConfirm, promptNode } = usePrompt();
   const qc = useQueryClient();
   const { toast } = useToast();
   const [newVenueName, setNewVenueName] = useState('');
@@ -110,6 +112,7 @@ export function VenueManager({ orgId }: { orgId: string }) {
 
   return (
     <div className="space-y-4">
+      {promptNode}
       <div className="bg-surface-2/60 p-4 rounded-xl border border-border flex flex-col sm:flex-row sm:items-center justify-between gap-3 shadow-xs">
         <div className="space-y-1">
           <h4 className="text-xs font-bold text-fg flex items-center gap-1.5 font-serif">
@@ -237,7 +240,7 @@ export function VenueManager({ orgId }: { orgId: string }) {
           venues.map((v: any) => {
             const style = typeof v.style === 'string' ? JSON.parse(v.style || '{}') : (v.style || {});
             return (
-              <Card key={v.id} className="p-3.5 flex items-center justify-between border-border bg-[#FDFBF7] shadow-sm">
+              <Card key={v.id} className="p-3.5 flex items-center justify-between border-border bg-paper shadow-sm">
                 <div className="flex items-center gap-3">
                   {style.photo ? (
                     <img src={style.photo} alt={v.name} className="h-12 w-12 object-cover rounded-md border border-border shadow-sm" />
@@ -282,7 +285,7 @@ export function VenueManager({ orgId }: { orgId: string }) {
                       <Plus className="h-3.5 w-3.5" />
                    </Button>
 
-                   <Button variant="ghost" size="icon" className="h-8 w-8 text-danger hover:bg-danger/10" onClick={() => { if (window.confirm(`Delete ${v.name}? Deletion is blocked while event layouts reference this space.`)) deleteMutation.mutate(v.id); }}>
+                   <Button variant="ghost" size="icon" className="h-8 w-8 text-danger hover:bg-danger/10" onClick={async () => { if (await askConfirm({ title: `Delete ${v.name}?`, description: 'Deletion is blocked while event layouts reference this space.', destructive: true })) deleteMutation.mutate(v.id); }}>
                      <Trash2 className="w-4 h-4" />
                    </Button>
                 </div>

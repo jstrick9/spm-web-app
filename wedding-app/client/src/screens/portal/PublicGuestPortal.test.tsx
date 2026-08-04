@@ -666,8 +666,8 @@ describe('PublicGuestPortal — Phase 34b regression suite', () => {
     const rsvpBtn = await screen.findByRole('button', { name: 'RSVP' });
     fireEvent.click(rsvpBtn);
 
-    // Verify Search Input exists
-    const searchInput = screen.getByPlaceholderText('Type your name to filter...');
+    // Verify Search Input exists (wizard is lazy-loaded)
+    const searchInput = await screen.findByPlaceholderText('Type your name to filter...');
     expect(searchInput).toBeInTheDocument();
 
     // Type query to filter
@@ -678,13 +678,14 @@ describe('PublicGuestPortal — Phase 34b regression suite', () => {
     const nameSelect = screen.getByLabelText('Your Name');
     fireEvent.change(nameSelect, { target: { value: 'g-1' } });
 
-    // Mock confirm warning
-    const confirmSpy = vi.spyOn(window, 'confirm').mockReturnValue(true);
-
     const homeBtn = screen.getByRole('button', { name: 'Home' });
     fireEvent.click(homeBtn);
 
-    expect(confirmSpy).toHaveBeenCalledWith(expect.stringContaining('unsaved RSVP responses'));
+    // The in-app discard dialog appears (replaces the native confirm).
+    await waitFor(() => {
+      expect(screen.getAllByText(/discard your draft/i).length).toBeGreaterThan(0);
+    });
+    fireEvent.click(screen.getAllByRole('button', { name: /^confirm$/i })[0]);
   });
 
   it('supports the Find My Seat smart search overlay and auto-panning selection', async () => {

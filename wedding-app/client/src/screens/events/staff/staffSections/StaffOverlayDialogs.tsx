@@ -35,7 +35,7 @@ export function StaffOverlayDialogs({ editTask, setEditTask, incidentSeverity, s
       {/* Quick Floorplan Map Blueprint Overlay Dialog (Phase 1) */}
       {mapOverlayOpen && activeLayout && (
          <Dialog open={mapOverlayOpen} onOpenChange={setMapOverlayOpen}>
-            <DialogContent className="max-w-2xl bg-[#FDFBF7] border border-[#e1d5c9] rounded-2xl shadow-xl">
+            <DialogContent className="max-w-2xl bg-paper border border-paper-border rounded-2xl shadow-xl">
                <DialogHeader>
                   <DialogTitle className="font-serif font-bold text-lg text-fg flex items-center gap-1.5">
                      🗺️ Quick Floorplan Blueprint Map
@@ -45,14 +45,14 @@ export function StaffOverlayDialogs({ editTask, setEditTask, incidentSeverity, s
                   </DialogDescription>
                </DialogHeader>
 
-               <div className="p-2 bg-white rounded-xl border border-[#e1d5c9]/50 shadow-inner">
+               <div className="p-2 bg-white rounded-xl border border-paper-border/50 shadow-inner">
                   {renderMiniMapSvg()}
                </div>
 
-               <DialogFooter className="border-t border-[#e1d5c9] pt-4 mt-2 flex justify-between items-center text-xs text-fg-subtle font-semibold">
+               <DialogFooter className="border-t border-paper-border pt-4 mt-2 flex justify-between items-center text-xs text-fg-subtle font-semibold">
                   <div className="flex gap-2">
-                     <span className="bg-[#FDFBF7] px-2 py-0.5 rounded border">REV {activeLayout.revision}</span>
-                     <span className="bg-[#FDFBF7] px-2 py-0.5 rounded border capitalize">{activeLayout.approval_status}</span>
+                     <span className="bg-paper px-2 py-0.5 rounded border">REV {activeLayout.revision}</span>
+                     <span className="bg-paper px-2 py-0.5 rounded border capitalize">{activeLayout.approval_status}</span>
                   </div>
                   <Button onClick={() => setMapOverlayOpen(false)}>Close Blueprint</Button>
                </DialogFooter>

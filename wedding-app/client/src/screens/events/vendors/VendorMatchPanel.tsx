@@ -275,7 +275,7 @@ export function VendorMatchPanel({ eventId }: Props) {
         {isLoading ? (
           <p className="text-sm text-fg-muted py-8 text-center animate-pulse">Analyzing vendor profiles and ratings…</p>
         ) : dynamicMatches.length === 0 ? (
-          <p className="text-sm text-fg-muted py-8 text-center border border-dashed border-border rounded-md bg-[#fdfbf7]/40">
+          <p className="text-sm text-fg-muted py-8 text-center border border-dashed border-border rounded-md bg-paper/40">
             No vendors to recommend yet. Add vendors and rate them after events to build reliability scores.
           </p>
         ) : (
@@ -288,7 +288,7 @@ export function VendorMatchPanel({ eventId }: Props) {
                   key={m.vendorId}
                   className={[
                     'flex flex-col rounded-lg border transition-all duration-200 overflow-hidden',
-                    isExpanded ? 'border-brand/40 bg-[#fdfbf7]/50 shadow-sm' : 'border-border hover:bg-surface-2/30'
+                    isExpanded ? 'border-brand/40 bg-paper/50 shadow-sm' : 'border-border hover:bg-surface-2/30'
                   ].join(' ')}
                 >
                   <div 
@@ -323,7 +323,7 @@ export function VendorMatchPanel({ eventId }: Props) {
 
                   {/* Rating breakdown expandable sub-panel */}
                   {isExpanded && m.ratingCount > 0 && (
-                    <div className="px-11 pb-4 pt-1 bg-[#fdfbf7]/30 border-t border-border/20 text-xs space-y-3">
+                    <div className="px-11 pb-4 pt-1 bg-paper/30 border-t border-border/20 text-xs space-y-3">
                       <div className="flex items-center gap-2 text-fg-muted font-bold text-[11px] uppercase tracking-wider">
                         <Activity className="h-3 w-3 text-brand" /> Detailed Score Breakdown
                       </div>
@@ -378,7 +378,7 @@ export function VendorMatchPanel({ eventId }: Props) {
                   )}
 
                   {isExpanded && m.ratingCount === 0 && (
-                    <div className="px-11 pb-4 pt-2 bg-[#fdfbf7]/30 border-t border-border/20 text-xs">
+                    <div className="px-11 pb-4 pt-2 bg-paper/30 border-t border-border/20 text-xs">
                       <p className="text-fg-subtle italic">No ratings logged for this vendor yet. Ratings will automatically construct this vendor's composite quality card.</p>
                     </div>
                   )}

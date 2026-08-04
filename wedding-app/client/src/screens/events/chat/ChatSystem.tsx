@@ -19,6 +19,7 @@ import { SdkUser } from '../../../sdk/types';
 import { getMessages, saveMessage, ChatMessage } from '../../../lib/db/chatDB';
 import { EmojiPicker } from '../../../ui/EmojiPicker';
 import { api, getToken } from '../../../sdk/client';
+import { usePrompt } from '../../../ui/usePrompt';
 
 interface Props {
   eventId: string;
@@ -29,6 +30,7 @@ const CATEGORIES = ['general', 'layout', 'logistics', 'vendors', 'urgent'] as co
 type Category = typeof CATEGORIES[number];
 
 export function ChatSystem({ eventId, currentUser }: Props) {
+  const { ask, askConfirm, promptNode } = usePrompt();
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [input, setInput] = useState('');
   const [activeCategory, setActiveCategory] = useState<Category>('general');
@@ -240,7 +242,7 @@ export function ChatSystem({ eventId, currentUser }: Props) {
   const sendBroadcast = async () => {
     if (!broadcastTitle.trim() || !broadcastBody.trim()) return;
     const sensitive = broadcastSeverity === 'urgent' || broadcastSeverity === 'owner_escalation' || broadcastChannel === 'sms' || broadcastChannel === 'all';
-    if (managerMode && sensitive && !window.confirm('Confirm sensitive manager broadcast. This may notify staff/vendors/guests and will be audit logged. Continue?')) return;
+    if (managerMode && sensitive && !(await askConfirm({ title: 'Sensitive manager broadcast?', description: 'This may notify staff/vendors/guests and will be audit logged.', destructive: true }))) return;
     const payload = { title: broadcastTitle.trim(), body: broadcastBody.trim(), audience: broadcastAudience, channel: broadcastChannel, severity: broadcastSeverity, quietHoursOverride, approvalRequired: broadcastSeverity === 'owner_escalation' };
     try {
       const res: any = await api.post(`/api/events/${eventId}/communications/broadcast`, payload);
@@ -263,8 +265,9 @@ ${broadcastBody}`, createdAt: localAudit.created_at, isOwn: true, synced: false 
   const threadMessages = messages.filter(m => m.threadId === activeCategory);
 
   return (
-    <Card className="flex flex-col h-[400px] sm:h-[600px] border border-[#e1d5c9] bg-[#FDFBF7] shadow-lg">
-      <CardHeader className="py-3.5 px-5 border-b border-[#e1d5c9] bg-[#FDFBF7] flex flex-row items-center justify-between space-y-0">
+    <Card className="flex flex-col h-[400px] sm:h-[600px] border border-paper-border bg-paper shadow-lg">
+      {promptNode}
+      <CardHeader className="py-3.5 px-5 border-b border-paper-border bg-paper flex flex-row items-center justify-between space-y-0">
         <CardTitle className="text-sm font-serif font-bold text-fg flex items-center gap-2">
           <MessageSquare className="w-4 h-4 text-brand" />
           Event Communications &amp; Direct Messaging
@@ -274,7 +277,7 @@ ${broadcastBody}`, createdAt: localAudit.created_at, isOwn: true, synced: false 
             <WifiOff className="w-3.5 h-3.5 text-warning animate-bounce" />
           )}
         </CardTitle>
-        <div className="flex gap-1.5 bg-[#FDFBF7] p-1 rounded-xl border border-[#e1d5c9] shadow-xs">
+        <div className="flex gap-1.5 bg-paper p-1 rounded-xl border border-paper-border shadow-xs">
           {CATEGORIES.map(c => (
             <button
               key={c}
@@ -293,9 +296,9 @@ ${broadcastBody}`, createdAt: localAudit.created_at, isOwn: true, synced: false 
       </CardHeader>
 
       {managerMode && (
-        <div className="border-b border-[#e1d5c9] bg-white/70 p-4 space-y-4">
+        <div className="border-b border-paper-border bg-white/70 p-4 space-y-4">
           <div className="grid gap-3 lg:grid-cols-[1.2fr_0.8fr]">
-            <div className="rounded-xl border border-border bg-[#FDFBF7] p-3 space-y-3">
+            <div className="rounded-xl border border-border bg-paper p-3 space-y-3">
               <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
                 <div><h3 className="text-sm font-bold text-brand flex items-center gap-2"><Bell className="h-4 w-4" /> Operations broadcast composer</h3><p className="text-xs text-fg-muted">Staff/vendor SMS/email/in-app workflow with severity, quiet hours, and approval rules.</p></div>
                 <Badge variant={broadcastSeverity === 'urgent' || broadcastSeverity === 'owner_escalation' ? 'danger' : broadcastSeverity === 'action_needed' ? 'warning' : 'outline'}>{broadcastSeverity.replace('_', ' ')}</Badge>
@@ -309,7 +312,7 @@ ${broadcastBody}`, createdAt: localAudit.created_at, isOwn: true, synced: false 
               <div className="grid gap-2 sm:grid-cols-[1fr_1.6fr_auto]"><Input value={broadcastTitle} onChange={(e) => setBroadcastTitle(e.target.value)} placeholder="Broadcast title" /><Input value={broadcastBody} onChange={(e) => setBroadcastBody(e.target.value)} placeholder="Message template or custom broadcast body" /><Button disabled={!broadcastTitle.trim() || !broadcastBody.trim()} onClick={sendBroadcast}><Send className="h-4 w-4" /> Broadcast</Button></div>
               <div className="flex flex-wrap gap-2 text-xs"><Button size="xs" variant="outline" onClick={() => { setBroadcastTitle('Vendor load-in update'); setBroadcastBody('Please confirm arrival status and use the marked load-in route.'); setBroadcastAudience('vendors'); setBroadcastChannel('sms'); }}>Vendor load-in</Button><Button size="xs" variant="outline" onClick={() => { setBroadcastTitle('Staff standby'); setBroadcastBody('All staff please stand by for the next timeline cue.'); setBroadcastAudience('staff'); setBroadcastChannel('in_app'); }}>Staff standby</Button><Button size="xs" variant="outline" onClick={() => { setBroadcastTitle('Urgent owner escalation'); setBroadcastBody('Owner/admin approval is needed before proceeding.'); setBroadcastSeverity('owner_escalation'); setBroadcastAudience('all'); }}>Owner escalation</Button></div>
             </div>
-            <div className="rounded-xl border border-border bg-[#FDFBF7] p-3">
+            <div className="rounded-xl border border-border bg-paper p-3">
               <h3 className="text-sm font-bold text-brand flex items-center gap-2"><ShieldAlert className="h-4 w-4" /> Communication approval rules</h3>
               <div className="mt-3 space-y-2 text-xs text-fg-muted"><div><strong>FYI:</strong> no approval required.</div><div><strong>Action needed:</strong> manager can send to staff/vendors.</div><div><strong>Urgent:</strong> event-day override can bypass quiet hours.</div><div><strong>Owner escalation:</strong> queued for owner/admin approval visibility.</div></div>
             </div>
@@ -321,7 +324,7 @@ ${broadcastBody}`, createdAt: localAudit.created_at, isOwn: true, synced: false 
         </div>
       )}
 
-      <CardContent className="flex-1 p-0 flex flex-col min-h-0 bg-[#FDFBF7]/30">
+      <CardContent className="flex-1 p-0 flex flex-col min-h-0 bg-paper/30">
         <div ref={scrollRef} className="flex-1 overflow-y-auto p-4 space-y-4">
           {threadMessages.map(msg => (
             <div key={msg.id} className={cn("flex flex-col max-w-[80%]", msg.isOwn ? "ml-auto items-end" : "mr-auto items-start")}>
@@ -333,7 +336,7 @@ ${broadcastBody}`, createdAt: localAudit.created_at, isOwn: true, synced: false 
                 "px-4 py-2 rounded-2xl text-xs sm:text-sm font-semibold shadow-xs",
                 msg.isOwn
                   ? "bg-brand text-brand-fg rounded-br-sm font-bold"
-                  : "bg-white border border-[#e1d5c9] text-fg rounded-bl-sm"
+                  : "bg-white border border-paper-border text-fg rounded-bl-sm"
               )}>
                 {msg.body}
               </div>
@@ -346,7 +349,7 @@ ${broadcastBody}`, createdAt: localAudit.created_at, isOwn: true, synced: false 
           )}
         </div>
 
-        <div className="p-3 border-t border-[#e1d5c9] bg-[#FDFBF7] relative">
+        <div className="p-3 border-t border-paper-border bg-paper relative">
           {showEmoji && (
             <EmojiPicker
               onSelect={(emoji) => setInput(prev => prev + emoji)}
@@ -366,7 +369,7 @@ ${broadcastBody}`, createdAt: localAudit.created_at, isOwn: true, synced: false 
               value={input}
               onChange={e => setInput(e.target.value)}
               placeholder={`Message #${activeCategory}...`}
-              className="flex-1 rounded-full bg-white border border-[#e1d5c9] h-9 text-xs"
+              className="flex-1 rounded-full bg-white border border-paper-border h-9 text-xs"
             />
             <Button type="submit" size="icon" className="rounded-full shrink-0 h-9 w-9" disabled={!input.trim()}>
               <Send className="w-4 h-4" />

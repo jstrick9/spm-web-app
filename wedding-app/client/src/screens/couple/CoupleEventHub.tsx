@@ -1,4 +1,4 @@
-import { lazy, Suspense, useEffect, useMemo, useState } from 'react';
+import { lazy, Suspense, useEffect, useMemo, useRef, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import {
   AlertTriangle,
@@ -30,6 +30,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../..
 import { PageBody, PageHeader } from '../../ui/AppShell';
 import { Skeleton } from '../../ui/Skeleton';
 import { useToast } from '../../ui/Toast';
+import { usePrompt } from '../../ui/usePrompt';
 import type { CoupleRequestType } from '../../sdk/couple';
 
 const CouplePostEventCloseout = lazy(() => import('./CouplePostEventCloseout').then((m) => ({ default: m.CouplePostEventCloseout })));
@@ -62,6 +63,7 @@ function safeMetadata(value: unknown): Record<string, any> {
 export function CoupleEventHub({ eventId }: { eventId: string }) {
   const { toast } = useToast();
   const qc = useQueryClient();
+  const { ask, askForm, askConfirm, promptNode } = usePrompt();
   const { data, isLoading, error } = useQuery({
     queryKey: ['couple-event-hub', eventId],
     queryFn: () => sdk.events.get(eventId),
@@ -96,6 +98,46 @@ export function CoupleEventHub({ eventId }: { eventId: string }) {
   const [importCsv, setImportCsv] = useState('fullName,email,phone,householdName,mailingAddress,rsvpStatus,mealChoice\nJane Guest,jane@example.com,555-0100,Smith Family,1 Main St,pending,Chicken');
   const [portalDraft, setPortalDraft] = useState<Record<string, string>>({ welcomeMessage: '', dressCode: '', parkingText: '', shuttleText: '', lodgingText: '', registryLinks: '', kidsPolicy: '', plusOneRules: '', accessibilityNotes: '', guestFaq: '', subEventInstructions: '', travelConcierge: '', language: 'en' });
   const [designDraft, setDesignDraft] = useState<Record<string, string>>({});
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const [documentFileError, setDocumentFileError] = useState<string | null>(null);
+  const MAX_DOC_BYTES = 8 * 1024 * 1024;
+  const ALLOWED_DOC_TYPES = ['application/pdf', 'image/jpeg', 'image/png', 'image/webp'];
+
+  const handleDocumentFileChosen = (event: React.ChangeEvent<HTMLInputElement>) => {
+    setDocumentFileError(null);
+    const file = event.target.files?.[0];
+    event.target.value = '';
+    if (!file) return;
+    if (!ALLOWED_DOC_TYPES.includes(file.type)) {
+      setDocumentFileError('Use a PDF, JPG, PNG, or WebP file.');
+      return;
+    }
+    if (file.size > MAX_DOC_BYTES) {
+      setDocumentFileError('Files must be under 8 MB.');
+      return;
+    }
+    const reader = new FileReader();
+    reader.onload = () => {
+      setDocumentDraft((p) => ({
+        ...p,
+        filename: file.name,
+        mimeType: file.type,
+        dataUri: String(reader.result),
+      }));
+    };
+    reader.onerror = () => setDocumentFileError('Could not read that file. Try again.');
+    reader.readAsDataURL(file);
+  };
+
+  const uploadChosenDocument = () => {
+    if (!documentDraft.dataUri || !documentDraft.filename) return;
+    documentUploadMutation.mutate({ filename: documentDraft.filename, dataUri: documentDraft.dataUri, mimeType: documentDraft.mimeType || 'application/pdf' });
+  };
+
+  const useSampleDocument = () => {
+    setDocumentFileError(null);
+    setDocumentDraft((p) => ({ ...p, filename: 'sample-document.pdf', mimeType: 'application/pdf', dataUri: 'data:application/pdf;base64,JVBERi0xLjQKJcTl8uXrp/Og0MTGCg==' }));
+  };
   const [documentDraft, setDocumentDraft] = useState<Record<string, string>>({ filename: 'wedding-menu.pdf', category: 'menu', visibility: 'couple_venue', notes: 'Menu notes for venue review' });
   const [messageDraft, setMessageDraft] = useState('');
   const [hasUnsavedDraft, setHasUnsavedDraft] = useState(false);
@@ -153,7 +195,7 @@ export function CoupleEventHub({ eventId }: { eventId: string }) {
     onSuccess: () => { qc.invalidateQueries({ queryKey: ['couple-layout-review', eventId] }); toast({ title: 'Floor plan response sent', variant: 'success' }); },
   });
   const appointmentMutation = useMutation({ 
-    mutationFn: (appointmentType: 'tasting' | 'planning_meeting' | 'final_walkthrough' | 'rehearsal' | 'payment' | 'tour' | 'other') => sdk.couple.requestAppointment(eventId, { appointmentType, note: window.prompt('Preferred dates/times or notes for the venue') || undefined }),
+    mutationFn: (input: { appointmentType: 'tasting' | 'planning_meeting' | 'final_walkthrough' | 'rehearsal' | 'payment' | 'tour' | 'other'; note?: string }) => sdk.couple.requestAppointment(eventId, input),
     onSuccess: () => { qc.invalidateQueries({ queryKey: ['couple-calendar', eventId] }); toast({ title: 'Appointment request sent', variant: 'success' }); },
   });
   const appointmentStatusMutation = useMutation({
@@ -169,7 +211,7 @@ export function CoupleEventHub({ eventId }: { eventId: string }) {
     onSuccess: () => { setMessageDraft(''); qc.invalidateQueries({ queryKey: ['couple-inbox', eventId] }); toast({ title: 'Message sent', variant: 'success' }); },
   });
   const decisionMutation = useMutation({
-    mutationFn: () => sdk.couple.createDecision(eventId, { title: window.prompt('Decision title') || 'Decision needed', detail: window.prompt('Decision details') || undefined }),
+    mutationFn: (input: { title: string; detail?: string }) => sdk.couple.createDecision(eventId, input),
     onSuccess: () => { qc.invalidateQueries({ queryKey: ['couple-inbox', eventId] }); toast({ title: 'Decision thread created', variant: 'success' }); },
   });
   const notificationPrefsMutation = useMutation({
@@ -177,7 +219,7 @@ export function CoupleEventHub({ eventId }: { eventId: string }) {
     onSuccess: () => { qc.invalidateQueries({ queryKey: ['couple-notification-preferences', eventId] }); toast({ title: 'Notification preferences saved', variant: 'success' }); },
   });
   const documentUploadMutation = useMutation({ 
-    mutationFn: () => sdk.couple.uploadDocument(eventId, { filename: documentDraft.filename || 'document.pdf', dataUri: documentDraft.dataUri || 'data:application/pdf;base64,JVBERi0xLjQKJcTl8uXrp/Og0MTGCg==', mimeType: documentDraft.mimeType || 'application/pdf', category: (documentDraft.category as any) || 'other', visibility: (documentDraft.visibility as any) || 'couple_venue', notes: documentDraft.notes }),
+    mutationFn: (input: { filename: string; dataUri: string; mimeType: string }) => sdk.couple.uploadDocument(eventId, { filename: input.filename, dataUri: input.dataUri, mimeType: input.mimeType, category: (documentDraft.category as any) || 'other', visibility: (documentDraft.visibility as any) || 'couple_venue', notes: documentDraft.notes }),
     onSuccess: () => { qc.invalidateQueries({ queryKey: ['couple-documents', eventId] }); toast({ title: 'Document uploaded for venue review', variant: 'success' }); },
     onError: (err: any) => toast({ title: 'Could not upload document', description: err?.message || 'Use a PDF/JPG/PNG/WebP under 8 MB.', variant: 'destructive' }),
   });
@@ -204,7 +246,7 @@ export function CoupleEventHub({ eventId }: { eventId: string }) {
     onSuccess: () => { qc.invalidateQueries({ queryKey: ['couple-finance', eventId] }); toast({ title: 'Change order request sent', variant: 'success' }); },
   });
   const signContractMutation = useMutation({
-    mutationFn: (contractId: string) => sdk.couple.signContract(eventId, contractId, window.prompt('Type your legal signature') || ''),
+    mutationFn: (input: { contractId: string; signature: string }) => sdk.couple.signContract(eventId, input.contractId, input.signature),
     onSuccess: () => { qc.invalidateQueries({ queryKey: ['couple-finance', eventId] }); toast({ title: 'Contract signed', variant: 'success' }); },
   });
   const vendorRequestMutation = useMutation({
@@ -318,24 +360,44 @@ export function CoupleEventHub({ eventId }: { eventId: string }) {
     pendingVenueQuestion ? 'Your venue question is already pending; avoid sending duplicates unless details changed.' : 'If anything looks wrong, ask the venue from this dashboard so the request is tracked.',
   ];
 
-  const promptRequest = (requestType: 'partner_invite' | 'planner_request' | 'account_recovery') => {
-    const targetEmail = requestType === 'account_recovery' ? undefined : window.prompt(requestType === 'partner_invite' ? 'Partner/co-client email address' : 'Planner/coordinator email address') || undefined;
-    if (requestType !== 'account_recovery' && !targetEmail) return;
-    const note = window.prompt('Optional note for the venue', '') || undefined;
+  const promptRequest = async (requestType: 'partner_invite' | 'planner_request' | 'account_recovery') => {
+    let targetEmail: string | undefined;
+    let note: string | undefined;
+    if (requestType === 'account_recovery') {
+      const values = await askForm({ title: 'Request account recovery', fields: [{ key: 'note', label: 'What happened?', multiline: true }] });
+      if (!values) return;
+      note = values.note || undefined;
+    } else {
+      const values = await askForm({
+        title: requestType === 'partner_invite' ? 'Invite your partner' : 'Request a planner',
+        fields: [
+          { key: 'email', label: 'Email address', required: true, placeholder: requestType === 'partner_invite' ? 'partner@example.com' : 'planner@example.com' },
+          { key: 'note', label: 'Optional note for the venue', multiline: true },
+        ],
+      });
+      if (!values) return;
+      targetEmail = values.email || undefined;
+      note = values.note || undefined;
+    }
     requestMutation.mutate({ requestType, targetEmail, note });
   };
 
-  const askVenue = () => {
-    const note = window.prompt('What would you like to ask the venue?');
+  const askVenue = async () => {
+    const note = await ask({ title: 'Ask the venue', label: 'Your question', multiline: true, required: true });
     if (!note) return;
     requestMutation.mutate({ requestType: 'venue_question', note, metadata: { source: 'couple_dashboard' } });
   };
 
-  const requestEventChange = (field: string, currentValue: string) => {
-    const requestedValue = window.prompt(`Requested update for ${field}`, currentValue || '');
-    if (!requestedValue || requestedValue === currentValue) return;
-    const note = window.prompt('Why are you requesting this change?', '') || undefined;
-    requestMutation.mutate({ requestType: 'event_change_request', note, metadata: { field, currentValue, requestedValue, source: 'couple_event_overview' } });
+  const requestEventChange = async (field: string, currentValue: string) => {
+    const values = await askForm({
+      title: `Update ${field}`,
+      fields: [
+        { key: 'value', label: `New value for ${field}`, defaultValue: currentValue || '', required: true },
+        { key: 'note', label: 'Why are you requesting this change?', multiline: true },
+      ],
+    });
+    if (!values || values.value === currentValue) return;
+    requestMutation.mutate({ requestType: 'event_change_request', note: values.note || undefined, metadata: { field, currentValue, requestedValue: values.value, source: 'couple_event_overview' } });
   };
 
   const submitIdentityCheck = () => {
@@ -403,29 +465,40 @@ export function CoupleEventHub({ eventId }: { eventId: string }) {
   };
 
   const requestVendorRecommendation = async () => {
-    const category = window.prompt('What vendor category do you need? (e.g., florist, photographer, DJ)');
-    if (!category) return;
-    const note = window.prompt('Optional details for the venue', '') || undefined;
-    vendorRequestMutation.mutate({ category, note });
+    const values = await askForm({
+      title: 'Request a vendor recommendation',
+      fields: [
+        { key: 'category', label: 'What category do you need?', required: true, placeholder: 'e.g., florist, photographer, DJ' },
+        { key: 'note', label: 'Optional details for the venue', multiline: true },
+      ],
+    });
+    if (!values) return;
+    vendorRequestMutation.mutate({ category: values.category, note: values.note || undefined });
   };
 
   const askVendorQuestion = async (vendorId?: string) => {
-    const question = window.prompt('What vendor question should the venue answer?');
+    const question = await ask({ title: 'Ask the venue about this vendor', label: 'Your question', multiline: true, required: true });
     if (!question) return;
     await sdk.couple.askVendorQuestion(eventId, { vendorId, question });
     qc.invalidateQueries({ queryKey: ['couple-vendor-board', eventId] });
     toast({ title: 'Vendor question sent to venue', variant: 'success' });
   };
 
-  const requestPlannerCollaboration = () => {
-    const plannerEmail = window.prompt('Planner/coordinator email address') || undefined;
-    const plannerName = window.prompt('Planner/coordinator name', coupleVendorsQuery.data?.planner.name || '') || undefined;
-    const note = window.prompt('Optional note for the venue', '') || undefined;
-    plannerCollabMutation.mutate({ plannerName, plannerEmail, note });
+  const requestPlannerCollaboration = async () => {
+    const values = await askForm({
+      title: 'Connect with a planner',
+      fields: [
+        { key: 'email', label: 'Planner/coordinator email address', required: true },
+        { key: 'name', label: 'Planner/coordinator name', defaultValue: coupleVendorsQuery.data?.planner.name || '' },
+        { key: 'note', label: 'Optional note for the venue', multiline: true },
+      ],
+    });
+    if (!values) return;
+    plannerCollabMutation.mutate({ plannerName: values.name || undefined, plannerEmail: values.email || undefined, note: values.note || undefined });
   };
 
   const requestLayoutComment = async (areaLabel?: string, x?: number, y?: number) => {
-    const note = window.prompt(areaLabel ? `Comment for ${areaLabel}` : 'What floor plan change would you like to request?');
+    const note = await ask({ title: areaLabel ? `Comment for ${areaLabel}` : 'Floor plan change request', label: 'Your comment or request', multiline: true, required: true });
     if (!note) return;
     await sdk.couple.addLayoutComment(eventId, { areaLabel, x, y, note });
     qc.invalidateQueries({ queryKey: ['couple-layout-review', eventId] });
@@ -435,7 +508,7 @@ export function CoupleEventHub({ eventId }: { eventId: string }) {
   const updateFirstUnseatedGuest = async () => {
     const guest = coupleLayoutQuery.data?.seating.unseatedGuests?.[0];
     if (!guest) return toast({ title: 'No unseated guests found', variant: 'success' });
-    const tableAssignment = window.prompt(`Assign table for ${guest.fullName}`, guest.tableAssignment || 'Table 1');
+    const tableAssignment = await ask({ title: `Assign a table for ${guest.fullName}`, label: 'Table assignment', defaultValue: guest.tableAssignment || 'Table 1', required: true });
     if (!tableAssignment) return;
     await sdk.couple.updateSeating(eventId, guest.id, { tableAssignment, note: 'Assigned from couple floor plan review' });
     qc.invalidateQueries({ queryKey: ['couple-layout-review', eventId] });
@@ -444,9 +517,15 @@ export function CoupleEventHub({ eventId }: { eventId: string }) {
   };
 
   const requestTimelineChange = async (timelineItemId?: string) => {
-    const requestedChange = window.prompt('What timeline change would you like to request?');
-    if (!requestedChange) return;
-    const reason = window.prompt('Optional reason for the venue/planner', '') || undefined;
+    const values = await askForm({
+      title: 'Request a timeline change',
+      fields: [
+        { key: 'change', label: 'What change would you like to request?', multiline: true, required: true },
+        { key: 'reason', label: 'Optional reason for the venue/planner', multiline: true },
+      ],
+    });
+    if (!values) return;
+    const { requestedChange, reason } = { requestedChange: values.change, reason: values.reason || undefined };
     await sdk.couple.requestTimelineChange(eventId, { timelineItemId, requestedChange, reason });
     qc.invalidateQueries({ queryKey: ['couple-timeline-review', eventId] });
     toast({ title: 'Timeline change request sent', variant: 'success' });
@@ -473,10 +552,30 @@ export function CoupleEventHub({ eventId }: { eventId: string }) {
   };
 
   if (isLoading) return <PageBody><Card><CardContent className="space-y-3 pt-6"><p className="font-semibold text-brand">Opening your private wedding hub…</p><p className="text-sm text-fg-muted">Loading your wedding details, guest list, checklist, documents, messages, and appointments.</p><Skeleton className="h-40 w-full" /></CardContent></Card></PageBody>;
+  const requestAppointment = async (appointmentType: 'tasting' | 'planning_meeting' | 'final_walkthrough' | 'rehearsal' | 'payment' | 'tour' | 'other') => {
+    const note = await ask({ title: 'Request an appointment', label: 'Preferred dates/times or notes for the venue', multiline: true });
+    if (note == null) return;
+    appointmentMutation.mutate({ appointmentType, note: note || undefined });
+  };
+
+  const requestDecision = async () => {
+    const values = await askForm({
+      title: 'Decision needed',
+      fields: [
+        { key: 'title', label: 'Decision title', required: true },
+        { key: 'detail', label: 'Details (optional)', multiline: true },
+      ],
+      confirmLabel: 'Create decision',
+    });
+    if (!values) return;
+    decisionMutation.mutate({ title: values.title, detail: values.detail || undefined });
+  };
+
   if (error || !event) return <PageBody><Card><CardContent className="space-y-2 pt-6 text-sm"><p className="font-semibold text-danger">We could not open this wedding hub.</p><p className="text-fg-muted">Check your invitation link, sign in with the email your venue invited, or contact the venue coordinator for a new link.</p><Button asChild size="sm" variant="outline"><a href="#/">Back to sign in</a></Button></CardContent></Card></PageBody>;
 
   return (
     <>
+      {promptNode}
       <PageHeader
         title="Your wedding hub"
         description="A private, client-safe planning home for your booked wedding."
@@ -488,7 +587,7 @@ export function CoupleEventHub({ eventId }: { eventId: string }) {
           <Card><CardHeader><CardTitle>Event Week updates</CardTitle><CardDescription>Important venue-approved updates for your wedding week.</CardDescription></CardHeader><CardContent className="space-y-2">{coupleUpdatesQuery.data?.updates?.length ? coupleUpdatesQuery.data.updates.map((update: any) => <div key={update.id} className="rounded border border-border p-3 text-sm"><strong>{update.title}</strong>{update.critical ? <span className="ml-2 text-warning">Action requested</span> : null}<p className="mt-1 text-fg-muted">{update.body}</p>{update.critical && !update.acknowledged_at && <Button className="mt-2" size="xs" onClick={() => acknowledgeUpdateMutation.mutate(update.id)}>I understand</Button>}{update.acknowledged_at && <p className="mt-2 text-xs text-success">Acknowledged</p>}</div>) : <p className="text-sm text-fg-muted">No Event Week updates right now.</p>}</CardContent></Card>
           <Card className="border-brand/30 bg-brand-soft/10"><CardHeader><CardTitle>{event.status === 'final_review' ? 'Final Review handoff' : 'Your planning focus'}</CardTitle><CardDescription>{event.status === 'final_review' ? 'Seven Paths Manor is completing the operational review. Keep any change requests focused and review venue-manager decisions here.' : 'Your next best decisions, kept simple. The venue team handles operations behind the scenes.'}</CardDescription></CardHeader><CardContent>{event.status === 'final_review' ? <p className="text-sm text-fg-muted">Review your approved layout, guest count, and wedding-day schedule. Use the Final Review card below if something needs to change.</p> : planningFocus.length ? <ol className="space-y-2 text-sm">{planningFocus.map((item, index) => <li key={item} className="flex gap-2"><span className="font-semibold text-brand">{index + 1}.</span>{item}</li>)}</ol> : <p className="text-sm text-fg-muted">Your immediate planning decisions are complete. Check your schedule and messages for venue updates.</p>}</CardContent></Card>
           <Card className="border-brand/20 bg-brand-soft/10"><CardHeader><CardTitle>Choose your venue-approved starting plan</CardTitle><CardDescription>Templates are approved by Seven Paths Manor. We recommend options that fit your current guest count; you can still view any option with a capacity note.</CardDescription></CardHeader><CardContent className="grid gap-3 md:grid-cols-2">{venueTemplatesQuery.data?.templates?.length ? venueTemplatesQuery.data.templates.map((template) => { const spec = template.spec || {}; const min = spec.minGuests ?? 0; const max = spec.maxGuests ?? Infinity; const warning = venueTemplatesQuery.data!.guestCount && (venueTemplatesQuery.data!.guestCount < min || venueTemplatesQuery.data!.guestCount > max); return <div key={template.id} className="rounded-lg border border-border bg-surface p-3"><strong>{template.name}</strong><p className="mt-1 text-xs text-fg-muted">{spec.weddingMoment || 'Wedding layout'} · {spec.serviceStyle || 'Flexible service'}{Number.isFinite(max) ? ` · designed for ${min}-${max} guests` : ''}</p>{warning && <p className="mt-2 text-xs text-warning">Your current guest count may need venue review for this template.</p>}<Button className="mt-3" size="sm" onClick={async () => { try { await venuesSdk.applyEventTemplate(eventId, template.id); qc.invalidateQueries({ queryKey: ['couple-layouts'] }); toast({ title: 'Template applied as your layout proposal', description: 'You can now customize permitted layout objects before venue review.', variant: 'success' }); } catch (err: any) { toast({ title: 'Could not apply template', description: err.message, variant: 'destructive' }); } }}>Use this template</Button></div>; }) : <p className="text-sm text-fg-muted">Seven Paths Manor has not published a template for this event yet. Ask your venue coordinator for options.</p>}</CardContent></Card>
-          {event.status === 'final_review' && <Card className="border-warning/30 bg-warning-soft/10"><CardHeader><CardTitle>Final Review with Seven Paths Manor</CardTitle><CardDescription>Your venue team is completing the operational review. You may request a change; your venue manager confirms the final decision.</CardDescription></CardHeader><CardContent className="space-y-3"><Button size="sm" variant="outline" isLoading={finalReviewChangeMutation.isPending} onClick={() => { const detail = window.prompt('What would you like Seven Paths Manor to review or change?'); if (detail?.trim()) finalReviewChangeMutation.mutate(detail.trim()); }}>Request a change</Button>{finalReviewChangesQuery.data?.requests?.length ? <div className="space-y-2">{finalReviewChangesQuery.data.requests.map((request) => <div key={request.id} className="rounded border border-border bg-surface p-2 text-sm"><strong>{request.status.replace('_', ' ')}</strong><p className="mt-1">{request.detail}</p>{request.manager_note && <p className="mt-1 text-fg-muted">Venue manager: {request.manager_note}</p>}</div>)}</div> : <p className="text-sm text-fg-muted">No Final Review change requests yet.</p>}</CardContent></Card>}
+          {event.status === 'final_review' && <Card className="border-warning/30 bg-warning-soft/10"><CardHeader><CardTitle>Final Review with Seven Paths Manor</CardTitle><CardDescription>Your venue team is completing the operational review. You may request a change; your venue manager confirms the final decision.</CardDescription></CardHeader><CardContent className="space-y-3"><Button size="sm" variant="outline" isLoading={finalReviewChangeMutation.isPending} onClick={async () => { const detail = await ask({ title: 'Request a review change', label: 'What would you like the venue to review or change?', multiline: true, required: true }); if (detail) finalReviewChangeMutation.mutate(detail); }}>Request a change</Button>{finalReviewChangesQuery.data?.requests?.length ? <div className="space-y-2">{finalReviewChangesQuery.data.requests.map((request) => <div key={request.id} className="rounded border border-border bg-surface p-2 text-sm"><strong>{request.status.replace('_', ' ')}</strong><p className="mt-1">{request.detail}</p>{request.manager_note && <p className="mt-1 text-fg-muted">Venue manager: {request.manager_note}</p>}</div>)}</div> : <p className="text-sm text-fg-muted">No Final Review change requests yet.</p>}</CardContent></Card>}
 
           <Card className="overflow-hidden border-brand/20 bg-gradient-to-br from-brand-soft/50 to-surface">
             <CardContent className="grid gap-5 p-5 sm:p-6 lg:grid-cols-[1.1fr_0.9fr] lg:items-center">
@@ -628,9 +727,9 @@ export function CoupleEventHub({ eventId }: { eventId: string }) {
             <CardHeader><CardTitle className="flex items-center gap-2 text-base"><CalendarDays className="h-4 w-4 text-brand" /> Couple Calendar & Appointments</CardTitle><CardDescription>Only couple-relevant appointments, deadlines, payment dates, tastings, rehearsal, and walkthrough items are shown.</CardDescription></CardHeader>
             <CardContent className="space-y-4">
               <div className="grid gap-2 sm:grid-cols-4 text-sm"><div className="rounded-lg border border-border bg-surface-2 p-3"><strong>{calendarQuery.data?.appointments.length ?? 0}</strong><p className="text-xs text-fg-muted">appointments</p></div><div className="rounded-lg border border-border bg-surface-2 p-3"><strong>{calendarQuery.data?.calendarItems.length ?? 0}</strong><p className="text-xs text-fg-muted">calendar items</p></div><div className="rounded-lg border border-border bg-surface-2 p-3"><strong>{calendarQuery.data?.appointments.filter((a) => a.status.includes('request')).length ?? 0}</strong><p className="text-xs text-fg-muted">open requests</p></div><div className="rounded-lg border border-border bg-surface-2 p-3"><strong>{calendarQuery.data?.providerSync.status || 'not connected'}</strong><p className="text-xs text-fg-muted">provider sync</p></div></div>
-              <div className="grid gap-2 lg:grid-cols-2">{(calendarQuery.data?.appointments || []).slice(0, 8).map((appt) => <div key={appt.id} className="rounded-lg border border-border bg-surface-2 p-3 text-sm"><div className="flex items-start justify-between gap-2"><div><strong>{appt.title}</strong><p className="text-xs text-fg-muted">{appt.appointmentType.replace('_', ' ')} · {appt.startsAt || 'time requested'} · {appt.location || 'location TBD'}</p><p className="mt-1 text-xs text-fg-muted">Prep: {appt.preparation.slice(0, 2).join(' · ')}</p></div><Badge variant={appt.status === 'confirmed' ? 'success' : appt.status.includes('request') ? 'warning' : 'outline'}>{appt.status.replace('_', ' ')}</Badge></div><div className="mt-2 flex flex-wrap gap-1"><Button size="xs" variant="outline" onClick={() => appointmentStatusMutation.mutate({ id: appt.id, status: 'reschedule_requested', note: window.prompt('Preferred reschedule details') || undefined })}>Reschedule</Button><Button size="xs" variant="ghost" onClick={() => appointmentStatusMutation.mutate({ id: appt.id, status: 'cancel_requested', note: 'Couple requested cancellation' })}>Cancel</Button>{appt.appointmentType === 'final_walkthrough' && <Button size="xs" onClick={() => appointmentSignoffMutation.mutate(appt.id)}>Sign off</Button>}</div></div>)}</div>
+              <div className="grid gap-2 lg:grid-cols-2">{(calendarQuery.data?.appointments || []).slice(0, 8).map((appt) => <div key={appt.id} className="rounded-lg border border-border bg-surface-2 p-3 text-sm"><div className="flex items-start justify-between gap-2"><div><strong>{appt.title}</strong><p className="text-xs text-fg-muted">{appt.appointmentType.replace('_', ' ')} · {appt.startsAt || 'time requested'} · {appt.location || 'location TBD'}</p><p className="mt-1 text-xs text-fg-muted">Prep: {appt.preparation.slice(0, 2).join(' · ')}</p></div><Badge variant={appt.status === 'confirmed' ? 'success' : appt.status.includes('request') ? 'warning' : 'outline'}>{appt.status.replace('_', ' ')}</Badge></div><div className="mt-2 flex flex-wrap gap-1"><Button size="xs" variant="outline" onClick={async () => { const note = await ask({ title: 'Reschedule this appointment', label: 'Preferred dates/times or notes', multiline: true, required: true }); if (note) appointmentStatusMutation.mutate({ id: appt.id, status: 'reschedule_requested', note }); }}>Reschedule</Button><Button size="xs" variant="ghost" onClick={() => appointmentStatusMutation.mutate({ id: appt.id, status: 'cancel_requested', note: 'Couple requested cancellation' })}>Cancel</Button>{appt.appointmentType === 'final_walkthrough' && <Button size="xs" onClick={() => appointmentSignoffMutation.mutate(appt.id)}>Sign off</Button>}</div></div>)}</div>
               <div className="grid gap-3 lg:grid-cols-3"><div className="rounded-lg border border-border bg-surface-2 p-3 text-xs"><strong>Availability windows</strong><ul className="mt-1 list-disc pl-4">{Object.entries(calendarQuery.data?.availabilityWindows || {}).map(([k, v]) => <li key={k}>{k.replace('_', ' ')}: {String(v)}</li>)}</ul></div><div className="rounded-lg border border-border bg-surface-2 p-3 text-xs"><strong>Upcoming deadlines/payment dates</strong><ul className="mt-1 list-disc pl-4">{(calendarQuery.data?.calendarItems || []).filter((i) => i.source !== 'appointment').slice(0, 6).map((i) => <li key={`${i.source}-${i.id}`}>{i.title} · {i.startsAt || 'TBD'}</li>)}</ul></div><div className="rounded-lg border border-border bg-surface-2 p-3 text-xs"><strong>Appointment preparation</strong><p>Each appointment includes reminder hooks and preparation checklist items for tastings, meetings, walkthroughs, rehearsals, and payment dates.</p></div></div>
-              <div className="flex flex-wrap gap-2"><Button size="sm" onClick={() => appointmentMutation.mutate('tasting')}>Request tasting</Button><Button size="sm" variant="outline" onClick={() => appointmentMutation.mutate('planning_meeting')}>Planning meeting</Button><Button size="sm" variant="outline" onClick={() => appointmentMutation.mutate('final_walkthrough')}>Final walkthrough</Button><Button size="sm" variant="outline" onClick={() => appointmentMutation.mutate('rehearsal')}>Rehearsal</Button><Button asChild size="sm" variant="outline"><a href={`/api/events/${eventId}/couple-calendar.ics`} download>Export calendar</a></Button></div>
+              <div className="flex flex-wrap gap-2"><Button size="sm" onClick={() => requestAppointment('tasting')}>Request tasting</Button><Button size="sm" variant="outline" onClick={() => requestAppointment('planning_meeting')}>Planning meeting</Button><Button size="sm" variant="outline" onClick={() => requestAppointment('final_walkthrough')}>Final walkthrough</Button><Button size="sm" variant="outline" onClick={() => requestAppointment('rehearsal')}>Rehearsal</Button><Button asChild size="sm" variant="outline"><a href={`/api/events/${eventId}/couple-calendar.ics`} download>Export calendar</a></Button></div>
             </CardContent>
           </Card>
 
@@ -640,7 +739,7 @@ export function CoupleEventHub({ eventId }: { eventId: string }) {
               <div className="grid gap-2 sm:grid-cols-4 text-sm"><div className="rounded-lg border border-border bg-surface-2 p-3"><strong>{inboxQuery.data?.notificationSummary.newVenueMessages ?? 0}</strong><p className="text-xs text-fg-muted">new venue messages</p></div><div className="rounded-lg border border-border bg-surface-2 p-3"><strong>{inboxQuery.data?.notificationSummary.dueTasks ?? 0}</strong><p className="text-xs text-fg-muted">due planning tasks</p></div><div className="rounded-lg border border-border bg-surface-2 p-3"><strong>{inboxQuery.data?.decisions.length ?? 0}</strong><p className="text-xs text-fg-muted">decision threads</p></div><div className="rounded-lg border border-border bg-surface-2 p-3"><strong>{inboxQuery.data?.venueContact.expectedResponse || '1 business day'}</strong><p className="text-xs text-fg-muted">expected response</p></div></div>
               <div className="grid gap-2 lg:grid-cols-2">{(inboxQuery.data?.threads || []).map((thread) => <div key={thread.threadId} className="rounded-lg border border-border bg-surface-2 p-3 text-sm"><div className="flex items-start justify-between gap-2"><div><strong>{thread.label}</strong><p className="text-xs text-fg-muted">Expected response: {thread.expectedResponse}</p></div><Badge variant={thread.unread ? 'warning' : 'outline'}>{thread.unread} unread</Badge></div><div className="mt-2 max-h-24 overflow-auto space-y-1 text-xs text-fg-muted">{thread.messages.slice(-3).map((m: any) => <p key={m.id}>{m.sender_role}: {m.body}</p>)}{!thread.messages.length && <p>No messages yet.</p>}</div></div>)}</div>
               <div className="grid gap-3 lg:grid-cols-3"><div className="rounded-lg border border-border bg-surface-2 p-3 text-xs"><strong>Message templates</strong><div className="mt-1 flex flex-wrap gap-1">{(inboxQuery.data?.templates || []).map((template) => <button key={template.id} className="rounded border border-border bg-surface px-2 py-1 text-left" onClick={() => setMessageDraft(template.body)}>{template.label}</button>)}</div></div><div className="rounded-lg border border-border bg-surface-2 p-3 text-xs"><strong>Searchable FAQ / venue policies</strong><ul className="mt-1 list-disc pl-4">{(inboxQuery.data?.templates ? (inboxQuery.data as any).faq || [] : []).slice?.(0, 0)}{(inboxQuery.data as any)?.faq?.slice(0, 4).map((f: any) => <li key={f.q}>{f.q}: {f.a}</li>) || <li>Venue policy guidance loads here.</li>}</ul></div><div className="rounded-lg border border-brand/20 bg-brand-soft/10 p-3 text-xs text-brand whitespace-pre-wrap"><strong>AI answer draft with policy citations</strong>\n{inboxQuery.data?.aiDraft || 'Ask a question to draft a venue-safe reply.'}</div></div>
-              <div className="grid gap-2 md:grid-cols-[1fr_auto_auto_auto]"><textarea value={messageDraft} onChange={(e) => setMessageDraft(e.target.value)} placeholder="Write a venue/planner message…" className="min-h-20 rounded-md border border-border bg-surface p-2 text-sm" /><Button size="sm" onClick={() => inboxMessageMutation.mutate({ threadType: 'venue', body: messageDraft })} disabled={!messageDraft}>Send to venue</Button><Button size="sm" variant="outline" onClick={() => inboxMessageMutation.mutate({ threadType: 'urgent', body: messageDraft || 'Urgent venue question', urgency: 'urgent' })}>Urgent</Button><Button size="sm" variant="outline" onClick={() => decisionMutation.mutate()} isLoading={decisionMutation.isPending}>Decision needed</Button></div>
+              <div className="grid gap-2 md:grid-cols-[1fr_auto_auto_auto]"><textarea value={messageDraft} onChange={(e) => setMessageDraft(e.target.value)} placeholder="Write a venue/planner message…" className="min-h-20 rounded-md border border-border bg-surface p-2 text-sm" /><Button size="sm" onClick={() => inboxMessageMutation.mutate({ threadType: 'venue', body: messageDraft })} disabled={!messageDraft}>Send to venue</Button><Button size="sm" variant="outline" onClick={() => inboxMessageMutation.mutate({ threadType: 'urgent', body: messageDraft || 'Urgent venue question', urgency: 'urgent' })}>Urgent</Button><Button size="sm" variant="outline" onClick={requestDecision} isLoading={decisionMutation.isPending}>Decision needed</Button></div>
               <div className="flex flex-wrap items-center gap-2 text-xs text-fg-muted"><span>Notifications: digest {notificationPrefsQuery.data?.preferences.digest_frequency || 'daily'}</span><Button size="xs" variant="outline" onClick={() => notificationPrefsMutation.mutate()} isLoading={notificationPrefsMutation.isPending}>Toggle instant/daily</Button></div>
             </CardContent>
           </Card>
@@ -649,7 +748,7 @@ export function CoupleEventHub({ eventId }: { eventId: string }) {
             <CardHeader><CardTitle className="flex items-center gap-2 text-base"><FileSignature className="h-4 w-4 text-brand" /> Couple Document Hub</CardTitle><CardDescription>Shared client document hub separate from internal gallery and operations evidence. Uploads support PDF/JPG/PNG/WebP up to 8 MB.</CardDescription></CardHeader>
             <CardContent className="space-y-4">
               <div className="grid gap-2 sm:grid-cols-4 text-sm"><div className="rounded-lg border border-border bg-surface-2 p-3"><strong>{documentsQuery.data?.documents.length ?? 0}</strong><p className="text-xs text-fg-muted">documents</p></div><div className="rounded-lg border border-warning/30 bg-warning-soft/20 p-3"><strong>{documentsQuery.data?.reviewQueue.length ?? 0}</strong><p className="text-xs text-warning">needs review</p></div><div className="rounded-lg border border-border bg-surface-2 p-3"><strong>{documentsQuery.data?.postEventGallery.length ?? 0}</strong><p className="text-xs text-fg-muted">post-event gallery</p></div><div className="rounded-lg border border-border bg-surface-2 p-3"><strong>{Math.round((documentsQuery.data?.maxBytes || 0) / 1024 / 1024) || 8} MB</strong><p className="text-xs text-fg-muted">file limit</p></div></div>
-              <div className="grid gap-2 md:grid-cols-5"><input value={documentDraft.filename || ''} onChange={(e) => setDocumentDraft((p) => ({ ...p, filename: e.target.value }))} placeholder="Filename" className="h-9 rounded-md border border-border bg-surface px-2 text-sm" /><select value={documentDraft.category || 'other'} onChange={(e) => setDocumentDraft((p) => ({ ...p, category: e.target.value }))} className="h-9 rounded-md border border-border bg-surface px-2 text-sm">{(documentsQuery.data?.categories || ['inspiration_photo','insurance','vendor_doc','ceremony_doc','playlist','diagram','permit','guest_list','menu','contract','post_event_gallery','other']).map((c) => <option key={c} value={c}>{c}</option>)}</select><select value={documentDraft.visibility || 'couple_venue'} onChange={(e) => setDocumentDraft((p) => ({ ...p, visibility: e.target.value }))} className="h-9 rounded-md border border-border bg-surface px-2 text-sm">{(documentsQuery.data?.visibilityOptions || ['couple','couple_venue','planner','vendor','guest_visible']).map((v) => <option key={v} value={v}>{v}</option>)}</select><input value={documentDraft.notes || ''} onChange={(e) => setDocumentDraft((p) => ({ ...p, notes: e.target.value }))} placeholder="Notes" className="h-9 rounded-md border border-border bg-surface px-2 text-sm" /><Button size="sm" onClick={() => documentUploadMutation.mutate()} isLoading={documentUploadMutation.isPending}>Upload sample</Button></div>
+              <div className="grid gap-2 md:grid-cols-5"><input value={documentDraft.filename || ''} onChange={(e) => setDocumentDraft((p) => ({ ...p, filename: e.target.value }))} placeholder="Filename" className="h-9 rounded-md border border-border bg-surface px-2 text-sm" /><select value={documentDraft.category || 'other'} onChange={(e) => setDocumentDraft((p) => ({ ...p, category: e.target.value }))} className="h-9 rounded-md border border-border bg-surface px-2 text-sm">{(documentsQuery.data?.categories || ['inspiration_photo','insurance','vendor_doc','ceremony_doc','playlist','diagram','permit','guest_list','menu','contract','post_event_gallery','other']).map((c) => <option key={c} value={c}>{c}</option>)}</select><select value={documentDraft.visibility || 'couple_venue'} onChange={(e) => setDocumentDraft((p) => ({ ...p, visibility: e.target.value }))} className="h-9 rounded-md border border-border bg-surface px-2 text-sm">{(documentsQuery.data?.visibilityOptions || ['couple','couple_venue','planner','vendor','guest_visible']).map((v) => <option key={v} value={v}>{v}</option>)}</select><input value={documentDraft.notes || ''} onChange={(e) => setDocumentDraft((p) => ({ ...p, notes: e.target.value }))} placeholder="Notes" className="h-9 rounded-md border border-border bg-surface px-2 text-sm" /><div className="flex items-center gap-2"><input ref={fileInputRef} type="file" accept=".pdf,.jpg,.jpeg,.png,.webp" className="hidden" aria-label="Choose a document file" onChange={handleDocumentFileChosen} /><Button size="sm" variant={documentDraft.dataUri ? 'default' : 'outline'} onClick={() => fileInputRef.current?.click()}>Choose file</Button>{documentDraft.dataUri ? <Button size="sm" onClick={uploadChosenDocument} isLoading={documentUploadMutation.isPending}>Upload</Button> : <Button size="xs" variant="ghost" onClick={useSampleDocument} className="text-xs">Use sample file</Button>}</div></div>{documentFileError && <p className="text-xs text-danger col-span-5 mt-2">{documentFileError}</p>}
               <div className="grid gap-2 lg:grid-cols-2">{(documentsQuery.data?.documents || []).slice(0, 8).map((doc) => <div key={doc.id} className="rounded-lg border border-border bg-surface-2 p-3 text-sm"><div className="flex items-start justify-between gap-2"><div><strong>{doc.filename}</strong><p className="text-xs text-fg-muted">{doc.category} · {doc.visibility} · v{doc.version}</p>{doc.extractedSummary && <p className="mt-1 whitespace-pre-wrap text-xs text-fg-muted">{doc.extractedSummary}</p>}</div><Badge variant={doc.approvalStatus === 'approved' ? 'success' : doc.approvalStatus === 'changes_requested' ? 'warning' : 'outline'}>{doc.approvalStatus}</Badge><Button size="xs" variant="ghost" onClick={() => documentDeleteMutation.mutate(doc.id)} aria-label={`Delete document ${doc.filename}`}><Trash2 className="h-3.5 w-3.5" /></Button></div></div>)}</div>
               <div className="grid gap-3 lg:grid-cols-3"><div className="rounded-lg border border-border bg-surface-2 p-3 text-xs"><strong>Supported categories</strong><p className="mt-1 text-fg-muted">Inspiration photos, insurance, vendor docs, ceremony docs, playlists, diagrams, permits, guest spreadsheets, menus, contracts, and post-event gallery.</p></div><div className="rounded-lg border border-border bg-surface-2 p-3 text-xs"><strong>Visibility</strong><p className="mt-1 text-fg-muted">Couple, couple+venue, planner, vendor, or guest-visible. Guest-visible files require venue approval.</p></div><div className="rounded-lg border border-brand/20 bg-brand-soft/10 p-3 text-xs text-brand"><strong>AI extraction review</strong><p className="mt-1">Guest lists, contracts, menu notes, ceremony docs, and playlists get deterministic review hints for venue approval.</p></div></div>
               <div className="flex flex-wrap gap-2"><Button asChild size="sm" variant="outline"><a href={`/api/events/${eventId}/couple-documents/final-packet.txt`} download>Download final packet</a></Button></div>
@@ -673,9 +772,9 @@ export function CoupleEventHub({ eventId }: { eventId: string }) {
             <CardContent className="space-y-4">
               <div className="grid gap-2 sm:grid-cols-4 text-sm"><div className="rounded-lg border border-border bg-surface-2 p-3"><strong>{money(financeQuery.data?.totals.contractedCents ?? 0)}</strong><p className="text-xs text-fg-muted">agreement total</p></div><div className="rounded-lg border border-success/30 bg-success-soft p-3"><strong>{money(paidCents)}</strong><p className="text-xs text-success">paid/receipted</p></div><div className="rounded-lg border border-warning/30 bg-warning-soft/20 p-3"><strong>{money(balanceCents)}</strong><p className="text-xs text-warning">open balance</p></div><div className="rounded-lg border border-border bg-surface-2 p-3"><strong>{financeQuery.data?.changeOrders.length ?? 0}</strong><p className="text-xs text-fg-muted">add-on requests</p></div></div>
               <div className="rounded-lg border border-brand/20 bg-brand-soft/10 p-3 text-xs text-brand"><strong>Payment status explanation:</strong> {financeQuery.data?.paymentScheduleExplanation || 'Venue-created payment schedule will appear here.'}</div>
-              <div className="grid gap-3 lg:grid-cols-2"><div className="rounded-lg border border-border bg-surface-2 p-3 text-sm"><h4 className="font-bold">Contracts and signatures</h4><div className="mt-2 space-y-2">{contracts.map((contract) => <div key={contract.id} className="rounded-md border border-border bg-surface p-2"><div className="flex items-start justify-between gap-2"><div><strong>{contract.title}</strong><p className="text-xs text-fg-muted">{contract.nextStep}</p>{contract.signedCertificate && <p className="text-xs text-success">Signed certificate: {contract.signedCertificate.signer} · {contract.signedCertificate.signedAt}</p>}</div><Badge variant={contract.status === 'signed' ? 'success' : 'warning'}>{contract.status}</Badge></div><div className="mt-2 flex flex-wrap gap-1">{contract.clauseExplainers.map((c) => <Badge key={`${contract.id}-${c.label}`} variant="outline">{c.label}</Badge>)}{contract.status !== 'signed' && <Button size="xs" variant="outline" onClick={() => signContractMutation.mutate(contract.id)}>Sign</Button>}</div></div>)}{contracts.length === 0 && <p className="text-xs text-fg-muted">No couple-visible agreement shared yet.</p>}</div></div><div className="rounded-lg border border-border bg-surface-2 p-3 text-sm"><h4 className="font-bold">Invoices, receipts, and due dates</h4><div className="mt-2 space-y-2">{(financeQuery.data?.payments || []).map((payment) => <div key={payment.id} className="rounded-md border border-border bg-surface p-2"><div className="flex items-start justify-between gap-2"><div><strong>{payment.label}</strong><p className="text-xs text-fg-muted">{money(payment.amountCents)} · due {payment.dueDate || 'TBD'} · {payment.explanation}</p>{payment.receiptUrl && <a className="text-xs text-brand underline" href={payment.receiptUrl}>Download receipt</a>}</div><Badge variant={payment.status === 'completed' ? 'success' : payment.status === 'failed' ? 'danger' : 'warning'}>{payment.status}</Badge></div>{payment.paymentUrl && <a className="mt-1 inline-block text-xs font-bold text-brand underline" href={payment.paymentUrl}>Open payment link</a>}</div>)}{!financeQuery.data?.payments?.length && <p className="text-xs text-fg-muted">No payment links shared yet.</p>}</div></div></div>
+              <div className="grid gap-3 lg:grid-cols-2"><div className="rounded-lg border border-border bg-surface-2 p-3 text-sm"><h4 className="font-bold">Contracts and signatures</h4><div className="mt-2 space-y-2">{contracts.map((contract) => <div key={contract.id} className="rounded-md border border-border bg-surface p-2"><div className="flex items-start justify-between gap-2"><div><strong>{contract.title}</strong><p className="text-xs text-fg-muted">{contract.nextStep}</p>{contract.signedCertificate && <p className="text-xs text-success">Signed certificate: {contract.signedCertificate.signer} · {contract.signedCertificate.signedAt}</p>}</div><Badge variant={contract.status === 'signed' ? 'success' : 'warning'}>{contract.status}</Badge></div><div className="mt-2 flex flex-wrap gap-1">{contract.clauseExplainers.map((c) => <Badge key={`${contract.id}-${c.label}`} variant="outline">{c.label}</Badge>)}{contract.status !== 'signed' && <Button size="xs" variant="outline" onClick={async () => { const signature = await ask({ title: 'Sign this agreement', label: 'Type your legal signature', required: true, confirmLabel: 'Sign' }); if (signature) signContractMutation.mutate({ contractId: contract.id, signature }); }}>Sign</Button>}</div></div>)}{contracts.length === 0 && <p className="text-xs text-fg-muted">No couple-visible agreement shared yet.</p>}</div></div><div className="rounded-lg border border-border bg-surface-2 p-3 text-sm"><h4 className="font-bold">Invoices, receipts, and due dates</h4><div className="mt-2 space-y-2">{(financeQuery.data?.payments || []).map((payment) => <div key={payment.id} className="rounded-md border border-border bg-surface p-2"><div className="flex items-start justify-between gap-2"><div><strong>{payment.label}</strong><p className="text-xs text-fg-muted">{money(payment.amountCents)} · due {payment.dueDate || 'TBD'} · {payment.explanation}</p>{payment.receiptUrl && <a className="text-xs text-brand underline" href={payment.receiptUrl}>Download receipt</a>}</div><Badge variant={payment.status === 'completed' ? 'success' : payment.status === 'failed' ? 'danger' : 'warning'}>{payment.status}</Badge></div>{payment.paymentUrl && <a className="mt-1 inline-block text-xs font-bold text-brand underline" href={payment.paymentUrl}>Open payment link</a>}</div>)}{!financeQuery.data?.payments?.length && <p className="text-xs text-fg-muted">No payment links shared yet.</p>}</div></div></div>
               <div className="grid gap-3 lg:grid-cols-3"><div className="rounded-lg border border-border bg-surface-2 p-3 text-xs"><strong>Refund / cancellation policy</strong><p className="mt-1 text-fg-muted">{financeQuery.data?.refundCancellationPolicy}</p></div><div className="rounded-lg border border-border bg-surface-2 p-3 text-xs"><strong>Hidden internal finance fields</strong><ul className="mt-1 list-disc pl-4">{(financeQuery.data?.hiddenFields || []).map((field) => <li key={field}>{field}</li>)}</ul></div><div className="rounded-lg border border-border bg-surface-2 p-3 text-xs"><strong>Payment method vault</strong><p className="mt-1 text-fg-muted">{financeQuery.data?.paymentMethodVault.note || 'Not configured.'}</p></div></div>
-              <div className="flex flex-wrap gap-2"><Button size="sm" onClick={() => { const question = window.prompt('Question about invoice, payment, or contract?'); if (question) financeQuestionMutation.mutate(question); }} isLoading={financeQuestionMutation.isPending}>Ask invoice/contract question</Button><Button size="sm" variant="outline" onClick={() => { const label = window.prompt('What add-on/change order do you want? (extra hour, room block, ceremony upgrade, bar package, rental upgrade)'); if (label) changeOrderMutation.mutate({ changeType: 'other', label, note: label }); }} isLoading={changeOrderMutation.isPending}>Request add-on/change order</Button><Button asChild size="sm" variant="outline"><a href={`/api/events/${eventId}/couple-finance/packet.txt`} download>Download contract/payment packet</a></Button></div>
+              <div className="flex flex-wrap gap-2"><Button size="sm" onClick={async () => { const question = await ask({ title: 'Ask about your invoice or contract', label: 'Your question', multiline: true, required: true }); if (question) financeQuestionMutation.mutate(question); }} isLoading={financeQuestionMutation.isPending}>Ask invoice/contract question</Button><Button size="sm" variant="outline" onClick={async () => { const label = await ask({ title: 'Request an add-on or change order', label: 'What do you want? (extra hour, room block, ceremony upgrade, bar package, rental upgrade)', multiline: true, required: true }); if (label) changeOrderMutation.mutate({ changeType: 'other', label, note: label }); }} isLoading={changeOrderMutation.isPending}>Request add-on/change order</Button><Button asChild size="sm" variant="outline"><a href={`/api/events/${eventId}/couple-finance/packet.txt`} download>Download contract/payment packet</a></Button></div>
             </CardContent>
           </Card>
 
@@ -725,7 +824,7 @@ export function CoupleEventHub({ eventId }: { eventId: string }) {
               <CardHeader><CardTitle className="flex items-center gap-2 text-base"><CheckCircle2 className="h-4 w-4 text-brand" /> Couple Planning Checklist</CardTitle><CardDescription>Separate from staff tasks. Deadlines come from the venue-controlled {planningQuery.data?.template?.packageKey || 'standard'} template.</CardDescription></CardHeader>
               <CardContent className="space-y-3">
                 <div className="grid gap-2 sm:grid-cols-3 text-sm"><div className="rounded-lg border border-border bg-surface-2 p-3"><strong>{completedPlanning}/{planningTasks.length}</strong><p className="text-xs text-fg-muted">complete</p></div><div className="rounded-lg border border-warning/30 bg-warning-soft/20 p-3"><strong>{overduePlanning.length}</strong><p className="text-xs text-warning">overdue</p></div><div className="rounded-lg border border-border bg-surface-2 p-3"><strong>{upcomingPlanning.length}</strong><p className="text-xs text-fg-muted">due soon</p></div></div>
-                <div className="grid gap-2">{planningTasks.slice(0, 8).map((task) => <div key={task.id} className="rounded-lg border border-border bg-surface-2 p-3 text-sm"><div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between"><div><div className="flex flex-wrap items-center gap-2"><strong>{task.title}</strong><Badge variant={task.owner === 'couple' ? 'default' : 'outline'}>{task.owner}</Badge><Badge variant={task.isOverdue ? 'warning' : task.status === 'completed' ? 'success' : 'outline'}>{task.status.replace('_', ' ')}</Badge><Badge variant={task.approvalStatus === 'approved' ? 'success' : task.approvalStatus === 'pending' ? 'warning' : 'outline'}>{task.approvalStatus.replace('_', ' ')}</Badge></div><p className="mt-1 text-xs text-fg-muted">Due {task.dueDate || 'TBD'} · {task.description}</p><p className="mt-1 text-xs text-fg-muted">Attachments: {task.attachments.length} · History: {task.history.length} update(s)</p></div><div className="flex shrink-0 flex-wrap gap-1"><Button size="xs" variant="outline" onClick={() => planningMutation.mutate({ taskId: task.id, patch: { status: 'completed', approvalStatus: task.approvalStatus === 'not_required' ? 'not_required' : 'pending', note: 'Marked complete by couple' } })}>Mark done</Button><Button size="xs" variant="ghost" onClick={() => { const q = window.prompt(`Question about ${task.title}`); if (q) sdk.couple.askPlanningTaskQuestion(eventId, task.id, q).then(() => { qc.invalidateQueries({ queryKey: ['couple-requests', eventId] }); toast({ title: 'Question sent to venue', variant: 'success' }); }); }}>Ask</Button></div></div></div>)}</div>
+                <div className="grid gap-2">{planningTasks.slice(0, 8).map((task) => <div key={task.id} className="rounded-lg border border-border bg-surface-2 p-3 text-sm"><div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between"><div><div className="flex flex-wrap items-center gap-2"><strong>{task.title}</strong><Badge variant={task.owner === 'couple' ? 'default' : 'outline'}>{task.owner}</Badge><Badge variant={task.isOverdue ? 'warning' : task.status === 'completed' ? 'success' : 'outline'}>{task.status.replace('_', ' ')}</Badge><Badge variant={task.approvalStatus === 'approved' ? 'success' : task.approvalStatus === 'pending' ? 'warning' : 'outline'}>{task.approvalStatus.replace('_', ' ')}</Badge></div><p className="mt-1 text-xs text-fg-muted">Due {task.dueDate || 'TBD'} · {task.description}</p><p className="mt-1 text-xs text-fg-muted">Attachments: {task.attachments.length} · History: {task.history.length} update(s)</p></div><div className="flex shrink-0 flex-wrap gap-1"><Button size="xs" variant="outline" onClick={() => planningMutation.mutate({ taskId: task.id, patch: { status: 'completed', approvalStatus: task.approvalStatus === 'not_required' ? 'not_required' : 'pending', note: 'Marked complete by couple' } })}>Mark done</Button><Button size="xs" variant="ghost" onClick={async () => { const q = await ask({ title: `Question about ${task.title}`, label: 'Your question', multiline: true, required: true }); if (q) { await sdk.couple.askPlanningTaskQuestion(eventId, task.id, q); qc.invalidateQueries({ queryKey: ['couple-requests', eventId] }); toast({ title: 'Question sent to venue', variant: 'success' }); } }}>Ask</Button></div></div></div>)}</div>
               </CardContent>
             </Card>
             <Card>

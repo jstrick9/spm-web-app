@@ -44,20 +44,20 @@ export function StaffTasksKanban({ priorityFilter, setPriorityFilter, statusFilt
         <div className="space-y-6 animate-in fade-in duration-200">
           
           {/* Progress Sparkline & Controls Band */}
-          <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-4 p-4 bg-[#FDFBF7] rounded-xl border border-[#e1d5c9] shadow-sm font-semibold text-xs">
+          <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-4 p-4 bg-paper rounded-xl border border-paper-border shadow-sm font-semibold text-xs">
              <div className="flex-1 space-y-1">
                 <div className="flex justify-between items-center text-xs font-bold text-fg mb-1">
                    <span>Tasks Completion Ratio</span>
                    <span className="text-brand font-black">{completedTasksCount}/{totalTasksCount} Completed ({completionRatio}%)</span>
                 </div>
-                <div className="h-3 w-full bg-surface-2 rounded-full overflow-hidden border border-[#e1d5c9] p-0.5">
+                <div className="h-3 w-full bg-surface-2 rounded-full overflow-hidden border border-paper-border p-0.5">
                    <div className="h-full rounded-full bg-brand transition-all duration-300" style={{ width: `${completionRatio}%` }}></div>
                 </div>
              </div>
 
              {/* Interactive filters */}
              <div className="flex gap-2 items-center shrink-0">
-                <div className="flex gap-1 items-center bg-white p-1 rounded-lg border border-[#e1d5c9]">
+                <div className="flex gap-1 items-center bg-white p-1 rounded-lg border border-paper-border">
                    <SlidersHorizontal className="w-3.5 h-3.5 ml-1 text-brand" />
                    <select 
                       value={priorityFilter}
@@ -73,7 +73,7 @@ export function StaffTasksKanban({ priorityFilter, setPriorityFilter, statusFilt
                    <select 
                       value={statusFilter}
                       onChange={e => setStatusFilter(e.target.value)}
-                      className="h-7 rounded border-none bg-transparent px-2 text-[10px] font-bold text-fg-subtle cursor-pointer focus:outline-none border-l border-[#e1d5c9]"
+                      className="h-7 rounded border-none bg-transparent px-2 text-[10px] font-bold text-fg-subtle cursor-pointer focus:outline-none border-l border-paper-border"
                    >
                       <option value="all">All Statuses</option>
                       <option value="not-started">Not Started</option>
@@ -93,7 +93,7 @@ export function StaffTasksKanban({ priorityFilter, setPriorityFilter, statusFilt
                     variant="outline" 
                     size="sm" 
                     onClick={() => setMapOverlayOpen(true)}
-                    className="font-bold border-[#e1d5c9] bg-white hover:bg-brand-soft/20 text-brand text-xs h-9 flex items-center gap-1.5"
+                    className="font-bold border-paper-border bg-white hover:bg-brand-soft/20 text-brand text-xs h-9 flex items-center gap-1.5"
                   >
                      🗺️ View Floorplan Map Blueprint
                   </Button>
@@ -105,7 +105,7 @@ export function StaffTasksKanban({ priorityFilter, setPriorityFilter, statusFilt
           </div>
 
           {totalTasksCount === 0 ? (
-            <Card className="border-[#e1d5c9] bg-[#FDFBF7]">
+            <Card className="border-paper-border bg-paper">
               <div className="py-12 flex flex-col items-center text-center">
                 <ClipboardList className="w-12 h-12 text-fg-subtle mb-4" />
                 <h3 className="text-lg font-medium font-serif text-fg">No tasks match selected filters</h3>
@@ -125,13 +125,13 @@ export function StaffTasksKanban({ priorityFilter, setPriorityFilter, statusFilt
                     onDragLeave={handleDragLeave}
                     onDrop={(e) => handleDrop(e, phase.id)}
                   >
-                    <h3 className="font-semibold text-xs text-fg flex justify-between items-center bg-white p-2.5 rounded-xl border border-[#e1d5c9] shadow-sm font-serif">
+                    <h3 className="font-semibold text-xs text-fg flex justify-between items-center bg-white p-2.5 rounded-xl border border-paper-border shadow-sm font-serif">
                       {phase.label}
-                      <Badge variant="outline" className="text-[10px] bg-[#FDFBF7] text-brand border-[#e1d5c9] font-bold">{phaseTasks.length}</Badge>
+                      <Badge variant="outline" className="text-[10px] bg-paper text-brand border-paper-border font-bold">{phaseTasks.length}</Badge>
                     </h3>
                     
                     {phaseTasks.length === 0 ? (
-                      <div className="text-center p-6 border border-dashed border-[#e1d5c9] rounded-xl text-xs text-fg-subtle bg-white font-serif">
+                      <div className="text-center p-6 border border-dashed border-paper-border rounded-xl text-xs text-fg-subtle bg-white font-serif">
                          No tasks scheduled
                       </div>
                     ) : (
@@ -140,7 +140,7 @@ export function StaffTasksKanban({ priorityFilter, setPriorityFilter, statusFilt
                           const isCompleted = task.status === 'completed';
                           const isBlocked = task.status === 'blocked';
                           return (
-                            <div key={task.id} className="relative overflow-hidden rounded-xl bg-[#FDFBF7]">
+                            <div key={task.id} className="relative overflow-hidden rounded-xl bg-paper">
                               {/* Swipe Background Reveal - Underlay */}
                               {isSwiping && swipingTaskId === task.id && Math.abs(swipeOffset) > 10 && (
                                 <div className="absolute inset-0 flex items-center justify-between px-4 rounded-xl">
@@ -174,7 +174,7 @@ export function StaffTasksKanban({ priorityFilter, setPriorityFilter, statusFilt
 
                               <Card 
                                 className={cn(
-                                  "hover:shadow-md transition-all border-[#e1d5c9] focus:outline-none focus:ring-2 focus:ring-brand focus:ring-offset-2 rounded-xl touch-pan-y select-none", 
+                                  "hover:shadow-md transition-all border-paper-border focus:outline-none focus:ring-2 focus:ring-brand focus:ring-offset-2 rounded-xl touch-pan-y select-none", 
                                   isCompleted && "opacity-60",
                                   isBlocked && "border-danger border-2 shadow-sm bg-red-50/20"
                                 )}
@@ -223,7 +223,7 @@ export function StaffTasksKanban({ priorityFilter, setPriorityFilter, statusFilt
                                     )}
                                     
                                     {(task.assignee_name || task.assignee_phone || task.assignee_email) && (
-                                      <div className="mt-2 rounded-lg border border-border bg-[#FDFBF7] p-2 text-[11px] text-fg-muted">
+                                      <div className="mt-2 rounded-lg border border-border bg-paper p-2 text-[11px] text-fg-muted">
                                         <div className="font-bold text-fg">Day-of contact: {task.assignee_name || 'Assigned contact'}</div>
                                         <div className="mt-1 flex flex-wrap gap-1.5">
                                           {task.assignee_phone && <a href={`tel:${task.assignee_phone}`} onClick={(e) => e.stopPropagation()} className="inline-flex min-h-8 items-center gap-1 rounded-md border border-border bg-white px-2 font-bold text-brand"><Phone className="h-3.5 w-3.5" /> Call</a>}
@@ -249,7 +249,7 @@ export function StaffTasksKanban({ priorityFilter, setPriorityFilter, statusFilt
                                         {task.priority} priority
                                       </Badge>
                                       {task.assigned_staff.length > 0 && (
-                                        <Badge variant="outline" className="text-[9px] bg-[#FDFBF7] border-[#e1d5c9] font-bold text-fg-subtle">
+                                        <Badge variant="outline" className="text-[9px] bg-paper border-paper-border font-bold text-fg-subtle">
                                           {task.assigned_staff.length} assigned
                                         </Badge>
                                       )}
