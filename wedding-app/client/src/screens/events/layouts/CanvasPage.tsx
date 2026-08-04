@@ -238,21 +238,46 @@ export function CanvasPage({ event }: Props) {
     setHasChanges(true);
   };
 
-  // Bind Ctrl+Z / Ctrl+Y keyboard shortcuts
+  // Bind Ctrl+Z / Ctrl+Y keyboard shortcuts + arrow-key nudging of the
+  // selected object (UX-10: keyboard-first floorplan editing).
   useEffect(() => {
     const handleKeys = (e: KeyboardEvent) => {
+      const target = e.target as HTMLElement | null;
+      const typing = target && (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.tagName === 'SELECT' || target.isContentEditable);
       if ((e.metaKey || e.ctrlKey) && e.key === 'z') {
         e.preventDefault();
         handleUndo();
+        return;
       }
       if ((e.metaKey || e.ctrlKey) && e.key === 'y') {
         e.preventDefault();
         handleRedo();
+        return;
+      }
+      if (typing || !selectedId) return;
+      const step = e.shiftKey ? 20 : 5;
+      const nudge = (dx: number, dy: number) => {
+        e.preventDefault();
+        pushState(items.map((entry) => entry.id === selectedId ? { ...entry, x: Number(entry.x || 0) + dx, y: Number(entry.y || 0) + dy } : entry));
+        setSelectedId(selectedId);
+      };
+      if (e.key === 'ArrowLeft') { nudge(-step, 0); }
+      else if (e.key === 'ArrowRight') { nudge(step, 0); }
+      else if (e.key === 'ArrowUp') { nudge(0, -step); }
+      else if (e.key === 'ArrowDown') { nudge(0, step); }
+      else if (e.key === 'Delete' || e.key === 'Backspace') {
+        e.preventDefault();
+        const targetItem = items.find((entry) => entry.id === selectedId);
+        if (targetItem && targetItem.id !== 'wedding-arch' && !targetItem.locked) {
+          setItems((prev) => prev.filter((entry) => entry.id !== selectedId));
+          setSelectedId(null);
+          setHasChanges(true);
+        }
       }
     };
     window.addEventListener('keydown', handleKeys);
     return () => window.removeEventListener('keydown', handleKeys);
-  }, [undoStack, redoStack, items]);
+  }, [undoStack, redoStack, items, selectedId, pushState]);
 
   // Helper Bounding Box Collision Detection
   const getBounds = (item: any) => {

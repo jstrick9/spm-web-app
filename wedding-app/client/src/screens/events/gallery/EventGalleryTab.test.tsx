@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { render, screen, waitFor } from '@testing-library/react';
+import { render, screen, waitFor, fireEvent } from '@testing-library/react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { EventGalleryTab } from './EventGalleryTab';
 
@@ -29,6 +29,40 @@ function wrap() {
 
 describe('EventGalleryTab', () => {
   beforeEach(() => { vi.clearAllMocks(); });
+
+  it('navigates the lightbox with arrow keys and prev/next buttons (UX-09)', async () => {
+    render(<EventGalleryTab eventId="e1" />, { wrapper: wrap() });
+    await waitFor(() => {
+      expect(screen.getAllByRole('img').length).toBeGreaterThanOrEqual(2);
+    });
+    // Open the lightbox on the first image
+    fireEvent.click(screen.getAllByRole('img')[0]);
+    await waitFor(() => expect(screen.getByLabelText(/close image preview/i)).toBeTruthy());
+
+    // First image: "Previous" hidden, "Next" visible
+    expect(screen.queryByLabelText(/previous image/i)).toBeNull();
+    expect(screen.getByLabelText(/next image/i)).toBeTruthy();
+
+    // ArrowRight advances to the last image -> Next disappears, Previous appears
+    fireEvent.keyDown(window, { key: 'ArrowRight' });
+    await waitFor(() => {
+      expect(screen.getByLabelText(/previous image/i)).toBeTruthy();
+    });
+    expect(screen.queryByLabelText(/next image/i)).toBeNull();
+
+    // ArrowLeft returns to the first image
+    fireEvent.keyDown(window, { key: 'ArrowLeft' });
+    await waitFor(() => {
+      expect(screen.getByLabelText(/next image/i)).toBeTruthy();
+    });
+    expect(screen.queryByLabelText(/previous image/i)).toBeNull();
+
+    // Escape closes the lightbox
+    fireEvent.keyDown(window, { key: 'Escape' });
+    await waitFor(() => {
+      expect(screen.queryByLabelText(/close image preview/i)).toBeNull();
+    });
+  });
 
   it('renders gallery images from server', async () => {
     render(<EventGalleryTab eventId="e1" />, { wrapper: wrap() });

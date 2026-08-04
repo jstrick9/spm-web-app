@@ -12,6 +12,7 @@ vi.mock('../../sdk', () => ({
           { id: 'a2', action: 'guest.create', actor_label: 'owner@venue.com', target_type: 'guest', target_id: 'g1', ip: '127.0.0.1', details: '{}', created_at: '2026-09-01T10:05:00Z' },
           { id: 'a3', action: 'rsvp.submit', actor_label: null, target_type: 'rsvp', target_id: 'r1', ip: '192.168.1.1', details: '{}', created_at: '2026-09-01T11:00:00Z' },
         ],
+        total: 3, limit: 200, nextBefore: undefined,
       }),
     },
   },
@@ -74,6 +75,28 @@ describe('AuditLog', () => {
   it('has search input', async () => {
     render(<AuditLog orgId="org1" />, { wrapper: wrap() });
     expect(screen.getByPlaceholderText(/Search actions/i)).toBeTruthy();
+  });
+
+  it('pages older records via the server nextBefore token (UX-08)', async () => {
+    const { sdk } = await import('../../sdk');
+    (sdk.audit.list as any).mockResolvedValue({
+      logs: [{ id: 'a1', action: 'event.create', actor_label: 'owner@venue.com', target_type: 'event', target_id: 'e1', ip: '1.1.1.1', details: '{}', created_at: '2026-09-01T10:00:00Z' }],
+      total: 250, limit: 200, nextBefore: '2026-09-01T10:00:00Z',
+    });
+    render(<AuditLog orgId="org-1" />, { wrapper: wrap() });
+    await waitFor(() => expect(screen.getByText(/250 record/i)).toBeTruthy());
+    const older = screen.getByRole('button', { name: /older/i });
+    expect(older).toBeTruthy();
+    // Clicking Older refetches with before=nextBefore
+    (sdk.audit.list as any).mockResolvedValue({
+      logs: [{ id: 'a0', action: 'user.login', actor_label: 'owner@venue.com', target_type: null, target_id: null, ip: '1.1.1.1', details: '{}', created_at: '2026-08-01T10:00:00Z' }],
+      total: 250, limit: 200, nextBefore: undefined,
+    });
+    older.click();
+    await waitFor(() => {
+      const calls = (sdk.audit.list as any).mock.calls;
+      expect(calls.some((c: any[]) => c[1]?.before === '2026-09-01T10:00:00Z')).toBe(true);
+    });
   });
 
   it('shows action filter chips', async () => {

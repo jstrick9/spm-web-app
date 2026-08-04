@@ -202,7 +202,9 @@ export function AuthScreen({ onAuth }: { onAuth: (u: SdkUser, m?: SdkMembership[
     try {
       const res = await sdk.auth.requestMagicLink(email);
       setMagicRequested(true);
-      if (res.magicToken) console.info('Development couple magic link token:', res.magicToken);
+      if (res.magicToken && (import.meta.env?.DEV || import.meta.env?.MODE === 'development')) {
+        console.info('Development couple magic link token:', res.magicToken);
+      }
       toast({ title: 'Couple sign-in link requested', description: res.message, variant: 'success' });
     } catch (err) {
       const e = err as ApiError;

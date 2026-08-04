@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { render, screen, fireEvent, waitFor } from '@testing-library/react';
+import { render, screen, fireEvent, waitFor, within } from '@testing-library/react';
 import { CanvasPage } from './CanvasPage';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { ToastProvider } from '../../../ui/Toast';
@@ -97,6 +97,36 @@ describe('CanvasPage', () => {
       </ToastProvider>
     </QueryClientProvider>
   );
+
+  it('nudges the selected object with arrow keys and persists on save (UX-10)', async () => {
+    queryClient.clear();
+    (layoutsSdk.list as any).mockResolvedValue({
+      layouts: [{ id: 'l1', revision: 1, updated_at: new Date().toISOString(), payload: { items: [{ id: 'table-1', type: 'round_table', x: 100, y: 100, radius: 24 }] }, approval_status: 'draft' }]
+    });
+    render(<CanvasPage event={{ id: "test-event", organization_id: "org-1", title: "Test Event", guest_count: 150 } as any} />, { wrapper: TestWrapper });
+
+    // Open the Layers panel and select the table object
+    const layersBtn = await screen.findByRole('button', { name: /layers/i });
+    fireEvent.click(layersBtn);
+    // The item label span in the Layers panel selects the object.
+    const layersPanel = await screen.findByText('Layers Panel');
+    const itemLabel = await within(layersPanel.parentElement as HTMLElement).findByText('round_table');
+    fireEvent.click(itemLabel);
+
+    // Arrow key nudges the selected object
+    fireEvent.keyDown(window, { key: 'ArrowRight' });
+
+    // Save becomes enabled and persists the nudged position
+    const saveBtn = await screen.findByRole('button', { name: /save layout/i });
+    await waitFor(() => expect((saveBtn as HTMLButtonElement).disabled).toBe(false));
+    fireEvent.click(saveBtn);
+    await waitFor(() => {
+      expect(layoutsSdk.save).toHaveBeenCalled();
+    });
+    const saveArg = (layoutsSdk.save as any).mock.calls[0][1];
+    expect(saveArg.items[0].x).toBe(105);
+    expect(saveArg.items[0].y).toBe(100);
+  });
 
   it('renders approval workflow within history tab', async () => {
     (layoutsSdk.list as any).mockResolvedValue({

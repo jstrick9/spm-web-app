@@ -13,6 +13,7 @@ import type { SdkAuditLog } from '../../sdk/audit';
 import { PageBody, PageHeader } from '../../ui/AppShell';
 import { Card, CardContent, CardHeader, CardTitle } from '../../ui/Card';
 import { Badge } from '../../ui/Badge';
+import { Button } from '../../ui/Button';
 import { Input } from '../../ui/Input';
 import { Skeleton } from '../../ui/Skeleton';
 import { useDebouncedValue } from '../../lib/useDebouncedValue';
@@ -63,16 +64,18 @@ function renderAuditDetails(log: SdkAuditLog) {
 export function AuditLog({ orgId }: Props) {
   const [search, setSearch] = useState('');
   const [actionFilter, setActionFilter] = useState<string | null>(null);
+  const [before, setBefore] = useState<string | undefined>(undefined);
   const [managerAuditFilter, setManagerAuditFilter] = useState<'all' | 'manager_ops' | 'pii' | 'approvals' | 'communications'>('all');
   const currentUserQuery = useQuery({ queryKey: ['me', 'audit-role'], queryFn: () => sdk.auth.me(), staleTime: 60_000 });
   const managerMode = currentUserQuery.data ? (currentUserQuery.data.memberships?.some((membership: any) => membership.organizationId === orgId && String(membership.roleKey).toLowerCase() === 'manager') ?? false) : (typeof window !== 'undefined' && localStorage.getItem('wvi_registration_role') === 'venue_manager');
   const debouncedSearch = useDebouncedValue(search, 250);
 
   const { data, isLoading } = useQuery({
-    queryKey: ['audit', orgId, actionFilter],
+    queryKey: ['audit', orgId, actionFilter, before],
     queryFn: () => sdk.audit.list(orgId, {
       limit: 200,
       action: actionFilter ?? undefined,
+      before,
     }),
   });
 
@@ -188,6 +191,20 @@ export function AuditLog({ orgId }: Props) {
                 </div>
               </CardContent>
             </Card>
+          </div>
+        )}
+
+        {/* Pager (UX-08: server-side paging via nextBefore) */}
+        {!isLoading && data && data.total > data.logs.length && (
+          <div className="flex flex-wrap items-center justify-between gap-3 text-sm">
+            <p className="text-xs text-fg-muted">
+              Showing {data.logs.length} of {data.total} record(s)
+              {actionFilter ? ` for ${getActionMeta(actionFilter).label}` : ''}
+            </p>
+            <div className="flex gap-2">
+              <Button size="xs" variant="outline" disabled={!before} onClick={() => setBefore(undefined)}>Newest</Button>
+              <Button size="xs" variant="outline" disabled={!data.nextBefore} onClick={() => setBefore(data.nextBefore)}>Older</Button>
+            </div>
           </div>
         )}
 

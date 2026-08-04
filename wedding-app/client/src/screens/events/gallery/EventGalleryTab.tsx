@@ -5,9 +5,9 @@
  * In production, you'd swap this for S3/blob storage — the API
  * shape stays identical; only the `url` field changes.
  */
-import { useState, useRef } from 'react';
+import { useState, useRef, useEffect, useCallback } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { Image as ImageIcon, Upload, Tag, X, Maximize2 } from 'lucide-react';
+import { Image as ImageIcon, Upload, Tag, X, Maximize2, ChevronLeft, ChevronRight } from 'lucide-react';
 import { sdk } from '../../../sdk';
 import type { SdkGalleryImage } from '../../../sdk/gallery';
 import { Button } from '../../../ui/Button';
@@ -41,6 +41,25 @@ export function EventGalleryTab({ eventId }: Props) {
   const counts = data?.counts ?? {};
   const total = images.length;
   const filtered = filter ? images.filter(img => img.category === filter) : images;
+
+  // Lightbox navigation: arrow keys + prev/next (UX-09).
+  const lightboxIndex = lightbox ? filtered.findIndex((img) => img.id === lightbox.id) : -1;
+  const stepLightbox = useCallback((direction: 1 | -1) => {
+    if (filtered.length === 0 || lightboxIndex === -1) return;
+    const next = (lightboxIndex + direction + filtered.length) % filtered.length;
+    setLightbox(filtered[next]);
+  }, [filtered, lightboxIndex]);
+
+  useEffect(() => {
+    if (!lightbox) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'ArrowRight') stepLightbox(1);
+      else if (e.key === 'ArrowLeft') stepLightbox(-1);
+      else if (e.key === 'Escape') setLightbox(null);
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [lightbox, stepLightbox]);
 
   const deleteMutation = useMutation({
     mutationFn: (id: string) => sdk.gallery.delete(id),
@@ -198,12 +217,22 @@ export function EventGalleryTab({ eventId }: Props) {
           <button className="absolute top-4 right-4 text-white hover:text-gray-300" onClick={() => setLightbox(null)} aria-label="Close image preview">
             <X className="h-6 w-6" />
           </button>
+          {lightboxIndex > 0 && (
+            <button className="absolute left-4 top-1/2 -translate-y-1/2 text-white/80 hover:text-white bg-black/40 hover:bg-black/60 rounded-full p-2" onClick={(e) => { e.stopPropagation(); stepLightbox(-1); }} aria-label="Previous image">
+              <ChevronLeft className="h-6 w-6" />
+            </button>
+          )}
           <img
             src={lightbox.url}
             alt={lightbox.caption || lightbox.filename}
             className="max-w-full max-h-full object-contain rounded-lg"
             onClick={e => e.stopPropagation()}
           />
+          {lightboxIndex < filtered.length - 1 && (
+            <button className="absolute right-4 top-1/2 -translate-y-1/2 text-white/80 hover:text-white bg-black/40 hover:bg-black/60 rounded-full p-2" onClick={(e) => { e.stopPropagation(); stepLightbox(1); }} aria-label="Next image">
+              <ChevronRight className="h-6 w-6" />
+            </button>
+          )}
           {lightbox.caption && (
             <p className="absolute bottom-6 left-1/2 -translate-x-1/2 text-white text-sm bg-black/50 px-4 py-2 rounded">
               {lightbox.caption}
