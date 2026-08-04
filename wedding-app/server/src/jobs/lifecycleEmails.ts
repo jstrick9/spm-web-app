@@ -2,7 +2,8 @@
  * Lifecycle email job worker.
  *
  * runTrigger(eventId, triggerType)
- *   — called by the PATCH /api/events/:id route on status → completed (thank_you)
+ *   — called on status → completed by BOTH the PATCH /api/events/:id route and the
+ *     POST /api/events/:id/stage stage endpoint (thank_you)
  *   — called by the manual "Send Now" POST route
  *   — called by the nightly cron scan (scanUpcomingDeadlines)
  *

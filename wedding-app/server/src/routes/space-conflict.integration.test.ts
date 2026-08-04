@@ -78,8 +78,12 @@ describe('Venue space conflict guard', () => {
     const { token, orgId } = await register('conflict-cancelled');
     const v = await authed(token, 'POST', `/api/orgs/${orgId}/venues`, { name: 'Tent', capacity: 100 });
     const venueId = v.json().venue.id;
-    await createEvent(token, orgId, { venueId, startDate: '2026-09-12', status: 'cancelled' });
-    await createEvent(token, orgId, { venueId, startDate: '2026-09-12', status: 'lost' });
+    // Terminal statuses are reached via stage transitions (they cannot be
+    // created directly), so create booked events then cancel/lose them.
+    const cancelled = await createEvent(token, orgId, { venueId, startDate: '2026-09-12', status: 'booked' });
+    await authed(token, 'POST', `/api/events/${cancelled.json().event.id}/stage`, { status: 'cancelled' });
+    const lost = await createEvent(token, orgId, { venueId, startDate: '2026-09-12', status: 'booked' });
+    await authed(token, 'POST', `/api/events/${lost.json().event.id}/stage`, { status: 'lost' });
     const ok = await createEvent(token, orgId, { venueId, startDate: '2026-09-12', status: 'booked' });
     expect(ok.statusCode).toBe(201);
   });

@@ -12,10 +12,18 @@ import { runTrigger } from '../jobs/lifecycleEmails.js';
 
 const isoDate = z.string().regex(/^\d{4}-\d{2}-\d{2}$/);
 
-const createEventSchema = z.object({
+/**
+ * New events always enter the sales pipeline — terminal states
+ * (completed/cancelled/lost) are reached through stage transitions, never
+ * by direct creation.
+ */
+const ENTRY_STATUSES = ['lead', 'hold', 'booked', 'planning'] as const;
+const FULL_STATUSES = ['lead','hold','booked','planning','final_review','completed','cancelled','lost'] as const;
+
+const baseEventSchema = z.object({
   organizationId: z.string().min(1),
   title:          z.string().min(1).max(200),
-  status:         z.enum(['lead','hold','booked','planning','final_review','completed','cancelled','lost']).optional(),
+  status:         z.enum(FULL_STATUSES).optional(),
   startDate:      isoDate.optional(),
   endDate:        isoDate.optional(),
   guestCount:     z.number().int().min(0).optional(),
@@ -27,9 +35,20 @@ const createEventSchema = z.object({
   metadata: z.record(z.any()).optional(),
 });
 
-const updateEventSchema = createEventSchema.extend({
-  metadata: z.record(z.any()).optional(),
-}).partial().omit({ organizationId: true });
+const createEventSchema = baseEventSchema
+  .extend({ status: z.enum(ENTRY_STATUSES).optional() })
+  .refine(
+    (data) => !data.startDate || !data.endDate || data.endDate >= data.startDate,
+    { message: 'endDate must be on or after startDate', path: ['endDate'] },
+  );
+
+const updateEventSchema = baseEventSchema
+  .partial()
+  .omit({ organizationId: true })
+  .refine(
+    (data) => !data.startDate || !data.endDate || data.endDate >= data.startDate,
+    { message: 'endDate must be on or after startDate', path: ['endDate'] },
+  );
 
 const subEventSchema = z.object({
   title:       z.string().min(1).max(200),
@@ -202,13 +221,16 @@ export async function eventRoutes(app: FastifyInstance) {
   });
 
   app.get('/api/events/:eventId/day-of-contact', { preHandler: requireAuth }, async (req) => {
-    const { eventId } = req.params as { eventId: string }; const event = eventsRepo.findById(eventId); if (!event) throw NotFound(); const orgMap = eventsRepo.orgMapForUser(req.auth!.userId); if (!can(req.auth!.memberships, { eventId }, 'guests.couple.manage', orgMap)) throw Forbidden();
+    const { eventId } = req.params as { eventId: string }; const event = eventsRepo.findById(eventId); if (!event) throw NotFound(); const orgMap = eventsRepo.orgMapForUser(req.auth!.userId); if (!can(req.auth!.memberships, { eventId }, 'events.view', orgMap)) throw Forbidden();
     const metadata = (() => { try { return JSON.parse(event.metadata || '{}'); } catch { return {}; } })(); return { contact: metadata.dayOfContact || { name: '', phone: '', email: '', hours: '', escalation: '' } };
   });
   app.put('/api/events/:eventId/day-of-contact', { preHandler: requireAuth }, async (req) => {
-    const { eventId } = req.params as { eventId: string }; const event = eventsRepo.findById(eventId); if (!event) throw NotFound(); if (!can(req.auth!.memberships, { organizationId: event.organization_id }, 'events.edit')) throw Forbidden();
+    const { eventId } = req.params as { eventId: string }; const event = eventsRepo.findById(eventId); if (!event) throw NotFound(); const orgMap = eventsRepo.orgMapForUser(req.auth!.userId); if (!can(req.auth!.memberships, { eventId }, 'events.edit', orgMap)) throw Forbidden();
     const parsed = z.object({ name: z.string().min(1).max(160), phone: z.string().max(40).optional(), email: z.string().email().optional().or(z.literal('')), hours: z.string().max(200).optional(), escalation: z.string().max(1000).optional() }).safeParse(req.body); if (!parsed.success) throw BadRequest('invalid-input', parsed.error.issues);
-    const metadata = (() => { try { return JSON.parse(event.metadata || '{}'); } catch { return {}; } })(); eventsRepo.update(eventId, { metadata: { ...metadata, dayOfContact: parsed.data } }); return { contact: parsed.data };
+    const metadata = (() => { try { return JSON.parse(event.metadata || '{}'); } catch { return {}; } })(); eventsRepo.update(eventId, { metadata: { ...metadata, dayOfContact: parsed.data } });
+    auditRepo.log({ organizationId: event.organization_id, actorUserId: req.auth!.userId, actorLabel: req.auth!.email, action: 'event.day_of_contact.update', targetType: 'event', targetId: eventId, ip: req.ip, details: { name: parsed.data.name } });
+    broadcastSSE(event.organization_id, "event.updated", { eventId, title: event.title }, req.auth!.userId);
+    return { contact: parsed.data };
   });
 
   app.post('/api/events/:eventId/couple-updates', { preHandler: requireAuth }, async (req, reply) => {
@@ -339,6 +361,13 @@ export async function eventRoutes(app: FastifyInstance) {
     if (parsed.data.status === 'final_review') { const finalReview = finalReviewReadiness(event); if (!finalReview.ready) throw BadRequest('final-review-not-ready', { checks: finalReview.checks.filter((check) => !check.complete) }); }
     const updated = eventsRepo.update(eventId, { status: parsed.data.status });
     auditRepo.log({ organizationId: event.organization_id, actorUserId: req.auth!.userId, actorLabel: req.auth!.email, action: 'event.stage.transition', targetType: 'event', targetId: eventId, ip: req.ip, details: { from: event.status, to: parsed.data.status } });
+    // Realtime + lifecycle parity with PATCH: broadcast so every workspace
+    // (lists, calendar, command palette) refreshes, and fire the thank-you
+    // automation when an event is completed through the stage selector.
+    broadcastSSE(event.organization_id, "event.updated", { eventId, title: updated?.title }, req.auth!.userId);
+    if (parsed.data.status === 'completed' && event.status !== 'completed') {
+      try { runTrigger(eventId, 'thank_you'); } catch (e) { req.log.error(e); }
+    }
     return { event: updated };
   });
 
@@ -369,10 +398,21 @@ export async function eventRoutes(app: FastifyInstance) {
     if ('metadata' in dataIn && dataIn.metadata !== undefined) {
       patch.metadata = dataIn.metadata as Record<string, unknown>;
     }
+    // Stage-consistency: entering final_review through a PATCH must clear the
+    // same readiness gate the dedicated stage endpoint enforces (EV-02).
+    if (patch.status === 'final_review' && event.status !== 'final_review') {
+      const finalReview = finalReviewReadiness(event);
+      if (!finalReview.ready) throw BadRequest('final-review-not-ready', { checks: finalReview.checks.filter((check) => !check.complete) });
+    }
     // Space-conflict guard: re-check whenever the space or date window changes.
     const effectiveVenueId: string | null = ('venueId' in dataIn && typeof dataIn.venueId === 'string') ? dataIn.venueId : (event.venue_id ?? null);
     const effectiveStart: string | null = ('startDate' in dataIn && typeof dataIn.startDate === 'string') ? dataIn.startDate : event.start_date;
     const effectiveEnd: string | null = ('endDate' in dataIn && typeof dataIn.endDate === 'string') ? dataIn.endDate : event.end_date;
+    // Cross-field date integrity against the event's existing values (the
+    // schema refine only sees the patch body, not the stored event).
+    if (effectiveStart && effectiveEnd && effectiveEnd < effectiveStart) {
+      throw BadRequest('invalid-input', [{ message: 'endDate must be on or after startDate', path: ['endDate'] }]);
+    }
     if (effectiveVenueId && effectiveStart) {
       const metadataForOverride = ('metadata' in dataIn && dataIn.metadata !== undefined)
         ? (dataIn.metadata as Record<string, unknown>)
@@ -427,8 +467,11 @@ export async function eventRoutes(app: FastifyInstance) {
       organizationId: source.organization_id,
       title: `${source.title} (Copy)`,
       status: "lead",
-      startDate: source.start_date ?? undefined,
-      endDate: source.end_date ?? undefined,
+      // A copy is a fresh template, not a second booking: dates are cleared
+      // so the new lead doesn't masquerade as scheduled in date-sorted views
+      // (space calendar, pipelines, forecasts). The user sets the new date.
+      startDate: undefined,
+      endDate: undefined,
       guestCount: source.guest_count,
       budgetCents: source.budget_cents ?? undefined,
       metadata,
@@ -497,11 +540,17 @@ export async function eventRoutes(app: FastifyInstance) {
   app.delete('/api/sub-events/:subId', { preHandler: requireAuth }, async (req, reply) => {
     const { subId } = req.params as { subId: string };
     const sub = subEventsRepo.findById(subId);
-    if (sub) {
-      const ev = eventsRepo.findById(sub.event_id);
-      if (ev && !can(req.auth!.memberships, { organizationId: ev.organization_id }, "events.edit")) throw Forbidden();
-    }
+    if (!sub) throw NotFound('sub-event-not-found');
+    const ev = eventsRepo.findById(sub.event_id);
+    if (!ev) throw NotFound();
+    const orgMap = eventsRepo.orgMapForUser(req.auth!.userId);
+    if (!can(req.auth!.memberships, { eventId: ev.id }, 'events.edit', orgMap)) throw Forbidden();
     subEventsRepo.delete(subId);
+    auditRepo.log({
+      organizationId: ev.organization_id, actorUserId: req.auth!.userId,
+      actorLabel: req.auth!.email, action: 'sub_event.delete',
+      targetType: 'sub_event', targetId: subId, ip: req.ip, details: { eventId: ev.id },
+    });
     return reply.code(204).send();
   });
 }

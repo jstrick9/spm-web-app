@@ -67,6 +67,7 @@ export function EventsList({ orgId }: Props) {
   const [managerFilter, setManagerFilter] =
     useState<ManagerPipelineFilter>("all");
   const [createOpen, setCreateOpen] = useState(false);
+  const [createPreset, setCreatePreset] = useState<'lead' | 'planning' | undefined>(undefined);
   const isManager = (() => {
     try {
       return localStorage.getItem("wvi_registration_role") === "venue_manager";
@@ -100,11 +101,11 @@ export function EventsList({ orgId }: Props) {
         actions={
           <div className="flex flex-wrap items-center gap-2">
             <ViewToggle view={view} onChange={setView} />
-            <Button variant="outline" onClick={() => setCreateOpen(true)}>
+            <Button variant="outline" onClick={() => { setCreatePreset('lead'); setCreateOpen(true); }}>
               <Plus className="h-4 w-4" />
               New lead inquiry
             </Button>
-            <Button onClick={() => setCreateOpen(true)}>
+            <Button onClick={() => { setCreatePreset(undefined); setCreateOpen(true); }}>
               <Plus className="h-4 w-4" />
               New event
             </Button>
@@ -210,6 +211,7 @@ export function EventsList({ orgId }: Props) {
         orgId={orgId}
         open={createOpen}
         onOpenChange={setCreateOpen}
+        initialStatus={createPreset}
         onCreated={(e) => navigate(`/events/${e.id}`)}
       />
     </>

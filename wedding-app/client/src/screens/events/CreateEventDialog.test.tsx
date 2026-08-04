@@ -2,7 +2,7 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { CreateEventDialog } from './CreateEventDialog';
+import { CreateEventDialog, ENTRY_STATUSES } from './CreateEventDialog';
 import { ToastProvider } from '../../ui/Toast';
 import { http, HttpResponse, server } from '../../test/server';
 import { setToken } from '../../sdk/client';
@@ -81,5 +81,26 @@ describe('CreateEventDialog', () => {
     await userEvent.type(screen.getByLabelText(/Budget/i), '25000.50');
     await userEvent.click(screen.getByRole('button', { name: /Create event/i }));
     await waitFor(() => expect(received.budgetCents).toBe(2500050));
+  });
+});
+
+describe('CreateEventDialog pipeline-entry contract', () => {
+  it('restricts new events to entry statuses only (no terminal/final-review)', () => {
+    // Radix Select options render in a portal that jsdom cannot open, so the
+    // contract is asserted at the source: the select renders ENTRY_STATUSES.
+    expect(ENTRY_STATUSES).toEqual(['lead', 'hold', 'booked', 'planning']);
+    expect(ENTRY_STATUSES).not.toContain('completed');
+    expect(ENTRY_STATUSES).not.toContain('cancelled');
+    expect(ENTRY_STATUSES).not.toContain('lost');
+    expect(ENTRY_STATUSES).not.toContain('final_review');
+  });
+
+  it('presets the status from initialStatus when it opens', async () => {
+    const { rerender } = render(harness(<CreateEventDialog orgId="org-1" open={false} onOpenChange={() => {}} initialStatus="planning" />));
+    rerender(harness(<CreateEventDialog orgId="org-1" open onOpenChange={() => {}} initialStatus="planning" />));
+    await waitFor(() => {
+      const trigger = screen.getByRole('combobox', { name: /^status/i });
+      expect(trigger.textContent).toMatch(/Planning/i);
+    });
   });
 });

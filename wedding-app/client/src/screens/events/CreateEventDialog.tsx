@@ -123,7 +123,16 @@ interface Props {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   onCreated?: (event: SdkEvent) => void;
+  /** Preset the pipeline status when the dialog opens (e.g. the "New lead inquiry" action). */
+  initialStatus?: 'lead' | 'planning';
 }
+
+/**
+ * Statuses a brand-new event can enter. Terminal states (completed /
+ * cancelled / lost) and final review are reached through stage transitions,
+ * never by direct creation (mirrors the API contract).
+ */
+export const ENTRY_STATUSES = ['lead', 'hold', 'booked', 'planning'] as const;
 
 const TEMPLATE_DEFAULTS: Record<
   FormValues["eventType"],
@@ -199,6 +208,7 @@ export function CreateEventDialog({
   open,
   onOpenChange,
   onCreated,
+  initialStatus,
 }: Props) {
   const qc = useQueryClient();
   const { toast } = useToast();
@@ -247,6 +257,12 @@ export function CreateEventDialog({
 
   useEffect(() => {
     if (!open) return;
+    // Lead-mode preset: the "New lead inquiry" action opens the dialog with
+    // the pipeline status locked to the entry status it represents.
+    if (initialStatus) {
+      form.setValue("status", initialStatus);
+      form.setValue("operationalStatus", "sales_owned");
+    }
     const currentType = form.getValues("eventType");
     const defaults = TEMPLATE_DEFAULTS[currentType];
     if (
@@ -258,7 +274,7 @@ export function CreateEventDialog({
         Math.min(venueCapacity ?? defaults.guestCount!, defaults.guestCount!),
       );
     }
-  }, [open, venueCapacity]);
+  }, [open, venueCapacity, initialStatus]);
 
   function applyTemplate(type: FormValues["eventType"]) {
     const defaults = TEMPLATE_DEFAULTS[type];
@@ -495,11 +511,11 @@ export function CreateEventDialog({
                         </SelectTrigger>
                       </FormControl>
                       <SelectContent>
-                        {statusOrder.map((s) => (
-                          <SelectItem key={s} value={s}>
-                            {STATUS_META[s].label}
+                        {ENTRY_STATUSES.map((entryStatus) => (
+                          <SelectItem key={entryStatus} value={entryStatus}>
+                            {STATUS_META[entryStatus].label}
                             <span className="text-fg-subtle ml-1">
-                              — {STATUS_META[s].ownerDefinition}
+                              — {STATUS_META[entryStatus].ownerDefinition}
                             </span>
                           </SelectItem>
                         ))}
