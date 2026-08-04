@@ -215,6 +215,23 @@ describe('System role grants', () => {
     expect(coupleDef.permissions).not.toContain('financial_legal.escalate');
   });
 
+  it('platform-admin capabilities are owner/admin-only (MODULE-08 PA-01/02)', () => {
+    const ownerDef = SYSTEM_ROLE_DEFINITIONS.find(r => r.key === 'owner')!;
+    const adminDef = SYSTEM_ROLE_DEFINITIONS.find(r => r.key === 'admin')!;
+    const managerDef = SYSTEM_ROLE_DEFINITIONS.find(r => r.key === 'manager')!;
+    const plannerDef = SYSTEM_ROLE_DEFINITIONS.find(r => r.key === 'planner')!;
+    // PA-01: the platform studio is owner/admin territory.
+    expect(ownerDef.permissions).toContain('platform.manage');
+    expect(adminDef.permissions).toContain('platform.manage');
+    expect(managerDef.permissions).not.toContain('platform.manage');
+    // PA-02: manager loses the admin read surfaces; planner keeps reports.
+    for (const p of ['audit.view', 'integrations.view', 'reports.view']) {
+      expect(managerDef.permissions).not.toContain(p);
+      expect(plannerDef.permissions).not.toContain(p === 'reports.view' ? 'audit.view' : p === 'audit.view' ? 'audit.view' : 'integrations.view');
+    }
+    expect(plannerDef.permissions).toContain('reports.view');
+  });
+
   it('couple role has no timeline.view — couples use the sanitized couple-schedule', () => {
     const coupleDef = SYSTEM_ROLE_DEFINITIONS.find(r => r.key === 'couple')!;
     expect(coupleDef.permissions).toContain('layouts.view');

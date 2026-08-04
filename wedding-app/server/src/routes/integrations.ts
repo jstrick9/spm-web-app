@@ -72,7 +72,8 @@ export async function integrationRoutes(app: FastifyInstance) {
     { preHandler: requireAuth },
     async (req) => {
       const { orgId } = req.params as { orgId: string };
-      if (!can(req.auth!.memberships, { organizationId: orgId }, 'org.view')) {
+      // PA-08: align the read gate with every other integration endpoint.
+      if (!can(req.auth!.memberships, { organizationId: orgId }, 'integrations.view')) {
         throw Forbidden();
       }
       const rows = integrationsRepo.listForOrg(orgId);

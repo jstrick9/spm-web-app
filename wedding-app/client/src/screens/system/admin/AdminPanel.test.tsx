@@ -31,6 +31,16 @@ vi.mock('../../../sdk', () => ({
   },
 }));
 
+let canManagePlatform = true;
+let canManageOrg = true;
+vi.mock('../../../lib/usePermission', () => ({
+  usePermission: (permissionId: string) => {
+    if (permissionId === 'platform.manage') return canManagePlatform;
+    if (permissionId === 'org.manage') return canManageOrg;
+    return true;
+  },
+}));
+
 function makeWrapper() {
   const qc = new QueryClient({ defaultOptions: { queries: { retry: false, gcTime: 0 } } });
   return ({ children }: { children: React.ReactNode }) => (
@@ -41,10 +51,11 @@ function makeWrapper() {
 }
 
 describe('AdminPanel', () => {
-  beforeEach(() => { vi.clearAllMocks(); localStorage.clear(); });
+  beforeEach(() => { vi.clearAllMocks(); localStorage.clear(); canManagePlatform = true; canManageOrg = true; });
 
 
   it('renders manager configuration viewer and change request queue in manager mode', async () => {
+    canManagePlatform = false;
     localStorage.setItem('wvi_registration_role', 'venue_manager');
     render(<AdminPanel orgId="org-1" />, { wrapper: makeWrapper() });
     expect(await screen.findByText('Manager configuration viewer')).toBeTruthy();
@@ -55,6 +66,19 @@ describe('AdminPanel', () => {
     expect(screen.getByText('Manager-readable audit summaries')).toBeTruthy();
     expect(await screen.findByText('Enable SMS alerts')).toBeTruthy();
     expect(screen.getByText('Owner/admin escalation contacts')).toBeTruthy();
+    // PA-04: a non-owner (manager) sees the queue but no decision buttons.
+    expect(screen.queryByRole('button', { name: /^Approve$/ })).toBeNull();
+  });
+
+  it('owner sees the full platform studio and can decide change requests', async () => {
+    render(<AdminPanel orgId="org-1" />, { wrapper: makeWrapper() });
+    await waitFor(() => {
+      expect(screen.getAllByText('Team Members').length).toBeGreaterThanOrEqual(1);
+    });
+    // Owner queue shows decision buttons (org.manage granted).
+    await waitFor(() => {
+      expect(screen.getByRole('button', { name: /^Approve$/ })).toBeTruthy();
+    });
   });
 
   it('renders Team Members tab by default', async () => {

@@ -46,13 +46,27 @@ export const auditRepo = {
     );
   },
 
-  listForOrg(orgId: string, opts: { limit?: number; action?: string } = {}): AuditLogRow[] {
+  listForOrg(orgId: string, opts: { limit?: number; action?: string; before?: string; after?: string; actorEmail?: string } = {}): AuditLogRow[] {
     let sql = `SELECT * FROM audit_logs WHERE organization_id = ?`;
     const params: unknown[] = [orgId];
     if (opts.action) { sql += ` AND action = ?`; params.push(opts.action); }
-    sql += ` ORDER BY created_at DESC LIMIT ?`;
-    params.push(opts.limit ?? 500);
+    if (opts.before) { sql += ` AND created_at < ?`; params.push(opts.before); }
+    if (opts.after) { sql += ` AND created_at > ?`; params.push(opts.after); }
+    if (opts.actorEmail) { sql += ` AND actor_label = ? COLLATE NOCASE`; params.push(opts.actorEmail); }
+    sql += ` ORDER BY created_at DESC, id DESC LIMIT ?`;
+    params.push(opts.limit ?? 200);
     return db.prepare(sql).all(...params) as AuditLogRow[];
+  },
+
+  /** Count matching rows (for paging `total`). */
+  countForOrg(orgId: string, opts: { action?: string; before?: string; after?: string; actorEmail?: string } = {}): number {
+    let sql = `SELECT COUNT(*) AS n FROM audit_logs WHERE organization_id = ?`;
+    const params: unknown[] = [orgId];
+    if (opts.action) { sql += ` AND action = ?`; params.push(opts.action); }
+    if (opts.before) { sql += ` AND created_at < ?`; params.push(opts.before); }
+    if (opts.after) { sql += ` AND created_at > ?`; params.push(opts.after); }
+    if (opts.actorEmail) { sql += ` AND actor_label = ? COLLATE NOCASE`; params.push(opts.actorEmail); }
+    return (db.prepare(sql).get(...params) as { n: number }).n;
   },
 
   /**

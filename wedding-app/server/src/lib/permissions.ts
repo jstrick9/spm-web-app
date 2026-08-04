@@ -384,11 +384,8 @@ export const SYSTEM_ROLE_DEFINITIONS: ReadonlyArray<SystemRoleDefinition> = [
       'feedback.view','feedback.manage',
       'messages.view','messages.send',
       'inventory.view','inventory.manage',
-      'reports.view',
       'calendar.view',
       'notifications.manage',
-      'integrations.view',
-      'audit.view',
     ],
   },
   {

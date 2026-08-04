@@ -46,7 +46,7 @@ describe('GET /integrations/providers', () => {
     expect(ids).toContain('sms_twilio');
   });
 
-  it('allows managers with integrations.view to see provider catalog but still forbids staff', async () => {
+  it('allows owner/admin to see provider catalog but forbids manager and staff (MODULE-08 PA-02)', async () => {
     const owner = await register();
     const manager = await register();
     const staff = await register();
@@ -59,9 +59,11 @@ describe('GET /integrations/providers', () => {
     const managerLogin = await app.inject({ method: 'POST', url: '/api/auth/login', payload: { email: manager.email, password: 'testpass123' }, headers: { 'content-type': 'application/json' } });
     const staffLogin = await app.inject({ method: 'POST', url: '/api/auth/login', payload: { email: staff.email, password: 'testpass123' }, headers: { 'content-type': 'application/json' } });
     const managerRes = await req(managerLogin.json().token, 'GET', `/api/orgs/${owner.orgId}/integrations/providers`);
-    expect(managerRes.statusCode).toBe(200);
+    expect(managerRes.statusCode).toBe(403);
     const staffRes = await req(staffLogin.json().token, 'GET', `/api/orgs/${owner.orgId}/integrations/providers`);
     expect(staffRes.statusCode).toBe(403);
+    const ownerRes = await req(owner.token, 'GET', `/api/orgs/${owner.orgId}/integrations/providers`);
+    expect(ownerRes.statusCode).toBe(200);
   });
 });
 

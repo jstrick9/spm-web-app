@@ -162,8 +162,10 @@ export async function platformConfigRoutes(app: FastifyInstance) {
     const { eventId } = req.params as { eventId: string };
     const event = eventsRepo.findById(eventId);
     if (!event) throw NotFound('event-not-found');
-    // Anyone who can edit the event can override its theme/widgets
-    assertCan(req.auth!.memberships, { organizationId: event.organization_id }, 'events.edit');
+    // PA-07: event-scoped editors (planner etc.) must be able to override the
+    // event theme — use the eventId scope + orgMap, not org-level.
+    const orgMap = eventsRepo.orgMapForUser(req.auth!.userId);
+    if (!can(req.auth!.memberships, { eventId }, 'events.edit', orgMap)) throw Forbidden();
 
     const parsed = configBodySchema.safeParse(req.body);
     if (!parsed.success) throw BadRequest('invalid-input', parsed.error.issues);

@@ -12,6 +12,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '../../../ui/Tabs';
 import { Button } from '../../../ui/Button';
 import { Badge } from '../../../ui/Badge';
 import { useToast } from '../../../ui/Toast';
+import { usePermission } from '../../../lib/usePermission';
 import { Input } from '../../../ui/Input';
 import { Label } from '../../../ui/Label';
 import { cn } from '../../../ui/lib/cn';
@@ -86,7 +87,11 @@ export function AdminPanel({ orgId }: Props) {
   const [previewRoleId, setPreviewRoleId] = useState<string>('');
   const tabs = group === 'required' ? REQUIRED_TABS : ADVANCED_TABS;
   const currentUserQuery = useQuery({ queryKey: ['me', 'admin-panel-role'], queryFn: () => sdk.auth.me(), staleTime: 60_000 });
-  const managerMode = currentUserQuery.data ? (currentUserQuery.data.memberships?.some((membership: any) => membership.organizationId === orgId && String(membership.roleKey).toLowerCase() === 'manager') ?? false) : (typeof window !== 'undefined' && localStorage.getItem('wvi_registration_role') === 'venue_manager');
+  // PA-01: the FULL platform studio belongs to owner/admin (platform.manage).
+  // Managers (and any role without it) get the read-only configuration viewer.
+  const managerMode = !usePermission('platform.manage');
+  // PA-04: only the venue owner may approve change requests.
+  const isOwner = usePermission('org.manage');
 
   if (managerMode) return <ManagerConfigurationViewer orgId={orgId} />;
 
@@ -130,7 +135,7 @@ export function AdminPanel({ orgId }: Props) {
             </CardContent>
           </Card>
 
-          <OwnerChangeRequestQueue orgId={orgId} />
+          <OwnerChangeRequestQueue orgId={orgId} canDecide={isOwner} />
 
           <Card className="min-h-[600px] flex flex-col border-border bg-bg shadow-lg">
             <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as AdminTab)} className="flex-1 flex flex-col">
