@@ -127,7 +127,11 @@ const EMAIL_PRESETS = {
 export function IntegrationHub({ orgId }: Props) {
   const { toast } = useToast();
   const qc = useQueryClient();
-  const managerMode = typeof window !== 'undefined' && localStorage.getItem('wvi_registration_role') === 'venue_manager';
+  // IN-07: permission-based (no raw roleKey); managers/custom roles with
+  // integrations.view get the read-only operations center, only
+  // org.settings.manage can configure credentials.
+  const canViewIntegrations = usePermission('integrations.view');
+  const managerMode = canViewIntegrations && !usePermission('org.settings.manage');
   const canManageSettings = usePermission('org.settings.manage');
   const [addOpen, setAddOpen] = useState(false);
   const [selectedWebhookId, setSelectedWebhookId] = useState<string | null>(null);

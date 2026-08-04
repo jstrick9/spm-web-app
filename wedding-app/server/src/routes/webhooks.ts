@@ -2,7 +2,7 @@ import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
 import { requireAuth } from '../middleware/auth.js';
 import { can } from '../lib/rbac.js';
-import { webhooksRepo } from '../db/repos/webhooks.js';
+import { webhooksRepo, openWebhookSecret } from '../db/repos/webhooks.js';
 import { BadRequest, Forbidden, NotFound } from '../lib/errors.js';
 import { auditRepo } from '../db/repos/index.js';
 import { isSafeOutboundUrl } from '../lib/outboundUrl.js';
@@ -18,12 +18,18 @@ const updateSchema = createSchema.partial().extend({
   isActive: z.boolean().optional(),
 });
 
+function publicWebhookView(row: ReturnType<typeof webhooksRepo.findById>) {
+  if (!row) return null;
+  const { secret_payload, ...rest } = row;
+  return { ...rest, hasSecret: !!secret_payload };
+}
+
 export async function webhookRoutes(app: FastifyInstance) {
   // ─── List webhooks for org ────────────────────────────
   app.get('/api/orgs/:orgId/webhooks', { preHandler: requireAuth }, async (req) => {
     const { orgId } = req.params as { orgId: string };
     if (!can(req.auth!.memberships, { organizationId: orgId }, 'integrations.view')) throw Forbidden();
-    return { webhooks: webhooksRepo.listForOrg(orgId) };
+    return { webhooks: webhooksRepo.listForOrg(orgId).map(publicWebhookView) };
   });
 
   app.get('/api/orgs/:orgId/webhooks/health', { preHandler: requireAuth }, async (req) => {
@@ -51,7 +57,7 @@ export async function webhookRoutes(app: FastifyInstance) {
       actorLabel: req.auth!.email, action: 'webhook.create',
       targetType: 'webhook', targetId: webhook.id, ip: req.ip,
     });
-    return reply.code(201).send({ webhook });
+    return reply.code(201).send({ webhook: publicWebhookView(webhook) });
   });
 
   // ─── Update webhook ──────────────────────────────────
@@ -62,7 +68,7 @@ export async function webhookRoutes(app: FastifyInstance) {
     if (!can(req.auth!.memberships, { organizationId: webhook.organization_id }, 'integrations.manage')) throw Forbidden();
     const parsed = updateSchema.safeParse(req.body);
     if (!parsed.success) throw BadRequest('invalid-input', parsed.error.issues);
-    return { webhook: webhooksRepo.update(id, parsed.data) };
+    return { webhook: publicWebhookView(webhooksRepo.update(id, parsed.data)) };
   });
 
   // ─── Delete webhook ──────────────────────────────────

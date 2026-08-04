@@ -4,6 +4,16 @@ import { IntegrationHub } from './IntegrationHub';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { ToastProvider } from '../../ui/Toast';
 
+let canViewIntegrations = true;
+let canManageSettings = true;
+vi.mock('../../lib/usePermission', () => ({
+  usePermission: (permissionId: string) => {
+    if (permissionId === 'integrations.view') return canViewIntegrations;
+    if (permissionId === 'org.settings.manage') return canManageSettings;
+    return true;
+  },
+}));
+
 // Mock SDK for webhooks
 vi.mock('../../sdk', () => ({
   sdk: {
@@ -49,7 +59,9 @@ function makeWrapper() {
 }
 
 describe('IntegrationHub', () => {
-  beforeEach(() => { vi.clearAllMocks(); localStorage.clear(); });
+  beforeEach(() => {
+    canViewIntegrations = true;
+    canManageSettings = true; vi.clearAllMocks(); localStorage.clear(); });
 
   it('renders integration catalog and webhook section', async () => {
     render(<IntegrationHub orgId="org-1" />, { wrapper: makeWrapper() });
@@ -81,7 +93,8 @@ describe('IntegrationHub', () => {
   });
 
   it('renders manager-friendly integration impact and delivery status panels', async () => {
-    localStorage.setItem('wvi_registration_role', 'venue_manager');
+    canViewIntegrations = true;
+    canManageSettings = false;
     render(<IntegrationHub orgId="org-1" />, { wrapper: makeWrapper() });
 
     expect(await screen.findByText('Manager integration status panel')).toBeInTheDocument();

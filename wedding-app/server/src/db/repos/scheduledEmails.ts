@@ -148,7 +148,7 @@ export const scheduledEmailsRepo = {
     // 2. Get active SMTP integration
     const smtpRow = db.prepare(
       `SELECT id FROM integrations
-       WHERE organization_id = ? AND provider = 'email_smtp' AND status = 'active'
+       WHERE organization_id = ? AND provider = 'email_smtp' AND status = 'connected'
        LIMIT 1`
     ).get(organizationId) as { id: string } | undefined;
     const smtpIntegrationId = smtpRow?.id ?? '';

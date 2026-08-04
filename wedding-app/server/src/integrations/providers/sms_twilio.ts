@@ -95,7 +95,18 @@ export const smsTwilioProvider: IntegrationProvider = {
   secretSchema,
   actions: [sendSms],
   async verify(ctx) {
-    configSchema.parse(ctx.config);
-    secretSchema.parse(ctx.secrets);
+    // IN-02: verification must actually reach Twilio — a config-only parse
+    // would let a bad token show as "connected". The Balance endpoint is a
+    // cheap authenticated read that works for any valid account credential.
+    const cfg = configSchema.parse(ctx.config);
+    const secrets = secretSchema.parse(ctx.secrets);
+    const res = await fetch(`https://api.twilio.com/2010-04-01/Accounts/${encodeURIComponent(cfg.accountSid)}/Balance.json`, {
+      headers: { authorization: authHeader(cfg.accountSid, secrets.authToken) },
+    });
+    if (!res.ok) {
+      const payload = await res.json().catch(() => ({})) as Record<string, unknown>;
+      const message = typeof payload.message === 'string' ? payload.message : `Twilio verification failed with HTTP ${res.status}`;
+      throw new Error(message);
+    }
   },
 };

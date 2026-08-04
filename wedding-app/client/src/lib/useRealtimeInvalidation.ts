@@ -232,5 +232,24 @@ export function useRealtimeInvalidation(orgId: string | null) {
       const eventId = (e.payload as any)?.eventId;
       if (eventId) qc.invalidateQueries({ queryKey: ['guest-help', eventId] });
     },
+    // ── Integrations & intelligence (MODULE-09 IN-06) ──────────────────
+    'webhook.inbound': () => {
+      qc.invalidateQueries({ queryKey: ['webhooks'] });
+      qc.invalidateQueries({ queryKey: ['webhook-deliveries'] });
+    },
+    'webhook.test': () => {
+      qc.invalidateQueries({ queryKey: ['webhooks'] });
+      qc.invalidateQueries({ queryKey: ['webhook-deliveries'] });
+    },
+    'integration.connected': () => {
+      qc.invalidateQueries({ queryKey: ['integrations'] });
+      qc.invalidateQueries({ queryKey: ['integration-providers'] });
+    },
+    'integration.error': () => {
+      qc.invalidateQueries({ queryKey: ['integrations'] });
+    },
+    'lifecycle_email.sent': () => {
+      qc.invalidateQueries({ queryKey: ['lifecycle-emails'] });
+    },
   });
 }

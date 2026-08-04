@@ -76,6 +76,11 @@ export async function intelligenceRoutes(app: FastifyInstance) {
     }).safeParse(req.body);
     if (!parsed.success) throw BadRequest('invalid-input', parsed.error.issues);
     const template = emailTemplatesRepo.create(orgId, { ...parsed.data, createdBy: req.auth!.userId });
+    auditRepo.log({
+      organizationId: orgId, actorUserId: req.auth!.userId, actorLabel: req.auth!.email,
+      action: 'email_template.create', targetType: 'email_template', targetId: template.id,
+      ip: req.ip, details: { name: template.name, category: template.category },
+    });
     return reply.code(201).send({ template });
   });
 
@@ -93,6 +98,11 @@ export async function intelligenceRoutes(app: FastifyInstance) {
     }).safeParse(req.body);
     if (!parsed.success) throw BadRequest('invalid-input', parsed.error.issues);
     const updated = emailTemplatesRepo.update(id, parsed.data);
+    auditRepo.log({
+      organizationId: template.organization_id, actorUserId: req.auth!.userId, actorLabel: req.auth!.email,
+      action: 'email_template.update', targetType: 'email_template', targetId: id,
+      ip: req.ip, details: { fields: Object.keys(parsed.data) },
+    });
     return { template: updated };
   });
 
@@ -102,6 +112,11 @@ export async function intelligenceRoutes(app: FastifyInstance) {
     if (!template) throw NotFound();
     if (!can(req.auth!.memberships, { organizationId: template.organization_id }, 'invites.manage')) throw Forbidden();
     emailTemplatesRepo.delete(id);
+    auditRepo.log({
+      organizationId: template.organization_id, actorUserId: req.auth!.userId, actorLabel: req.auth!.email,
+      action: 'email_template.delete', targetType: 'email_template', targetId: id,
+      ip: req.ip, details: { name: template.name },
+    });
     return reply.code(204).send();
   });
 

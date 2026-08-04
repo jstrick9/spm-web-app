@@ -13,7 +13,7 @@
 import type { FastifyInstance } from 'fastify';
 import { createHmac, timingSafeEqual } from 'node:crypto';
 import { auditRepo } from '../db/repos/index.js';
-import { webhooksRepo } from '../db/repos/webhooks.js';
+import { webhooksRepo, openWebhookSecret } from '../db/repos/webhooks.js';
 import { requireAuth } from '../middleware/auth.js';
 import { can } from '../lib/rbac.js';
 import { Forbidden } from '../lib/errors.js';
@@ -22,7 +22,8 @@ import { broadcastSSE } from './sse.js';
 export async function webhookReceiverRoutes(app: FastifyInstance) {
   // ─── Inbound webhook endpoint ─────────────────────────
   // Any external service can POST here. The webhook ID is in the URL.
-  app.post('/api/webhooks/inbound/:webhookId', async (req, reply) => {
+  // IN-03: public endpoint — rate-limit like every other public surface.
+  app.post('/api/webhooks/inbound/:webhookId', { config: { rateLimit: { max: 60, timeWindow: '1 minute' } } }, async (req, reply) => {
     const { webhookId } = req.params as { webhookId: string };
 
     // Find the webhook config
@@ -31,11 +32,15 @@ export async function webhookReceiverRoutes(app: FastifyInstance) {
       return reply.code(404).send({ error: 'webhook-not-found' });
     }
 
-    // Verify signature if a secret is configured
-    if (webhook.secret) {
+    // Verify signature if a secret is configured. IN-03: sign over the RAW
+    // body bytes (captured by the payments plugin's global raw-body parser)
+    // so key order/whitespace can never break verification.
+    const webhookSecret = openWebhookSecret(webhook);
+    if (webhookSecret) {
       const signature = req.headers['x-webhook-signature'] as string | undefined;
-      const body = JSON.stringify(req.body);
-      const expected = createHmac('sha256', webhook.secret).update(body).digest();
+      const rawBody = (req as { rawBody?: string }).rawBody;
+      const body = typeof rawBody === 'string' && rawBody.length > 0 ? rawBody : JSON.stringify(req.body ?? {});
+      const expected = createHmac('sha256', webhookSecret).update(body).digest();
       const provided = typeof signature === 'string' && signature.startsWith('sha256=')
         ? Buffer.from(signature.slice('sha256='.length), 'hex')
         : null;

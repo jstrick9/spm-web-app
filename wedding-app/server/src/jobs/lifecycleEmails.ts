@@ -27,6 +27,7 @@ import {
   emailTemplatesRepo,
   scheduledEmailsRepo,
   integrationsRepo,
+  auditRepo,
 } from '../db/repos/index.js';
 
 export type TriggerType = 'rsvp_reminder' | 'thank_you' | 'save_the_date' | 'manual';
@@ -145,9 +146,21 @@ export async function runTrigger(
       continue;
     }
 
-    // Render the template with guest+event merge fields
-    const mergeFields = buildMergeFields(guest, event);
-    const rendered = emailTemplatesRepo.render(template, mergeFields);
+    // Render the template with guest+event merge fields. IN-05: a broken
+    // template must not kill the whole automation run — isolate per guest.
+    let rendered: ReturnType<typeof emailTemplatesRepo.render>;
+    try {
+      const mergeFields = buildMergeFields(guest, event);
+      rendered = emailTemplatesRepo.render(template, mergeFields);
+    } catch (err) {
+      auditRepo.log({
+        organizationId: orgId, actorLabel: 'system',
+        action: 'lifecycle_email.render_failed', targetType: 'event', targetId: eventId,
+        details: { triggerType, guestId: guest.id, templateId: template.id, error: (err as Error).message },
+      });
+      skipped++;
+      continue;
+    }
 
     // Enqueue the send
     scheduledEmailsRepo.enqueue({

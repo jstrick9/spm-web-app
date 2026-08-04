@@ -163,4 +163,28 @@ describe('useRealtimeInvalidation', () => {
     });
     expect(spy).toHaveBeenCalledWith({ queryKey: ['couple-documents', 'evt-8'] });
   });
+
+  // MODULE-09 IN-06: webhook/integration/lifecycle events invalidate the hub.
+  it('registers handlers for webhook, integration, and lifecycle events', () => {
+    renderWithQC();
+    for (const type of ['webhook.inbound', 'webhook.test', 'integration.connected', 'integration.error', 'lifecycle_email.sent']) {
+      expect(capturedHandlers[type], type).toBeDefined();
+    }
+  });
+
+  it('webhook.inbound invalidates webhooks and delivery logs', () => {
+    renderWithQC();
+    const spy = vi.spyOn(qc, 'invalidateQueries');
+    capturedHandlers['webhook.inbound']({ id: 9, type: 'webhook.inbound', payload: {}, actorUserId: null, timestamp: '' });
+    expect(spy).toHaveBeenCalledWith({ queryKey: ['webhooks'] });
+    expect(spy).toHaveBeenCalledWith({ queryKey: ['webhook-deliveries'] });
+  });
+
+  it('integration.connected invalidates the integration lists', () => {
+    renderWithQC();
+    const spy = vi.spyOn(qc, 'invalidateQueries');
+    capturedHandlers['integration.connected']({ id: 10, type: 'integration.connected', payload: {}, actorUserId: null, timestamp: '' });
+    expect(spy).toHaveBeenCalledWith({ queryKey: ['integrations'] });
+    expect(spy).toHaveBeenCalledWith({ queryKey: ['integration-providers'] });
+  });
 });

@@ -1,12 +1,29 @@
 import { db } from '../database.js';
 import { uuid } from '../../lib/crypto.js';
 import { stringifyJson, parseJson } from '../../lib/json.js';
+import { sealSecret, openSecret } from '../../lib/secrets.js';
+
+/** Seal a webhook signing/verification secret for storage. */
+export function sealWebhookSecret(secret: string): string {
+  return sealSecret({ value: secret });
+}
+
+/** Open a sealed webhook secret. Returns '' when none is stored. */
+export function openWebhookSecret(row: { secret_payload: string | null }): string {
+  if (!row.secret_payload) return '';
+  try {
+    const opened = openSecret<{ value?: string }>(row.secret_payload);
+    return typeof opened?.value === 'string' ? opened.value : '';
+  } catch {
+    return '';
+  }
+}
 
 export interface WebhookRow {
   id: string;
   organization_id: string;
   url: string;
-  secret: string;
+  secret_payload: string | null;
   event_types: string;  // JSON array
   is_active: number;
   description: string | null;
@@ -44,11 +61,11 @@ export const webhooksRepo = {
   }): WebhookRow {
     const id = uuid();
     db.prepare(
-      `INSERT INTO webhooks (id, organization_id, url, secret, event_types, description, created_by)
+      `INSERT INTO webhooks (id, organization_id, url, secret_payload, event_types, description, created_by)
        VALUES (?, ?, ?, ?, ?, ?, ?)`
     ).run(
       id, input.organizationId, input.url,
-      input.secret ?? '',
+      input.secret ? sealWebhookSecret(input.secret) : null,
       stringifyJson(input.eventTypes ?? ['*']),
       input.description ?? null,
       input.createdBy
@@ -82,7 +99,7 @@ export const webhooksRepo = {
     const fields: string[] = [];
     const values: unknown[] = [];
     if (patch.url !== undefined)         { fields.push('url = ?');         values.push(patch.url); }
-    if (patch.secret !== undefined)      { fields.push('secret = ?');      values.push(patch.secret); }
+    if (patch.secret !== undefined)      { fields.push('secret_payload = ?'); values.push(patch.secret ? sealWebhookSecret(patch.secret) : null); }
     if (patch.eventTypes !== undefined)  { fields.push('event_types = ?'); values.push(stringifyJson(patch.eventTypes)); }
     if (patch.isActive !== undefined)    { fields.push('is_active = ?');   values.push(patch.isActive ? 1 : 0); }
     if (patch.description !== undefined) { fields.push('description = ?'); values.push(patch.description); }
@@ -137,8 +154,8 @@ export const webhooksRepo = {
     return db.prepare(`UPDATE webhook_deliveries SET terminal_at = NULL, next_retry_at = datetime('now') WHERE id = ? AND webhook_id = ? AND terminal_at IS NOT NULL`).run(deliveryId, webhookId).changes > 0;
   },
 
-  claimDueRetries(limit = 20): Array<WebhookDeliveryRow & { url: string; secret: string }> {
-    const rows = db.prepare(`SELECT d.*, w.url, w.secret FROM webhook_deliveries d JOIN webhooks w ON w.id = d.webhook_id WHERE d.next_retry_at <= datetime('now') AND d.terminal_at IS NULL AND w.is_active = 1 ORDER BY d.next_retry_at LIMIT ?`).all(limit) as Array<WebhookDeliveryRow & { url: string; secret: string }>;
+  claimDueRetries(limit = 20): Array<WebhookDeliveryRow & { url: string; secret_payload: string | null }> {
+    const rows = db.prepare(`SELECT d.*, w.url, w.secret_payload FROM webhook_deliveries d JOIN webhooks w ON w.id = d.webhook_id WHERE d.next_retry_at <= datetime('now') AND d.terminal_at IS NULL AND w.is_active = 1 ORDER BY d.next_retry_at LIMIT ?`).all(limit) as Array<WebhookDeliveryRow & { url: string; secret_payload: string | null }>;
     for (const row of rows) db.prepare(`UPDATE webhook_deliveries SET next_retry_at = NULL, terminal_at = datetime('now') WHERE id = ?`).run(row.id);
     return rows;
   },

@@ -9,7 +9,7 @@
  * Failures are tolerated — the app never waits on webhook delivery.
  */
 import { createHmac } from 'node:crypto';
-import { webhooksRepo } from '../db/repos/webhooks.js';
+import { webhooksRepo, openWebhookSecret } from '../db/repos/webhooks.js';
 import { webhookRetryDecision } from './retryPolicy.js';
 import { assertPublicWebhookTarget } from '../lib/outboundNetwork.js';
 
@@ -65,7 +65,7 @@ export function replayDueWebhookDeliveries(): void {
     let data: Record<string, unknown> = {};
     try { data = JSON.parse(row.payload) as Record<string, unknown>; } catch { continue; }
     const body = JSON.stringify({ eventType: row.event_type, timestamp: new Date().toISOString(), data });
-    enqueueDelivery(() => deliverWebhook(row.webhook_id, row.url, row.secret, row.event_type, body, data, row.attempt_count + 1));
+    enqueueDelivery(() => deliverWebhook(row.webhook_id, row.url, openWebhookSecret(row), row.event_type, body, data, row.attempt_count + 1));
   }
 }
 
@@ -88,7 +88,7 @@ export function broadcastWebhook(
       const body = JSON.stringify(payload);
 
       for (const hook of hooks) {
-        enqueueDelivery(() => deliverWebhook(hook.id, hook.url, hook.secret, eventType, body, data));
+        enqueueDelivery(() => deliverWebhook(hook.id, hook.url, openWebhookSecret(hook), eventType, body, data));
       }
     } catch {
       // Never crash the server for a webhook failure
