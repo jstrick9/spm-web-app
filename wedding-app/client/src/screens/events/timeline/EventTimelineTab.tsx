@@ -437,16 +437,29 @@ export function EventTimelineTab({ eventId, organizationId }: Props) {
                 onDrop={(e) => handleTimelineDrop(e, item)}
               >
                 
-                {/* Timeline dot */}
-                <div 
+                {/* Timeline dot — keyboard-activatable + arrow navigation */}
+                <button
+                  type="button"
+                  data-timeline-dot
+                  aria-label={`${item.title} — ${isCompleted ? 'completed, click to reopen' : 'not completed, click to mark complete'}`}
                   className={cn(
                     "flex items-center justify-center w-10 h-10 rounded-full border-4 border-surface bg-surface shadow shrink-0 md:order-1 md:group-odd:-translate-x-1/2 md:group-even:translate-x-1/2 z-10 cursor-pointer transition-colors",
                     isCompleted ? "text-success" : "text-fg-subtle hover:text-brand"
                   )}
                   onClick={() => toggleStatus.mutate(item)}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); toggleStatus.mutate(item); return; }
+                    if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
+                      e.preventDefault();
+                      const dots = Array.from(document.querySelectorAll('button[data-timeline-dot]')) as HTMLButtonElement[];
+                      const idx = dots.indexOf(e.currentTarget);
+                      const next = dots[idx + (e.key === 'ArrowDown' ? 1 : -1)] as HTMLButtonElement | undefined;
+                      next?.focus();
+                    }
+                  }}
                 >
                   {isCompleted ? <CheckCircle2 className="w-5 h-5" /> : <Circle className="w-5 h-5" />}
-                </div>
+                </button>
                 
                 {/* Content Card */}
                 <Card className={cn(

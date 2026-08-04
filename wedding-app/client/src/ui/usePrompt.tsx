@@ -29,7 +29,7 @@ import {
 } from './Dialog';
 import { Button } from './Button';
 import { Input } from './Input';
-import { Label } from './Label';
+import { FormField } from './FormField';
 
 export interface PromptField {
   key: string;
@@ -96,30 +96,32 @@ function PromptDialog({ state, onClose }: { state: PromptState; onClose: (value:
           <DialogTitle>{state.title}</DialogTitle>
           {state.description && <DialogDescription>{state.description}</DialogDescription>}
         </DialogHeader>
-        <div className="space-y-2">
-          {state.label && <Label htmlFor="prompt-field">{state.label}</Label>}
-          {state.multiline ? (
-            <textarea
-              id="prompt-field"
-              value={value}
-              onChange={(e) => setValue(e.target.value)}
-              placeholder={state.placeholder}
-              autoFocus
-              rows={3}
-              className="w-full rounded-lg border border-border bg-surface px-3 py-2 text-sm outline-none focus:border-brand"
-            />
-          ) : (
-            <Input
-              id="prompt-field"
-              value={value}
-              onChange={(e) => setValue(e.target.value)}
-              placeholder={state.placeholder}
-              autoFocus
-              onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); submit(); } }}
-            />
-          )}
-          {touched && invalid && <p className="text-xs text-danger">This field is required.</p>}
-        </div>
+        {state.label && (
+          <FormField label={state.label} htmlFor="prompt-field" required={state.required} error={touched && invalid ? 'This field is required.' : null}>
+            {state.multiline ? (
+              <textarea
+                id="prompt-field"
+                value={value}
+                onChange={(e) => setValue(e.target.value)}
+                placeholder={state.placeholder}
+                autoFocus
+                aria-required={state.required}
+                rows={3}
+                className="w-full rounded-lg border border-border bg-surface px-3 py-2 text-sm outline-none focus:border-brand"
+              />
+            ) : (
+              <Input
+                id="prompt-field"
+                value={value}
+                onChange={(e) => setValue(e.target.value)}
+                placeholder={state.placeholder}
+                autoFocus
+                aria-required={state.required}
+                onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); submit(); } }}
+              />
+            )}
+          </FormField>
+        )}
         <DialogFooter>
           <Button variant="ghost" onClick={() => onClose(null)}>{state.cancelLabel ?? 'Cancel'}</Button>
           <Button onClick={submit}>{state.confirmLabel ?? 'Save'}</Button>
@@ -152,8 +154,13 @@ function PromptFormDialog({ state, onClose }: { state: PromptFormState; onClose:
         </DialogHeader>
         <div className="space-y-4">
           {state.fields.map((field, index) => (
-            <div key={field.key} className="space-y-1.5">
-              <Label htmlFor={`prompt-${field.key}`}>{field.label}{field.required && <span className="text-danger"> *</span>}</Label>
+            <FormField
+              key={field.key}
+              label={field.label}
+              htmlFor={`prompt-${field.key}`}
+              required={field.required}
+              error={touched && invalid && field.required && !String(values[field.key] ?? '').trim() ? 'This field is required.' : null}
+            >
               {field.multiline ? (
                 <textarea
                   id={`prompt-${field.key}`}
@@ -161,6 +168,7 @@ function PromptFormDialog({ state, onClose }: { state: PromptFormState; onClose:
                   onChange={(e) => set(field.key, e.target.value)}
                   placeholder={field.placeholder}
                   autoFocus={index === 0}
+                  aria-required={field.required}
                   rows={3}
                   className="w-full rounded-lg border border-border bg-surface px-3 py-2 text-sm outline-none focus:border-brand"
                 />
@@ -171,12 +179,12 @@ function PromptFormDialog({ state, onClose }: { state: PromptFormState; onClose:
                   onChange={(e) => set(field.key, e.target.value)}
                   placeholder={field.placeholder}
                   autoFocus={index === 0}
+                  aria-required={field.required}
                   onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); submit(); } }}
                 />
               )}
-            </div>
+            </FormField>
           ))}
-          {touched && invalid && <p className="text-xs text-danger">Please fill in all required fields.</p>}
         </div>
         <DialogFooter>
           <Button variant="ghost" onClick={() => onClose(null)}>{state.cancelLabel ?? 'Cancel'}</Button>

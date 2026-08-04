@@ -18,6 +18,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '../../../ui/Card';
 import { Badge } from '../../../ui/Badge';
 import { Input } from '../../../ui/Input';
 import { Label } from '../../../ui/Label';
+import { FormField } from '../../../ui/FormField';
 import { StatCard } from '../../../ui/StatCard';
 import { DataTable, type Column } from '../../../ui/DataTable';
 import { useToast } from '../../../ui/Toast';
@@ -380,13 +381,14 @@ export function PaymentsPanel({ eventId }: Props) {
                 <DialogHeader><DialogTitle className="font-serif font-bold text-lg text-fg">New Payment Link</DialogTitle></DialogHeader>
                 <div className="space-y-4 font-semibold text-xs text-fg">
                   <div>
-                    <Label>Amount ($)</Label>
-                    <Input type="number" min={0} step={0.01} value={amount}
-                      onChange={(e) => setAmount(e.target.value)} placeholder="0.00" className="mt-1 bg-white border-paper-border text-xs h-9" />
-                    {/* MODULE-06 FI-14: field-level feedback instead of a generic toast on 400 */}
-                    {amount && (Number.isNaN(parseFloat(amount)) || parseFloat(amount) <= 0) && (
-                      <p className="mt-1 text-xs text-danger">Enter an amount greater than zero.</p>
-                    )}
+                    <FormField
+                      label="Amount ($)"
+                      htmlFor="payment-amount"
+                      error={amount && (Number.isNaN(parseFloat(amount)) || parseFloat(amount) <= 0) ? 'Enter an amount greater than zero.' : null}
+                    >
+                      <Input id="payment-amount" type="number" min={0} step={0.01} value={amount}
+                        onChange={(e) => setAmount(e.target.value)} placeholder="0.00" className="bg-white border-paper-border text-xs h-9" />
+                    </FormField>
                   </div>
                   <div>
                     <Label htmlFor="pay-provider">Provider</Label>

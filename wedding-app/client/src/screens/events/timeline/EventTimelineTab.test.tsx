@@ -2,6 +2,7 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import { EventTimelineTab } from './EventTimelineTab';
 import { timelineSdk } from '../../../sdk/timeline';
+import { sdk } from '../../../sdk';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { ToastProvider } from '../../../ui/Toast';
 
@@ -89,6 +90,24 @@ describe('EventTimelineTab', () => {
     expect(screen.getByText('Audience print / phone views')).toBeInTheDocument();
     expect(await screen.findAllByText('Manager assignment & day-of controls')).toHaveLength(2);
     expect(screen.getByRole('button', { name: /Make visible offline/i })).toBeInTheDocument();
+  });
+
+  it('toggles completion from the dot via keyboard and arrows move between items', async () => {
+    render(<EventTimelineTab eventId="evt-1" organizationId="org-1" />, { wrapper: TestWrapper });
+    const firstDot = await screen.findByLabelText(/arrival — not completed, click to mark complete/i);
+    expect(firstDot.getAttribute('data-timeline-dot')).not.toBeNull();
+
+    // Space toggles the item
+    fireEvent.keyDown(firstDot, { key: ' ' });
+    await waitFor(() => {
+      expect(sdk.timeline.update).toHaveBeenCalledWith('i1', { completed: true });
+    });
+
+    // ArrowDown moves focus to the next item's dot
+    fireEvent.keyDown(firstDot, { key: 'ArrowDown' });
+    await waitFor(() => {
+      expect(document.activeElement?.getAttribute('aria-label')).toContain('Ceremony');
+    });
   });
 
   it('opens create dialog', async () => {

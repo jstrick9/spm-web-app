@@ -37,7 +37,7 @@ describe('usePrompt dialogs', () => {
     expect(screen.getByText(/this field is required/i)).toBeTruthy();
     expect(screen.getByRole('dialog')).toBeTruthy();
 
-    await user.type(screen.getByLabelText(/^note$/i), 'Bring the tent');
+    await user.type(screen.getByLabelText(/^note/i), 'Bring the tent');
     await user.click(screen.getByRole('button', { name: /^Save$/ }));
     await waitFor(() => expect(screen.getByTestId('result').textContent).toBe('Bring the tent'));
   });
@@ -59,7 +59,8 @@ describe('usePrompt dialogs', () => {
     render(<Harness />);
     await user.click(screen.getByRole('button', { name: /open form/i }));
     await user.click(await screen.findByRole('button', { name: /^Save$/ }));
-    expect(screen.getByText(/fill in all required fields/i)).toBeTruthy();
+    // Per-field validation error appears for the required name field.
+    expect(screen.getByRole('alert')).toBeTruthy();
 
     await user.type(screen.getByLabelText(/name/i), 'Avery');
     await user.type(screen.getByLabelText(/phone/i), '555-0100');
