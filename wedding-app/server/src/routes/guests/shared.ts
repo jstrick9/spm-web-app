@@ -469,6 +469,8 @@ export function addDaysIso(days: number) {
   return d.toISOString().slice(0, 10);
 }
 
+import { icsText } from '../../lib/ics.js';
+
 export function escapeHtml(value: string) {
   return value.replace(/[&<>"]/g, (ch) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[ch] || ch));
 }
@@ -501,7 +503,7 @@ export function icsDate(value: string | null | undefined) {
 }
 
 export function guestCalendarIcs(input: { event: any; timeline: any[]; subEvents: any[]; metadata: Record<string, any> }) {
-  const escape = (value: string) => String(value || '').replace(/\n/g, ' ').replace(/,/g, '\\,');
+  const escape = (value: string) => icsText(value);
   const lines = ['BEGIN:VCALENDAR', 'VERSION:2.0', 'PRODID:-//Wedding Venue Intelligence//Guest Schedule//EN'];
   for (const item of input.timeline) {
     if (!item.starts_at) continue;

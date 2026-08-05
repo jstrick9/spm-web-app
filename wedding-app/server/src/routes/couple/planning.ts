@@ -1,5 +1,6 @@
 import { auditRepo, catalogRepo, contractsRepo, coupleAppointmentsRepo, coupleDocumentsRepo, couplePlanningRepo, coupleRequestsRepo, eventsRepo, guestsRepo, layoutsRepo, messagesRepo, paymentLinksRepo, rolesRepo, subEventsRepo, teamInvitationsRepo, timelineRepo, usersRepo, vendorsRepo, venuesRepo } from '../../db/repos/index.js';
 import { localDateString } from '../../lib/time.js';
+import { icsText } from '../../lib/ics.js';
 import { deliverTeamInvitation } from '../../lib/teamInviteDelivery.js';
 import { db } from '../../db/database.js';
 import { uuid } from '../../lib/crypto.js';
@@ -224,7 +225,7 @@ export async function couplePlanningRoutes(app: FastifyInstance) {
     if (!can(req.auth!.memberships, { eventId }, 'events.view', orgMap)) throw Forbidden();
     const now = new Date().toISOString().replace(/[-:]/g, '').replace(/\.\d{3}/, '');
     const appts = coupleAppointmentsRepo.listForEvent(eventId).filter((a) => a.starts_at);
-    const events = appts.map((a) => ['BEGIN:VEVENT', `UID:${a.id}@wvi-couple-calendar`, `DTSTAMP:${now}`, `DTSTART:${String(a.starts_at).replace(/[-:]/g, '').replace(/\.\d{3}/, '')}`, a.ends_at ? `DTEND:${String(a.ends_at).replace(/[-:]/g, '').replace(/\.\d{3}/, '')}` : '', `SUMMARY:${a.title.replace(/[,;\\]/g, ' ')}`, a.location ? `LOCATION:${a.location.replace(/[,;\\]/g, ' ')}` : '', 'END:VEVENT'].filter(Boolean).join('\r\n'));
+    const events = appts.map((a) => ['BEGIN:VEVENT', `UID:${a.id}@wvi-couple-calendar`, `DTSTAMP:${now}`, `DTSTART:${String(a.starts_at).replace(/[-:]/g, '').replace(/\.\d{3}/, '')}`, a.ends_at ? `DTEND:${String(a.ends_at).replace(/[-:]/g, '').replace(/\.\d{3}/, '')}` : '', `SUMMARY:${icsText(a.title)}`, a.location ? `LOCATION:${icsText(a.location)}` : '', 'END:VEVENT'].filter(Boolean).join('\r\n'));
     const ics = ['BEGIN:VCALENDAR', 'VERSION:2.0', 'PRODID:-//Wedding Venue Intelligence Couple Calendar//EN', ...events, 'END:VCALENDAR'].join('\r\n');
     reply.header('Content-Type', 'text/calendar; charset=utf-8');
     reply.header('Content-Disposition', `attachment; filename="couple_calendar_${eventId}.ics"`);
@@ -570,7 +571,7 @@ export async function couplePlanningRoutes(app: FastifyInstance) {
     const events = timelineRepo.listForEvent(eventId).filter(isCoupleTimelineItem).map((item) => {
       const start = item.starts_at.replace(/[-:]/g, '').replace(/\.\d{3}/, '');
       const end = (item.ends_at || item.starts_at).replace(/[-:]/g, '').replace(/\.\d{3}/, '');
-      return ['BEGIN:VEVENT', `UID:${item.id}@wvi-couple`, `DTSTAMP:${now}`, `DTSTART:${start}`, `DTEND:${end}`, `SUMMARY:${item.title.replace(/[,;\\]/g, ' ')}`, item.location ? `LOCATION:${item.location.replace(/[,;\\]/g, ' ')}` : '', 'END:VEVENT'].filter(Boolean).join('\r\n');
+      return ['BEGIN:VEVENT', `UID:${item.id}@wvi-couple`, `DTSTAMP:${now}`, `DTSTART:${start}`, `DTEND:${end}`, `SUMMARY:${icsText(item.title)}`, item.location ? `LOCATION:${icsText(item.location)}` : '', 'END:VEVENT'].filter(Boolean).join('\r\n');
     });
     const ics = ['BEGIN:VCALENDAR', 'VERSION:2.0', 'PRODID:-//Wedding Venue Intelligence Couple Timeline//EN', ...events, 'END:VCALENDAR'].join('\r\n');
     reply.header('Content-Type', 'text/calendar; charset=utf-8');
