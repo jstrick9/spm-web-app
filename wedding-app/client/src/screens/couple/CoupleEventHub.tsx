@@ -93,6 +93,29 @@ export function CoupleEventHub({ eventId }: { eventId: string }) {
   const coupleTimelineQuery = useQuery({ queryKey: ['couple-timeline-review', eventId], queryFn: () => sdk.couple.timeline(eventId), enabled: !!eventId });
   const coupleLayoutQuery = useQuery({ queryKey: ['couple-layout-review', eventId], queryFn: () => sdk.couple.layout(eventId), enabled: !!eventId });
   const coupleVendorsQuery = useQuery({ queryKey: ['couple-vendor-board', eventId], queryFn: () => sdk.couple.vendors(eventId), enabled: !!eventId });
+
+  // Honest section states: if one of the ~20 parallel section queries
+  // fails (transient network blip, server hiccup), the hub used to render
+  // "No X yet" as if the data simply didn't exist. Track failures so we
+  // can surface exactly which sections failed and retry them.
+  const sectionQueries: Array<{ label: string; query: { isError: boolean; refetch: () => unknown } }> = [
+    { label: 'guest list', query: guestsQuery },
+    { label: 'calendar', query: calendarQuery },
+    { label: 'inbox', query: inboxQuery },
+    { label: 'documents', query: documentsQuery },
+    { label: 'design preferences', query: designQuery },
+    { label: 'finance', query: financeQuery },
+    { label: 'timeline', query: timelineQuery },
+    { label: 'requests', query: requestsQuery },
+    { label: 'planning', query: planningQuery },
+    { label: 'guest portal', query: guestPortalQuery },
+    { label: 'vendor board', query: coupleVendorsQuery },
+    { label: 'layout review', query: coupleLayoutQuery },
+    { label: 'event updates', query: coupleUpdatesQuery },
+    { label: 'day-of contact', query: dayOfContactQuery },
+  ];
+  const failedSections = sectionQueries.filter((s) => s.query.isError);
+
   const [profileDraft, setProfileDraft] = useState<Record<string, string>>({});
   const [guestDraft, setGuestDraft] = useState<Record<string, string>>({ fullName: '', email: '', householdName: '' });
   const [importCsv, setImportCsv] = useState('fullName,email,phone,householdName,mailingAddress,rsvpStatus,mealChoice\nJane Guest,jane@example.com,555-0100,Smith Family,1 Main St,pending,Chicken');
@@ -582,6 +605,21 @@ export function CoupleEventHub({ eventId }: { eventId: string }) {
         actions={<div className="flex flex-wrap gap-2"><Button size="sm" variant="outline" onClick={shareSummary}><Share2 className="h-4 w-4" /> Share</Button><Button size="sm" variant="outline" onClick={downloadSummary}><Download className="h-4 w-4" /> Save summary</Button><Badge variant="success">Couple access</Badge></div>}
       />
       <PageBody>
+        {failedSections.length > 0 && (
+          <div role="alert" className="mb-5 rounded-lg border border-warning/40 bg-warning-soft/20 p-3 text-sm">
+            <div className="flex flex-wrap items-start justify-between gap-3">
+              <div>
+                <strong className="text-warning">Some parts of your hub couldn’t load</strong>
+                <p className="mt-1 text-xs text-fg-muted">
+                  We couldn’t reach the server for: {failedSections.map((s) => s.label).join(', ')}. Nothing was changed — retry to load them.
+                </p>
+              </div>
+              <Button size="xs" variant="outline" onClick={() => failedSections.forEach((s) => void s.query.refetch())}>
+                Retry sections
+              </Button>
+            </div>
+          </div>
+        )}
         <div className={`space-y-5 pb-24 md:pb-0 ${largeTextMode ? 'text-lg' : ''} ${accessibilityMode ? 'contrast-more' : ''}`} onInputCapture={() => setHasUnsavedDraft(true)}>
           {dayOfContactQuery.data?.contact?.name && <Card className="border-brand/20"><CardHeader><CardTitle>Day-of contact</CardTitle><CardDescription>Your venue’s Event Week point of contact.</CardDescription></CardHeader><CardContent className="text-sm"><strong>{dayOfContactQuery.data.contact.name}</strong>{dayOfContactQuery.data.contact.hours && <p className="mt-1 text-fg-muted">Available: {dayOfContactQuery.data.contact.hours}</p>}{dayOfContactQuery.data.contact.phone && <p className="mt-1"><a className="text-brand underline" href={`tel:${dayOfContactQuery.data.contact.phone}`}>{dayOfContactQuery.data.contact.phone}</a></p>}{dayOfContactQuery.data.contact.email && <p className="mt-1"><a className="text-brand underline" href={`mailto:${dayOfContactQuery.data.contact.email}`}>{dayOfContactQuery.data.contact.email}</a></p>}{dayOfContactQuery.data.contact.escalation && <p className="mt-2 text-fg-muted">{dayOfContactQuery.data.contact.escalation}</p>}</CardContent></Card>}
           <Card><CardHeader><CardTitle>Event Week updates</CardTitle><CardDescription>Important venue-approved updates for your wedding week.</CardDescription></CardHeader><CardContent className="space-y-2">{coupleUpdatesQuery.data?.updates?.length ? coupleUpdatesQuery.data.updates.map((update: any) => <div key={update.id} className="rounded border border-border p-3 text-sm"><strong>{update.title}</strong>{update.critical ? <span className="ml-2 text-warning">Action requested</span> : null}<p className="mt-1 text-fg-muted">{update.body}</p>{update.critical && !update.acknowledged_at && <Button className="mt-2" size="xs" onClick={() => acknowledgeUpdateMutation.mutate(update.id)}>I understand</Button>}{update.acknowledged_at && <p className="mt-2 text-xs text-success">Acknowledged</p>}</div>) : <p className="text-sm text-fg-muted">No Event Week updates right now.</p>}</CardContent></Card>

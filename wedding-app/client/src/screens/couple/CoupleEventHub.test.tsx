@@ -102,4 +102,27 @@ describe('CoupleEventHub', () => {
       expect(sdk.couple.deleteDocument).toHaveBeenCalledWith('e1', 'd1');
     });
   });
+
+  // Honest section states: a failed section query must not masquerade as
+  // "no data" — surface it and allow retry.
+  it('shows a retry banner when a section query fails instead of pretending it is empty', async () => {
+    const { sdk } = await import('../../sdk');
+    (sdk.couple.guests as any).mockRejectedValueOnce(new Error('network down'));
+    render(<CoupleEventHub eventId="e1" />, { wrapper: wrapper() });
+    await waitFor(() => {
+      expect(screen.getByRole('alert')).toBeTruthy();
+    });
+    expect(screen.getByText(/couldn.t load/i)).toBeTruthy();
+    expect(screen.getAllByText(/guest list/).length).toBeGreaterThanOrEqual(1);
+
+    const callsBefore = (sdk.couple.guests as any).mock.calls.length;
+    fireEvent.click(screen.getByRole('button', { name: /retry sections/i }));
+    await waitFor(() => {
+      expect((sdk.couple.guests as any).mock.calls.length).toBeGreaterThan(callsBefore);
+    });
+    // Retry succeeds → banner clears.
+    await waitFor(() => {
+      expect(screen.queryByRole('alert')).toBeNull();
+    });
+  });
 });
