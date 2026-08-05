@@ -35,7 +35,7 @@ import {
   Database,
   FileSpreadsheet,
 } from "lucide-react";
-import { sdk } from "../../sdk";
+import { sdk, downloadFile } from "../../sdk";
 import { useRouter } from "../../lib/router";
 import { formatDateOnly } from "../../lib/formatDate";
 import { PageBody, PageHeader } from "../../ui/AppShell";
@@ -387,7 +387,7 @@ export function EventDetail({ eventId, user }: Props & { user: any }) {
               </a>
             )}
             {perms[ACTION_PERMISSIONS.calendarExport] === true && (
-              <a href={`/api/events/${eventId}/export.ics`} download>
+              <a href={`/api/events/${eventId}/export.ics`} onClick={async (e) => { e.preventDefault(); try { await downloadFile(`/api/events/${eventId}/export.ics`, { filename: 'event-calendar.ics' }); } catch (err: any) { toast({ title: 'Could not export calendar', description: err?.message || 'Please try again.', variant: 'destructive' }); } }}>
                 <Button variant="outline">
                   <CalendarPlus className="h-3.5 w-3.5 mr-1" />
                   Add to Calendar

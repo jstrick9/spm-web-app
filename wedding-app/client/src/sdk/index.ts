@@ -12,7 +12,7 @@
  *   • messagesSdk wired (sdk.messages)
  *   • decorSdk wired (sdk.decor)
  */
-export { ApiError, api, getToken, setToken, subscribe, isServerReachable } from './client.js';
+export { ApiError, api, getToken, setToken, subscribe, isServerReachable, downloadFile } from './client.js';
 export type { ClientEvent, RequestOptions } from './client.js';
 export * from './types.js';
 

@@ -21,7 +21,7 @@ import { Input } from '../../ui/Input';
 import { Label } from '../../ui/Label';
 import { useToast } from '../../ui/Toast';
 import { usePrompt } from '../../ui/usePrompt';
-import { sdk } from '../../sdk';
+import { sdk, downloadFile } from '../../sdk';
 import type { SdkIntegration, SdkIntegrationProvider, IntegrationStatus } from '../../sdk/integrations';
 import type { SdkWebhook } from '../../sdk/webhooks';
 import { cn } from '../../ui/lib/cn';
@@ -551,13 +551,22 @@ function TroubleshootingTips({ webhook }: { webhook: SdkWebhook }) {
 }
 
 function DataExportCard({ orgId }: { orgId: string }) {
+  const { toast } = useToast();
+  /** Authenticated download: plain <a href> cannot send the JWT. */
+  const downloadAuth = async (url: string, filename?: string) => {
+    try {
+      await downloadFile(url, { filename });
+    } catch (err: any) {
+      toast({ title: 'Download failed', description: err?.message || 'Please try again.', variant: 'destructive' });
+    }
+  };
   return (
     <Card>
       <CardHeader><CardTitle className="text-base">Data export</CardTitle></CardHeader>
       <CardContent className="space-y-3">
-        <a href={`/api/orgs/${orgId}/export/guests.csv`} download><Button variant="outline" className="min-h-11 w-full justify-between group">Export All Guests (CSV) <ExternalLink className="h-4 w-4 text-fg-subtle group-hover:text-fg" /></Button></a>
-        <a href={`/api/orgs/${orgId}/export/financials.json`} download><Button variant="outline" className="min-h-11 w-full justify-between group">Export Financials (JSON) <ExternalLink className="h-4 w-4 text-fg-subtle group-hover:text-fg" /></Button></a>
-        <a href={`/api/orgs/${orgId}/export/vendors.csv`} download><Button variant="outline" className="min-h-11 w-full justify-between group">Export Vendors (CSV) <ExternalLink className="h-4 w-4 text-fg-subtle group-hover:text-fg" /></Button></a>
+        <a href={`/api/orgs/${orgId}/export/guests.csv`} onClick={(e) => { e.preventDefault(); downloadAuth(`/api/orgs/${orgId}/export/guests.csv`, 'guests.csv'); }}><Button variant="outline" className="min-h-11 w-full justify-between group">Export All Guests (CSV) <ExternalLink className="h-4 w-4 text-fg-subtle group-hover:text-fg" /></Button></a>
+        <a href={`/api/orgs/${orgId}/export/financials.json`} onClick={(e) => { e.preventDefault(); downloadAuth(`/api/orgs/${orgId}/export/financials.json`, 'financials.json'); }}><Button variant="outline" className="min-h-11 w-full justify-between group">Export Financials (JSON) <ExternalLink className="h-4 w-4 text-fg-subtle group-hover:text-fg" /></Button></a>
+        <a href={`/api/orgs/${orgId}/export/vendors.csv`} onClick={(e) => { e.preventDefault(); downloadAuth(`/api/orgs/${orgId}/export/vendors.csv`, 'vendors.csv'); }}><Button variant="outline" className="min-h-11 w-full justify-between group">Export Vendors (CSV) <ExternalLink className="h-4 w-4 text-fg-subtle group-hover:text-fg" /></Button></a>
       </CardContent>
     </Card>
   );

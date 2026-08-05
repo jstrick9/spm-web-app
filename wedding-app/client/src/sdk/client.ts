@@ -199,3 +199,64 @@ export const api = {
   patch:  <T>(p: string, body?: unknown, opts?: RequestOptions)  => request<T>('PATCH',  p, body,      opts),
   delete: <T>(p: string, body?: unknown, opts?: RequestOptions) => request<T>('DELETE', p, body,      opts),
 };
+
+/**
+ * Authenticated file download / open.
+ *
+ * Protected export endpoints (ICS, CSV, ZIP packets, PDFs) reject requests
+ * without the JWT. A plain `<a href="/api/...">` navigation cannot carry the
+ * Authorization header, so every download must go through fetch with the
+ * token, then hand the resulting Blob to the browser via an object URL.
+ *
+ * @param path        API path (e.g. `/api/events/e1/export.ics`)
+ * @param opts.open   When true, open the blob in a new tab (for viewing PDFs)
+ *                    instead of downloading it.
+ * @param opts.filename  Preferred filename; falls back to the server's
+ *                    Content-Disposition, then the URL's last segment.
+ */
+export async function downloadFile(
+  path: string,
+  opts: { open?: boolean; filename?: string } = {},
+): Promise<void> {
+  const headers: Record<string, string> = {};
+  const token = getToken();
+  if (token) headers['Authorization'] = `Bearer ${token}`;
+
+  let res: Response;
+  try {
+    res = await fetch(path, { method: 'GET', headers });
+  } catch {
+    markUnreachable();
+    throw new ApiError('offline', 0, 'network-error');
+  }
+  markReachable();
+
+  if (!res.ok) {
+    let body: ApiErrorBody | null = null;
+    try { body = (await res.json()) as ApiErrorBody; } catch { /* non-JSON error */ }
+    throw new ApiError(classifyStatus(res.status), res.status, body?.error ?? 'unknown', body ?? undefined);
+  }
+
+  const blob = await res.blob();
+  const disposition = res.headers.get('content-disposition') ?? '';
+  const match = /filename\*?=(?:UTF-8'')?"?([^";]+)"?/i.exec(disposition);
+  const serverFilename = match ? match[1].trim() : '';
+  const fallback = path.split('/').filter(Boolean).pop() ?? 'download';
+  const filename = opts.filename || serverFilename || fallback;
+
+  const url = URL.createObjectURL(blob);
+  if (opts.open) {
+    // 'noopener' keeps the new tab sandboxed; revoke after a delay so the
+    // browser has time to load the blob before the URL dies.
+    window.open(url, '_blank', 'noopener');
+    setTimeout(() => { try { URL.revokeObjectURL(url); } catch { /* noop */ } }, 60_000);
+    return;
+  }
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = filename;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  setTimeout(() => { try { URL.revokeObjectURL(url); } catch { /* noop */ } }, 60_000);
+}

@@ -24,7 +24,7 @@ import {
   MapPin,
   Star,
 } from "lucide-react";
-import { sdk } from "../../../sdk";
+import { sdk, downloadFile } from "../../../sdk";
 import { Button } from "../../../ui/Button";
 import { Input } from "../../../ui/Input";
 import { Card, CardContent, CardHeader, CardTitle } from "../../../ui/Card";
@@ -560,6 +560,13 @@ export function EventVendorsTab({ eventId, organizationId }: Props) {
                 target="_blank"
                 rel="noreferrer noopener"
                 className="text-[9px] text-brand font-bold hover:underline"
+                onClick={(e) => {
+                  // The asset endpoint requires the JWT; plain navigation 401s.
+                  e.preventDefault();
+                  downloadFile(`/api/assets/${coiReviewMeta(v).assetId}/content`, { open: true }).catch(() => {
+                    /* session may have expired; the app's session guard handles it */
+                  });
+                }}
               >
                 View COI file ↗
               </a>

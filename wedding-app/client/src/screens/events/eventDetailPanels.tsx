@@ -27,7 +27,7 @@ import {
   Database,
   FileSpreadsheet,
 } from "lucide-react";
-import { sdk } from "../../sdk";
+import { sdk, downloadFile } from "../../sdk";
 import { formatDateOnly } from "../../lib/formatDate";
 import { usePrompt } from "../../ui/usePrompt";
 import { AccessDenied } from "../../ui/AccessDenied";
@@ -559,6 +559,15 @@ export function OverviewTab({
 }
 
 export function ManagerDataImportExportPanel({ event, guestsCount, vendors, staffTasks }: { event: any; guestsCount: number; vendors: any[]; staffTasks: any[] }) {
+  const { toast } = useToast();
+  /** Authenticated download: plain <a href> cannot send the JWT. */
+  const downloadAuth = async (url: string, filename?: string) => {
+    try {
+      await downloadFile(url, { filename });
+    } catch (err: any) {
+      toast({ title: 'Download failed', description: err?.message || 'Please try again.', variant: 'destructive' });
+    }
+  };
   const [workflow, setWorkflow] = useState<'guests' | 'vendors' | 'timeline' | 'staff'>('guests');
   const [rawImport, setRawImport] = useState('');
   const managerMode = (() => { try { return localStorage.getItem('wvi_registration_role') === 'venue_manager'; } catch { return false; } })();
@@ -604,8 +613,8 @@ export function ManagerDataImportExportPanel({ event, guestsCount, vendors, staf
             <CardDescription>Manager-safe import guide, preview warnings, workflow CSV templates, and event-day packet export.</CardDescription>
           </div>
           <div className="flex flex-wrap gap-2">
-            <a href={`/api/events/${event.id}/export/operations-packet.zip`} download><Button size="sm"><DownloadCloud className="h-4 w-4" /> Export PDF/ZIP packet</Button></a>
-            <a href={`/api/events/${event.id}/export/day-of-packet.json`} download><Button size="sm" variant="outline"><DownloadCloud className="h-4 w-4" /> Export JSON packet</Button></a>
+            <a href={`/api/events/${event.id}/export/operations-packet.zip`} onClick={(e) => { e.preventDefault(); downloadAuth(`/api/events/${event.id}/export/operations-packet.zip`, 'operations-packet.zip'); }}><Button size="sm"><DownloadCloud className="h-4 w-4" /> Export PDF/ZIP packet</Button></a>
+            <a href={`/api/events/${event.id}/export/day-of-packet.json`} onClick={(e) => { e.preventDefault(); downloadAuth(`/api/events/${event.id}/export/day-of-packet.json`, 'day-of-packet.json'); }}><Button size="sm" variant="outline"><DownloadCloud className="h-4 w-4" /> Export JSON packet</Button></a>
           </div>
         </div>
       </CardHeader>
