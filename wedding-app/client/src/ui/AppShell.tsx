@@ -212,7 +212,14 @@ export function AppShell({
   const dayOfEventId = eventMatch?.[1];
   const managerMode = (() => { try { return localStorage.getItem('wvi_registration_role') === 'venue_manager'; } catch { return false; } })();
   const showDayOfShell = managerMode && (managerDayMode || !!dayOfEventId);
-  const lastSyncedAt = useMemo(() => new Date().toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' }), [currentPath, syncStatus.queueSize, effectiveOffline]);
+  // Honest "last synced": the timestamp of the newest successful request
+  // (syncMonitor records every request-success). Previously this was
+  // `new Date()` on every render — implying fresh sync when nothing had
+  // synced at all.
+  const lastSyncedAt = useMemo(() => {
+    const last = syncStatus.recentRequests.find((r) => r.ok);
+    return last ? new Date(last.ts).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' }) : '—';
+  }, [syncStatus.recentRequests, effectiveOffline]);
 
   useEffect(() => {
     try { localStorage.setItem('wvi_manager_day_mode', String(managerDayMode)); } catch {}
