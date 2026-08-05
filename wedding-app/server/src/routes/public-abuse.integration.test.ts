@@ -60,6 +60,19 @@ describe('Public endpoint abuse controls', () => {
     expect(auditActions()).toContain('public.abuse.nps.blocked');
   });
 
+  it('dedupes NPS by device session (score inflation guard)', async () => {
+    const s = await setup();
+    const first = await app.inject({ method: 'POST', url: `/api/public/events/${s.eventId}/nps`,
+      payload: { score: 10, comment: 'Amazing' },
+      headers: { 'content-type': 'application/json' } });
+    expect(first.statusCode).toBe(200);
+    const dup = await app.inject({ method: 'POST', url: `/api/public/events/${s.eventId}/nps`,
+      payload: { score: 0, comment: 'Inflated' },
+      headers: { 'content-type': 'application/json' } });
+    expect(dup.statusCode).toBe(400);
+    expect(dup.json().error).toBe('already-submitted');
+  });
+
   it('rejects public poll vote honeypot submissions and audits the block', async () => {
     const s = await setup();
     const poll = { id: 'poll-1', question: 'Song?', status: 'active', options: [{ id: 'opt-1', text: 'A', votes: 0 }] };

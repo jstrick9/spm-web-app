@@ -132,6 +132,16 @@ export async function feedbackRoutes(app: FastifyInstance) {
     if (typeof score !== 'number' || score < 0 || score > 10) {
       throw BadRequest('score-range-0-10');
     }
+    // One NPS response per device session per event — otherwise a single
+    // actor can skew the venue's scorecard by re-submitting (rate limiting
+    // alone caps abuse at 10/min).
+    const session = publicRequestFingerprint(req);
+    const npsSessions: string[] = Array.isArray(meta.npsSessions) ? meta.npsSessions : [];
+    if (npsSessions.includes(session)) throw BadRequest('already-submitted');
+    npsSessions.push(session);
+    if (npsSessions.length > 500) npsSessions.splice(0, npsSessions.length - 500);
+    meta.npsSessions = npsSessions;
+
     const npsResponse = {
       id: uuid(),
       score,
