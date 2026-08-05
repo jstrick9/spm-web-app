@@ -56,8 +56,9 @@ describe('jobsRepo', () => {
     const after = jobsRepo.findById(job.id)!;
     expect(after.status).toBe('pending');
     expect(after.last_error).toBe('transient');
-    // run_at advanced into the future
-    expect(new Date(after.run_at + 'Z').getTime()).toBeGreaterThan(Date.now() - 1000);
+    // run_at advanced into the future (ISO format; tolerate legacy space format)
+    const runAtMs = new Date(after.run_at.includes('T') ? after.run_at : after.run_at + 'Z').getTime();
+    expect(runAtMs).toBeGreaterThan(Date.now() - 1000);
   });
 
   it('markFailed marks dead after max_attempts', () => {

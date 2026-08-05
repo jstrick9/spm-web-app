@@ -207,10 +207,14 @@ export async function scanUpcomingDeadlines(): Promise<{
 
     const offsetDays = rsvpAuto.offset_days ?? 7;
 
-    // Events whose deadline is exactly `offsetDays` days from now
+    // Events whose deadline is exactly `offsetDays` days from now.
+    // rsvp_deadline is a LOCAL calendar date (YYYY-MM-DD from the date
+    // picker); deriving the target with toISOString() (UTC) shifts the
+    // comparison by one day in US timezones, firing reminders a day late.
     const targetDate = new Date(now);
     targetDate.setDate(targetDate.getDate() + offsetDays);
-    const targetDateStr = targetDate.toISOString().slice(0, 10);
+    const targetDateStr =
+      `${targetDate.getFullYear()}-${String(targetDate.getMonth() + 1).padStart(2, '0')}-${String(targetDate.getDate()).padStart(2, '0')}`;
 
     const events = eventsRepo.listForOrg(orgId, { status: ['booked', 'planning'] });
     for (const event of events) {
