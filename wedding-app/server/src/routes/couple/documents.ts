@@ -136,7 +136,7 @@ export async function coupleDocumentsRoutes(app: FastifyInstance) {
     if (!event) throw NotFound('event-not-found');
     const orgMap = eventsRepo.orgMapForUser(req.auth!.userId);
     if (!can(req.auth!.memberships, { eventId }, 'events.view', orgMap)) throw Forbidden();
-    const docs = coupleDocumentsRepo.listForEvent(eventId).map(safeDocument);
+    const docs = visibleDocumentsFor(coupleDocumentsRepo.listForEvent(eventId), req.auth!.memberships, eventId).map(safeDocument);
     const text = [`${event.title} — Shared Final Wedding Document Packet`, '', ...docs.map((doc) => [`${doc.filename} v${doc.version}`, `Category: ${doc.category}`, `Visibility: ${doc.visibility}`, `Approval: ${doc.approvalStatus}`, `URL: ${doc.url}`, doc.extractedSummary ? `Review summary: ${doc.extractedSummary}` : ''].filter(Boolean).join('\n'))].join('\n\n---\n\n');
     reply.header('Content-Type', 'text/plain');
     reply.header('Content-Disposition', `attachment; filename="couple_final_document_packet_${eventId}.txt"`);
