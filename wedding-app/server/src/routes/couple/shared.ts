@@ -510,7 +510,16 @@ export function couplePostEventSummary(input: {
   // approved gallery documents; private storage paths are never emitted.
   const galleryDocs = documents
     .filter((d) => d.category === 'post_event_gallery' && d.visibility === 'guest_visible' && d.approval_status === 'approved')
-    .map((d) => ({ id: d.id, filename: d.filename, url: `/api/events/${event.id}/couple-documents/${d.id}/content`, approvalStatus: d.approval_status, notes: d.notes }));
+    .map((d) => ({
+      id: d.id,
+      filename: d.filename,
+      url: `/api/events/${event.id}/couple-documents/${d.id}/content`,
+      // Shareable link for guests (public, rate-limited, doc must remain
+      // approved + guest_visible to stay reachable).
+      guestUrl: `/api/portal/${event.id}/post-event-gallery/${d.id}`,
+      approvalStatus: d.approval_status,
+      notes: d.notes,
+    }));
   const photoLinks = [
     ...(postEvent.photoGalleryUrl ? [{ label: 'Photo gallery', url: postEvent.photoGalleryUrl }] : []),
     ...(postEvent.memoryShareUrl ? [{ label: 'Memory/photo sharing link', url: postEvent.memoryShareUrl }] : []),

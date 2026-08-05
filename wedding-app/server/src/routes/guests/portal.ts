@@ -1,9 +1,11 @@
-import { auditRepo, eventsRepo, guestsRepo, jobsRepo, layoutsRepo, orgsRepo, portalConfigRepo, rsvpRepo, subEventsRepo, timelineRepo } from '../../db/repos/index.js';
+import { auditRepo, coupleDocumentsRepo, eventsRepo, guestsRepo, jobsRepo, layoutsRepo, orgsRepo, portalConfigRepo, rsvpRepo, subEventsRepo, timelineRepo } from '../../db/repos/index.js';
 import { db } from '../../db/database.js';
 import { hashPassword, verifyPassword, uuid } from '../../lib/crypto.js';
 import { can } from '../../lib/rbac.js';
 import { broadcastSSE } from '../sse.js';
 import { BadRequest, NotFound } from '../../lib/errors.js';
+import { privateFilePath } from '../../lib/fileStorage.js';
+import { createReadStream, existsSync } from 'node:fs';
 import { assertNoPublicHoneypot, auditPublicSubmission, publicRequestFingerprint } from '../../lib/publicAbuse.js';
 import type { FastifyInstance } from 'fastify';
 import { rsvpSchema, guestLookupSchema, guestHelpSchema, guestQuestionSchema, guestAccessibilityRequestSchema, guestPrivacyRequestSchema, guestReminderPreferencesSchema, guestDayOfHelpSchema, guestMemorySubmissionSchema, guestPostEventFeedbackSchema, guestResendSchema, guestMetadata, guestHouseholdKey, publicGuest, normalizeGuestPostEvent, normalizeGuestDayOf, normalizeGuestReminders, normalizeGuestPrivacy, normalizeGuestCare, normalizeGuestGifts, normalizeGuestFaq, normalizeWayfindingLabels, safeGuestLayoutPayload, verifyGuestPortalToken, activeSmtpIntegrationId, activeSmsIntegrationId, addDaysIso, escapeHtml, isGuestTimelineItem, safeGuestTimelineItem, eventTimezone, guestCalendarIcs, safeGuestHelpRequest, safeGuestHelpReply } from './shared.js';
@@ -190,7 +192,11 @@ export async function guestPortalRoutes(app: FastifyInstance) {
         weatherRainPlanNote: portalConfig.weatherRainPlanNote || eventMetadata.weatherRainPlanNote || '',
         offlineCardUrl: `/api/portal/${eventId}/travel-card.txt${tokenGuest && q.token ? `?guest=${encodeURIComponent(tokenGuest.id)}&token=${encodeURIComponent(q.token)}` : ''}`,
       },
-      guestPostEvent: normalizeGuestPostEvent(portalConfig, eventMetadata, event),
+      guestPostEvent: normalizeGuestPostEvent(portalConfig, eventMetadata, event, {
+        galleryDocuments: coupleDocumentsRepo.listForEvent(eventId)
+          .filter((d) => d.category === 'post_event_gallery' && d.visibility === 'guest_visible' && d.approval_status === 'approved')
+          .map((d) => ({ id: d.id, filename: d.filename, mimeType: d.mime_type, url: `/api/portal/${eventId}/post-event-gallery/${d.id}`, notes: d.notes })),
+      }),
       guestDayOf: normalizeGuestDayOf(portalConfig, eventMetadata, eventId, tokenGuest, q.token),
       guestReminders: normalizeGuestReminders(portalConfig, eventMetadata, event.organization_id, eventId, tokenGuest),
       guestPrivacy: normalizeGuestPrivacy(portalConfig, eventMetadata, identityPayload),
@@ -209,6 +215,22 @@ export async function guestPortalRoutes(app: FastifyInstance) {
       subEvents,
       timeline,
     };
+  });
+
+  // Guest-visible post-event gallery documents. The venue explicitly opts a
+  // document in (category post_event_gallery + visibility guest_visible +
+  // approved); only those are streamed, and only with nosniff headers so a
+  // mislabeled file can never render as HTML in a guest browser.
+  app.get('/api/portal/:eventId/post-event-gallery/:documentId', { config: { rateLimit: { max: 60, timeWindow: '1 minute' } } }, async (req, reply) => {
+    const { eventId, documentId } = req.params as { eventId: string; documentId: string };
+    const document = coupleDocumentsRepo.findById(documentId);
+    if (!document || document.event_id !== eventId) throw NotFound('document-not-found');
+    if (document.category !== 'post_event_gallery' || document.visibility !== 'guest_visible' || document.approval_status !== 'approved') throw NotFound('document-not-found');
+    const path = privateFilePath(document.url);
+    if (!path || !existsSync(path)) throw NotFound('document-file-not-found');
+    reply.header('Content-Type', document.mime_type || 'application/octet-stream');
+    reply.header('Content-Disposition', `inline; filename="${document.filename.replace(/[\"\\\r\n]/g, '_')}"`);
+    return reply.send(createReadStream(path));
   });
 
   app.post('/api/portal/:eventId/lookup', { config: { rateLimit: { max: 20, timeWindow: '1 minute' } } }, async (req) => {

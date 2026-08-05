@@ -140,6 +140,7 @@ export interface PortalInfoResponse {
     thankYouTitle: string;
     thankYouMessage: string;
     links: Array<{ id: string; label: string; url: string; description: string }>;
+    galleryDocuments?: Array<{ id: string; filename: string; mimeType: string | null; url: string; notes: string | null }>;
     uploadEnabled: boolean;
     moderationCopy: string;
     consentCopy: string;

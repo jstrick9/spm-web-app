@@ -208,7 +208,12 @@ export function publicGuest(g: NonNullable<ReturnType<typeof guestsRepo.findById
 
 
 
-export function normalizeGuestPostEvent(portalConfig: Record<string, any>, metadata: Record<string, any>, event: any) {
+export function normalizeGuestPostEvent(
+  portalConfig: Record<string, any>,
+  metadata: Record<string, any>,
+  event: any,
+  extra: { galleryDocuments?: Array<{ id: string; filename: string; mimeType: string | null; url: string; notes: string | null }> } = {},
+) {
   const start = event.start_date ? new Date(event.start_date).getTime() : 0;
   const afterEvent = start ? Date.now() >= start : false;
   const linksRaw = Array.isArray(portalConfig.memoryPhotoLinks) ? portalConfig.memoryPhotoLinks : Array.isArray(metadata.memoryPhotoLinks) ? metadata.memoryPhotoLinks : [];
@@ -221,6 +226,7 @@ export function normalizeGuestPostEvent(portalConfig: Record<string, any>, metad
     thankYouTitle: String(portalConfig.postEventThankYouTitle || metadata.postEventThankYouTitle || 'Thank you for celebrating with us'),
     thankYouMessage: String(portalConfig.postEventThankYouMessage || metadata.postEventThankYouMessage || 'We are grateful you joined the celebration.'),
     links: links.slice(0, 12),
+    galleryDocuments: (extra.galleryDocuments ?? []).slice(0, 12),
     uploadEnabled: portalConfig.guestPhotoUploadEnabled !== false,
     moderationCopy: String(portalConfig.guestPhotoModerationCopy || 'Guest-submitted photos/links are reviewed before they are shared with the couple, gallery, or venue team.'),
     consentCopy: String(portalConfig.guestPhotoConsentCopy || 'By submitting a photo/link, you confirm you have permission to share it and understand it may be reviewed by the couple/venue team before publication.'),
