@@ -134,6 +134,36 @@ describe('CP-01 — couple-write authorization', () => {
       headers: staffAuth,
     });
     expect(staffDoc.statusCode).toBe(403);
+
+    // Visibility enforcement on read: the couple uploads a private doc and
+    // a couple_venue doc; venue staff must NOT see/read the private one.
+    const privateDoc = await app.inject({
+      method: 'POST', url: `/api/events/${eventId}/couple-documents`,
+      payload: { filename: 'private.pdf', dataUri: 'data:application/pdf;base64,JVBERi0xLjQ=', mimeType: 'application/pdf', category: 'insurance', visibility: 'couple' },
+      headers: coupleAuth,
+    });
+    expect(privateDoc.statusCode).toBe(201);
+    const sharedDoc = await app.inject({
+      method: 'POST', url: `/api/events/${eventId}/couple-documents`,
+      payload: { filename: 'shared.pdf', dataUri: 'data:application/pdf;base64,JVBERi0xLjQ=', mimeType: 'application/pdf', category: 'menu', visibility: 'couple_venue' },
+      headers: coupleAuth,
+    });
+    expect(sharedDoc.statusCode).toBe(201);
+
+    const staffList = await app.inject({ method: 'GET', url: `/api/events/${eventId}/couple-documents`, headers: { authorization: `Bearer ${staff.token}` } });
+    expect(staffList.statusCode).toBe(200);
+    const staffNames = staffList.json().documents.map((d: any) => d.filename);
+    expect(staffNames).toContain('shared.pdf');
+    expect(staffNames).not.toContain('private.pdf');
+
+    const staffReadPrivate = await app.inject({ method: 'GET', url: `/api/events/${eventId}/couple-documents/${privateDoc.json().document.id}/content`, headers: { authorization: `Bearer ${staff.token}` } });
+    expect(staffReadPrivate.statusCode).toBe(404);
+    const staffReadShared = await app.inject({ method: 'GET', url: `/api/events/${eventId}/couple-documents/${sharedDoc.json().document.id}/content`, headers: { authorization: `Bearer ${staff.token}` } });
+    expect(staffReadShared.statusCode).toBe(200);
+
+    // The couple still sees both.
+    const coupleList = await app.inject({ method: 'GET', url: `/api/events/${eventId}/couple-documents`, headers: coupleAuth });
+    expect(coupleList.json().documents.map((d: any) => d.filename)).toEqual(expect.arrayContaining(['private.pdf', 'shared.pdf']));
   });
 });
 

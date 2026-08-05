@@ -9,6 +9,23 @@ import type { FastifyInstance } from 'fastify';
 import { canWriteCoupleData, coupleDocumentUpdateSchema, coupleDocumentUploadSchema, extractDocumentSummary, safeDocument } from './shared.js';
 import { broadcastSSE } from '../sse.js';
 
+/**
+ * Document visibility per requester (the visibility field exists so docs
+ * can be shared selectively — enforce it server-side):
+ *   - couple-role members of the event see everything;
+ *   - venue staff (events.view) see couple_venue / planner / vendor /
+ *     guest_visible — NEVER 'couple'-private documents.
+ */
+function visibleDocumentsFor<T extends { visibility: string }>(
+  documents: T[],
+  memberships: Array<{ eventId?: string; roleKey?: string }>,
+  eventId: string,
+): T[] {
+  const isCoupleMember = memberships.some((m) => m.eventId === eventId && String(m.roleKey).toLowerCase() === 'couple');
+  if (isCoupleMember) return documents;
+  return documents.filter((d) => d.visibility !== 'couple');
+}
+
 export async function coupleDocumentsRoutes(app: FastifyInstance) {
   app.get('/api/events/:eventId/couple-documents/:documentId/content', { preHandler: requireAuth }, async (req, reply) => {
     const { eventId, documentId } = req.params as { eventId: string; documentId: string };
@@ -18,6 +35,9 @@ export async function coupleDocumentsRoutes(app: FastifyInstance) {
     if (!can(req.auth!.memberships, { eventId }, 'events.view', orgMap)) throw Forbidden();
     const document = coupleDocumentsRepo.findById(documentId);
     if (!document || document.event_id !== eventId) throw NotFound('document-not-found');
+    // Visibility enforcement: venue staff must not read couple-private docs.
+    const isCoupleMember = req.auth!.memberships.some((m) => m.eventId === eventId && String(m.roleKey).toLowerCase() === 'couple');
+    if (!isCoupleMember && document.visibility === 'couple') throw NotFound('document-not-found');
     const path = privateFilePath(document.url);
     if (!path) return reply.redirect(document.url);
     if (!existsSync(path)) throw NotFound('document-file-not-found');
@@ -32,7 +52,8 @@ export async function coupleDocumentsRoutes(app: FastifyInstance) {
     if (!event) throw NotFound('event-not-found');
     const orgMap = eventsRepo.orgMapForUser(req.auth!.userId);
     if (!can(req.auth!.memberships, { eventId }, 'events.view', orgMap)) throw Forbidden();
-    const documents = coupleDocumentsRepo.listForEvent(eventId).map(safeDocument);
+    const all = coupleDocumentsRepo.listForEvent(eventId);
+    const documents = visibleDocumentsFor(all, req.auth!.memberships, eventId).map(safeDocument);
     const counts = documents.reduce((acc: Record<string, number>, doc) => { acc[doc.category] = (acc[doc.category] || 0) + 1; return acc; }, {});
     return {
       documents,
