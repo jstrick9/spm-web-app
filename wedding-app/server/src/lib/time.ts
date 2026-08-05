@@ -40,3 +40,23 @@ export function localDateString(date = new Date()): string {
   const d = String(date.getDate()).padStart(2, '0');
   return `${date.getFullYear()}-${m}-${d}`;
 }
+
+/**
+ * Human-readable calendar date for user-facing documents (travel cards,
+ * packet text exports). Renders "September 12, 2026" for YYYY-MM-DD and
+ * ISO values; never throws on garbage input (falls back to the raw value).
+ */
+export function formatDateLong(value: string | null | undefined): string {
+  if (!value) return 'TBD';
+  const m = /^(\d{4})-(\d{2})-(\d{2})/.exec(value);
+  if (m) {
+    const [, y, mo, d] = m;
+    const parsed = new Date(Date.UTC(Number(y), Number(mo) - 1, Number(d)));
+    if (!Number.isNaN(parsed.getTime())) {
+      return parsed.toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric', timeZone: 'UTC' });
+    }
+  }
+  const parsed = new Date(value);
+  if (Number.isNaN(parsed.getTime())) return value;
+  return parsed.toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' });
+}

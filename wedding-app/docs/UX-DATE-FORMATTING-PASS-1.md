@@ -45,3 +45,18 @@ Applied at every raw-date render site found by sweep:
   TBD fallbacks, unknown-string passthrough.
 - `EventDetail.test.tsx` updated to assert the formatted date.
 - Full client suite green: 905 tests / 135 files.
+
+## Server-side text exports (follow-up)
+
+Guest-facing text files still showed raw `YYYY-MM-DD`:
+
+- `POST-event final packet` (`routes/couple/postEvent.ts`) — "Wedding date:"
+- Guest offline travel card + event-day pass (`routes/guests/portal.ts`)
+- Couple travel-microsite packet (`routes/couple/planning.ts`)
+
+New server helper `formatDateLong()` in `lib/time.ts` (mirror of the client
+`formatDateOnly`; timezone-safe, never throws). Applied to all three.
+
+**Tests:** `server/src/lib/time.test.ts` (4, incl. formatDateLong cases);
+`routes/portal-flow.integration.test.ts` test 9 asserts the travel card
+renders "September 12, 2026" and no raw date. Server suite: 660 tests.

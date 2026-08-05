@@ -1,6 +1,7 @@
 import { auditRepo, catalogRepo, contractsRepo, coupleAppointmentsRepo, coupleDocumentsRepo, couplePlanningRepo, coupleRequestsRepo, eventsRepo, guestsRepo, jobsRepo, layoutsRepo, messagesRepo, paymentLinksRepo, rolesRepo, subEventsRepo, teamInvitationsRepo, timelineRepo, usersRepo, vendorsRepo, venuesRepo } from '../../db/repos/index.js';
 import { localDateString } from '../../lib/time.js';
 import { icsText } from '../../lib/ics.js';
+import { formatDateLong } from '../../lib/time.js';
 import { deliverTeamInvitation } from '../../lib/teamInviteDelivery.js';
 import { db } from '../../db/database.js';
 import { uuid } from '../../lib/crypto.js';
@@ -64,7 +65,7 @@ export async function couplePlanningRoutes(app: FastifyInstance) {
     const plan = summary.plan as any;
     const packet = [
       `${event.title} — Personalized guest travel microsite packet`,
-      `Wedding date: ${event.start_date || 'TBD'}`,
+      `Wedding date: ${formatDateLong(event.start_date)}`,
       '',
       `Welcome: ${plan.travelMicrosite?.welcome || 'Welcome family and friends.'}`,
       `Travel tips: ${plan.travelMicrosite?.travelTips || 'Venue travel guidance pending.'}`,

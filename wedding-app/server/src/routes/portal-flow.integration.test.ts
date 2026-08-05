@@ -544,4 +544,14 @@ describe('Public portal: full RSVP flow', () => {
     // theme may be null if no config set, but the field should exist
     expect(res.json()).toHaveProperty('theme');
   });
+
+  it('9. Offline travel card renders human-readable dates', async () => {
+    const s = await setupEvent();
+    const res = await app.inject({ method: 'GET', url: `/api/portal/${s.eventId}/travel-card.txt` });
+    expect(res.statusCode).toBe(200);
+    expect(res.headers['content-type']).toContain('text/plain');
+    // "2026-09-12" (raw) must not appear; "September 12, 2026" must.
+    expect(res.body).toContain('Date: September 12, 2026');
+    expect(res.body).not.toContain('Date: 2026-09-12');
+  });
 });

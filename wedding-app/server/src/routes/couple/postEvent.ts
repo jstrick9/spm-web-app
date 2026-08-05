@@ -1,6 +1,7 @@
 import { auditRepo, coupleRequestsRepo, eventsRepo, jobsRepo, usersRepo } from '../../db/repos/index.js';
 import { db } from '../../db/database.js';
 import { uuid } from '../../lib/crypto.js';
+import { formatDateLong } from '../../lib/time.js';
 import { requireAuth } from '../../middleware/auth.js';
 import { can } from '../../lib/rbac.js';
 import { BadRequest, Forbidden, NotFound } from '../../lib/errors.js';
@@ -228,7 +229,7 @@ export async function couplePostEventRoutes(app: FastifyInstance) {
     const summary = couplePostEventSummary({ event, userId: req.auth!.userId });
     const packet = [
       `${event.title} — Post-event final packet`,
-      `Wedding date: ${event.start_date || 'TBD'}`,
+      `Wedding date: ${formatDateLong(event.start_date)}`,
       '',
       'Closeout checklist',
       ...summary.closeoutItems.map((item) => `- ${item.label}: ${item.status} — ${item.detail}`),

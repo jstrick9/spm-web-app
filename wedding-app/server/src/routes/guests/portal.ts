@@ -1,5 +1,6 @@
 import { auditRepo, coupleDocumentsRepo, eventsRepo, guestsRepo, jobsRepo, layoutsRepo, orgsRepo, portalConfigRepo, rsvpRepo, subEventsRepo, timelineRepo } from '../../db/repos/index.js';
 import { appPublicBaseUrl } from '../../lib/appBaseUrl.js';
+import { formatDateLong } from '../../lib/time.js';
 import { icsText } from '../../lib/ics.js';
 import { db } from '../../db/database.js';
 import { hashPassword, verifyPassword, uuid } from '../../lib/crypto.js';
@@ -495,7 +496,7 @@ export async function guestPortalRoutes(app: FastifyInstance) {
     const lines = [
       `${event.title} — Offline guest event-day pass`,
       `Guest: ${tokenValid ? guest!.full_name : 'Use secure link for personalized pass'}`,
-      `Date: ${event.start_date || 'TBD'}`,
+      `Date: ${formatDateLong(event.start_date)}`,
       `Address: ${portalConfig.venueAddress || metadata.venueAddress || metadata.location || org?.name || 'TBD'}`,
       `Table: ${tokenValid ? (guest!.table_assignment || 'Not assigned yet') : 'Use secure link'}`,
       `Seat: ${tokenValid ? (guest!.seat_assignment || 'Not assigned yet') : 'Use secure link'}`,
@@ -541,7 +542,7 @@ export async function guestPortalRoutes(app: FastifyInstance) {
     const lines = [
       `${event.title} — Offline guest travel card`,
       `Guest: ${tokenValid ? guest!.full_name : 'Use your secure link for personalized details'}`,
-      `Date: ${event.start_date || 'TBD'}`,
+      `Date: ${formatDateLong(event.start_date)}`,
       `Venue/address: ${travel.venueAddress || 'TBD'}`,
       `Map link: ${travel.mapUrl || 'TBD'}`,
       `Parking entrance: ${travel.parkingEntrance || 'TBD'}`,
