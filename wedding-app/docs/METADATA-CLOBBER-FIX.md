@@ -33,11 +33,14 @@ object back on every change. Consequence:
 
 - `events-module.integration.test.ts` +1: writer A logs an incident,
   writer B (stale base) updates the kit checklist — **both survive**;
-  nested-object merge keeps sibling keys; arrays still replace (RFC 7386).
+  nested-object merge keeps sibling keys; arrays still replace (RFC 7386);
+  same guard asserted for sub-event metadata.
+- `guests-module.integration.test.ts` +1: couple hub meal-choice metadata
+  and guest-portal reminder preferences (two stale writers) both survive.
 - `EventEmergencyTab.test.tsx` +1: a "concurrent tablet" incident appears
   in the write payload after toggling a kit item (refresh-before-write).
 
 ## Verification
 
-- Server **569 tests / 80 files** · Client **886 tests / 134 files**.
+- Server **570 tests / 80 files** · Client **886 tests / 134 files**.
 - `tsc --noEmit` clean both apps; client build + bundle budgets satisfied.
