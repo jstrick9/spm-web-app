@@ -37,6 +37,7 @@ import {
 } from "lucide-react";
 import { sdk } from "../../sdk";
 import { useRouter } from "../../lib/router";
+import { formatDateOnly } from "../../lib/formatDate";
 import { PageBody, PageHeader } from "../../ui/AppShell";
 import { AccessDenied } from "../../ui/AccessDenied";
 import { Badge } from "../../ui/Badge";
@@ -327,9 +328,9 @@ export function EventDetail({ eventId, user }: Props & { user: any }) {
             {event.start_date && (
               <span className="inline-flex items-center gap-1.5">
                 <Calendar className="h-3.5 w-3.5" />
-                {event.start_date}
+                {formatDateOnly(event.start_date)}
                 {event.end_date && event.end_date !== event.start_date
-                  ? ` – ${event.end_date}`
+                  ? ` – ${formatDateOnly(event.end_date)}`
                   : ""}
               </span>
             )}

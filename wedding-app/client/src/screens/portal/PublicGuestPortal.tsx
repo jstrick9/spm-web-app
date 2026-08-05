@@ -25,6 +25,7 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '../..
 import { Button }                  from '../../ui/Button';
 import { Label }                   from '../../ui/Label';
 import { usePrompt }              from '../../ui/usePrompt';
+import { formatDateOnly }       from '../../lib/formatDate';
 import { Map as MapIcon, Home, Send, CloudRain, HelpCircle, Bus, Gift, Mail, Contrast, Languages, RefreshCw, ShieldAlert, Type } from 'lucide-react';
 import { Badge }                   from '../../ui/Badge';
 import { cn }                      from '../../ui/lib/cn';
@@ -313,9 +314,9 @@ export function PublicGuestPortal({ eventId }: { eventId: string }) {
     const lines = [
       `${info.title} — Guest event details`,
       `Type: ${guestHome?.eventType || info.eventType || 'wedding'}`,
-      `Date: ${info.startDate || 'TBD'}`,
+      `Date: ${info.startDate ? formatDateOnly(info.startDate) : 'TBD'}`,
       `Location: ${guestHome?.locationSummary || info.locationSummary || 'Venue details pending'}`,
-      `RSVP deadline: ${guestHome?.rsvpDeadline || info.rsvpDeadline || 'TBD'}`,
+      `RSVP deadline: ${guestHome?.rsvpDeadline || info.rsvpDeadline ? formatDateOnly(guestHome?.rsvpDeadline || info.rsvpDeadline) : 'TBD'}`,
       activeGuest ? `Guest: ${activeGuest.fullName}` : 'Guest: not selected yet',
       activeGuest?.tableAssignment ? `Table: ${activeGuest.tableAssignment}` : '',
       activeGuest?.seatAssignment ? `Seat: ${activeGuest.seatAssignment}` : '',

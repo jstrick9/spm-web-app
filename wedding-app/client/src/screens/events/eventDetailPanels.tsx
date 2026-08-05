@@ -28,6 +28,7 @@ import {
   FileSpreadsheet,
 } from "lucide-react";
 import { sdk } from "../../sdk";
+import { formatDateOnly } from "../../lib/formatDate";
 import { usePrompt } from "../../ui/usePrompt";
 import { AccessDenied } from "../../ui/AccessDenied";
 import { Badge } from "../../ui/Badge";
@@ -695,7 +696,7 @@ export function ManagerEventWorkspaceHome({
       ).replace(/_/g, " "),
     ],
     ["Expected guests", String(event.guest_count || totalGuests || "TBD")],
-    ["Start date", event.start_date ? `Event date ${event.start_date}` : "TBD"],
+    ["Start date", event.start_date ? `Event date ${formatDateOnly(event.start_date)}` : "TBD"],
     [
       "Layout",
       layoutReady

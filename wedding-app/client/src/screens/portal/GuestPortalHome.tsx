@@ -6,6 +6,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../..
 import { Input } from '../../ui/Input';
 import { Label } from '../../ui/Label';
 import { sdk } from '../../sdk';
+import { formatDateOnly } from '../../lib/formatDate';
 import type { PortalGuestEntry, PortalInfoResponse } from '../../sdk/portalTypes';
 
 type Palette = {
@@ -154,7 +155,7 @@ function GuestEventDashboard({ info, guestHome, activeGuest, palette, setActiveT
           <SummaryTile label="Location" value={guestHome?.locationSummary || info.locationSummary || 'Venue details pending'} palette={palette} />
           <SummaryTile label="Last updated" value={guestHome?.lastUpdatedAt || info.lastUpdatedAt ? new Date((guestHome?.lastUpdatedAt || info.lastUpdatedAt)!).toLocaleDateString() : 'Recently'} palette={palette} />
         </div>
-        {(guestHome?.rsvpDeadline || info.rsvpDeadline || guestHome?.editWindowDays !== null) && <div className="rounded-xl border border-warning/30 bg-warning-soft/20 p-3 text-warning"><strong>RSVP deadline:</strong> {guestHome?.rsvpDeadline || info.rsvpDeadline || 'Check invitation'}{guestHome?.editWindowDays != null ? ` · Edits may close ${guestHome.editWindowDays} day(s) before the event.` : ''}</div>}
+        {(guestHome?.rsvpDeadline || info.rsvpDeadline || guestHome?.editWindowDays !== null) && <div className="rounded-xl border border-warning/30 bg-warning-soft/20 p-3 text-warning"><strong>RSVP deadline:</strong> {formatDateOnly(guestHome?.rsvpDeadline || info.rsvpDeadline) || 'Check invitation'}{guestHome?.editWindowDays != null ? ` · Edits may close ${guestHome.editWindowDays} day(s) before the event.` : ''}</div>}
         <div className="grid gap-2 sm:grid-cols-3 lg:grid-cols-6">
           <Button type="button" aria-label="Open RSVP" onClick={() => setActiveTab('rsvp')}>RSVP</Button>
           <Button type="button" variant="outline" onClick={() => document.getElementById('guest-schedule-info')?.scrollIntoView({ behavior: 'smooth' })}>Schedule</Button>

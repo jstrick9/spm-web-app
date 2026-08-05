@@ -114,7 +114,7 @@ describe('EventDetail', () => {
   it('renders event date and guest count', async () => {
     render(<EventDetail eventId="e1" user={{ id: 'u1', email: 'test@x.com' }} />, { wrapper: wrap() });
     await waitFor(() => {
-      expect(screen.getByText('2026-09-12')).toBeTruthy();
+      expect(screen.getByText('September 12, 2026')).toBeTruthy();
       expect(screen.getByText(/120 guests/)).toBeTruthy();
     });
   });
