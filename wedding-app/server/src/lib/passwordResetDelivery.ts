@@ -1,4 +1,5 @@
 import { jobsRepo, integrationsRepo, orgsRepo, emailTemplatesRepo } from '../db/repos/index.js';
+import { appPublicBaseUrl } from '../lib/appBaseUrl.js';
 
 export type PasswordResetDeliveryResult =
   | { channel: 'smtp'; queued: true; integrationId: string }
@@ -6,7 +7,7 @@ export type PasswordResetDeliveryResult =
   | { channel: 'none'; queued: false; reason: string };
 
 function appBaseUrl(): string {
-  return (process.env.PUBLIC_APP_URL || process.env.BASE_URL || 'http://localhost:5173').replace(/\/+$/, '');
+  return appPublicBaseUrl();
 }
 
 export function buildPasswordResetUrl(token: string): string {

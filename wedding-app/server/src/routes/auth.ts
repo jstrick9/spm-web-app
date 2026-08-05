@@ -1,4 +1,5 @@
 import type { FastifyInstance } from 'fastify';
+import { appPublicBaseUrl } from '../lib/appBaseUrl.js';
 import { BadRequest, NotFound } from '../lib/errors.js';
 import { z } from 'zod';
 import { hashPassword, verifyPassword, needsRehash } from '../lib/crypto.js';
@@ -232,7 +233,7 @@ export async function authRoutes(app: FastifyInstance) {
         const firstCoupleEvent = db.prepare(
           `SELECT e.id AS event_id, e.organization_id, e.title FROM event_memberships em JOIN roles r ON r.id = em.role_id JOIN events e ON e.id = em.event_id WHERE em.user_id = ? AND em.status = 'active' AND r.key = 'couple' AND e.deleted_at IS NULL ORDER BY e.start_date IS NULL, e.start_date LIMIT 1`,
         ).get(user.id) as { event_id: string; organization_id: string; title: string } | undefined;
-        const baseUrl = (process.env.PUBLIC_APP_URL || process.env.BASE_URL || 'http://localhost:5173').replace(/\/+$/, '');
+        const baseUrl = appPublicBaseUrl();
         const magicUrl = `${baseUrl}/#/magic-link?token=${encodeURIComponent(token.token)}`;
         const smtp = firstCoupleEvent ? integrationsRepo.findByOrgProvider(firstCoupleEvent.organization_id, 'email_smtp') : undefined;
         let delivery: Record<string, unknown> = { channel: 'none', queued: false };

@@ -1,4 +1,5 @@
 import { auditRepo, coupleDocumentsRepo, eventsRepo, guestsRepo, jobsRepo, layoutsRepo, orgsRepo, portalConfigRepo, rsvpRepo, subEventsRepo, timelineRepo } from '../../db/repos/index.js';
+import { appPublicBaseUrl } from '../../lib/appBaseUrl.js';
 import { db } from '../../db/database.js';
 import { hashPassword, verifyPassword, uuid } from '../../lib/crypto.js';
 import { can } from '../../lib/rbac.js';
@@ -412,7 +413,7 @@ export async function guestPortalRoutes(app: FastifyInstance) {
     const smtpId = activeSmtpIntegrationId(event.organization_id);
     if (guest && guest.allow_portal_access && smtpId) {
       const token = guestsRepo.rotatePortalToken(guest.id);
-      const baseUrl = (process.env.PUBLIC_APP_URL || process.env.BASE_URL || 'http://localhost:5173').replace(/\/+$/, '');
+      const baseUrl = appPublicBaseUrl();
       const url = `${baseUrl}/#/portal/${eventId}?guest=${encodeURIComponent(guest.id)}&token=${encodeURIComponent(token)}`;
       jobsRepo.enqueue({ kind: 'email.send', organizationId: event.organization_id, payload: { integrationId: smtpId, to: email, subject: `${event.title} RSVP link`, text: `Open your secure RSVP link: ${url}`, html: `<p>Open your secure RSVP link:</p><p><a href="${escapeHtml(url)}">RSVP for ${escapeHtml(event.title)}</a></p>` } });
       queued = true;

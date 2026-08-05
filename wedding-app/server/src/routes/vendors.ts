@@ -1,4 +1,5 @@
 import type { FastifyInstance } from 'fastify';
+import { appPublicBaseUrl } from '../lib/appBaseUrl.js';
 import { z } from 'zod';
 import { requireAuth } from '../middleware/auth.js';
 import { can } from '../lib/rbac.js';
@@ -95,7 +96,7 @@ function portalExpiresAt(expiresInDays: number): string {
 }
 
 function appBaseUrl(): string {
-  return (process.env.PUBLIC_APP_URL || process.env.BASE_URL || 'http://localhost:5173').replace(/\/+$/, '');
+  return appPublicBaseUrl();
 }
 
 async function deliverVendorInvite(input: { vendor: NonNullable<ReturnType<typeof vendorsRepo.findById>>; token: string; expiresAt: string; message?: string }) {

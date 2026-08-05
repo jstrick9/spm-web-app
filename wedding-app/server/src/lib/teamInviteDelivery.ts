@@ -1,8 +1,9 @@
 import { eventsRepo, jobsRepo, integrationsRepo, orgsRepo, rolesRepo } from '../db/repos/index.js';
+import { appPublicBaseUrl } from '../lib/appBaseUrl.js';
 import type { TeamInvitationRow } from '../db/repos/teamInvitations.js';
 
 function appBaseUrl(): string {
-  return (process.env.PUBLIC_APP_URL || process.env.BASE_URL || 'http://localhost:5173').replace(/\/+$/, '');
+  return appPublicBaseUrl();
 }
 
 export function buildTeamInviteUrl(token: string): string {

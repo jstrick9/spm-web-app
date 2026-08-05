@@ -1,4 +1,5 @@
 import { coupleRequestsRepo, eventsRepo, portalConfigRepo } from '../../db/repos/index.js';
+import { appPublicBaseUrl } from '../../lib/appBaseUrl.js';
 import { db } from '../../db/database.js';
 import { uuid } from '../../lib/crypto.js';
 import { requireAuth } from '../../middleware/auth.js';
@@ -53,7 +54,7 @@ export async function couplePortalRoutes(app: FastifyInstance) {
     const requests = coupleRequestsRepo.listForRequester(eventId, req.auth!.userId).map(safeRequest);
     const approval = requests.find((r) => r.requestType === 'guest_portal_update' && ['pending','approved'].includes(r.status));
     const reminder = requests.find((r) => r.requestType === 'rsvp_reminder_request' && ['pending','approved'].includes(r.status));
-    const baseUrl = (process.env.PUBLIC_APP_URL || process.env.BASE_URL || 'http://localhost:5173').replace(/\/+$/, '');
+    const baseUrl = appPublicBaseUrl();
     return {
       portal: {
         enabled: !!cfg?.enabled,

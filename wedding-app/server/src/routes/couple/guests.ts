@@ -1,4 +1,5 @@
 import { auditRepo, eventsRepo, guestsRepo } from '../../db/repos/index.js';
+import { appPublicBaseUrl } from '../../lib/appBaseUrl.js';
 import { requireAuth } from '../../middleware/auth.js';
 import { can } from '../../lib/rbac.js';
 import { BadRequest, Forbidden, NotFound } from '../../lib/errors.js';
@@ -58,7 +59,7 @@ export async function coupleGuestsRoutes(app: FastifyInstance) {
     if (!guest || guest.event_id !== eventId) throw NotFound('guest-not-found');
     const token = guestsRepo.rotatePortalToken(guestId);
     guestsRepo.update(guestId, { allowPortalAccess: true });
-    const baseUrl = (process.env.PUBLIC_APP_URL || process.env.BASE_URL || 'http://localhost:5173').replace(/\/+$/, '');
+    const baseUrl = appPublicBaseUrl();
     const url = `${baseUrl}/#/portal/${eventId}?guest=${encodeURIComponent(guestId)}&token=${encodeURIComponent(token)}`;
     return { url, token, qrPayload: `WVI-GUEST:${eventId}:${guestId}:${token.slice(0, 10)}` };
   });
