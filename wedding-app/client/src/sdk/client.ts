@@ -41,13 +41,14 @@ export function setToken(token: string | null): void {
  *   - kind: 'not-found'    → 404
  *   - kind: 'conflict'     → 409 (revision-conflict, role-in-use, etc.)
  *   - kind: 'validation'   → 400 with .details from zod
+ *   - kind: 'rate-limited' → 429 (friendly 'try again in a moment')
  *   - kind: 'server'       → 5xx or any other unhandled status
  */
 export class ApiError extends Error {
   constructor(
     public readonly kind:
       | 'offline' | 'unauthorized' | 'forbidden' | 'not-found'
-      | 'conflict' | 'validation' | 'server',
+      | 'conflict' | 'validation' | 'rate-limited' | 'server',
     public readonly status: number,
     public readonly code: string,
     public readonly body?: ApiErrorBody,
@@ -182,7 +183,7 @@ function classifyStatus(s: number): ApiError['kind'] {
   if (s === 404) return 'not-found';
   if (s === 409) return 'conflict';
   if (s === 400) return 'validation';
-  if (s === 429) return 'server';
+  if (s === 429) return 'rate-limited';
   return 'server';
 }
 

@@ -53,6 +53,8 @@ export function describeUnhandledError(err: unknown): { title: string; descripti
         return { title: 'Session expired', description: 'Please sign in again.' };
       case 'offline':
         return { title: 'You are offline', description: "This change wasn't saved. Reconnect and try again." };
+      case 'rate-limited':
+        return { title: 'Too many requests', description: 'Please wait a moment and try again.' };
       default:
         break;
     }

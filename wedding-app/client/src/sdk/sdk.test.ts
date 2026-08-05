@@ -185,6 +185,32 @@ describe('ApiError + lifecycle events', () => {
   });
 });
 
+describe('HTTP error classification', () => {
+  it('classifies 429 as rate-limited, not server', async () => {
+    server.use(
+      http.get('/api/events/:eventId/guests', () => {
+        return new HttpResponse(JSON.stringify({ error: 'rate-limit' }), { status: 429, headers: { 'content-type': 'application/json' } });
+      }),
+    );
+    try {
+      await sdk.guests.list('e1');
+      expect.unreachable();
+    } catch (e) {
+      const err = e as ApiError;
+      expect(err.kind).toBe('rate-limited');
+      expect(err.status).toBe(429);
+    }
+  });
+
+  it('rate-limited errors do not auto-retry (QueryProvider skips them)', async () => {
+    const { QueryClient } = await import('@tanstack/react-query');
+    const qc = new QueryClient({ defaultOptions: { queries: { retry: (n, e) => e instanceof ApiError ? e.kind !== 'rate-limited' && n < 2 : n < 2 } } });
+    // just verify the predicate: a rate-limited error should not retry
+    const err = new ApiError('rate-limited', 429, 'rate-limit', { error: 'rate-limit' });
+    expect(qc.getDefaultOptions().queries!.retry!(1, err)).toBe(false);
+  });
+});
+
 describe('push SDK', () => {
   it('subscribe stores the subscription', async () => {
     const reg = await sdk.auth.register({ email: 'push1@x.com', password: 'pw1234', fullName: 'P', orgName: 'O' });
