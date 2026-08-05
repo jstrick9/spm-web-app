@@ -110,9 +110,9 @@ describe('CoupleEventHub', () => {
     (sdk.couple.guests as any).mockRejectedValueOnce(new Error('network down'));
     render(<CoupleEventHub eventId="e1" />, { wrapper: wrapper() });
     await waitFor(() => {
-      expect(screen.getByRole('alert')).toBeTruthy();
+      expect(screen.getAllByRole('alert').length).toBeGreaterThanOrEqual(1);
     });
-    expect(screen.getByText(/couldn.t load/i)).toBeTruthy();
+    expect(screen.getAllByText(/couldn.t load/i).length).toBeGreaterThanOrEqual(1);
     expect(screen.getAllByText(/guest list/).length).toBeGreaterThanOrEqual(1);
 
     const callsBefore = (sdk.couple.guests as any).mock.calls.length;
@@ -122,7 +122,38 @@ describe('CoupleEventHub', () => {
     });
     // Retry succeeds → banner clears.
     await waitFor(() => {
-      expect(screen.queryByRole('alert')).toBeNull();
+      expect(screen.queryAllByRole('alert')).toHaveLength(0);
     });
+  });
+
+  it('shows an inline per-section error (not a false empty state) when the documents query fails', async () => {
+    const { sdk } = await import('../../sdk');
+    (sdk.couple.documents as any).mockRejectedValueOnce(new Error('network down'));
+    render(<CoupleEventHub eventId="e1" />, { wrapper: wrapper() });
+    await waitFor(() => {
+      expect(screen.getByText(/Documents couldn.t load/i)).toBeTruthy();
+    });
+    // The false empty state must NOT appear next to the inline error.
+    expect(screen.queryByText('No documents yet')).toBeNull();
+    // Inline retry re-runs the query.
+    const callsBefore = (sdk.couple.documents as any).mock.calls.length;
+    fireEvent.click(screen.getAllByRole('button', { name: 'Retry' })[0]);
+    await waitFor(() => {
+      expect((sdk.couple.documents as any).mock.calls.length).toBeGreaterThan(callsBefore);
+    });
+  });
+
+  it('shows an inline error on the RSVP progress card instead of a misleading 0%', async () => {
+    const { sdk } = await import('../../sdk');
+    (sdk.couple.guests as any).mockRejectedValueOnce(new Error('network down'));
+    render(<CoupleEventHub eventId="e1" />, { wrapper: wrapper() });
+    await waitFor(() => {
+      expect(screen.getByText(/RSVP progress couldn.t load/i)).toBeTruthy();
+    });
+    // No misleading "0 of — guests responded" figure while the data is unknown,
+    // and the readiness card shows "—" instead of a fabricated 0%.
+    expect(screen.queryByText(/0 of — guests responded/)).toBeNull();
+    expect(screen.queryByText(/guests responded/)).toBeNull();
+    expect(screen.getAllByText('—').length).toBeGreaterThanOrEqual(1);
   });
 });
