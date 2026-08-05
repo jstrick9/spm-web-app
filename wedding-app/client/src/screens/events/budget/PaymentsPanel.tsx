@@ -221,7 +221,7 @@ export function PaymentsPanel({ eventId }: Props) {
              </div>
              <div class="row">
                 <span>Date &amp; Time:</span>
-                <span>${payment.created_at ? new Date(payment.created_at).toLocaleString() : new Date().toLocaleString()}</span>
+                <span>${payment.created_at ? new Date(payment.created_at).toLocaleString() : 'Not recorded'}</span>
              </div>
              <div class="row total">
                 <span>Amount Paid:</span>
