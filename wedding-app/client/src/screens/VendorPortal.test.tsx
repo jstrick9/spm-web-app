@@ -113,6 +113,22 @@ describe('VendorPortal', () => {
     });
   });
 
+  it('shows the expired/revoked-link message for token errors (no retry button)', async () => {
+    (sdk.vendors.portalInfo as any).mockRejectedValue({
+      kind: 'unauthorized',
+      status: 401,
+      code: 'vendor-portal-token-invalid-or-expired',
+      message: 'vendor-portal-token-invalid-or-expired',
+    });
+
+    render(<VendorPortal vendorId="v1" token="expired-token" />, { wrapper: TestWrapper });
+
+    expect(await screen.findByText(/This vendor portal link has expired or was revoked/i)).toBeInTheDocument();
+    expect(screen.getByText(/Ask the venue for a new portal link/i)).toBeInTheDocument();
+    // No pointless retry button for a dead token.
+    expect(screen.queryByRole('button', { name: /Try again/i })).toBeNull();
+  });
+
   it('shows a retry button on load failure and retries the request', async () => {
     (sdk.vendors.portalInfo as any)
       .mockRejectedValueOnce(new Error('network down'))

@@ -323,19 +323,38 @@ export function VendorPortal({ vendorId, token }: { vendorId: string; token: str
   }
 
   if (error || !data) {
+    // Token lifecycle UX: an expired/revoked portal link has a different
+    // remedy (ask the venue for a new link) than a network blip (retry).
+    const tokenProblem =
+      (error as any)?.code === 'vendor-portal-token-invalid-or-expired' ||
+      (error as any)?.code === 'vendor-portal-token-required' ||
+      (error as any)?.kind === 'unauthorized' ||
+      (error as any)?.kind === 'forbidden';
      return (
       <div className="min-h-screen bg-bg flex items-center justify-center p-4">
         <Card className="max-w-md w-full bg-bg border-2 border-danger/20 rounded-2xl shadow-lg">
            <CardContent className="pt-6 text-center text-danger font-semibold space-y-4">
               <AlertCircle className="w-12 h-12 mx-auto text-danger" />
-              <p>Unable to load secure vendor details. Please verify your direct link or contact the venue administration.</p>
-              <p className="text-sm font-normal text-fg-muted">
-                If you just lost Wi-Fi or the venue network hiccuped, try again —
-                your run-of-show and messages reload automatically once connected.
-              </p>
-              <Button type="button" variant="outline" isLoading={isRefetching} onClick={() => refetch()}>
-                <RefreshCw className="h-4 w-4 mr-1" aria-hidden="true" /> Try again
-              </Button>
+              {tokenProblem ? (
+                <>
+                  <p>This vendor portal link has expired or was revoked.</p>
+                  <p className="text-sm font-normal text-fg-muted">
+                    Ask the venue for a new portal link. The venue can resend your
+                    invitation at any time — your login stays the same.
+                  </p>
+                </>
+              ) : (
+                <>
+                  <p>Unable to load secure vendor details. Please verify your direct link or contact the venue administration.</p>
+                  <p className="text-sm font-normal text-fg-muted">
+                    If you just lost Wi-Fi or the venue network hiccuped, try again —
+                    your run-of-show and messages reload automatically once connected.
+                  </p>
+                  <Button type="button" variant="outline" isLoading={isRefetching} onClick={() => refetch()}>
+                    <RefreshCw className="h-4 w-4 mr-1" aria-hidden="true" /> Try again
+                  </Button>
+                </>
+              )}
            </CardContent>
         </Card>
       </div>

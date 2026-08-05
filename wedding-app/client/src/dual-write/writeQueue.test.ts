@@ -108,11 +108,11 @@ describe('queue events', () => {
 describe('drain permanent errors', () => {
   it('validation (400) drops the write immediately instead of burning retries', async () => {
     const calls: number[] = [];
-    registerExecutor('payments', 'create', async () => {
+    registerExecutor('events', 'create', async () => {
       calls.push(1);
       throw new ApiError('validation', 400, 'invalid-input');
     });
-    enqueue({ domain: 'payments', op: 'create', payload: {} });
+    enqueue({ domain: 'events', op: 'create', payload: {} });
     await drain();
     expect(calls.length).toBe(1);       // no retry loop
     expect(size()).toBe(0);             // dropped immediately
