@@ -52,6 +52,28 @@ export const coupleAppointmentsRepo = {
     return db.prepare(`SELECT * FROM couple_appointments WHERE id = ?`).get(id) as CoupleAppointmentRow | undefined;
   },
 
+  /**
+   * Find the first non-cancelled appointment for the same event whose
+   * [starts_at, ends_at) window overlaps the given window. Cancelled
+   * appointments never conflict; back-to-back (end === start) is allowed.
+   */
+  findConflicting(eventId: string, startsAt: string, endsAt: string, excludeId?: string): CoupleAppointmentRow | undefined {
+    const start = Date.parse(startsAt);
+    const end = Date.parse(endsAt);
+    if (!Number.isFinite(start) || !Number.isFinite(end) || end <= start) return undefined;
+    const rows = db.prepare(
+      `SELECT * FROM couple_appointments
+       WHERE event_id = ? AND status != 'cancelled' AND starts_at IS NOT NULL AND ends_at IS NOT NULL`,
+    ).all(eventId) as CoupleAppointmentRow[];
+    return rows.find((r) => {
+      if (r.id === excludeId) return false;
+      const rStart = Date.parse(r.starts_at!);
+      const rEnd = Date.parse(r.ends_at!);
+      if (!Number.isFinite(rStart) || !Number.isFinite(rEnd) || rEnd <= rStart) return false;
+      return start < rEnd && end > rStart;
+    });
+  },
+
   create(input: {
     organizationId: string;
     eventId: string;

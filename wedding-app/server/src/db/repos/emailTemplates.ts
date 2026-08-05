@@ -48,17 +48,47 @@ export const emailTemplatesRepo = {
     return db.prepare(`DELETE FROM email_templates WHERE id = ?`).run(id).changes > 0;
   },
 
-  /** Render a template with merge data. */
+  /**
+   * Render a template with merge data.
+   *
+   * Values are sanitized per channel:
+   *  - HTML body: values are HTML-escaped so guest/vendor-supplied text
+   *    (names, notes) cannot inject markup or break the email layout.
+   *  - Subject: CR/LF and other control characters are neutralized so a
+   *    malicious merge value cannot attempt header injection.
+   *  - Plain-text body: values are inserted verbatim (no escaping in text).
+   */
   render(template: EmailTemplateRow, data: Record<string, string>): { subject: string; html: string; text: string } {
     let subject = template.subject;
     let html = template.body_html;
     let text = template.body_text;
-    for (const [key, value] of Object.entries(data)) {
-      const pattern = new RegExp(`\\{\\{${key}\\}\\}`, 'g');
-      subject = subject.replace(pattern, value);
-      html = html.replace(pattern, value);
-      text = text.replace(pattern, value);
+    for (const [key, rawValue] of Object.entries(data)) {
+      // Keys come from template authoring, but treat them as literal regex text.
+      const safeKey = key.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+      const pattern = new RegExp(`\\{\\{${safeKey}\\}\\}`, 'g');
+      subject = subject.replace(pattern, subjectSafe(rawValue));
+      html = html.replace(pattern, escapeHtml(rawValue));
+      text = text.replace(pattern, rawValue);
     }
+    // Belt-and-suspenders: neutralize control chars the template itself may contain.
+    subject = subjectSafe(subject);
     return { subject, html, text };
   },
+};
+
+function escapeHtml(value: string): string {
+  return value
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#039;');
+}
+
+function subjectSafe(value: string): string {
+  // RFC 5322: no CR/LF or control chars in the header line.
+  return value
+    .replace(/[\r\n\t\0\x01-\x08\x0b\x0c\x0e-\x1f\x7f]+/g, ' ')
+    .replace(/\s{2,}/g, ' ')
+    .trim();
 };

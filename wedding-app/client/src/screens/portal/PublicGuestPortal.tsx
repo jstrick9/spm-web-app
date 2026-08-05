@@ -498,32 +498,22 @@ export function PublicGuestPortal({ eventId }: { eventId: string }) {
               );
             })()}
 
-            {/* On-Site Weather Station Widget */}
-            <Card style={{ background: portalPalette.surface, borderColor: portalPalette.border }}>
-               <CardContent className="p-5 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+            {/* Weather & rain plan — venue-authored note only (no fabricated forecasts) */}
+            {guestTravel?.weatherRainPlanNote?.trim() && (
+              <Card style={{ background: portalPalette.surface, borderColor: portalPalette.border }}>
+                <CardContent className="p-5 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
                   <div className="space-y-1">
-                     <span className="text-[9px] uppercase font-bold tracking-widest block" style={{ color: portalPalette.primary }}>Venue Weather Station</span>
-                     <h4 className="text-base font-serif font-black text-brand flex items-center gap-1.5">
-                        <CloudRain className="w-5 h-5 text-brand" /> Venue Weather Monitor
-                     </h4>
-                     <p className="text-xs text-fg-subtle font-semibold max-w-md">
-                        Live forecast guidance for the venue area. Plan outfits, umbrellas, or footwear accordingly.
-                     </p>
+                    <span className="text-[9px] uppercase font-bold tracking-widest block" style={{ color: portalPalette.primary }}>Weather &amp; Rain Plan</span>
+                    <h4 className="text-base font-serif font-black text-brand flex items-center gap-1.5">
+                      <CloudRain className="w-5 h-5 text-brand" aria-hidden="true" /> From the venue team
+                    </h4>
+                    <p className="text-sm whitespace-pre-wrap max-w-xl" style={{ color: portalPalette.fgMuted }}>
+                      {guestTravel.weatherRainPlanNote}
+                    </p>
                   </div>
-
-                  <div className="flex gap-4 items-center bg-surface p-3 rounded-xl border border-border w-full sm:w-auto">
-                     <div className="text-center shrink-0">
-                        <span className="text-2xl">🌦️</span>
-                        <div className="text-xs font-black mt-0.5">72°F</div>
-                     </div>
-                     <div className="text-xs font-semibold text-fg-muted space-y-0.5">
-                        <div>Condition: <strong className="text-fg font-bold">Passing Showers</strong></div>
-                        <div>Rain Risk: <strong className="text-warning font-bold">40% afternoon</strong></div>
-                        <div>Staging: <strong className="text-success font-bold">Plan B on standby</strong></div>
-                     </div>
-                  </div>
-               </CardContent>
-            </Card>
+                </CardContent>
+              </Card>
+            )}
 
 
             {/* Wedding Weekend Itinerary */}

@@ -77,7 +77,9 @@ describe('Org platform config', () => {
 
   it('accepts a logo payload larger than the normal API body limit', async () => {
     const u = await register();
-    const dataUri = `data:image/png;base64,${'A'.repeat(3_000_000)}`;
+    // Real PNG signature (content sniffing) padded well past the default body limit.
+    const png = 'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+/p9sAAAAASUVORK5CYII=';
+    const dataUri = `data:image/png;base64,${png}${'A'.repeat(3_000_000)}`;
     const uploaded = await req(u.token, 'POST', `/api/orgs/${u.orgId}/config/logo`, { dataUri });
     expect(uploaded.statusCode).toBe(200);
   });

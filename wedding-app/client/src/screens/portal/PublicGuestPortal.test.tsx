@@ -428,7 +428,7 @@ describe('PublicGuestPortal — Phase 34b regression suite', () => {
     });
   });
 
-  it('renders precision countdown, weather monitor, and schedule switcher on Home tab', async () => {
+  it('renders precision countdown, venue weather/rain note, and schedule switcher on Home tab', async () => {
     window.location.hash = '#/portal/e-1?guest=g-1';
     vi.mocked(sdk.portal.info).mockResolvedValue({
       ...BASE_INFO,
@@ -440,7 +440,8 @@ describe('PublicGuestPortal — Phase 34b regression suite', () => {
       ],
       timeline: [
         { id: 't-1', title: 'Ceremony Starts', starts_at: '2026-05-27T16:00:00Z', category: 'ceremony' }
-      ]
+      ],
+      guestTravel: { weatherRainPlanNote: 'Ceremony moves indoors to the Grand Ballroom if rain is forecast.' }
     } as any);
 
     renderPortal();
@@ -448,8 +449,12 @@ describe('PublicGuestPortal — Phase 34b regression suite', () => {
     // Check precision countdown displays
     expect(await screen.findByText('Wedding Day Countdown')).toBeInTheDocument();
     
-    // Check Weather Station displays
-    expect(screen.getByText('Venue Weather Station')).toBeInTheDocument();
+    // Check the venue-authored weather/rain plan shows (no fabricated forecast)
+    expect(screen.getByText('Weather & Rain Plan')).toBeInTheDocument();
+    // The note is shown both in the dedicated weather card and the travel FAQ.
+    expect((await screen.findAllByText(/Grand Ballroom if rain is forecast/)).length).toBeGreaterThanOrEqual(1);
+    expect(screen.queryByText('Venue Weather Station')).not.toBeInTheDocument();
+    expect(screen.queryByText('72°F')).not.toBeInTheDocument();
     
     // Check schedule section and tab switches
     expect(await screen.findByText('Guest Schedule')).toBeInTheDocument();
@@ -460,6 +465,19 @@ describe('PublicGuestPortal — Phase 34b regression suite', () => {
     
     fireEvent.click(subeventsBtn);
     expect(await screen.findByText(/Rehearsal Dinner/)).toBeInTheDocument();
+  });
+
+  it('does not render any weather/rain card when the venue has not posted a rain-plan note', async () => {
+    window.location.hash = '#/portal/e-1?guest=g-1';
+    vi.mocked(sdk.portal.info).mockResolvedValue({
+      ...BASE_INFO,
+      guestTravel: { weatherRainPlanNote: '' }
+    } as any);
+
+    renderPortal();
+    await waitFor(() => expect(screen.getByText('Smith Wedding')).toBeTruthy());
+    expect(screen.queryByText('Weather & Rain Plan')).not.toBeInTheDocument();
+    expect(screen.queryByText(/72°F|Passing Showers|Rain Risk|Plan B on standby/)).not.toBeInTheDocument();
   });
 
 

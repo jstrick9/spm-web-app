@@ -220,10 +220,18 @@ export function CoupleEventHub({ eventId }: { eventId: string }) {
   const appointmentMutation = useMutation({ 
     mutationFn: (input: { appointmentType: 'tasting' | 'planning_meeting' | 'final_walkthrough' | 'rehearsal' | 'payment' | 'tour' | 'other'; note?: string }) => sdk.couple.requestAppointment(eventId, input),
     onSuccess: () => { qc.invalidateQueries({ queryKey: ['couple-calendar', eventId] }); toast({ title: 'Appointment request sent', variant: 'success' }); },
+    onError: (err: any) => toast({ title: 'Could not request appointment', description: err?.message || 'Please try again.', variant: 'destructive' }),
   });
   const appointmentStatusMutation = useMutation({
     mutationFn: (input: { id: string; status: 'reschedule_requested' | 'cancel_requested' | 'completed' | 'cancelled' | 'confirmed'; note?: string }) => sdk.couple.updateAppointment(eventId, input.id, { status: input.status, note: input.note }),
     onSuccess: () => { qc.invalidateQueries({ queryKey: ['couple-calendar', eventId] }); toast({ title: 'Appointment updated', variant: 'success' }); },
+    onError: (err: any) => toast({
+      title: 'Could not update appointment',
+      description: err?.code === 'appointment-time-conflict'
+        ? 'That time overlaps another meeting on your calendar. Choose a different time.'
+        : err?.message || 'Please try again.',
+      variant: 'destructive',
+    }),
   });
   const appointmentSignoffMutation = useMutation({
     mutationFn: (id: string) => sdk.couple.signoffAppointment(eventId, id, 'Final walkthrough completed by couple.'),

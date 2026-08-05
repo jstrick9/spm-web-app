@@ -7,7 +7,7 @@ import { uuid } from '../../lib/crypto.js';
 import { requireAuth } from '../../middleware/auth.js';
 import { can } from '../../lib/rbac.js';
 import { z } from 'zod';
-import { BadRequest, Forbidden, NotFound } from '../../lib/errors.js';
+import { BadRequest, Conflict, Forbidden, NotFound } from '../../lib/errors.js';
 import type { FastifyInstance } from 'fastify';
 import { createRequestSchema, updateRequestSchema, coupleTimelineChangeSchema, coupleTimelineApprovalSchema, coupleLayoutCommentSchema, coupleLayoutApprovalSchema, appointmentRequestSchema, appointmentStatusSchema, appointmentSignoffSchema, coupleInboxMessageSchema, coupleDecisionSchema, advancedPlanningSchema, conciergeEscalationSchema, updatePlanningTaskSchema, coupleDesignPreferencesSchema, coupleProfileSchema, parseEventMetadata, isCoupleTimelineItem, safeTimelineItem, layoutItems, summarizeLayoutItem, designSummary, safeVendor, safeGuest, safeRequest, coupleReminderItems, upsertNormalizedAdvancedSections, coupleAdvancedPlanningSummary, canWriteCoupleData } from './shared.js';
 import { broadcastSSE } from '../sse.js';
@@ -210,6 +210,14 @@ export async function couplePlanningRoutes(app: FastifyInstance) {
     if (!canWriteCoupleData(req.auth!.memberships, eventId, orgMap)) throw Forbidden();
     const parsed = appointmentRequestSchema.safeParse(req.body);
     if (!parsed.success) throw BadRequest('invalid-input', parsed.error.issues);
+    if (parsed.data.startsAt && parsed.data.endsAt) {
+      const conflicting = coupleAppointmentsRepo.findConflicting(eventId, parsed.data.startsAt, parsed.data.endsAt);
+      if (conflicting) {
+        throw Conflict('appointment-time-conflict', {
+          conflicting: { id: conflicting.id, title: conflicting.title, status: conflicting.status, startsAt: conflicting.starts_at, endsAt: conflicting.ends_at },
+        });
+      }
+    }
     const appointment = coupleAppointmentsRepo.create({ organizationId: event.organization_id, eventId, requesterUserId: req.auth!.userId, ...parsed.data });
     auditRepo.log({ organizationId: event.organization_id, actorUserId: req.auth!.userId, actorLabel: req.auth!.email, action: 'couple.appointment.request', targetType: 'couple_appointment', targetId: appointment.id, ip: req.ip, details: { eventId, appointmentType: appointment.appointment_type } });
     return reply.code(201).send({ appointment });
@@ -227,6 +235,16 @@ export async function couplePlanningRoutes(app: FastifyInstance) {
     if (!appointment || appointment.event_id !== eventId) throw NotFound('appointment-not-found');
     const parsed = appointmentStatusSchema.safeParse(req.body);
     if (!parsed.success) throw BadRequest('invalid-input', parsed.error.issues);
+    // Confirming a meeting must not double-book the couple: check the
+    // appointment's own time window against other live appointments.
+    if (parsed.data.status === 'confirmed' && appointment.starts_at && appointment.ends_at) {
+      const conflicting = coupleAppointmentsRepo.findConflicting(eventId, appointment.starts_at, appointment.ends_at, appointmentId);
+      if (conflicting) {
+        throw Conflict('appointment-time-conflict', {
+          conflicting: { id: conflicting.id, title: conflicting.title, status: conflicting.status, startsAt: conflicting.starts_at, endsAt: conflicting.ends_at },
+        });
+      }
+    }
     return { appointment: coupleAppointmentsRepo.updateStatus(appointmentId, parsed.data.status, parsed.data.note) };
   });
 
