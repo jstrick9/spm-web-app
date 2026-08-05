@@ -302,6 +302,13 @@ describe('Public portal: full RSVP flow', () => {
     const row = db.prepare(`SELECT * FROM guest_help_requests WHERE id = ?`).get(memory.json().requestId) as any;
     expect(row.message).toContain('Guest memory/photo submission');
     expect(row.message).toContain('pending_review');
+
+    // Unsafe URL schemes (javascript:/data:/vbscript:) are rejected — a
+    // guest-submitted link later surfaces to venue staff review.
+    for (const evil of ['javascript:alert(1)', 'data:text/html,<script>x</script>', 'vbscript:msgbox(1)']) {
+      const bad = await app.inject({ method: 'POST', url: `/api/portal/${s.eventId}/memory-submission`, payload: { guestId: s.guestId1, token: guestToken, photoUrl: evil, caption: 'x', consent: true }, headers: { 'content-type': 'application/json' } });
+      expect(bad.statusCode).toBe(400);
+    }
     const fb = await app.inject({ method: 'POST', url: `/api/portal/${s.eventId}/guest-feedback`, payload: { guestId: s.guestId1, token: guestToken, npsScore: 9, comment: 'Great guest flow', consentToContact: true }, headers: { 'content-type': 'application/json' } });
     expect(fb.statusCode).toBe(201);
     expect(fb.json().feedback.npsScore).toBe(9);

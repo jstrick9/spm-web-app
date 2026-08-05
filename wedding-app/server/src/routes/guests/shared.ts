@@ -139,7 +139,12 @@ export const guestMemorySubmissionSchema = z.object({
   token: z.string().optional(),
   name: z.string().max(160).optional(),
   email: z.string().email().optional().or(z.literal('')),
-  photoUrl: z.string().url().optional().or(z.literal('')),
+  // z.string().url() alone accepts javascript:/data:/vbscript: schemes —
+  // guest-submitted links are surfaced to venue staff, so restrict to http/https.
+  photoUrl: z.union([
+    z.string().url().refine((v) => /^https?:\/\//i.test(v), { message: 'photo-url-unsafe-scheme' }),
+    z.literal(''),
+  ]).optional(),
   caption: z.string().max(1000).optional(),
   consent: z.boolean(),
 });
