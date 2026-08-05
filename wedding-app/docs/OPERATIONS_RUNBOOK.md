@@ -99,3 +99,7 @@ window.
 typecheck, unit suites, and client production build. `deploy.sh` wraps the
 git-flow (feature → develop → staging → main) and runs the gate before every
 merge. Both scripts are self-locating and work from any checkout.
+
+## Push notifications (web push)
+
+...

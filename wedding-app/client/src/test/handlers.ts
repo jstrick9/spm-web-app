@@ -22,6 +22,7 @@ interface Store {
   layouts:  Map<string, { id: string; organization_id: string; event_id: string | null; name: string; revision: number; payload: string; is_template: 0|1; visibility: string; venue_id: string | null; created_at: string; updated_at: string }>;
   vendors:  Map<string, { id: string; organization_id: string; event_id: string | null; name: string; category: string; contract_amount_cents: number | null; amount_paid_cents: number; is_preferred: 0|1; owner_user_id: string | null; contact_name: string | null; email: string | null; phone: string | null; website_url: string | null; notes: string | null; metadata: string; created_at: string }>;
   messages: Map<string, Array<{ id: string; thread_id: string; body: string; sender_id: string | null; sender_role: string; created_at: string; read_at: string | null }>>;
+  pushSubscriptions: Map<string, { endpoint: string; p256dh: string; auth: string; organization_id: string }>;
 }
 
 export const store: Store = {
@@ -36,6 +37,7 @@ export const store: Store = {
   layouts: new Map(),
   vendors: new Map(),
   messages: new Map(),
+  pushSubscriptions: new Map(),
 };
 
 export function resetStore(): void {
@@ -432,4 +434,30 @@ export const defaultHandlers = [
     store.roles.delete(params.id as string);
     return new HttpResponse(null, { status: 204 });
   }),
+
+  // ─── Push notifications ────────────────────────────
+  http.post('/api/push/subscribe', async ({ request }) => {
+    if (!authedUserId(request)) return unauthorized();
+    const body = await request.json() as { endpoint: string; keys: { p256dh: string; auth: string }; organizationId: string };
+    if (!body?.endpoint) return HttpResponse.json({ error: 'invalid-input' }, { status: 400 });
+    store.pushSubscriptions.set(body.endpoint, {
+      endpoint: body.endpoint, p256dh: body.keys.p256dh, auth: body.keys.auth, organization_id: body.organizationId,
+    });
+    return HttpResponse.json({ subscription: { id: 'sub-1' } }, { status: 201 });
+  }),
+  http.delete('/api/push/subscribe', async ({ request }) => {
+    if (!authedUserId(request)) return unauthorized();
+    const body = await request.json().catch(() => null) as { endpoint?: string } | null;
+    if (!body?.endpoint) return HttpResponse.json({ error: 'endpoint-required' }, { status: 400 });
+    store.pushSubscriptions.delete(body.endpoint);
+    return HttpResponse.json({ ok: true });
+  }),
+  http.get('/api/push/subscriptions', ({ request }) => {
+    if (!authedUserId(request)) return unauthorized();
+    const userId = authedUserId(request);
+    const subs = Array.from(store.pushSubscriptions.values()).map((s, i) => ({ id: `sub-${i}`, endpoint: s.endpoint, createdAt: new Date().toISOString() }));
+    return HttpResponse.json({ subscriptions: subs });
+  }),
+  http.get('/api/push/vapid-key', () => HttpResponse.json({ publicKey: 'test-vapid-key' })),
+  http.get('/api/push/status', () => HttpResponse.json({ configured: true })),
 ];

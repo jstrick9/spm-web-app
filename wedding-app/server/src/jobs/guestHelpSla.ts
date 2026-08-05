@@ -13,6 +13,7 @@
 import { db } from '../db/database.js';
 import { uuid } from '../lib/crypto.js';
 import { broadcastSSE } from '../routes/sse.js';
+import { sendPushToOrg } from '../push/service.js';
 
 export function scanGuestHelpSlaBreaches(): { flagged: number } {
   const now = new Date().toISOString();
@@ -37,6 +38,12 @@ export function scanGuestHelpSlaBreaches(): { flagged: number } {
     broadcastSSE(row.organization_id, 'guest_help.sla_breach', {
       eventId: row.event_id, requestId: row.id, kind: row.kind, slaDueAt: row.sla_due_at,
     });
+    void sendPushToOrg(row.organization_id, {
+      title: '⚠ Guest help request past SLA',
+      body: `A ${row.kind} help request is overdue (${row.sla_due_at}).`,
+      url: `/events/${row.event_id}?tab=guest-help`,
+      tag: `guest-help-sla-${row.id}`,
+    }).catch((err) => console.error('[guest-help-sla] push dispatch failed:', err));
     flagged += 1;
   }
   return { flagged };

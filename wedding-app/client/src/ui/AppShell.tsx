@@ -63,7 +63,7 @@ import {
   Activity,
   Database,
 } from "lucide-react";
-import type { SdkUser } from "../sdk/types";
+import type { SdkMembership, SdkUser } from "../sdk/types";
 import {
   startSyncMonitor,
   subscribeSyncStatus,
@@ -79,6 +79,8 @@ export interface AppShellProps {
   currentPath?: string;
   onLogout: () => void;
   onOpenCommandPalette?: () => void;
+  /** Memberships used by header controls (e.g. push subscription org). */
+  memberships?: SdkMembership[];
   children: ReactNode;
 }
 
@@ -87,6 +89,7 @@ export function AppShell({
   currentPath = "",
   onLogout,
   onOpenCommandPalette,
+  memberships = [],
   children,
 }: AppShellProps) {
   const { ask, askConfirm, promptNode } = usePrompt();
@@ -323,7 +326,7 @@ export function AppShell({
             <HelpCircle className="h-5 w-5" aria-hidden="true" />
           </Button>
           <ThemeToggle />
-          <NotificationCenter />
+          <NotificationCenter memberships={memberships} />
           <UserMenu user={user} onLogout={onLogout} />
         </div>
       </header>

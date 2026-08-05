@@ -132,7 +132,7 @@ Every API endpoint is RBAC-gated and integration-tested.
 | `LOG_LEVEL` | `info` | Fastify log level |
 | `CORS_ORIGIN` | disabled | Optional allowed CORS origin; same-origin production needs no setting |
 | `NODE_ENV` | — | Set to `production` for prod mode |
-| `VAPID_PUBLIC_KEY` | — | WebPush VAPID public key |
+| `VAPID_PUBLIC_KEY` / `VAPID_PRIVATE_KEY` / `VAPID_SUBJECT` | — | WebPush keys for browser push notifications (generate with `cd server && npm run push:keys`; push degrades gracefully when unset) |
 | `WEDDING_SECRETS_KEY` | — | AES-256-GCM key for integration credentials (required in Docker production) |
 | `WEDDING_UPLOADS_PATH` | `server/uploads` | Persistent directory for uploaded images and documents |
 | `WEBHOOK_DELIVERY_RETENTION_DAYS` | `90` | Days to retain outbound webhook delivery history |

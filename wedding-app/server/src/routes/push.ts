@@ -4,6 +4,7 @@ import { requireAuth } from '../middleware/auth.js';
 import { can } from '../lib/rbac.js';
 import { pushSubscriptionsRepo } from '../db/repos/index.js';
 import { BadRequest, Forbidden } from '../lib/errors.js';
+import { isPushConfigured } from '../push/service.js';
 
 const subscriptionSchema = z.object({
   endpoint: z.string().url(),
@@ -63,5 +64,11 @@ export async function pushRoutes(app: FastifyInstance) {
   app.get('/api/push/vapid-key', async () => {
     const key = process.env.VAPID_PUBLIC_KEY ?? '';
     return { publicKey: key };
+  });
+
+  // ─── Configuration status (so the UI can show "not configured" instead
+  // of failing silently when VAPID keys are missing from .env) ──
+  app.get('/api/push/status', { preHandler: requireAuth }, async () => {
+    return { configured: isPushConfigured() };
   });
 }

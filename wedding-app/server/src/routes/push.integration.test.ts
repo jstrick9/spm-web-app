@@ -132,6 +132,14 @@ describe('Push subscription endpoints', () => {
     });
     expect(res.statusCode).toBe(401);
   });
+
+  it('GET /api/push/status reports configuration state (false without VAPID keys)', async () => {
+    const u = await register();
+    const res = await req(u.token, 'GET', '/api/push/status');
+    expect(res.statusCode).toBe(200);
+    expect(res.json()).toHaveProperty('configured');
+    expect(typeof res.json().configured).toBe('boolean');
+  });
 });
 
 describe('Cross-org guest listing', () => {

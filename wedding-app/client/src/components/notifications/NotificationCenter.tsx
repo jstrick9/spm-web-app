@@ -9,12 +9,14 @@
  *   5. Persists read state in localStorage
  */
 import { useState, useEffect, useCallback } from 'react';
-import { Bell, Check, X, ExternalLink, SlidersHorizontal, ShieldAlert } from 'lucide-react';
+import { Bell, Check, X, ExternalLink, SlidersHorizontal, ShieldAlert, BellRing } from 'lucide-react';
 import { Button } from '../../ui/Button';
 import { Badge } from '../../ui/Badge';
 import { cn } from '../../ui/lib/cn';
 import { useRouter } from '../../lib/router';
+import { usePushNotifications } from '../../lib/usePushNotifications';
 import type { SSEEvent } from '../../sdk/sse';
+import type { SdkMembership } from '../../sdk/types';
 
 interface Notification {
   id: string;
@@ -65,13 +67,18 @@ function saveReadIds(ids: Set<string>) {
   localStorage.setItem(STORAGE_KEY, JSON.stringify(arr));
 }
 
-export function NotificationCenter() {
+export function NotificationCenter({ memberships = [] }: { memberships?: SdkMembership[] }) {
   const [open, setOpen] = useState(false);
   const [notifications, setNotifications] = useState<Notification[]>([]);
   const [readIds, setReadIds] = useState<Set<string>>(getReadIds);
   const [managerPreset, setManagerPreset] = useState(() => localStorage.getItem('wvi_manager_notification_preset') || 'balanced');
   const managerMode = typeof window !== 'undefined' && localStorage.getItem('wvi_registration_role') === 'venue_manager';
   const { navigate } = useRouter();
+  // Push notifications subscribe against the user's first organization
+  // membership (the bell is a global header control).
+  const pushOrgId = memberships.find((m) => m.organizationId)?.organizationId
+    ?? memberships.find((m) => m.eventOrganizationId)?.eventOrganizationId;
+  const push = usePushNotifications(pushOrgId);
 
   // Listen for SSE events from the useSSE hook in useRealtimeInvalidation
   // We use a global event listener approach
@@ -230,6 +237,54 @@ export function NotificationCenter() {
                     </button>
                   );
                 })
+              )}
+            </div>
+
+            {/* Browser push toggle (end-to-end web push) */}
+            <div className="border-t border-border bg-surface-2/40 p-3">
+              <div className="flex items-center justify-between gap-3">
+                <div className="min-w-0">
+                  <p className="text-xs font-semibold flex items-center gap-1.5">
+                    <BellRing className="h-3.5 w-3.5 text-brand" aria-hidden />
+                    Browser push
+                  </p>
+                  <p className="text-[11px] text-fg-muted leading-snug mt-0.5">
+                    {push.enabled
+                      ? 'Alerts arrive here even when this tab is closed.'
+                      : 'Get alerts on this device even when the tab is closed.'}
+                  </p>
+                </div>
+                {push.supported ? (
+                  <button
+                    onClick={() => (push.enabled ? push.disable() : push.enable())}
+                    disabled={push.busy}
+                    aria-pressed={push.enabled}
+                    aria-label={push.enabled ? 'Disable browser push notifications' : 'Enable browser push notifications'}
+                    title={push.enabled ? 'Turn off browser push' : 'Turn on browser push'}
+                    className={cn(
+                      'relative h-5 w-9 shrink-0 rounded-full transition-colors cursor-pointer',
+                      push.enabled ? 'bg-brand' : 'border border-border bg-surface',
+                      push.busy && 'opacity-60 cursor-wait',
+                    )}
+                  >
+                    <span
+                      className={cn(
+                        'absolute top-0.5 h-4 w-4 rounded-full bg-white shadow transition-all',
+                        push.enabled ? 'left-[18px]' : 'left-0.5',
+                      )}
+                    />
+                  </button>
+                ) : (
+                  <span className="text-[11px] text-fg-subtle shrink-0">Not supported</span>
+                )}
+              </div>
+              {push.serverConfigured === false && !push.enabled && (
+                <p className="mt-2 text-[11px] text-warning">
+                  Push isn&apos;t configured on this server yet — an admin needs to add VAPID keys to .env.
+                </p>
+              )}
+              {push.error && (
+                <p role="alert" className="mt-2 text-[11px] text-danger">{push.error}</p>
               )}
             </div>
           </div>

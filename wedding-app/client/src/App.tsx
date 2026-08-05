@@ -378,6 +378,7 @@ function AuthenticatedApp({
         currentPath={hash}
         onLogout={onLogout}
         onOpenCommandPalette={() => setPaletteOpen(true)}
+        memberships={memberships}
       >
         <Suspense fallback={<Loading />}>
           <Routes

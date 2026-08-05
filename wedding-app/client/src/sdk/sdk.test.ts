@@ -184,3 +184,37 @@ describe('ApiError + lifecycle events', () => {
     }
   });
 });
+
+describe('push SDK', () => {
+  it('subscribe stores the subscription', async () => {
+    const reg = await sdk.auth.register({ email: 'push1@x.com', password: 'pw1234', fullName: 'P', orgName: 'O' });
+    const res = await sdk.push.subscribe({
+      endpoint: 'https://push.example.com/sub/1',
+      keys: { p256dh: 'k', auth: 'a' },
+      organizationId: reg.organizationId!,
+    });
+    expect(res.subscription.id).toBeTruthy();
+    const subs = await sdk.push.listSubscriptions();
+    expect(subs.subscriptions.some(s => s.endpoint === 'https://push.example.com/sub/1')).toBe(true);
+  });
+
+  it('unsubscribe sends the endpoint in the DELETE body (regression: api.delete used to drop body)', async () => {
+    await sdk.auth.register({ email: 'push2@x.com', password: 'pw1234', fullName: 'P', orgName: 'O' });
+    await sdk.push.subscribe({
+      endpoint: 'https://push.example.com/sub/2',
+      keys: { p256dh: 'k', auth: 'a' },
+      organizationId: 'org',
+    });
+    // The server rejects the DELETE when the endpoint is missing — the old
+    // api.delete ignored the body, so this always failed with 400.
+    const res = await sdk.push.unsubscribe('https://push.example.com/sub/2');
+    expect(res.ok).toBe(true);
+    const subs = await sdk.push.listSubscriptions();
+    expect(subs.subscriptions.some(s => s.endpoint === 'https://push.example.com/sub/2')).toBe(false);
+  });
+
+  it('exposes vapid key and configuration status', async () => {
+    const vapid = await sdk.push.getVapidKey();
+    expect(vapid.publicKey).toBe('test-vapid-key');
+  });
+});

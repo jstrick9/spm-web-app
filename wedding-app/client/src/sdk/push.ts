@@ -5,6 +5,11 @@ export const pushSdk = {
     return api.get('/api/push/vapid-key', { auth: false });
   },
 
+  /** Whether the server has VAPID keys configured (push actually deliverable). */
+  status(): Promise<{ configured: boolean }> {
+    return api.get('/api/push/status');
+  },
+
   subscribe(input: {
     endpoint: string;
     keys: { p256dh: string; auth: string };
@@ -14,7 +19,7 @@ export const pushSdk = {
   },
 
   unsubscribe(endpoint: string): Promise<{ ok: boolean }> {
-    return api.delete('/api/push/subscribe', { body: { endpoint } } as any);
+    return api.delete('/api/push/subscribe', { endpoint });
   },
 
   listSubscriptions(): Promise<{ subscriptions: Array<{ id: string; endpoint: string; createdAt: string }> }> {

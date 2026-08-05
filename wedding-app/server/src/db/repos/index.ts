@@ -26,7 +26,7 @@ export { auditRepo } from './audit.js';
 export { adminChangeRequestsRepo } from './adminChangeRequests.js';
 export { integrationsRepo } from './integrations.js';
 export { jobsRepo, type JobRow, type JobStatus } from './jobs.js';
-export { pushSubscriptionsRepo } from './pushSubscriptions.js';
+export { pushSubscriptionsRepo, type PushSubscriptionRow } from './pushSubscriptions.js';
 export { sseEventsRepo } from './sseEvents.js';
 export { webhooksRepo } from './webhooks.js';
 export { budgetRepo } from './budget.js';

@@ -15,6 +15,7 @@
 import { db } from '../db/database.js';
 import { broadcastSSE } from '../routes/sse.js';
 import { integrationsRepo, jobsRepo, orgsRepo } from '../db/repos/index.js';
+import { sendPushToOrg } from '../push/service.js';
 
 interface DueReminder {
   id: string;
@@ -62,6 +63,14 @@ export function scanDueTimelineReminders(): { dispatched: number } {
           remindAt: reminder.remind_at,
           audience: reminder.audience,
         });
+        // Web push mirrors the in-app broadcast for devices with push
+        // enabled (no-op when VAPID keys aren't configured).
+        void sendPushToOrg(reminder.organization_id, {
+          title: `⏰ ${title}`,
+          body: 'A timeline item is coming up — review the run of show.',
+          url: `/events/${reminder.event_id}?tab=timeline`,
+          tag: `timeline-reminder-${reminder.event_id}`,
+        }).catch((err) => console.error('[reminders] push dispatch failed:', err));
         markSent(reminder.id);
         dispatched += 1;
       } else if (reminder.channel === 'email') {
