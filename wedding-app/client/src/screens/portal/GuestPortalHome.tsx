@@ -297,8 +297,13 @@ function StaffHelpQr({ payload }: { payload: string }) {
   useEffect(() => {
     let cancelled = false;
     void import('qrcode').then((QRCode) => {
-      QRCode.toDataURL(payload, { width: 320, margin: 1 })
-        .then((url) => { if (!cancelled) setDataUrl(url); })
+      // SVG-string output — no canvas dependency, works in every browser
+      // and in test environments.
+      QRCode.toString(payload, { type: 'svg', width: 320, margin: 1 })
+        .then((svg: string) => {
+          if (cancelled) return;
+          setDataUrl(`data:image/svg+xml;utf8,${encodeURIComponent(svg)}`);
+        })
         .catch(() => { /* leave fallback text visible */ });
     });
     return () => { cancelled = true; };

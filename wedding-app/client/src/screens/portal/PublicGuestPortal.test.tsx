@@ -517,7 +517,8 @@ describe('PublicGuestPortal — Phase 34b regression suite', () => {
     expect(screen.getAllByText(/Table 3/).length).toBeGreaterThan(0);
     expect(screen.getAllByText('Shuttle every 20 minutes').length).toBeGreaterThan(0);
     expect(screen.getByRole('link', { name: /Offline guest pass/i })).toHaveAttribute('href', '/api/portal/e-1/guest-pass.txt?guest=g-1&token=t-1');
-    expect(screen.getByRole('img', { name: /Venue staff help QR code/i })).toBeInTheDocument();
+    // The QR is generated async (dynamic import + SVG encoding).
+    expect(await screen.findByRole('img', { name: /Venue staff help QR code/i })).toBeInTheDocument();
     expect(screen.getByText('WVI-GUEST-HELP:e-1:g-1')).toBeInTheDocument();
     fireEvent.click(screen.getByRole('button', { name: 'Running late' }));
     await waitFor(() => expect(vi.mocked(sdk.portal.dayOfHelp)).toHaveBeenCalledWith('e-1', expect.objectContaining({ guestId: 'g-1', token: 't-1', kind: 'running_late' })));

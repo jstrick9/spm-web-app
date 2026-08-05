@@ -43,7 +43,13 @@ export function PublicNpsSurvey({ eventId }: { eventId: string }) {
       });
       setDone(true);
     } catch (err: any) {
-      setError(err?.message || 'Could not submit feedback.');
+      if (err?.code === 'already-submitted') {
+        // One response per device (server-enforced) — treat as success for
+        // the guest's experience.
+        setDone(true);
+      } else {
+        setError(err?.message || 'Could not submit feedback.');
+      }
     } finally {
       setSubmitting(false);
     }
