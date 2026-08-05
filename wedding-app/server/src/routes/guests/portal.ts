@@ -653,9 +653,33 @@ export async function guestPortalRoutes(app: FastifyInstance) {
           }
         }
       }
-      if (g.portal_token_hash && (parsed.data.token || prior.n > 0) && verifyGuestPortalToken(g, parsed.data.token) !== 'valid') {
+      // Token validity: the guest's own invitation token, OR a household
+      // member's token (one invite per household — the client submits the
+      // primary's link token for every member of the party).
+      const tokenValidForGuest = parsed.data.token ? verifyGuestPortalToken(g, parsed.data.token) === 'valid' : false;
+      const tokenValidForHousehold = (() => {
+        if (tokenValidForGuest || !parsed.data.token) return false;
+        const householdKey = guestHouseholdKey(g);
+        if (!householdKey) return false;
+        return guestsRepo.listForEvent(eventId).some(
+          (m) => m.id !== g.id && guestHouseholdKey(m) === householdKey && verifyGuestPortalToken(m, parsed.data.token) === 'valid',
+        );
+      })();
+      const authorized = tokenValidForGuest || tokenValidForHousehold;
+      if (g.portal_token_hash && (parsed.data.token || prior.n > 0) && !authorized) {
         auditPublicSubmission(req, { organizationId: event.organization_id, action: 'rsvp.suspicious_submit', targetType: 'guest', targetId: g.id, details: { reason: prior.n > 0 ? 'edit_token_required_or_invalid' : 'token_invalid', priorCount: prior.n } });
         throw new (await import('../../lib/errors.js')).HttpError(403, prior.n > 0 ? 'portal-token-required-for-rsvp-edit' : 'portal-token-invalid');
+      }
+      // RSVP integrity: an RSVP must come from the guest's INVITATION LINK
+      // (or a household member's link). Guests without any issued token were
+      // never invited via secure link (the default for imported guests) —
+      // accepting a tokenless RSVP would let anyone who finds a guest's ID
+      // via public lookup submit/change attendance on their behalf (spoofed
+      // headcounts for catering/seating). Such guests use the lookup →
+      // request-secure-link flow instead.
+      if (!g.portal_token_hash && !authorized) {
+        auditPublicSubmission(req, { organizationId: event.organization_id, action: 'rsvp.no_token_hash', targetType: 'guest', targetId: g.id, details: { eventId, reason: 'guest_never_issued_secure_link' } });
+        throw new (await import('../../lib/errors.js')).HttpError(403, 'portal-token-required');
       }
     }
 

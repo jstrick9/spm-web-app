@@ -197,14 +197,23 @@ describe('Public portal flow', () => {
     expect(pr.json().guests[0].fullName).toBe('Portal Guest');
   });
 
-  it('RSVP submission works without auth', async () => {
+  it('RSVP submission works without auth but requires the invitation token', async () => {
     const s = await register();
     const evt = await req(s.token, 'POST', '/api/events', { organizationId: s.orgId, title: 'RSVP Test' });
     const eventId = evt.json().event.id;
     const guestId = guestsRepo.create(s.orgId, eventId, { fullName: 'RSVP Guest' }).id;
 
-    const rr = await app.inject({ method: 'POST', url: `/api/portal/${eventId}/rsvp`,
+    // Tokenless RSVP is rejected (spoof guard)…
+    const noToken = await app.inject({ method: 'POST', url: `/api/portal/${eventId}/rsvp`,
       payload: { guestId, attending: true, mealChoice: 'vegetarian' },
+      headers: { 'content-type': 'application/json' } });
+    expect(noToken.statusCode).toBe(403);
+    expect(noToken.json().error).toBe('portal-token-required');
+
+    // …with the secure link it succeeds.
+    const token = guestsRepo.rotatePortalToken(guestId);
+    const rr = await app.inject({ method: 'POST', url: `/api/portal/${eventId}/rsvp`,
+      payload: { guestId, token, attending: true, mealChoice: 'vegetarian' },
       headers: { 'content-type': 'application/json' } });
     expect(rr.statusCode).toBe(201);
     expect(rr.json().ok).toBe(true);

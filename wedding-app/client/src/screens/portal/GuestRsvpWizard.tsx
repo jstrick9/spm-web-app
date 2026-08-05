@@ -160,9 +160,13 @@ export function GuestRsvpWizard({
       setStep('confirm');
     } catch (err) {
       const apiErr = err as Error & { kind?: string; code?: string };
-      setError(apiErr.kind === 'offline' || apiErr.code === 'network-error'
-        ? 'Network failure: your RSVP draft is still saved locally on this device. Reconnect and retry when ready.'
-        : apiErr.message || 'Could not submit RSVP. Please review required fields and try again.');
+      if (apiErr.code === 'portal-token-required' || apiErr.code === 'portal-token-invalid' || apiErr.code === 'portal-token-required-for-rsvp-edit') {
+        setError('To RSVP you need the secure link from your invitation. Use “I cannot find my name” or “Request your secure link” on the home screen, or ask the couple/venue for your link.');
+      } else {
+        setError(apiErr.kind === 'offline' || apiErr.code === 'network-error'
+          ? 'Network failure: your RSVP draft is still saved locally on this device. Reconnect and retry when ready.'
+          : apiErr.message || 'Could not submit RSVP. Please review required fields and try again.');
+      }
     }
   }
 

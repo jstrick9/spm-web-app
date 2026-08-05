@@ -181,13 +181,13 @@ describe('RSVP edit window', () => {
   it('allows editing within the window', async () => {
     const { coupleToken, event } = await setupEventWithWindow('2099-01-01');
     const guest = insertGuest(event.organization_id, event.id, { email: 'g@example.com' });
-
-    const first = await app.inject({ method: 'POST', url: `/api/portal/${event.id}/rsvp`, payload: { guestId: guest.id, attending: true, mealChoice: 'Chicken' }, headers: { 'content-type': 'application/json' } });
-    expect(first.statusCode).toBe(201);
-
-    // Rotate a token for the guest (edits require it once a prior exists).
+    // Issue the secure link first — RSVPs require the invitation token.
     const tok = await authed(coupleToken, 'POST', `/api/guests/${guest.id}/portal-token`);
     const token = tok.json().token as string;
+
+    const first = await app.inject({ method: 'POST', url: `/api/portal/${event.id}/rsvp`, payload: { guestId: guest.id, token, attending: true, mealChoice: 'Chicken' }, headers: { 'content-type': 'application/json' } });
+    expect(first.statusCode).toBe(201);
+
     const edit = await app.inject({ method: 'POST', url: `/api/portal/${event.id}/rsvp`, payload: { guestId: guest.id, attending: false, token }, headers: { 'content-type': 'application/json' } });
     expect(edit.statusCode).toBe(201);
   });
@@ -195,12 +195,12 @@ describe('RSVP edit window', () => {
   it('rejects editing after deadline + window has closed', async () => {
     const { coupleToken, event } = await setupEventWithWindow('2020-01-01'); // long past
     const guest = insertGuest(event.organization_id, event.id, { email: 'g2@example.com' });
-
-    const first = await app.inject({ method: 'POST', url: `/api/portal/${event.id}/rsvp`, payload: { guestId: guest.id, attending: true }, headers: { 'content-type': 'application/json' } });
-    expect(first.statusCode).toBe(201);
-
     const tok = await authed(coupleToken, 'POST', `/api/guests/${guest.id}/portal-token`);
     const token = tok.json().token as string;
+
+    const first = await app.inject({ method: 'POST', url: `/api/portal/${event.id}/rsvp`, payload: { guestId: guest.id, token, attending: true }, headers: { 'content-type': 'application/json' } });
+    expect(first.statusCode).toBe(201);
+
     const edit = await app.inject({ method: 'POST', url: `/api/portal/${event.id}/rsvp`, payload: { guestId: guest.id, attending: false, token }, headers: { 'content-type': 'application/json' } });
     expect(edit.statusCode).toBe(403);
     expect(edit.json().error).toBe('rsvp-edit-window-closed');

@@ -363,8 +363,9 @@ describe('Public portal: full RSVP flow', () => {
 
   it('2. Guest submits RSVP (attending + meal choice)', async () => {
     const s = await setupEvent();
+    const guestToken = guestsRepo.rotatePortalToken(s.guestId1);
     const res = await app.inject({ method: 'POST', url: `/api/portal/${s.eventId}/rsvp`,
-      payload: { guestId: s.guestId1, attending: true, mealChoice: 'vegetarian', dietaryNotes: 'Vegetarian', allergies: 'Peanuts', allergySeverity: 'severe', crossContaminationWarning: true, beveragePreference: 'Mocktail', severeAllergyContact: true, notes: 'Looking forward!' },
+      payload: { guestId: s.guestId1, token: guestToken, attending: true, mealChoice: 'vegetarian', dietaryNotes: 'Vegetarian', allergies: 'Peanuts', allergySeverity: 'severe', crossContaminationWarning: true, beveragePreference: 'Mocktail', severeAllergyContact: true, notes: 'Looking forward!' },
       headers: { 'content-type': 'application/json' } });
     expect(res.statusCode).toBe(201);
     expect(res.json().ok).toBe(true);
@@ -380,8 +381,9 @@ describe('Public portal: full RSVP flow', () => {
 
   it('3. RSVP updates guest status to attending', async () => {
     const s = await setupEvent();
+    const guestToken = guestsRepo.rotatePortalToken(s.guestId1);
     await app.inject({ method: 'POST', url: `/api/portal/${s.eventId}/rsvp`,
-      payload: { guestId: s.guestId1, attending: true },
+      payload: { guestId: s.guestId1, token: guestToken, attending: true },
       headers: { 'content-type': 'application/json' } });
 
     // Verify via authenticated guest list
@@ -393,8 +395,9 @@ describe('Public portal: full RSVP flow', () => {
 
   it('4. Guest declines RSVP', async () => {
     const s = await setupEvent();
+    const guestToken = guestsRepo.rotatePortalToken(s.guestId2);
     await app.inject({ method: 'POST', url: `/api/portal/${s.eventId}/rsvp`,
-      payload: { guestId: s.guestId2, attending: false },
+      payload: { guestId: s.guestId2, token: guestToken, attending: false },
       headers: { 'content-type': 'application/json' } });
 
     const guests = await app.inject({ method: 'GET', url: `/api/events/${s.eventId}/guests`,
@@ -410,6 +413,48 @@ describe('Public portal: full RSVP flow', () => {
     expect(res.statusCode).toBe(400);
   });
 
+  it('5b. Rejects tokenless RSVP for a guest never issued a secure link (spoof guard)', async () => {
+    const s = await setupEvent();
+    // Guest has NO portal token hash (invite link never sent).
+    const res = await app.inject({ method: 'POST', url: `/api/portal/${s.eventId}/rsvp`,
+      payload: { guestId: s.guestId1, attending: true },
+      headers: { 'content-type': 'application/json' } });
+    expect(res.statusCode).toBe(403);
+    expect(res.json().error).toBe('portal-token-required');
+    // No attendance was recorded.
+    const guests = await app.inject({ method: 'GET', url: `/api/events/${s.eventId}/guests`,
+      headers: { authorization: `Bearer ${s.token}` } });
+    expect(guests.json().counts.attending).toBe(0);
+    expect(guests.json().counts.pending).toBe(2);
+    // The same guest CAN RSVP once they receive their secure link.
+    const guestToken = guestsRepo.rotatePortalToken(s.guestId1);
+    const ok = await app.inject({ method: 'POST', url: `/api/portal/${s.eventId}/rsvp`,
+      payload: { guestId: s.guestId1, token: guestToken, attending: true },
+      headers: { 'content-type': 'application/json' } });
+    expect(ok.statusCode).toBe(201);
+  });
+
+  it('5c. Household members may RSVP using the primary invite\'s token (one link per household)', async () => {
+    const s = await setupEvent(); // g1 + g2 share party 'Johnson Household'
+    // Only g1 is issued the secure link.
+    const guestToken = guestsRepo.rotatePortalToken(s.guestId1);
+
+    // g2 (no own token, same household) RSVPs with g1's token → allowed.
+    const res = await app.inject({ method: 'POST', url: `/api/portal/${s.eventId}/rsvp`,
+      payload: { guestId: s.guestId2, token: guestToken, attending: true, mealChoice: 'Fish' },
+      headers: { 'content-type': 'application/json' } });
+    expect(res.statusCode).toBe(201);
+
+    // But an unrelated party (different household) cannot use the token.
+    const { uuid } = await import('../lib/crypto.js');
+    const g3id = uuid();
+    db.prepare(`INSERT INTO guests (id, organization_id, event_id, full_name, party_name) VALUES (?, ?, ?, 'Carol Standalone', 'Standalone')`).run(g3id, s.orgId, s.eventId);
+    const spoof = await app.inject({ method: 'POST', url: `/api/portal/${s.eventId}/rsvp`,
+      payload: { guestId: g3id, token: guestToken, attending: true },
+      headers: { 'content-type': 'application/json' } });
+    expect(spoof.statusCode).toBe(403);
+  });
+
   it('6. Portal returns 404 for non-existent event', async () => {
     const res = await app.inject({ method: 'GET', url: '/api/portal/fake-event-id/info' });
     expect(res.statusCode).toBe(404);
@@ -417,13 +462,14 @@ describe('Public portal: full RSVP flow', () => {
 
   it('7. Multiple RSVPs from same guest (latest wins)', async () => {
     const s = await setupEvent();
+    const guestToken = guestsRepo.rotatePortalToken(s.guestId1);
     // First: attend
     await app.inject({ method: 'POST', url: `/api/portal/${s.eventId}/rsvp`,
-      payload: { guestId: s.guestId1, attending: true },
+      payload: { guestId: s.guestId1, token: guestToken, attending: true },
       headers: { 'content-type': 'application/json' } });
     // Then: decline
     await app.inject({ method: 'POST', url: `/api/portal/${s.eventId}/rsvp`,
-      payload: { guestId: s.guestId1, attending: false },
+      payload: { guestId: s.guestId1, token: guestToken, attending: false },
       headers: { 'content-type': 'application/json' } });
 
     const guests = await app.inject({ method: 'GET', url: `/api/events/${s.eventId}/guests`,
