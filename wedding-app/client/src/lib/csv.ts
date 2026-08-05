@@ -55,3 +55,22 @@ export function parseCsv(text: string): string[][] {
 
   return rows;
 }
+
+/**
+ * CSV cell / document builders with spreadsheet-formula injection
+ * protection (OWASP "CSV Injection").
+ *
+ * Names and notes exported from the app are user-controlled; a cell
+ * starting with `=`, `+`, `-`, or `@` would be evaluated as a formula
+ * when the CSV is opened in Excel/Sheets. Prefixing with a single quote
+ * keeps it inert text. Mirrors server/src/lib/csv.ts.
+ */
+export function csvCell(value: unknown): string {
+  let s = String(value ?? '');
+  if (/^[=+\-@\t\r]/.test(s)) s = `'${s}`;
+  return `"${s.replace(/"/g, '""')}"`;
+}
+
+export function toCsv(rows: Array<Array<unknown>>): string {
+  return rows.map((row) => row.map(csvCell).join(',')).join('\n');
+}

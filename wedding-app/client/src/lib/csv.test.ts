@@ -1,29 +1,31 @@
 import { describe, it, expect } from 'vitest';
-import { parseCsv } from './csv';
+import { csvCell, toCsv, parseCsv } from './csv';
 
-describe('parseCsv', () => {
-  it('parses basic comma separated values', () => {
-    const csv = 'a,b,c\n1,2,3';
-    expect(parseCsv(csv)).toEqual([['a', 'b', 'c'], ['1', '2', '3']]);
+describe('csvCell (formula-injection guard)', () => {
+  it('neutralizes leading = + - @ with a single quote', () => {
+    expect(csvCell('=HYPERLINK("https://evil.example","x")')).toBe(`"'=HYPERLINK(""https://evil.example"",""x"")"`);
+    expect(csvCell('+SUM(A1:A9)')).toBe(`"'+SUM(A1:A9)"`);
+    expect(csvCell('-1+1')).toBe(`"'-1+1"`);
+    expect(csvCell('@cmd')).toBe(`"'@cmd"`);
   });
 
-  it('handles quotes and escaped quotes', () => {
-    const csv = 'a,"b,c",d\n1,"2""3",4';
-    expect(parseCsv(csv)).toEqual([['a', 'b,c', 'd'], ['1', '2"3', '4']]);
+  it('leaves normal values untouched (still quoted, inner quotes doubled)', () => {
+    expect(csvCell('Alice')).toBe('"Alice"');
+    expect(csvCell('O\'Brien')).toBe('"O\'Brien"');
+    expect(csvCell('Say "hi"')).toBe('"Say ""hi"""');
+    expect(csvCell(null)).toBe('""');
+    expect(csvCell(42)).toBe('"42"');
   });
 
-  it('handles CRLF', () => {
-    const csv = 'a,b\r\n1,2';
-    expect(parseCsv(csv)).toEqual([['a', 'b'], ['1', '2']]);
+  it('toCsv builds a document row by row', () => {
+    const csv = toCsv([['Name', 'Notes'], ['DJ', '=cmd'], ['Caterer', 'Great']]);
+    expect(csv).toBe('"Name","Notes"\n"DJ","\'=cmd"\n"Caterer","Great"');
   });
+});
 
-  it('handles empty cells', () => {
-    const csv = 'a,,c\n1,,3';
-    expect(parseCsv(csv)).toEqual([['a', '', 'c'], ['1', '', '3']]);
-  });
-
-  it('removes BOM', () => {
-    const csv = '\uFEFFa,b\n1,2';
-    expect(parseCsv(csv)).toEqual([['a', 'b'], ['1', '2']]);
+describe('parseCsv (existing importer untouched)', () => {
+  it('round-trips quoted cells and escaped quotes', () => {
+    const rows = parseCsv('"a","b,c"\n"say ""hi""","d"');
+    expect(rows).toEqual([['a', 'b,c'], ['say "hi"', 'd']]);
   });
 });

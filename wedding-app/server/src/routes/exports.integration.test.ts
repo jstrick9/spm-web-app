@@ -185,4 +185,33 @@ describe('Org backup', () => {
     const res = await app.inject({ method: 'GET', url: '/api/orgs/fake/export/backup.json' });
     expect(res.statusCode).toBe(401);
   });
+
+  it('neutralizes spreadsheet formulas in exported guest/vendor cells (CSV injection)', async () => {
+    const s = await setup();
+    const eventId = s.eventId;
+    // Guest + vendor names that look like spreadsheet formulas.
+    guestsRepo.create(s.orgId, eventId, {
+      fullName: '=HYPERLINK("https://evil.example","Click me")',
+      email: '=2+5',
+      rsvpStatus: 'attending',
+    });
+    await app.inject({ method: 'POST', url: `/api/orgs/${s.orgId}/vendors`,
+      payload: { name: '+SUM(A1:A9)', category: 'music', eventId },
+      headers: { authorization: `Bearer ${s.token}`, 'content-type': 'application/json' } });
+
+    const guests = await req(s.token, `/api/orgs/${s.orgId}/export/guests.csv`);
+    expect(guests.statusCode).toBe(200);
+    // Inner quotes are CSV-escaped (""), the leading = is neutralized (').
+    expect(guests.body).toContain(`"'=HYPERLINK(""https://evil.example"",""Click me"")"`);
+    expect(guests.body).toContain(`"'=2+5"`);
+    expect(guests.body).not.toContain('"=HYPERLINK');
+
+    const vendors = await req(s.token, `/api/orgs/${s.orgId}/export/vendors.csv`);
+    expect(vendors.statusCode).toBe(200);
+    expect(vendors.body).toContain(`"'+SUM(A1:A9)"`);
+
+    const couple = await req(s.token, `/api/events/${eventId}/couple-guests/export.csv`);
+    expect(couple.statusCode).toBe(200);
+    expect(couple.body).toContain(`"'=HYPERLINK`);
+  });
 });

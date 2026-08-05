@@ -11,6 +11,7 @@
  *   - Export to CSV
  */
 import { useQuery, useMutation, useQueryClient, keepPreviousData } from '@tanstack/react-query';
+import { toCsv } from '../../lib/csv';
 import {
   Download, Search, Users, ChevronLeft, ChevronRight,
   Mail, Phone, Utensils, Accessibility,
@@ -98,7 +99,7 @@ export function CrossEventGuestBrowser({ orgId }: Props) {
       g.event_title ?? '',
       g.dietary_restrictions ?? '',
     ]);
-    const csv = [headers, ...rows].map(r => r.map(c => `"${String(c).replace(/"/g, '""')}"`).join(',')).join('\n');
+    const csv = toCsv([headers, ...rows]);
     const blob = new Blob([csv], { type: 'text/csv' });
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');

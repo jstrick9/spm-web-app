@@ -6,6 +6,7 @@ import { can } from '../../lib/rbac.js';
 import { broadcastSSE } from '../sse.js';
 import { z } from 'zod';
 import { BadRequest, Forbidden, NotFound } from '../../lib/errors.js';
+import { csvCell } from '../../lib/csv.js';
 import type { FastifyInstance } from 'fastify';
 import { guestSchema, portalConfigSchema, guestHelpUpdateSchema, guestHelpReplySchema, activeSmtpIntegrationId, activeSmsIntegrationId, addDaysIso, escapeHtml, safeGuestHelpRequest, safeGuestHelpReply, requireCoupleGuestManager } from './shared.js';
 
@@ -62,7 +63,6 @@ export async function guestCoreRoutes(app: FastifyInstance) {
       LEFT JOIN rsvp_submissions r ON r.id = (SELECT id FROM rsvp_submissions WHERE guest_id = g.id ORDER BY submitted_at DESC LIMIT 1)
       WHERE g.event_id = ? AND g.deleted_at IS NULL
       ORDER BY g.full_name`).all(eventId) as Array<Record<string, any>>;
-    const escape = (value: unknown) => `"${String(value ?? '').replace(/"/g, '""')}"`;
     const rowsOut: Array<Record<string, any>> = rows.map((r) => {
       let meta: Record<string, any> = {};
       try { meta = JSON.parse(r.metadata || '{}'); } catch { /* ignore */ }
@@ -74,8 +74,8 @@ export async function guestCoreRoutes(app: FastifyInstance) {
       return { ...r, mealChoice, cateringNotes };
     });
     const csv = [
-      ['Guest','Email','Phone','Household','Table','Seat','Lodging','Meal choice','Dietary restrictions','Allergies / dietary notes','Accessibility needs','Catering notes','Submitted at'].map(escape).join(','),
-      ...rowsOut.map((r) => [r.full_name, r.email, r.phone, r.party_name, r.table_assignment, r.seat_assignment, r.room_assignment, r.mealChoice, r.dietary_restrictions, r.dietary_notes, r.accessibility_notes, r.cateringNotes, r.submitted_at].map(escape).join(',')),
+      ['Guest','Email','Phone','Household','Table','Seat','Lodging','Meal choice','Dietary restrictions','Allergies / dietary notes','Accessibility needs','Catering notes','Submitted at'].map(csvCell).join(','),
+      ...rowsOut.map((r) => [r.full_name, r.email, r.phone, r.party_name, r.table_assignment, r.seat_assignment, r.room_assignment, r.mealChoice, r.dietary_restrictions, r.dietary_notes, r.accessibility_notes, r.cateringNotes, r.submitted_at].map(csvCell).join(',')),
     ].join('\n');
     auditRepo.log({ organizationId: event.organization_id, actorUserId: req.auth!.userId, actorLabel: req.auth!.email, action: 'guests.catering_dietary_export', targetType: 'event', targetId: eventId, ip: req.ip, details: { rows: rows.length } });
     return reply.header('content-type', 'text/csv; charset=utf-8').header('content-disposition', `attachment; filename="catering-dietary-${eventId}.csv"`).send(csv);

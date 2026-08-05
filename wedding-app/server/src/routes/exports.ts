@@ -4,6 +4,7 @@ import { can } from '../lib/rbac.js';
 import { guestsRepo, vendorsRepo, eventsRepo, timelineRepo, staffTasksRepo, layoutsRepo } from '../db/repos/index.js';
 import { budgetRepo } from '../db/repos/budget.js';
 import { Forbidden } from '../lib/errors.js';
+import { toCsv } from '../lib/csv.js';
 import { buildOperationsPacketManifest, buildOperationsPacketZip, type OperationsPacketData } from '../lib/operationsPacket.js';
 
 function collectOperationsPacketData(eventId: string): OperationsPacketData {
@@ -30,7 +31,7 @@ export async function exportRoutes(app: FastifyInstance) {
       g.rsvp_status, g.table_assignment ?? '', g.dietary_restrictions ?? '',
       (g as any).event_title ?? '',
     ]);
-    const csv = [headers, ...rows].map(r => r.map(c => `"${String(c).replace(/"/g, '""')}"`).join(',')).join('\n');
+    const csv = toCsv([headers, ...rows]);
 
     reply.header('Content-Type', 'text/csv');
     reply.header('Content-Disposition', 'attachment; filename="guests_export.csv"');
@@ -50,7 +51,7 @@ export async function exportRoutes(app: FastifyInstance) {
       (v.amount_paid_cents / 100).toFixed(2),
       (((v.contract_amount_cents ?? 0) - v.amount_paid_cents) / 100).toFixed(2),
     ]);
-    const csv = [headers, ...rows].map(r => r.map(c => `"${String(c).replace(/"/g, '""')}"`).join(',')).join('\n');
+    const csv = toCsv([headers, ...rows]);
 
     reply.header('Content-Type', 'text/csv');
     reply.header('Content-Disposition', 'attachment; filename="vendors_export.csv"');

@@ -2,6 +2,7 @@ import { auditRepo, eventsRepo, guestsRepo } from '../../db/repos/index.js';
 import { requireAuth } from '../../middleware/auth.js';
 import { can } from '../../lib/rbac.js';
 import { BadRequest, Forbidden, NotFound } from '../../lib/errors.js';
+import { toCsv } from '../../lib/csv.js';
 import type { FastifyInstance } from 'fastify';
 import { canWriteCoupleData, coupleGuestSchema, coupleSeatingSchema, importPreviewSchema, parseCsvLine, safeGuest } from './shared.js';
 
@@ -29,7 +30,7 @@ export async function coupleGuestsRoutes(app: FastifyInstance) {
     if (!can(req.auth!.memberships, { eventId }, 'events.view', orgMap)) throw Forbidden();
     const headers = ['Guest','Household','Table','Seat','Tags','Accessibility'];
     const rows = guestsRepo.listForEvent(eventId).map(safeGuest).map((g) => [g.fullName, g.householdName, g.tableAssignment ?? '', g.seatAssignment ?? '', g.tags.join('|'), g.accessibilityNotes ?? '']);
-    const csv = [headers, ...rows].map((r) => r.map((c) => `"${String(c).replace(/"/g, '""')}"`).join(',')).join('\n');
+    const csv = toCsv([headers, ...rows]);
     reply.header('Content-Type', 'text/csv');
     reply.header('Content-Disposition', `attachment; filename="couple_seating_chart_${eventId}.csv"`);
     return reply.send(csv);
@@ -187,7 +188,7 @@ export async function coupleGuestsRoutes(app: FastifyInstance) {
     const guests = guestsRepo.listForEvent(eventId).map(safeGuest);
     const headers = ['Full Name','Email','Phone','Household','Mailing Address','RSVP','Meal Choice','Dietary','Accessibility','Tags','Table','Seat','Room'];
     const rows = guests.map((g) => [g.fullName, g.email ?? '', g.phone ?? '', g.householdName, g.mailingAddress, g.rsvpStatus, g.mealChoice, g.dietaryRestrictions ?? '', g.accessibilityNotes ?? '', g.tags.join('|'), g.tableAssignment ?? '', g.seatAssignment ?? '', g.roomAssignment ?? '']);
-    const csv = [headers, ...rows].map((r) => r.map((c) => `"${String(c).replace(/"/g, '""')}"`).join(',')).join('\n');
+    const csv = toCsv([headers, ...rows]);
     reply.header('Content-Type', 'text/csv');
     reply.header('Content-Disposition', `attachment; filename="couple_guest_list_${eventId}.csv"`);
     return reply.send(csv);

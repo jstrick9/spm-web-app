@@ -6,6 +6,7 @@
  * even when WiFi drops in the parking lot.
  */
 import React, { useState, useEffect } from 'react';
+import { toCsv } from '../../lib/csv';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { QrCode, Search, LogIn, LogOut, Clock, AlertCircle, Phone, Building2, UserCircle, X, Download, Keyboard, MessageSquare, Loader2, Camera, LockKeyhole } from 'lucide-react';
 import { sdk } from '../../sdk';
@@ -77,7 +78,7 @@ export function VendorCheckInApp({ eventId, organizationId }: Props) {
 
   const exportReport = () => {
     const rows = [['Vendor','Category','Contact','Phone','Status'], ...vendors.map(v => [v.name, v.category || '', v.contact_name || '', v.phone || '', statusMap[v.id] || 'expected'])];
-    const csv = rows.map(r => r.map(c => `"${String(c).replace(/"/g, '""')}"`).join(',')).join('\n');
+    const csv = toCsv(rows);
     const blob = new Blob([csv], { type: 'text/csv' });
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
