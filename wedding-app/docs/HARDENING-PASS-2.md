@@ -131,8 +131,31 @@ as a permanent regression net.
 
 ---
 
+## 6. RFC 5545 ICS escaping (follow-up commit `815ffad`)
+
+**Files:** `server/src/routes/guests/portal.ts`, `server/src/routes/exports.ts`
+
+**Problem:** the guest portal's per-sub-event `.ics` endpoint built its own
+VEVENT with only newline stripping — a title like `Rehearsal, Dinner;
+Planning \ Backslash` produced malformed calendar files (`,`/`;`/`\` are
+RFC 5545 TEXT structure characters), and CR/LF in any user-controlled value
+could inject extra ICS lines. The event `export.ics` similarly replaced
+`,`/`;`/`\` with spaces but never neutralized CR/LF.
+
+**Fix:** both endpoints now route every user-controlled value through
+`lib/ics.ts` `icsText()` (escape `\`, `;`, `,`; collapse CR/LF).
+
+**Tests:** `server/src/routes/portal-ics.integration.test.ts` (3 tests) —
+escaping across SUMMARY/LOCATION/DESCRIPTION, well-formed line structure
+(no injected properties), invite-only token guard, and a CRLF
+line-injection attempt on the event export `.ics`.
+
+---
+
 ## Verification
 
-- Server: full suite green (599 tests / 83 files at the time of this pass).
-- Client: full suite green (899 tests).
+- Server: full suite green (641 tests / 84 files).
+- Client: full suite green (898 tests / 135 files).
 - `tsc --noEmit` clean on both apps; `npm run build` + bundle-budget pass.
+- SDK↔server route surface cross-checked: every SDK call resolves to a
+  registered server route (no dead/misrouted endpoints).
