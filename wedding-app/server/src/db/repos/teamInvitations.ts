@@ -1,4 +1,5 @@
 import { db } from '../database.js';
+import { nowIso } from '../../lib/time.js';
 import { generateOpaqueToken, hashToken, uuid, verifyToken } from '../../lib/crypto.js';
 
 export interface TeamInvitationRow {
@@ -64,8 +65,8 @@ export const teamInvitationsRepo = {
     if (!id || !secret) return undefined;
     const row = db.prepare(
       `SELECT * FROM team_invitations
-       WHERE id = ? AND accepted_at IS NULL AND revoked_at IS NULL AND expires_at > datetime('now')`,
-    ).get(id) as TeamInvitationRow | undefined;
+       WHERE id = ? AND accepted_at IS NULL AND revoked_at IS NULL AND expires_at > ?`,
+    ).get(id, nowIso()) as TeamInvitationRow | undefined;
     if (!row) return undefined;
     return verifyToken(secret, { hash: row.token_hash, salt: row.token_salt }) ? row : undefined;
   },

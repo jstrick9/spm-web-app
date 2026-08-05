@@ -1,6 +1,7 @@
 import { db } from '../database.js';
 import { uuid } from '../../lib/crypto.js';
 import { stringifyJson } from '../../lib/json.js';
+import { isoToSqliteUtc } from '../../lib/time.js';
 
 export interface AuditLogRow {
   id: string;
@@ -50,8 +51,11 @@ export const auditRepo = {
     let sql = `SELECT * FROM audit_logs WHERE organization_id = ?`;
     const params: unknown[] = [orgId];
     if (opts.action) { sql += ` AND action = ?`; params.push(opts.action); }
-    if (opts.before) { sql += ` AND created_at < ?`; params.push(opts.before); }
-    if (opts.after) { sql += ` AND created_at > ?`; params.push(opts.after); }
+    // created_at is stored in SQLite space format; normalize ISO params
+    // (e.g. the client's time-range filters) or string comparison silently
+    // drops same-day rows.
+    if (opts.before) { sql += ` AND created_at < ?`; params.push(opts.before.includes('T') ? isoToSqliteUtc(opts.before) : opts.before); }
+    if (opts.after) { sql += ` AND created_at > ?`; params.push(opts.after.includes('T') ? isoToSqliteUtc(opts.after) : opts.after); }
     if (opts.actorEmail) { sql += ` AND actor_label = ? COLLATE NOCASE`; params.push(opts.actorEmail); }
     sql += ` ORDER BY created_at DESC, id DESC LIMIT ?`;
     params.push(opts.limit ?? 200);
@@ -63,8 +67,8 @@ export const auditRepo = {
     let sql = `SELECT COUNT(*) AS n FROM audit_logs WHERE organization_id = ?`;
     const params: unknown[] = [orgId];
     if (opts.action) { sql += ` AND action = ?`; params.push(opts.action); }
-    if (opts.before) { sql += ` AND created_at < ?`; params.push(opts.before); }
-    if (opts.after) { sql += ` AND created_at > ?`; params.push(opts.after); }
+    if (opts.before) { sql += ` AND created_at < ?`; params.push(opts.before.includes('T') ? isoToSqliteUtc(opts.before) : opts.before); }
+    if (opts.after) { sql += ` AND created_at > ?`; params.push(opts.after.includes('T') ? isoToSqliteUtc(opts.after) : opts.after); }
     if (opts.actorEmail) { sql += ` AND actor_label = ? COLLATE NOCASE`; params.push(opts.actorEmail); }
     return (db.prepare(sql).get(...params) as { n: number }).n;
   },
@@ -78,6 +82,7 @@ export const auditRepo = {
    */
   purgeBefore(beforeIso: string, opts: { organizationId?: string } = {}): number {
     let sql = `DELETE FROM audit_logs WHERE created_at < ?`;
+    if (beforeIso.includes('T')) beforeIso = isoToSqliteUtc(beforeIso);
     const params: unknown[] = [beforeIso];
     if (opts.organizationId) { sql += ` AND organization_id = ?`; params.push(opts.organizationId); }
     return db.prepare(sql).run(...params).changes;
@@ -85,6 +90,7 @@ export const auditRepo = {
 
   /** Distinct orgs with audit rows older than `beforeIso` (for retention reporting). */
   orgsWithRowsOlderThan(beforeIso: string): Array<{ organization_id: string | null; rows: number }> {
+    if (beforeIso.includes('T')) beforeIso = isoToSqliteUtc(beforeIso);
     return db.prepare(
       `SELECT organization_id, COUNT(*) AS rows FROM audit_logs WHERE created_at < ? GROUP BY organization_id`
     ).all(beforeIso) as Array<{ organization_id: string | null; rows: number }>;

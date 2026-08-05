@@ -13,7 +13,7 @@
  *   - logs the totals to stdout for ops monitoring.
  */
 import { auditRepo } from '../db/repos/audit.js';
-import { nowIso } from '../lib/time.js';
+import { nowIso, toSqliteUtc } from '../lib/time.js';
 
 export function auditRetentionDays(): number {
   const raw = Number(process.env.AUDIT_RETENTION_DAYS ?? 0);
@@ -24,7 +24,9 @@ export function runAuditRetention(): { enabled: boolean; deletedRows: number; af
   const days = auditRetentionDays();
   if (days === 0) return { enabled: false, deletedRows: 0, affectedOrgs: 0 };
 
-  const cutoff = nowIso(new Date(Date.now() - days * 86_400_000).getTime());
+  // audit created_at is SQLite space format — an ISO cutoff would purge
+  // same-day rows up to the end of the UTC day (see lib/time.ts).
+  const cutoff = toSqliteUtc(new Date(Date.now() - days * 86_400_000));
   const affected = auditRepo.orgsWithRowsOlderThan(cutoff);
 
   for (const org of affected) {

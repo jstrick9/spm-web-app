@@ -1,4 +1,5 @@
 import { db } from '../database.js';
+import { nowIso } from '../../lib/time.js';
 import { uuid } from '../../lib/crypto.js';
 import { stringifyJson, parseJson } from '../../lib/json.js';
 import { sealSecret, openSecret } from '../../lib/secrets.js';
@@ -155,7 +156,7 @@ export const webhooksRepo = {
   },
 
   claimDueRetries(limit = 20): Array<WebhookDeliveryRow & { url: string; secret_payload: string | null }> {
-    const rows = db.prepare(`SELECT d.*, w.url, w.secret_payload FROM webhook_deliveries d JOIN webhooks w ON w.id = d.webhook_id WHERE d.next_retry_at <= datetime('now') AND d.terminal_at IS NULL AND w.is_active = 1 ORDER BY d.next_retry_at LIMIT ?`).all(limit) as Array<WebhookDeliveryRow & { url: string; secret_payload: string | null }>;
+    const rows = db.prepare(`SELECT d.*, w.url, w.secret_payload FROM webhook_deliveries d JOIN webhooks w ON w.id = d.webhook_id WHERE d.next_retry_at <= ? AND d.terminal_at IS NULL AND w.is_active = 1 ORDER BY d.next_retry_at LIMIT ?`).all(nowIso(), limit) as Array<WebhookDeliveryRow & { url: string; secret_payload: string | null }>;
     for (const row of rows) db.prepare(`UPDATE webhook_deliveries SET next_retry_at = NULL, terminal_at = datetime('now') WHERE id = ?`).run(row.id);
     return rows;
   },

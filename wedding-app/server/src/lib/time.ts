@@ -15,3 +15,15 @@ export function nowIso(at?: number): string {
 export function toSqliteUtc(date = new Date()): string {
   return date.toISOString().slice(0, 19).replace('T', ' ');
 }
+
+/**
+ * Convert an ISO-8601 timestamp ('YYYY-MM-DDTHH:MM:SS.sssZ') to SQLite
+ * space format ('YYYY-MM-DD HH:MM:SS'). Use this when a caller hands you
+ * an ISO timestamp but the column stores datetime('now') values — mixing
+ * the two formats in a string comparison silently breaks (every ISO
+ * string sorts AFTER every space string on the same day, so e.g.
+ * "expires_at > datetime('now')" stays true until UTC midnight).
+ */
+export function isoToSqliteUtc(iso: string): string {
+  return iso.slice(0, 19).replace('T', ' ');
+}

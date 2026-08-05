@@ -1,4 +1,5 @@
 import { db } from '../database.js';
+import { nowIso } from '../../lib/time.js';
 import { generateOpaqueToken, hashToken, uuid, verifyToken } from '../../lib/crypto.js';
 
 export interface PasswordResetTokenRow {
@@ -25,8 +26,8 @@ export const passwordResetTokensRepo = {
       db.prepare(
         `UPDATE password_reset_tokens
          SET used_at = datetime('now')
-         WHERE user_id = ? AND used_at IS NULL AND expires_at > datetime('now')`
-      ).run(userId);
+         WHERE user_id = ? AND used_at IS NULL AND expires_at > ?`
+      ).run(userId, nowIso());
       db.prepare(
         `INSERT INTO password_reset_tokens (id, user_id, token_hash, token_salt, expires_at)
          VALUES (?, ?, ?, ?, ?)`
@@ -46,8 +47,8 @@ export const passwordResetTokensRepo = {
     if (!id || !secret) return undefined;
     const row = db.prepare(
       `SELECT * FROM password_reset_tokens
-       WHERE id = ? AND used_at IS NULL AND expires_at > datetime('now')`
-    ).get(id) as PasswordResetTokenRow | undefined;
+       WHERE id = ? AND used_at IS NULL AND expires_at > ?`
+    ).get(id, nowIso()) as PasswordResetTokenRow | undefined;
     if (!row) return undefined;
     return verifyToken(secret, { hash: row.token_hash, salt: row.token_salt }) ? row : undefined;
   },

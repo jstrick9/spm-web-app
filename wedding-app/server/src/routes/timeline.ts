@@ -211,7 +211,13 @@ export async function timelineRoutes(app: FastifyInstance) {
     assertTimelineItemBelongsToEvent(parsed.data.timelineItemId, event.id);
     // MODULE-05 ST-06: no SMS gateway exists — reject the channel at creation instead of queueing forever.
     if (parsed.data.channel === 'sms') throw BadRequest('sms-channel-not-configured');
-    const reminder = timelineOpsRepo.addReminder(event.organization_id, event.id, { ...parsed.data, createdBy: req.auth!.userId });
+    const reminder = timelineOpsRepo.addReminder(event.organization_id, event.id, {
+      ...parsed.data,
+      // Store canonical ISO so the reminder scan's ISO comparison works
+      // regardless of what string the client sent.
+      remindAt: new Date(parsed.data.remindAt).toISOString(),
+      createdBy: req.auth!.userId,
+    });
     audit(req, event.organization_id, 'timeline.reminder.created', 'event', event.id, { reminderId: reminder.id, remindAt: reminder.remind_at, channel: reminder.channel, audience: reminder.audience });
     return reply.code(201).send({ reminder });
   });

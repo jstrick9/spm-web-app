@@ -1,4 +1,5 @@
 import { db } from '../database.js';
+import { nowIso } from '../../lib/time.js';
 import { uuid, hashToken, verifyToken } from '../../lib/crypto.js';
 import { stringifyJson } from '../../lib/json.js';
 
@@ -160,7 +161,7 @@ export const layoutOpsRepo = {
   },
 
   findPacketByToken(token: string): LayoutSetupPacketRow | undefined {
-    const rows = db.prepare(`SELECT * FROM layout_setup_packets WHERE revoked_at IS NULL AND (expires_at IS NULL OR expires_at > datetime('now'))`).all() as LayoutSetupPacketRow[];
+    const rows = db.prepare(`SELECT * FROM layout_setup_packets WHERE revoked_at IS NULL AND (expires_at IS NULL OR expires_at > ?)`).all(nowIso()) as LayoutSetupPacketRow[];
     const row = rows.find((packet) => packet.token_salt ? verifyToken(token, { hash: packet.token, salt: packet.token_salt }) : packet.token === token);
     if (row) db.prepare(`UPDATE layout_setup_packets SET token_last_used_at = datetime('now') WHERE id = ?`).run(row.id);
     return row;

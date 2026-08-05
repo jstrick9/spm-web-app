@@ -11,6 +11,7 @@
  * job (using UPDATE ... RETURNING via a transactional SELECT+UPDATE).
  */
 import { db } from '../database.js';
+import { nowIso } from '../../lib/time.js';
 import { uuid } from '../../lib/crypto.js';
 import { parseJson, stringifyJson } from '../../lib/json.js';
 
@@ -44,13 +45,15 @@ export const jobsRepo = {
     const id = uuid();
     db.prepare(
       `INSERT INTO job_queue (id, kind, organization_id, payload, run_at, max_attempts)
-       VALUES (?, ?, ?, ?, COALESCE(?, datetime('now')), ?)`,
+       VALUES (?, ?, ?, ?, ?, ?)`,
     ).run(
       id,
       input.kind,
       input.organizationId ?? null,
       stringifyJson(input.payload ?? {}),
-      input.runAt ?? null,
+      // Always write ISO — comparing ISO against datetime('now') (space
+      // format) delays same-day jobs until UTC midnight.
+      input.runAt ?? nowIso(),
       input.maxAttempts ?? 5,
     );
     return this.findById(id)!;
@@ -73,9 +76,9 @@ export const jobsRepo = {
     const tx = db.transaction(() => {
       const candidate = db.prepare(
         `SELECT * FROM job_queue
-         WHERE status = 'pending' AND run_at <= datetime('now')
+         WHERE status = 'pending' AND run_at <= ?
          ORDER BY run_at ASC LIMIT 1`,
-      ).get() as JobRow | undefined;
+      ).get(nowIso()) as JobRow | undefined;
       if (!candidate) return;
       const res = db.prepare(
         `UPDATE job_queue
@@ -122,10 +125,10 @@ export const jobsRepo = {
     db.prepare(
       `UPDATE job_queue
        SET status = 'pending', locked_at = NULL, locked_by = NULL,
-           run_at = datetime('now', '+' || ? || ' seconds'),
+           run_at = ?,
            last_error = ?
        WHERE id = ?`,
-    ).run(backoffSec, errorMessage, id);
+    ).run(nowIso(Date.now() + backoffSec * 1000), errorMessage, id);
   },
 
   /** Reclaim jobs whose worker died (no heartbeat for > 5 min). */
@@ -133,9 +136,9 @@ export const jobsRepo = {
     const res = db.prepare(
       `UPDATE job_queue
        SET status = 'pending', locked_at = NULL, locked_by = NULL,
-           run_at = datetime('now')
+           run_at = ?
        WHERE status = 'running' AND locked_at < datetime('now', '-5 minutes')`,
-    ).run();
+    ).run(nowIso());
     return res.changes;
   },
 
