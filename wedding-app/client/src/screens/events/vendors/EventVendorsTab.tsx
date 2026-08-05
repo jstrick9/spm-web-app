@@ -22,6 +22,7 @@ import {
   QrCode,
   Eye,
   MapPin,
+  Star,
 } from "lucide-react";
 import { sdk } from "../../../sdk";
 import { Button } from "../../../ui/Button";
@@ -36,6 +37,7 @@ import { Link } from "lucide-react";
 import { SdkVendor } from "../../../sdk/types";
 import { VendorFormDialog } from "./VendorFormDialog";
 import { VendorPaymentDialog } from "./VendorPaymentDialog";
+import { VendorRatingDialog } from "./VendorRatingDialog";
 import { VendorTimelineChart } from "./VendorTimelineChart";
 import { VendorCommunicationsHub } from "./hub/VendorCommunicationsHub";
 import { VendorMatchPanel } from "./VendorMatchPanel";
@@ -60,6 +62,7 @@ export function EventVendorsTab({ eventId, organizationId }: Props) {
     id: string;
     name: string;
   } | null>(null);
+  const [ratingVendor, setRatingVendor] = useState<SdkVendor | null>(null);
   const [generatingPortalFor, setGeneratingPortalFor] = useState<string | null>(
     null,
   );
@@ -765,6 +768,15 @@ export function EventVendorsTab({ eventId, organizationId }: Props) {
               <Button
                 variant="outline"
                 size="xs"
+                className="text-[9px] py-1 h-auto text-amber-600 border-amber-300 hover:bg-amber-50"
+                onClick={() => setRatingVendor(v)}
+                aria-label={`Rate ${v.name}`}
+              >
+                <Star className="w-3 h-3 mr-1" /> Rate
+              </Button>
+              <Button
+                variant="outline"
+                size="xs"
                 className="text-[9px] py-1 h-auto"
                 onClick={() => setPaymentVendor({ id: v.id, name: v.name })}
               >
@@ -1036,6 +1048,15 @@ export function EventVendorsTab({ eventId, organizationId }: Props) {
           eventId={eventId}
           organizationId={organizationId}
           vendor={editVendor}
+        />
+      )}
+
+      {ratingVendor && (
+        <VendorRatingDialog
+          open={true}
+          onOpenChange={(v) => !v && setRatingVendor(null)}
+          eventId={eventId}
+          vendor={ratingVendor}
         />
       )}
     </div>

@@ -52,7 +52,16 @@ function makeWrapper() {
 }
 
 describe('VendorCheckInApp', () => {
-  beforeEach(() => { vi.clearAllMocks(); });
+  beforeEach(async () => {
+    vi.clearAllMocks();
+    // Restore the default status map — later tests override it per-test.
+    const { sdk } = await import('../../sdk');
+    (sdk.checkins.list as any).mockResolvedValue({
+      checkins: [],
+      statusMap: {},
+      counts: { expected: 0, arrived: 0, completed: 0, departed: 0 },
+    });
+  });
 
   it('renders vendor list and check-in controls', async () => {
     render(<VendorCheckInApp eventId="evt-1" organizationId="org-1" />, { wrapper: makeWrapper() });
@@ -87,5 +96,47 @@ describe('VendorCheckInApp', () => {
     expect(screen.getByText(/All Vendors/)).toBeInTheDocument();
     expect(screen.getByText(/Expected/)).toBeInTheDocument();
     expect(screen.getByText(/On-Site/)).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /^Late/ })).toBeInTheDocument();
+  });
+
+  it('Late filter shows only vendors explicitly marked late (regression: inverted filter hid them)', async () => {
+    const { sdk } = await import('../../sdk');
+    (sdk.checkins.list as any).mockResolvedValue({
+      checkins: [],
+      statusMap: { v1: 'late' },
+      counts: { expected: 1, arrived: 0, completed: 0, departed: 0 },
+    });
+    render(<VendorCheckInApp eventId="evt-1" organizationId="org-1" />, { wrapper: makeWrapper() });
+    await screen.findByText('DJ Snake');
+    fireEvent.click(screen.getByRole('button', { name: /^Late/ }));
+    expect(screen.getByText('DJ Snake')).toBeInTheDocument();
+    expect(screen.queryByText('Food Co')).not.toBeInTheDocument();
+  });
+
+  it('Mark Late flags an expected vendor as late', async () => {
+    const { sdk } = await import('../../sdk');
+    render(<VendorCheckInApp eventId="evt-1" organizationId="org-1" />, { wrapper: makeWrapper() });
+    await screen.findByText('DJ Snake');
+    fireEvent.click(screen.getByRole('button', { name: /Mark DJ Snake as late/i }));
+    await waitFor(() => {
+      const calls = (sdk.checkins.update as any).mock.calls;
+      expect(calls.some((c: unknown[]) => c[0] === 'evt-1' && c[1] === 'v1' && c[2] === 'late')).toBe(true);
+    });
+  });
+
+  it('late vendors can still be checked in when they arrive', async () => {
+    const { sdk } = await import('../../sdk');
+    (sdk.checkins.list as any).mockResolvedValue({
+      checkins: [],
+      statusMap: { v1: 'late' },
+      counts: { expected: 0, arrived: 0, completed: 0, departed: 0 },
+    });
+    render(<VendorCheckInApp eventId="evt-1" organizationId="org-1" />, { wrapper: makeWrapper() });
+    await screen.findByText('DJ Snake');
+    fireEvent.click(screen.getByRole('button', { name: /Arrived Late/i }));
+    await waitFor(() => {
+      const calls = (sdk.checkins.update as any).mock.calls;
+      expect(calls.some((c: unknown[]) => c[0] === 'evt-1' && c[1] === 'v1' && c[2] === 'arrived')).toBe(true);
+    });
   });
 });

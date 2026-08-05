@@ -91,7 +91,8 @@ export function VendorCheckInApp({ eventId, organizationId }: Props) {
     const s = statusMap[v.id] || 'expected';
     if (filter === 'expected' && s !== 'expected') return false;
     if (filter === 'arrived' && !['arrived', 'setup', 'completed'].includes(s)) return false;
-    if (filter === 'late' && s !== 'expected') return false;
+    // 'late' shows vendors explicitly marked late by the day-of captain.
+    if (filter === 'late' && s !== 'late') return false;
     if (search && !v.name.toLowerCase().includes(search.toLowerCase()) && !v.category?.toLowerCase().includes(search.toLowerCase())) return false;
     return true;
   });
@@ -102,6 +103,7 @@ export function VendorCheckInApp({ eventId, organizationId }: Props) {
 
   const expectedCount = vendors.filter(v => (statusMap[v.id] || 'expected') === 'expected').length;
   const arrivedCount = vendors.filter(v => ['arrived', 'setup', 'completed'].includes(statusMap[v.id])).length;
+  const lateCount = vendors.filter(v => statusMap[v.id] === 'late').length;
 
   return (
     <div className={cn("min-h-screen bg-surface-2/50 pb-20", kioskMode && "bg-black text-white")}>
@@ -133,7 +135,7 @@ export function VendorCheckInApp({ eventId, organizationId }: Props) {
           <button onClick={() => setFilter('late')}
             className={cn("px-4 py-1.5 text-sm font-medium rounded-full transition-colors whitespace-nowrap flex items-center gap-1",
               filter === 'late' ? "bg-danger text-danger-fg" : "bg-danger/10 text-danger hover:bg-danger/20")}>
-            <AlertCircle className="w-3.5 h-3.5" /> Late
+            <AlertCircle className="w-3.5 h-3.5" /> Late <span className="ml-0.5 opacity-70">({lateCount})</span>
           </button>
         </div>
       </header>
@@ -166,15 +168,15 @@ export function VendorCheckInApp({ eventId, organizationId }: Props) {
             {filteredVendors.map(vendor => {
               const status = statusMap[vendor.id] || 'expected';
               return (
-                <Card key={vendor.id} className={cn("overflow-hidden transition-all duration-300", status !== 'expected' ? "border-brand/30 shadow-sm" : "border-border shadow-none")}>
-                  <div className={cn("p-4", status !== 'expected' ? "bg-brand/5" : "bg-surface")}>
+                <Card key={vendor.id} className={cn("overflow-hidden transition-all duration-300", status === 'late' ? "border-danger/40 shadow-sm" : status !== 'expected' ? "border-brand/30 shadow-sm" : "border-border shadow-none")}>
+                  <div className={cn("p-4", status === 'late' ? "bg-danger/5" : status !== 'expected' ? "bg-brand/5" : "bg-surface")}>
                     <div className="flex justify-between items-start mb-3">
                       <div>
                         <h3 className="font-bold text-lg leading-tight">{vendor.name}</h3>
                         <div className="text-sm font-medium text-fg-subtle uppercase tracking-widest mt-1">{vendor.category}</div>
                       </div>
-                      <Badge variant={status === 'expected' ? 'outline' : status === 'departed' ? 'info' : 'success'} className="uppercase text-[10px] tracking-wider font-bold">
-                        {status}
+                      <Badge variant={status === 'expected' ? 'outline' : status === 'departed' ? 'info' : status === 'late' ? 'danger' : 'success'} className="uppercase text-[10px] tracking-wider font-bold">
+                        {status === 'late' ? 'late ⚠' : status}
                       </Badge>
                     </div>
 
@@ -191,8 +193,23 @@ export function VendorCheckInApp({ eventId, organizationId }: Props) {
 
                     <div className="flex flex-wrap gap-2 pt-4 border-t border-border/50">
                       {status === 'expected' && (
+                        <>
+                          <Button className="flex-1 min-w-[120px]" size="sm" onClick={() => updateStatus(vendor.id, 'arrived')}>
+                            <LogIn className="w-4 h-4 mr-2" /> Mark Arrived
+                          </Button>
+                          <Button
+                            className="flex-1 min-w-[100px] border-danger/30 text-danger hover:bg-danger/10"
+                            variant="outline" size="sm"
+                            onClick={() => updateStatus(vendor.id, 'late')}
+                            aria-label={`Mark ${vendor.name} as late`}
+                          >
+                            <AlertCircle className="w-4 h-4 mr-2" /> Mark Late
+                          </Button>
+                        </>
+                      )}
+                      {status === 'late' && (
                         <Button className="flex-1 min-w-[120px]" size="sm" onClick={() => updateStatus(vendor.id, 'arrived')}>
-                          <LogIn className="w-4 h-4 mr-2" /> Mark Arrived
+                          <LogIn className="w-4 h-4 mr-2" /> Arrived Late — Check In
                         </Button>
                       )}
                       {status === 'arrived' && (
