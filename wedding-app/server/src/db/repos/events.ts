@@ -263,8 +263,8 @@ export const eventsRepo = {
 
 // ─── Sub-events ──────────────────────────────────────────────
 export const subEventsRepo = {
-  findById(id: string) {
-    return db.prepare("SELECT * FROM sub_events WHERE id = ?").get(id) as { id: string; event_id: string } | undefined;
+  findById(id: string): SubEventRow | undefined {
+    return db.prepare("SELECT * FROM sub_events WHERE id = ?").get(id) as SubEventRow | undefined;
   },
 
   create(input: {

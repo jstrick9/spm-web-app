@@ -50,13 +50,17 @@ const updateEventSchema = baseEventSchema
     { message: 'endDate must be on or after startDate', path: ['endDate'] },
   );
 
-const subEventSchema = z.object({
+const subEventSchemaBase = z.object({
   title:       z.string().min(1).max(200),
   startsAt:    z.string().min(1),
   endsAt:      z.string().optional(),
   venueId:     z.string().optional(),
   inviteOnly:  z.boolean().optional(),
   metadata:    z.record(z.unknown()).optional(),
+});
+const subEventSchema = subEventSchemaBase.refine((value) => value.endsAt === undefined || value.endsAt === '' || Date.parse(value.endsAt) > Date.parse(value.startsAt), {
+  message: 'sub-event-end-must-follow-start',
+  path: ['endsAt'],
 });
 
 function finalReviewReadiness(event: any) {  const metadata = (() => { try { return JSON.parse(event.metadata || '{}'); } catch { return {}; } })() as Record<string, any>;
@@ -546,8 +550,14 @@ export async function eventRoutes(app: FastifyInstance) {
     if (!ev) throw NotFound();
     const orgMap = eventsRepo.orgMapForUser(req.auth!.userId);
     if (!can(req.auth!.memberships, { eventId: ev.id }, 'events.edit', orgMap)) throw Forbidden();
-    const parsed = subEventSchema.partial().safeParse(req.body);
+    const parsed = subEventSchemaBase.partial().safeParse(req.body);
     if (!parsed.success) throw BadRequest('invalid-input', parsed.error.issues);
+    // Ordering guard against the EFFECTIVE start: the patch may only touch
+    // endsAt, in which case compare against the stored starts_at.
+    const effectiveStart = parsed.data.startsAt ?? sub.starts_at;
+    if (parsed.data.endsAt !== undefined && parsed.data.endsAt !== '' && Date.parse(parsed.data.endsAt) <= Date.parse(effectiveStart)) {
+      throw BadRequest('invalid-input', [{ message: 'sub-event-end-must-follow-start', path: ['endsAt'] }]);
+    }
     const updated = subEventsRepo.update(subId, parsed.data as never);
     auditRepo.log({ organizationId: ev.organization_id, actorUserId: req.auth!.userId, actorLabel: req.auth!.email, action: 'sub_event.update', targetType: 'sub_event', targetId: subId, ip: req.ip, details: { fields: Object.keys(parsed.data) } });
     return { subEvent: updated };

@@ -88,6 +88,16 @@ describe('Events module — pipeline integrity', () => {
     expect(sub.statusCode).toBe(201);
     const subId = sub.json().subEvent.id;
     await authed(u.token, 'PATCH', `/api/sub-events/${subId}`, { metadata: { lodgingNote: 'Block at Grand Hotel' } });
+
+    // Sub-event ordering: an end before its start is rejected on create
+    // and on update (matches timeline behavior).
+    const badSub = await authed(u.token, 'POST', `/api/events/${event.id}/sub-events`, {
+      title: 'Backwards', startsAt: '2026-09-12T17:00:00', endsAt: '2026-09-12T16:00:00',
+    });
+    expect(badSub.statusCode).toBe(400);
+    expect(badSub.json().error).toBe('invalid-input');
+    const badPatch = await authed(u.token, 'PATCH', `/api/sub-events/${subId}`, { endsAt: '2026-09-12T15:00:00' });
+    expect(badPatch.statusCode).toBe(400);
     const subGet = await authed(u.token, 'GET', `/api/events/${event.id}/sub-events`);
     const subMeta = JSON.parse(subGet.json().subEvents.find((s: any) => s.id === subId).metadata || '{}');
     expect(subMeta.rsvpEnabled).toBe(true);
