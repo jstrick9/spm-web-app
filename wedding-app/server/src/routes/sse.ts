@@ -130,6 +130,11 @@ export async function sseRoutes(app: FastifyInstance) {
       'X-Accel-Buffering': 'no', // Disable nginx buffering
     });
 
+    // Immediate keep-alive: EventSource clients (and intermediate proxies)
+    // see the connection as open instantly instead of waiting up to the
+    // 30s heartbeat for the first byte.
+    reply.raw.write(': connected\n\n');
+
     // Send initial catch-up events
     const lastId = Number(query.lastId ?? 0);
     const catchUp = sseEventsRepo.listAfter(orgId, lastId);
