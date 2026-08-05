@@ -54,6 +54,9 @@ export const appointmentRequestSchema = z.object({
   location: z.string().max(300).optional(),
   note: z.string().max(2000).optional(),
   availabilityWindow: z.string().max(500).optional(),
+}).refine((value) => value.endsAt === undefined || value.startsAt === undefined || Date.parse(value.endsAt) > Date.parse(value.startsAt), {
+  message: 'appointment-end-must-follow-start',
+  path: ['endsAt'],
 });
 
 export const appointmentStatusSchema = z.object({

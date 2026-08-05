@@ -358,6 +358,9 @@ describe('Auth: logout', () => {
 
     const appointment = await app.inject({ method: 'POST', url: `/api/events/${eventId}/couple-appointments`, payload: { appointmentType: 'tasting', title: 'Menu Tasting', startsAt: '2026-08-01T14:00:00', endsAt: '2026-08-01T15:00:00', note: 'Prefer Thursday afternoon' }, headers: { authorization: `Bearer ${reg.json().token}`, 'content-type': 'application/json' } });
     expect(appointment.statusCode).toBe(201);
+    // Appointment ordering: end before start is rejected.
+    const badAppt = await app.inject({ method: 'POST', url: `/api/events/${eventId}/couple-appointments`, payload: { appointmentType: 'tour', title: 'Backwards', startsAt: '2026-08-01T14:00:00', endsAt: '2026-08-01T13:00:00' }, headers: { authorization: `Bearer ${reg.json().token}`, 'content-type': 'application/json' } });
+    expect(badAppt.statusCode).toBe(400);
     expect(appointment.json().appointment.appointment_type).toBe('tasting');
     const calendar = await app.inject({ method: 'GET', url: `/api/events/${eventId}/couple-calendar`, headers: { authorization: `Bearer ${reg.json().token}` } });
     expect(calendar.statusCode).toBe(200);
