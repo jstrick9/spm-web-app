@@ -8,7 +8,7 @@
 import { useState, useRef, useEffect, useCallback } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { Image as ImageIcon, Upload, Tag, X, Maximize2, ChevronLeft, ChevronRight } from 'lucide-react';
-import { sdk } from '../../../sdk';
+import { sdk, downloadFile } from '../../../sdk';
 import type { SdkGalleryImage } from '../../../sdk/gallery';
 import { Button } from '../../../ui/Button';
 import { Card, CardContent } from '../../../ui/Card';
@@ -290,6 +290,13 @@ export function EventGalleryTab({ eventId }: Props) {
                     target="_blank"
                     rel="noreferrer noopener"
                     className="shrink-0 text-xs font-bold text-brand underline"
+                    onClick={(e) => {
+                      // Content endpoint requires the JWT; plain navigation 401s.
+                      e.preventDefault();
+                      downloadFile(doc.url, { open: true, filename: doc.filename }).catch(() => {
+                        /* session guard handles expired tokens */
+                      });
+                    }}
                   >
                     View
                   </a>

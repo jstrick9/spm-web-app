@@ -55,3 +55,14 @@ correct pattern (fetch + blob) and was left as-is.
   as anchors.
 - The vendor COI viewer keeps `target="_blank"` semantics by opening the
   fetched blob in a new tab.
+
+## Follow-up — document viewers + couple document Open button
+
+- `EventGalleryTab` "View" links pointed at the auth'd couple-document
+  content endpoint — same 401 bug. Now intercepted with
+  `downloadFile(..., { open: true })`.
+- Couple hub document list previously had **no way to open a document at
+  all** (filename/status/delete only). Added an "Open" button using the
+  auth'd download helper.
+- Final sweep confirms zero remaining unprotected `/api/` anchors except
+  intentionally public `/api/portal` and `/api/public` endpoints.
