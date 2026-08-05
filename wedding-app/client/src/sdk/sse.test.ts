@@ -123,4 +123,61 @@ describe('createSSEStream token refresh', () => {
     // No new connection after close.
     expect(FakeEventSource.instances.length).toBe(before);
   });
+
+  it('onerror tears down the dead stream and reconnects with a FRESH token', async () => {
+    const stream = createSSEStream('org-1');
+    stream.on('event.created', vi.fn());
+    await Promise.resolve();
+    await Promise.resolve();
+    expect(FakeEventSource.instances).toHaveLength(1);
+
+    // Server drops the stream (token expired): onerror fires.
+    FakeEventSource.instances[0].onerror?.();
+    expect(FakeEventSource.instances[0].closed).toBe(true);
+
+    // Reconnect is scheduled shortly after (not hammering the dead URL).
+    vi.advanceTimersByTime(1600);
+    await Promise.resolve();
+    await Promise.resolve();
+    expect(FakeEventSource.instances.length).toBeGreaterThanOrEqual(2);
+    // The NEW stream used a fresh token.
+    expect(FakeEventSource.instances[1].url).toContain('sse-token-2');
+    stream.close();
+  });
+
+  it('retries the token fetch after failure instead of dying silently', async () => {
+    let failNext = true;
+    const realFetch = (globalThis as any).fetch;
+    (globalThis as any).fetch = async (url: string, init?: { headers?: Record<string, string> }) => {
+      if (url.includes('/sse-token') && failNext) {
+        failNext = false;
+        throw new TypeError('Failed to fetch');
+      }
+      return realFetch(url, init);
+    };
+    const stream = createSSEStream('org-1');
+    stream.on('event.created', vi.fn());
+    await Promise.resolve();
+    await Promise.resolve();
+    expect(FakeEventSource.instances).toHaveLength(0); // first fetch failed
+
+    // The scheduled retry succeeds and opens a stream.
+    vi.advanceTimersByTime(3100);
+    for (let i = 0; i < 6; i++) await Promise.resolve();
+    expect(FakeEventSource.instances).toHaveLength(1);
+    stream.close();
+  });
+
+  it('close() cancels a pending reconnect (no stray timers after dispose)', async () => {
+    const stream = createSSEStream('org-1');
+    stream.on('event.created', vi.fn());
+    await Promise.resolve();
+    await Promise.resolve();
+    FakeEventSource.instances[0].onerror?.(); // schedules reconnect
+    stream.close();
+    const before = FakeEventSource.instances.length;
+    vi.advanceTimersByTime(10_000);
+    await Promise.resolve();
+    expect(FakeEventSource.instances.length).toBe(before);
+  });
 });

@@ -28,6 +28,17 @@ export function createSSEStream(orgId: string) {
   let lastId = 0;
   let connectedAt = 0;
   let refreshTimer: ReturnType<typeof setTimeout> | null = null;
+  let connectTimer: ReturnType<typeof setTimeout> | null = null;
+  let disposed = false;
+
+  /** Debounced reconnect with a FRESH SSE token (see connect()). */
+  function scheduleConnect(delayMs = 3000) {
+    if (disposed || connectTimer) return;
+    connectTimer = setTimeout(() => {
+      connectTimer = null;
+      void connect();
+    }, delayMs);
+  }
   const handlers = new Map<string, Set<SSEEventHandler>>();
   const statusListeners = new Set<(status: SSEConnectionStatus) => void>();
 
@@ -36,6 +47,7 @@ export function createSSEStream(orgId: string) {
   }
 
   async function connect() {
+    if (disposed) return;
     const mainToken = getToken();
     if (!mainToken) return;
 
@@ -44,9 +56,9 @@ export function createSSEStream(orgId: string) {
       const res = await fetch(`/api/orgs/${orgId}/sse-token`, {
         headers: { authorization: `Bearer ${mainToken}` },
       });
-      if (!res.ok) return;
+      if (!res.ok) { scheduleConnect(); return; }
       const { token: sseToken } = await res.json();
-      if (!sseToken) return;
+      if (!sseToken) { scheduleConnect(); return; }
 
       const url = `/api/orgs/${orgId}/events/stream?token=${encodeURIComponent(sseToken)}&lastId=${lastId}`;
       eventSource = new EventSource(url);
@@ -61,15 +73,25 @@ export function createSSEStream(orgId: string) {
         connect();
       }, 4 * 60 * 1000);
     } catch {
-      return; // SSE not available — degrade gracefully
+      scheduleConnect(); // offline / transient — retry with a fresh token
+      return;
     }
 
-    eventSource.onopen = () => emitStatus('open');
+    eventSource.onopen = () => {
+      if (connectTimer) { clearTimeout(connectTimer); connectTimer = null; }
+      emitStatus('open');
+    };
     eventSource.onerror = () => {
-      // EventSource auto-reconnects; the badge should reflect the dead
-      // window rather than claiming live. (close() emits 'closed' when we
-      // deliberately tear the stream down.)
+      // EventSource auto-reconnects, but it would retry the SAME URL — and
+      // the SSE token is short-lived, so a dead stream (token expiry,
+      // server restart, network drop) must be torn down and re-established
+      // with a fresh token instead of hammering the dead URL.
       emitStatus('error');
+      if (eventSource) {
+        eventSource.close();
+        eventSource = null;
+      }
+      scheduleConnect(1500);
     };
     eventSource.onmessage = (e) => {
       try {
@@ -99,9 +121,10 @@ export function createSSEStream(orgId: string) {
     }
     handlers.get(eventType)!.add(handler);
 
-    // Auto-connect on first handler
+    // Auto-connect on first handler (also re-arm after a full dispose)
     if (!eventSource) {
-      connect();
+      disposed = false;
+      void connect();
     }
   }
 
@@ -114,12 +137,14 @@ export function createSSEStream(orgId: string) {
 
     // Auto-disconnect when no handlers left
     if (handlers.size === 0) {
+      disposed = true;
       close();
     }
   }
 
   function close() {
     if (refreshTimer) { clearTimeout(refreshTimer); refreshTimer = null; }
+    if (connectTimer) { clearTimeout(connectTimer); connectTimer = null; }
     if (eventSource) {
       eventSource.close();
       eventSource = null;
