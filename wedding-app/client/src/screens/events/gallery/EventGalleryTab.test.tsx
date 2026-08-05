@@ -17,6 +17,21 @@ vi.mock('../../../sdk', () => ({
       update: vi.fn().mockResolvedValue({ image: {} }),
       delete: vi.fn().mockResolvedValue(undefined),
     },
+    couple: {
+      documents: vi.fn().mockResolvedValue({
+        documents: [
+          { id: 'cd1', filename: 'menu.pdf', url: '/api/events/e1/couple-documents/cd1/content', mimeType: 'application/pdf', category: 'menu', visibility: 'couple_venue', approvalStatus: 'approved', version: 1, notes: 'Final menu', extractedSummary: null, history: [], reviewedBy: null, reviewedAt: null, createdAt: '', updatedAt: '' },
+          { id: 'cd2', filename: 'private.pdf', url: '/api/events/e1/couple-documents/cd2/content', mimeType: 'application/pdf', category: 'insurance', visibility: 'couple', approvalStatus: 'pending', version: 1, notes: null, extractedSummary: null, history: [], reviewedBy: null, reviewedAt: null, createdAt: '', updatedAt: '' },
+        ],
+        counts: {},
+        reviewQueue: [],
+        postEventGallery: [],
+        allowedTypes: ['application/pdf'],
+        maxBytes: 1,
+        categories: [],
+        visibilityOptions: [],
+      }),
+    },
   },
 }));
 vi.mock('../../../ui/Toast', () => ({ useToast: () => ({ toast: vi.fn() }) }));
@@ -107,5 +122,16 @@ describe('EventGalleryTab', () => {
     await waitFor(() => {
       expect(screen.getByText('Upload')).toBeTruthy();
     });
+  });
+
+  it('lists couple-shared documents but hides couple-private ones', async () => {
+    render(<EventGalleryTab eventId="e1" />, { wrapper: wrap() });
+    await waitFor(() => {
+      expect(screen.getByText('Couple-shared documents')).toBeTruthy();
+    });
+    expect(screen.getByText('menu.pdf')).toBeTruthy();
+    expect(screen.queryByText('private.pdf')).toBeNull();
+    const viewLink = screen.getByRole('link', { name: /View/ });
+    expect(viewLink.getAttribute('href')).toBe('/api/events/e1/couple-documents/cd1/content');
   });
 });

@@ -38,6 +38,17 @@ export function EventGalleryTab({ eventId }: Props) {
   });
 
   const images = data?.images ?? [];
+
+  // Couple-shared documents: the couple uploads with visibility
+  // 'couple_venue' expecting the venue to see them — this panel closes
+  // that loop (server filters out couple-private docs for staff).
+  const coupleDocsQuery = useQuery({
+    queryKey: ['couple-documents', eventId],
+    queryFn: () => sdk.couple.documents(eventId),
+  });
+  const coupleDocs = (coupleDocsQuery.data?.documents ?? []).filter(
+    (d) => d.visibility !== 'couple' && ['couple_venue', 'planner', 'vendor', 'guest_visible'].includes(d.visibility),
+  );
   const counts = data?.counts ?? {};
   const total = images.length;
   const filtered = filter ? images.filter(img => img.category === filter) : images;
@@ -250,6 +261,41 @@ export function EventGalleryTab({ eventId }: Props) {
             <p className="absolute bottom-6 left-1/2 -translate-x-1/2 text-white text-sm bg-black/50 px-4 py-2 rounded">
               {lightbox.caption}
             </p>
+          )}
+        </div>
+      )}
+
+      {/* Couple-shared documents (visibility-gated server-side) */}
+      {!coupleDocsQuery.isLoading && (
+        <div className="rounded-lg border border-border bg-surface">
+          <div className="flex items-center justify-between px-4 py-3 border-b border-border">
+            <h3 className="text-sm font-semibold">Couple-shared documents</h3>
+            {coupleDocsQuery.isError && <span className="text-[11px] text-fg-muted">Couldn’t load</span>}
+          </div>
+          {coupleDocs.length === 0 ? (
+            <p className="px-4 py-4 text-xs text-fg-muted">No documents shared by the couple yet. They appear here when the couple uploads a document with venue visibility.</p>
+          ) : (
+            <ul className="divide-y divide-border">
+              {coupleDocs.map((doc) => (
+                <li key={doc.id} className="flex items-center justify-between gap-3 px-4 py-2.5">
+                  <div className="min-w-0">
+                    <p className="text-sm font-medium truncate">{doc.filename}</p>
+                    <p className="text-[11px] text-fg-muted capitalize">
+                      {doc.category.replace(/_/g, ' ')} · {doc.visibility.replace(/_/g, ' ')} · {doc.approvalStatus.replace(/_/g, ' ')}
+                      {doc.notes ? ` · ${doc.notes}` : ''}
+                    </p>
+                  </div>
+                  <a
+                    href={doc.url}
+                    target="_blank"
+                    rel="noreferrer noopener"
+                    className="shrink-0 text-xs font-bold text-brand underline"
+                  >
+                    View
+                  </a>
+                </li>
+              ))}
+            </ul>
           )}
         </div>
       )}
