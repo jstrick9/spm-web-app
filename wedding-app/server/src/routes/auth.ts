@@ -382,7 +382,16 @@ export async function authRoutes(app: FastifyInstance) {
       passwordHash: user.password_hash, passwordSalt: user.password_salt,
       iterations: user.password_iterations ?? undefined,
     });
-    if (!valid) return { error: "invalid-current-password" };
+    if (!valid) {
+      // Failed password changes are a credential-tampering signal; keep an
+      // audit trail even though the HTTP shape stays 200 (client contract).
+      auditRepo.log({
+        actorUserId: req.auth!.userId, actorLabel: req.auth!.email,
+        action: "user.password.change_failed", ip: req.ip,
+        userAgent: req.headers['user-agent'],
+      });
+      return { error: "invalid-current-password" };
+    }
 
     const pwd = hashPassword(parsed.data.newPassword);
     usersRepo.changePassword(req.auth!.userId, pwd.passwordHash, pwd.passwordSalt, pwd.iterations);

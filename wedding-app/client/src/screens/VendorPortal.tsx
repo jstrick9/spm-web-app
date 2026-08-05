@@ -25,7 +25,8 @@ import {
   CheckSquare,
   Activity,
   MessageSquare,
-  Send
+  Send,
+  RefreshCw
 } from 'lucide-react';
 import { sdk } from '../sdk';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '../ui/Card';
@@ -155,7 +156,7 @@ export function VendorPortal({ vendorId, token }: { vendorId: string; token: str
 
   const [newMessageText, setNewMessageText] = useState('');
 
-  const { data, isLoading, error } = useQuery({
+  const { data, isLoading, error, refetch, isRefetching } = useQuery({
     queryKey: ['vendorPortal', vendorId, token],
     queryFn: () => sdk.vendors.portalInfo(vendorId, token),
     enabled: !!token,
@@ -328,6 +329,13 @@ export function VendorPortal({ vendorId, token }: { vendorId: string; token: str
            <CardContent className="pt-6 text-center text-danger font-semibold space-y-4">
               <AlertCircle className="w-12 h-12 mx-auto text-danger" />
               <p>Unable to load secure vendor details. Please verify your direct link or contact the venue administration.</p>
+              <p className="text-sm font-normal text-fg-muted">
+                If you just lost Wi-Fi or the venue network hiccuped, try again —
+                your run-of-show and messages reload automatically once connected.
+              </p>
+              <Button type="button" variant="outline" isLoading={isRefetching} onClick={() => refetch()}>
+                <RefreshCw className="h-4 w-4 mr-1" aria-hidden="true" /> Try again
+              </Button>
            </CardContent>
         </Card>
       </div>

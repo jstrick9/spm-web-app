@@ -2,6 +2,7 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, waitFor } from '@testing-library/react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { EventDetail } from './EventDetail';
+import { sdk } from '../../sdk';
 
 const routerState = vi.hoisted(() => ({
   query: new URLSearchParams(),
@@ -66,13 +67,14 @@ vi.mock('../../sdk', () => ({
       }}),
       duplicate: vi.fn().mockResolvedValue({ event: { id: 'e-copy', title: 'Smith Wedding (Copy)' } }),
     },
-    guests: { list: vi.fn().mockResolvedValue({ guests: [], counts: { pending: 30, attending: 60, declined: 10, maybe: 20 } }), guestHelpRequests: vi.fn().mockResolvedValue({ requests: [], counts: { open: 0, inReview: 0, resolved: 0, closed: 0 } }), updateGuestHelpRequest: vi.fn().mockResolvedValue({ request: {} }) },
+    guests: { list: vi.fn().mockResolvedValue({ guests: [], counts: { pending: 30, attending: 60, declined: 10, maybe: 20 } }), guestHelpRequests: vi.fn().mockResolvedValue({ requests: [], counts: { open: 0, inReview: 0, resolved: 0, closed: 0 } }), updateGuestHelpRequest: vi.fn().mockResolvedValue({ request: {} }), venueManifest: vi.fn().mockResolvedValue({ guests: [], counts: { attending: 0 } }) },
     healthCommand: { get: vi.fn().mockResolvedValue({ commandCenter: { actions: [], summary: {}, resolvedActions: [] } }) },
     staff: { listTasks: vi.fn().mockResolvedValue({ tasks: [{ id: 'task1', title: 'Setup', status: 'not-started', priority: 'critical' }] }) },
     vendors: { list: vi.fn().mockResolvedValue({ vendors: [{ id: 'v1', name: 'DJ Co', category: 'DJ', metadata: '{}' }] }) },
     layouts: { list: vi.fn().mockResolvedValue({ layouts: [] }) },
     roles: { listRoles: vi.fn().mockResolvedValue({ roles: [] }) },
     risk: { forEvent: vi.fn().mockResolvedValue({ risk: { eventId: 'e1', eventTitle: 'Smith Wedding', startDate: null, daysUntil: null, healthScore: 100, alerts: [] } }) },
+    timeline: { setupPacket: vi.fn().mockResolvedValue({ packet: { layout: null, staffing: [], timeline: [], vendorLoadIn: [] } }) },
   },
 }));
 
@@ -175,5 +177,29 @@ describe('EventDetail', () => {
       expect(screen.queryByText('Duplicate')).toBeNull();
       expect(screen.queryByText('Vendor Check-In')).toBeNull();
     });
+  });
+
+  it('shows an honest failure banner when a section query fails (no silent "No X yet")', async () => {
+    grantAll();
+    vi.mocked(sdk.guests.venueManifest).mockRejectedValueOnce(new Error('network down'));
+    render(<EventDetail eventId="e1" user={{ id: 'u1', email: 'test@x.com' }} />, { wrapper: wrap() });
+
+    await waitFor(() => {
+      expect(screen.getByText('Some sections could not load.')).toBeTruthy();
+    });
+    expect(screen.getByText(/guest manifest/)).toBeTruthy();
+    expect(screen.getByRole('button', { name: /Retry failed sections/i })).toBeTruthy();
+  });
+
+  it('does not show the failure banner when every section query succeeds', async () => {
+    grantAll();
+    render(<EventDetail eventId="e1" user={{ id: 'u1', email: 'test@x.com' }} />, { wrapper: wrap() });
+
+    await waitFor(() => {
+      expect(screen.getByText('Smith Wedding')).toBeTruthy();
+    });
+    // Give any failed queries a beat to surface; none should.
+    await new Promise((r) => setTimeout(r, 50));
+    expect(screen.queryByText('Some sections could not load.')).toBeNull();
   });
 });

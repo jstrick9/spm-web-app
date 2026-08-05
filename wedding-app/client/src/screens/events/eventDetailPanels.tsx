@@ -68,6 +68,7 @@ import {
   Activity,
   Smartphone,
   MessageSquare,
+  RefreshCw,
 } from "lucide-react";
 import { useEffect, useState, useMemo, type ReactNode } from "react";
 import { eventReadinessScore, eventSetupItems, safeMetadata } from './eventDetailUtils';
@@ -221,6 +222,28 @@ export function OverviewTab({
     )
     .slice(0, 5);
   const workloadEvents = workloadQuery.data?.events ?? [];
+
+  // Honest failure states: a transient network/server blip on any of the
+  // ~15 parallel section queries must NOT render as "No X yet". Track
+  // failures so the manager sees exactly which sections failed and can retry.
+  const sectionQueries: Array<{ label: string; query: { isError: boolean; refetch: () => unknown } }> = [
+    { label: 'couple invitations', query: coupleInvitationsQuery },
+    { label: 'final review readiness', query: finalReviewQuery },
+    { label: 'final review changes', query: finalReviewChangesQuery },
+    { label: 'setup packet', query: setupPacketQuery },
+    { label: 'communication templates', query: communicationTemplatesQuery },
+    { label: 'day-of contact', query: dayOfContactQuery },
+    { label: 'couple update acknowledgments', query: coupleUpdateSummaryQuery },
+    { label: 'live operations', query: liveOperationsQuery },
+    { label: 'health command center', query: healthQuery },
+    { label: 'staff tasks', query: staffTasksQuery },
+    { label: 'vendors', query: vendorsQuery },
+    { label: 'guest manifest', query: venueGuestManifestQuery },
+    { label: 'layouts', query: layoutsQuery },
+    { label: 'event workload', query: workloadQuery },
+  ].filter((s) => s.query.isError !== undefined); // only queries with real state
+  const failedSections = sectionQueries.filter((s) => s.query.isError);
+  const failedSectionLabels = failedSections.map((s) => s.label);
   const openStaffTasks = staffTasks.filter(
     (task: any) => task.status !== "completed",
   );
@@ -363,6 +386,28 @@ export function OverviewTab({
   return (
     <div className="space-y-6">
       {promptNode}
+      {failedSectionLabels.length > 0 && (
+        <div className="rounded-xl border border-warning/40 bg-warning-soft/20 p-4 text-sm" role="alert">
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <div>
+              <strong className="text-warning">Some sections could not load.</strong>
+              <p className="mt-1 text-fg-muted">
+                The following data may be out of date or missing:{" "}
+                {failedSectionLabels.join(", ")}. Check your connection and
+                retry before acting on these numbers.
+              </p>
+            </div>
+            <div className="flex flex-wrap gap-2">
+              <Button size="sm" variant="outline" onClick={() => failedSections.forEach((s) => s.query.refetch())}>
+                <RefreshCw className="h-3.5 w-3.5 mr-1" aria-hidden="true" /> Retry failed sections
+              </Button>
+              <Button size="sm" variant="ghost" onClick={() => sectionQueries.forEach((s) => s.query.refetch())}>
+                Refresh everything
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
       {canInviteCouple && <Card><CardHeader><CardTitle>Venue event stage</CardTitle><CardDescription>Seven Paths Manor controls formal event stages. Couple planning begins after the event is booked.</CardDescription></CardHeader><CardContent className="flex flex-wrap items-center gap-2"><Badge variant="brand">Current: {event.status}</Badge><select aria-label="Venue event stage" className="h-9 rounded border border-border bg-surface px-2 text-sm" value={event.status} onChange={async (e) => { const next = e.target.value; if ((next === 'cancelled' || next === 'lost')) { const ok = await askConfirm({ title: next === 'cancelled' ? 'Cancel this event?' : 'Mark this event as lost?', description: `Move \u201c${event.title}\u201d to ${next === 'cancelled' ? 'Cancelled' : 'Lost'}? This removes it from the active pipeline (reversible via this selector).`, confirmLabel: next === 'cancelled' ? 'Cancel event' : 'Mark lost', destructive: true }); if (!ok) { e.target.value = event.status; return; } } stageMutation.mutate(next); }} disabled={stageMutation.isPending}><option value="lead">Lead</option><option value="hold">Hold</option><option value="booked">Booked</option><option value="planning">Planning</option><option value="final_review">Final Review</option><option value="completed">Completed</option><option value="cancelled">Cancelled</option><option value="lost">Lost</option></select>{event.status === 'booked' && <span className="text-xs text-brand">Next: invite the couple and select a venue template.</span>}</CardContent></Card>}
       {canInviteCouple && <Card className="border-warning/30"><CardHeader><CardTitle>Final Review readiness</CardTitle><CardDescription>All operational checks must be complete before Seven Paths Manor can move this event into Final Review.</CardDescription></CardHeader><CardContent>{finalReviewQuery.isLoading ? <p className="text-sm text-fg-muted">Checking operational readiness…</p> : <div className="space-y-2"><Badge variant={finalReviewQuery.data?.finalReview.ready ? 'success' : 'warning'}>{finalReviewQuery.data?.finalReview.ready ? 'Ready for Final Review' : 'Operational items remain'}</Badge><div className="grid gap-2 sm:grid-cols-2">{finalReviewQuery.data?.finalReview.checks.map((check) => <div key={check.key} className="flex items-center justify-between gap-2 rounded border border-border px-2 py-1 text-sm"><span className="flex items-center gap-2"><span aria-hidden>{check.complete ? '✓' : '○'}</span><span>{check.label}</span></span>{(['confirmed_guest_count', 'staffing_readiness', 'inventory_readiness', 'accessibility_checks', 'rain_plan_checks'] as const).includes(check.key as any) && <Button size="xs" variant={check.complete ? 'outline' : 'default'} isLoading={finalReviewCheckMutation.isPending} onClick={() => finalReviewCheckMutation.mutate({ key: check.key as 'confirmed_guest_count' | 'staffing_readiness' | 'inventory_readiness' | 'accessibility_checks' | 'rain_plan_checks', complete: !check.complete })}>{check.complete ? 'Reopen' : 'Confirm'}</Button>}</div>)}</div></div>}</CardContent></Card>}
       {canInviteCouple && <Card><CardHeader><CardTitle>Publish couple Event Week update</CardTitle><CardDescription>Use venue-approved copy, then tailor it to this wedding before publishing.</CardDescription></CardHeader><CardContent className="flex flex-wrap gap-2">{communicationTemplatesQuery.data?.templates.filter((template) => template.active).map((template) => <Button key={template.id} size="sm" variant="outline" isLoading={publishCoupleUpdateMutation.isPending} onClick={async () => { const values = await askForm({ title: `Publish ${template.name}`, fields: [{ key: 'body', label: 'Message', multiline: true, required: true, defaultValue: template.body }], confirmLabel: 'Publish' }); if (!values) return; const critical = await askConfirm({ title: 'Require acknowledgment?', description: 'Should the couple be required to acknowledge this update?', confirmLabel: 'Require acknowledgment' }); publishCoupleUpdateMutation.mutate({ templateId: template.id, title: template.subject, body: values.body.trim(), category: template.category, critical }); }}>{template.name}</Button>) || <p className="text-sm text-fg-muted">Create an active venue communication template before publishing an update.</p>}</CardContent></Card>}

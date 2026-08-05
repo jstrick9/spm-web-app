@@ -112,4 +112,25 @@ describe('VendorPortal', () => {
       expect(sdk.vendors.portalSendMessage).toHaveBeenCalledWith('v1', 'Setting up gear now', 'tok-1');
     });
   });
+
+  it('shows a retry button on load failure and retries the request', async () => {
+    (sdk.vendors.portalInfo as any)
+      .mockRejectedValueOnce(new Error('network down'))
+      .mockResolvedValueOnce({
+        vendor: { id: 'v1', name: 'DJ Snake', category: 'Entertainment' },
+        event: { title: 'Smith Wedding', status: 'booked' },
+        timeline: [],
+      });
+
+    render(<VendorPortal vendorId="v1" token="tok-1" />, { wrapper: TestWrapper });
+
+    expect(await screen.findByText(/Unable to load secure vendor details/i)).toBeInTheDocument();
+
+    const retry = screen.getByRole('button', { name: /Try again/i });
+    fireEvent.click(retry);
+
+    // After the retry resolves, the portal renders normally.
+    expect(await screen.findByText(/Logistics Questionnaire/i)).toBeInTheDocument();
+    expect(sdk.vendors.portalInfo).toHaveBeenCalledTimes(2);
+  });
 });

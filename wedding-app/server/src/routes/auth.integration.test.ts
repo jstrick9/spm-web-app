@@ -30,7 +30,7 @@ async function register(email?: string) {
   const r = await app.inject({ method: 'POST', url: '/api/auth/register',
     payload: { email: e, password: 'testpass123', fullName: 'Tester', orgName: 'Org' },
     headers: { 'content-type': 'application/json' } });
-  return { token: r.json().token, email: e };
+  return { token: r.json().token, email: e, userId: r.json().user.id };
 }
 
 describe('Auth: password change', () => {
@@ -61,6 +61,16 @@ describe('Auth: password change', () => {
       headers: { authorization: `Bearer ${u.token}`, 'content-type': 'application/json' } });
     expect(res.statusCode).toBe(200);
     expect(res.json().error).toBe('invalid-current-password');
+  });
+
+  it('audits failed password-change attempts (credential-tampering signal)', async () => {
+    const u = await register();
+    const res = await app.inject({ method: 'POST', url: '/api/auth/change-password',
+      payload: { currentPassword: 'wrongpassword', newPassword: 'newpass456789' },
+      headers: { authorization: `Bearer ${u.token}`, 'content-type': 'application/json' } });
+    expect(res.json().error).toBe('invalid-current-password');
+    const audit = db.prepare(`SELECT COUNT(*) AS n FROM audit_logs WHERE action = 'user.password.change_failed' AND actor_user_id = ?`).get(u.userId) as { n: number };
+    expect(audit.n).toBe(1);
   });
 
   it('rejects new password too short', async () => {
