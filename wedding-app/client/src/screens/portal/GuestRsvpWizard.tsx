@@ -129,6 +129,8 @@ export function GuestRsvpWizard({
         emailReminderConsent,
         smsReminderConsent,
         attending: attendingStatus === 'attending',
+        // 'unsure' → server status 'maybe' (recorded as maybe, not declined)
+        status: attendingStatus === 'unsure' ? 'maybe' : undefined,
         mealChoice,
         plusOneName: plusOneName || undefined,
         dietaryNotes: dietaryRestrictions || undefined,

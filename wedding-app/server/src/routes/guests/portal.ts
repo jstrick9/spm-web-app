@@ -691,6 +691,7 @@ export async function guestPortalRoutes(app: FastifyInstance) {
       organizationId: event.organization_id, eventId,
       guestId: parsed.data.guestId,
       attending: parsed.data.attending,
+      status: parsed.data.status,
       attendingDays: parsed.data.attendingDays,
       mealChoice: parsed.data.mealChoice,
       plusOneName: parsed.data.plusOneName,

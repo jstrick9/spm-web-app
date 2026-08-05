@@ -405,6 +405,32 @@ describe('Public portal: full RSVP flow', () => {
     expect(guests.json().counts.declined).toBe(1);
   });
 
+  it('4c. An unsure RSVP records maybe — never a hard decline', async () => {
+    const s = await setupEvent();
+    const guestToken = guestsRepo.rotatePortalToken(s.guestId1);
+
+    const res = await app.inject({ method: 'POST', url: `/api/portal/${s.eventId}/rsvp`,
+      payload: { guestId: s.guestId1, token: guestToken, attending: false, status: 'maybe', mealChoice: 'Chicken' },
+      headers: { 'content-type': 'application/json' } });
+    expect(res.statusCode).toBe(201);
+
+    const guests = await app.inject({ method: 'GET', url: `/api/events/${s.eventId}/guests`,
+      headers: { authorization: `Bearer ${s.token}` } });
+    expect(guests.json().counts.maybe).toBe(1);
+    expect(guests.json().counts.declined).toBe(0);
+    const row = guests.json().guests.find((g: any) => g.id === s.guestId1);
+    expect(row.rsvp_status).toBe('maybe');
+
+    // Default path still records hard declines when no status is sent.
+    await app.inject({ method: 'POST', url: `/api/portal/${s.eventId}/rsvp`,
+      payload: { guestId: s.guestId2, token: guestsRepo.rotatePortalToken(s.guestId2), attending: false },
+      headers: { 'content-type': 'application/json' } });
+    const after = await app.inject({ method: 'GET', url: `/api/events/${s.eventId}/guests`,
+      headers: { authorization: `Bearer ${s.token}` } });
+    expect(after.json().counts.declined).toBe(1);
+    expect(after.json().counts.maybe).toBe(1);
+  });
+
   it('5. Portal rejects RSVP for non-existent guest', async () => {
     const s = await setupEvent();
     const res = await app.inject({ method: 'POST', url: `/api/portal/${s.eventId}/rsvp`,

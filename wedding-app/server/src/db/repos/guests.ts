@@ -276,6 +276,8 @@ export const rsvpRepo = {
     eventId: string;
     guestId?: string;
     attending: boolean;
+    /** Tri-state: 'maybe' sets the guest status to maybe (leaning yes). */
+    status?: 'attending' | 'declined' | 'maybe';
     attendingDays?: string[];
     mealChoice?: string;
     plusOneName?: string;
@@ -308,9 +310,10 @@ export const rsvpRepo = {
       input.userAgent ?? null,
     );
     if (input.guestId) {
+      const status = input.status === 'maybe' ? 'maybe' : input.attending ? 'attending' : 'declined';
       db.prepare(
         `UPDATE guests SET rsvp_status = ?, updated_at = datetime('now') WHERE id = ?`
-      ).run(input.attending ? 'attending' : 'declined', input.guestId);
+      ).run(status, input.guestId);
     }
     return id;
   },

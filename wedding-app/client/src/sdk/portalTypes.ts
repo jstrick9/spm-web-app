@@ -210,6 +210,8 @@ export interface PortalInfoResponse {
 export interface PortalRsvpInput {
   guestId: string;
   attending: boolean;
+  /** Tri-state override: 'maybe' records an unsure guest as maybe (not declined). */
+  status?: 'attending' | 'declined' | 'maybe';
   attendingDays?: string[];
   mealChoice?: string;
   plusOneName?: string;

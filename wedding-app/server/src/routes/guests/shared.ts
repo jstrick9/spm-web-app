@@ -30,6 +30,10 @@ export const guestSchema = z.object({
 export const rsvpSchema = z.object({
   guestId:           z.string().optional(),
   attending:         z.boolean(),
+  // Tri-state RSVP: 'maybe' guests are recorded as MAYBE, not declined.
+  // The wizard offers attending / declined / unsure; without this the
+  // unsure answer was stored as a hard decline (skewing headcounts).
+  status:            z.enum(['attending','declined','maybe']).optional(),
   attendingDays:     z.array(z.string()).optional(),
   mealChoice:        z.string().max(60).optional(),
   plusOneName:       z.string().max(200).optional(),
