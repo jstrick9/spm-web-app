@@ -1,4 +1,5 @@
 import { db } from '../database.js';
+import { deepMergeMetadata } from './events.js';
 import { uuid } from '../../lib/crypto.js';
 import { issueCapabilitySecret } from '../../lib/capability.js';
 import { parseJson, stringifyJson } from '../../lib/json.js';
@@ -149,7 +150,14 @@ export const guestsRepo = {
       if (!spec) continue;
       fields.push(`${spec.col} = ?`);
       if (spec.bool) values.push(v ? 1 : 0);
-      else if (spec.json) values.push(stringifyJson(v));
+      else if (spec.json) {
+        // Deep-merge guest metadata (RFC 7386) so concurrent writers —
+        // couple hub, guest portal RSVP, staff help desk, CSV import —
+        // don't clobber each other's keys.
+        const current = this.findById(id);
+        const stored = (() => { try { return JSON.parse(current?.metadata || '{}'); } catch { return {}; } })();
+        values.push(stringifyJson(deepMergeMetadata(stored, v)));
+      }
       else values.push(v ?? null);
     }
     if (fields.length === 0) return this.findById(id);

@@ -101,6 +101,33 @@ describe('Guest identity merge (owner-only data-quality tool)', () => {
     expect(audit.n).toBe(1);
   });
 
+  it('deep-merges guest metadata from concurrent writers (couple + portal)', async () => {
+    const owner = await register('merge-owner');
+    const ev = await createEvent(owner.token, owner.orgId);
+    const eventId = ev.id;
+    const couple = await addCoupleMember(owner.token, owner.orgId, eventId);
+    const guest = insertGuest(owner.orgId, eventId, { fullName: 'Pat' });
+
+    // Writer 1: couple hub saves meal choice metadata.
+    const r1 = await authed(couple, 'PATCH', `/api/guests/${guest.id}`, {
+      metadata: { mealChoice: 'Chicken', coupleNotes: 'Allergic to peanuts' },
+    });
+    expect(r1.statusCode).toBe(200);
+
+    // Writer 2: guest portal reminder preferences (stale base — no meal data).
+    const r2 = await authed(couple, 'PATCH', `/api/guests/${guest.id}`, {
+      metadata: { reminderPreferences: { emailOptIn: true, quietHoursStart: '21:00' } },
+    });
+    expect(r2.statusCode).toBe(200);
+
+    const get = await authed(couple, 'GET', `/api/events/${eventId}/guests`);
+    const g = get.json().guests.find((x: any) => x.id === guest.id);
+    const meta = JSON.parse(g.metadata || '{}');
+    expect(meta.mealChoice).toBe('Chicken');
+    expect(meta.coupleNotes).toBe('Allergic to peanuts');
+    expect(meta.reminderPreferences.emailOptIn).toBe(true);
+  });
+
   it('rejects merge for non-owner staff', async () => {
     const { token, orgId } = await register('merge-manager');
     const e1 = await createEvent(token, orgId);
