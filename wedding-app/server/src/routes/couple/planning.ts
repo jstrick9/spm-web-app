@@ -1,4 +1,5 @@
 import { auditRepo, catalogRepo, contractsRepo, coupleAppointmentsRepo, coupleDocumentsRepo, couplePlanningRepo, coupleRequestsRepo, eventsRepo, guestsRepo, layoutsRepo, messagesRepo, paymentLinksRepo, rolesRepo, subEventsRepo, teamInvitationsRepo, timelineRepo, usersRepo, vendorsRepo, venuesRepo } from '../../db/repos/index.js';
+import { localDateString } from '../../lib/time.js';
 import { deliverTeamInvitation } from '../../lib/teamInviteDelivery.js';
 import { db } from '../../db/database.js';
 import { uuid } from '../../lib/crypto.js';
@@ -585,7 +586,7 @@ export async function couplePlanningRoutes(app: FastifyInstance) {
     if (!can(req.auth!.memberships, { eventId }, 'events.view', orgMap)) throw Forbidden();
     const metadata = parseEventMetadata(event);
     const tasks = couplePlanningRepo.ensureDefaults({ organizationId: event.organization_id, eventId, weddingDate: event.start_date, packageKey: metadata.package || metadata.packageName, cultureKey: metadata.cultureKey });
-    const today = new Date().toISOString().slice(0, 10);
+    const today = localDateString();
     return {
       tasks: tasks.map((t) => ({
         id: t.id,
@@ -601,7 +602,7 @@ export async function couplePlanningRoutes(app: FastifyInstance) {
         attachments: (() => { try { return JSON.parse(t.attachments || '[]'); } catch { return []; } })(),
         history: (() => { try { return JSON.parse(t.history || '[]'); } catch { return []; } })(),
         isOverdue: !!t.due_date && t.due_date < today && t.status !== 'completed',
-        isUpcoming: !!t.due_date && t.due_date >= today && t.due_date <= new Date(Date.now() + 14 * 86400000).toISOString().slice(0, 10) && t.status !== 'completed',
+        isUpcoming: !!t.due_date && t.due_date >= today && t.due_date <= localDateString(new Date(Date.now() + 14 * 86400000)) && t.status !== 'completed',
         updatedAt: t.updated_at,
       })),
       template: { packageKey: metadata.package || metadata.packageName || 'standard', cultureKey: metadata.cultureKey || 'default', source: 'venue-controlled-default-deadline-template' },

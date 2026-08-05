@@ -27,3 +27,16 @@ export function toSqliteUtc(date = new Date()): string {
 export function isoToSqliteUtc(iso: string): string {
   return iso.slice(0, 19).replace('T', ' ');
 }
+
+/**
+ * Local calendar date ('YYYY-MM-DD') for the given Date (default now).
+ * Use this when comparing against user-entered date-only values (date
+ * pickers send LOCAL dates) — deriving "today" with toISOString() gives
+ * the UTC date, which is tomorrow during US evening hours and silently
+ * shifts "overdue/upcoming" labels by a day.
+ */
+export function localDateString(date = new Date()): string {
+  const m = String(date.getMonth() + 1).padStart(2, '0');
+  const d = String(date.getDate()).padStart(2, '0');
+  return `${date.getFullYear()}-${m}-${d}`;
+}
