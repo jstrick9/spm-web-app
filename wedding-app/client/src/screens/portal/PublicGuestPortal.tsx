@@ -19,7 +19,7 @@
  *
  * After Phase 35a, PublicGuestPortal.tsx has ZERO `any` annotations.
  */
-import React, { lazy, Suspense, useState, useEffect, useMemo } from 'react';
+import React, { lazy, Suspense, useState, useEffect, useMemo, useCallback } from 'react';
 import { ApiError, sdk }           from '../../sdk';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '../../ui/Card';
 import { Button }                  from '../../ui/Button';
@@ -151,8 +151,12 @@ export function PublicGuestPortal({ eventId }: { eventId: string }) {
     bg: '#000000', surface: '#0b0b0b', border: '#ffffff', fg: '#ffffff', fgMuted: '#f3f4f6', fgSubtle: '#e5e7eb', primary: '#ffffff', primaryFg: '#000000', primaryHover: '#f3f4f6', accent: '#facc15', accentSoft: '#1f2937',
   } : palette;
 
-  // ── Boot: load portal data ───────────────────────────────────────────────
-  useEffect(() => {
+  // ── Boot + light polling: load portal data ──────────────────────────────
+  // The portal advertises "What has changed?" notices but never re-checked —
+  // a venue schedule update wouldn't appear on an open phone until reload.
+  // Poll every 5 minutes (well inside the 120/min info rate limit) so
+  // change notices, schedule edits, and messages stay fresh on event day.
+  const loadPortalData = useCallback(() => {
     const sp = new URLSearchParams(window.location.hash.split('?')[1] || '');
     const guestParam = sp.get('guest');
     const tokenParam = sp.get('token') || '';
@@ -218,6 +222,12 @@ export function PublicGuestPortal({ eventId }: { eventId: string }) {
         sdk.portal.status(eventId).then((status) => setPortalStatus(status)).catch(() => setPortalStatus(null));
       });
   }, [eventId]);
+
+  useEffect(() => {
+    loadPortalData();
+    const poll = setInterval(loadPortalData, 5 * 60 * 1000);
+    return () => clearInterval(poll);
+  }, [loadPortalData]);
 
   // ── RSVP submit ──────────────────────────────────────────────────────────
   async function submit(e: React.FormEvent) {
