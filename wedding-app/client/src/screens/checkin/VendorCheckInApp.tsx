@@ -85,8 +85,31 @@ export function VendorCheckInApp({ eventId, organizationId }: Props) {
     updateMutation.mutate({ vendorId, status });
   };
 
-  const handleScan = (decodedText: string) => {
+  const handleScan = async (decodedText: string) => {
     setScanning(false);
+    // Guest-help codes from the guest portal ("WVI-GUEST-HELP:<event>:<guestId>"):
+    // the guest's phone shows a REAL QR (it used to be decorative); scanning it
+    // here surfaces their RSVP/table info for staff so they don't browse the
+    // guest list aloud.
+    if (decodedText.startsWith('WVI-GUEST-HELP:')) {
+      const [, , guestId] = decodedText.split(':');
+      if (!guestId) { toast({ title: 'Invalid guest code', variant: 'destructive' }); return; }
+      try {
+        const res = await sdk.guests.list(eventId);
+        const guest = (res.guests || []).find((g: any) => g.id === guestId);
+        if (guest) {
+          const table = (guest as any).table_assignment || 'not assigned';
+          const seat = (guest as any).seat_assignment || '';
+          const status = (guest as any).rsvp_status || 'pending';
+          toast({ title: `Guest: ${guest.full_name}`, description: `RSVP ${status} · Table ${table}${seat ? ` · Seat ${seat}` : ''}`, variant: 'success' });
+        } else {
+          toast({ title: 'Guest not in this event', description: 'The code may be for a different event.', variant: 'destructive' });
+        }
+      } catch {
+        toast({ title: 'Could not look up guest', description: 'Check connectivity and try again.', variant: 'destructive' });
+      }
+      return;
+    }
     const vendor = vendors.find(v => v.id === decodedText || v.name.toLowerCase() === decodedText.toLowerCase());
     if (vendor) {
       updateStatus(vendor.id, 'arrived');

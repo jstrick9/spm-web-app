@@ -204,10 +204,13 @@ describe('HTTP error classification', () => {
 
   it('rate-limited errors do not auto-retry (QueryProvider skips them)', async () => {
     const { QueryClient } = await import('@tanstack/react-query');
-    const qc = new QueryClient({ defaultOptions: { queries: { retry: (n, e) => e instanceof ApiError ? e.kind !== 'rate-limited' && n < 2 : n < 2 } } });
+    const retryFn: (failureCount: number, error: unknown) => boolean = (n, e) =>
+      e instanceof ApiError ? e.kind !== 'rate-limited' && n < 2 : n < 2;
+    const qc = new QueryClient({ defaultOptions: { queries: { retry: retryFn } } });
     // just verify the predicate: a rate-limited error should not retry
     const err = new ApiError('rate-limited', 429, 'rate-limit', { error: 'rate-limit' });
-    expect(qc.getDefaultOptions().queries!.retry!(1, err)).toBe(false);
+    const opts = qc.getDefaultOptions().queries!.retry;
+    expect(typeof opts === 'function' ? (opts as (n: number, e: unknown) => boolean)(1, err) : opts).toBe(false);
   });
 });
 

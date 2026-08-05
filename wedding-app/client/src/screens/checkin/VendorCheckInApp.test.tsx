@@ -6,6 +6,8 @@ import { ToastProvider } from '../../ui/Toast';
 import { ApiError } from '../../sdk/client';
 import { peek, clear as clearQueue, drain } from '../../dual-write/writeQueue';
 
+// Test hook: what value the fake scanner emits when 'Simulate Scan' is clicked.
+let scanEmitValue = 'v1';
 vi.mock('html5-qrcode', () => ({
   Html5QrcodeScanner: class {
     render(onSuccess: any) {
@@ -13,7 +15,7 @@ vi.mock('html5-qrcode', () => ({
       if (reader) {
         const btn = document.createElement('button');
         btn.innerHTML = 'Simulate Scan';
-        btn.onclick = () => onSuccess('v1');
+        btn.onclick = () => onSuccess(scanEmitValue);
         reader.appendChild(btn);
       }
     }
@@ -29,6 +31,12 @@ vi.mock('../../sdk', () => ({
           { id: 'v1', name: 'DJ Snake', category: 'Entertainment' },
           { id: 'v2', name: 'Food Co', category: 'Catering' }
         ]
+      }),
+    },
+    guests: {
+      list: vi.fn().mockResolvedValue({
+        guests: [{ id: 'g1', full_name: 'Alex Johnson', rsvp_status: 'attending', table_assignment: '7', seat_assignment: 'A' }],
+        counts: { pending: 0, attending: 1, declined: 0, maybe: 0 },
       }),
     },
     checkins: {
@@ -55,6 +63,7 @@ function makeWrapper() {
 
 describe('VendorCheckInApp', () => {
   beforeEach(async () => {
+    scanEmitValue = 'v1';
     vi.clearAllMocks();
     // Restore the default status map — later tests override it per-test.
     const { sdk } = await import('../../sdk');
@@ -175,5 +184,22 @@ describe('VendorCheckInApp', () => {
     await waitFor(() => expect(screen.getByText(/Status update failed/)).toBeTruthy());
     expect(screen.getByText(/Disk full/)).toBeTruthy();
     expect(peek()).toHaveLength(0);
+  });
+
+  it('recognizes guest-help QR codes and shows the guest RSVP/table (real QR flow)', async () => {
+    const { sdk } = await import('../../sdk');
+    scanEmitValue = 'WVI-GUEST-HELP:evt-1:g1';
+    render(<VendorCheckInApp eventId="evt-1" organizationId="org-1" />, { wrapper: makeWrapper() });
+    await screen.findByText('DJ Snake');
+    fireEvent.click(screen.getByRole('button', { name: /Scan/i }));
+    const simulate = await screen.findByRole('button', { name: /Simulate Scan/i });
+    fireEvent.click(simulate);
+
+    await waitFor(() => {
+      expect(screen.getByText(/Alex Johnson/)).toBeTruthy();
+    }, { timeout: 3000 });
+    expect(screen.getByText(/Table 7/)).toBeTruthy();
+    // No check-in status change was triggered for a guest code.
+    expect((sdk.checkins.update as any).mock.calls.length).toBe(0);
   });
 });

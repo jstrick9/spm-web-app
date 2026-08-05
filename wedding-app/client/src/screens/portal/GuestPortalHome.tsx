@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { Accessibility, Bell, Bus, Camera, Clock, Download, Ear, Eye, Gift, HelpCircle, Images, Languages, LockKeyhole, Mail, MapPin, MessageCircle, QrCode, Search, Send, ShieldCheck, Smartphone, Star, Trash2, Umbrella, UserRoundCheck, ExternalLink } from 'lucide-react';
 import { Badge } from '../../ui/Badge';
 import { Button } from '../../ui/Button';
@@ -289,8 +289,24 @@ function DayOfTile({ label, value, palette }: { label: string; value: string; pa
 }
 
 function StaffHelpQr({ payload }: { payload: string }) {
-  const bits = Array.from({ length: 81 }, (_, i) => ((payload.charCodeAt(i % Math.max(1, payload.length)) + i * 17) % 5) < 2);
-  return <svg role="img" aria-label="Venue staff help QR code" viewBox="0 0 90 90" className="h-32 w-32 rounded bg-white p-1"><rect width="90" height="90" fill="white" />{bits.map((on, i) => on ? <rect key={i} x={(i % 9) * 10} y={Math.floor(i / 9) * 10} width="8" height="8" fill="black" /> : null)}<rect x="0" y="0" width="24" height="24" fill="none" stroke="black" strokeWidth="4" /><rect x="66" y="0" width="24" height="24" fill="none" stroke="black" strokeWidth="4" /><rect x="0" y="66" width="24" height="24" fill="none" stroke="black" strokeWidth="4" /></svg>;
+  // REAL QR encoding (was a decorative pseudo-pattern that no scanner
+  // could read, despite the UI claiming staff can scan it to find the
+  // guest's RSVP/table). Uses the same QR library semantics as any
+  // standard reader; the plain-text payload stays visible as a fallback.
+  const [dataUrl, setDataUrl] = useState<string | null>(null);
+  useEffect(() => {
+    let cancelled = false;
+    void import('qrcode').then((QRCode) => {
+      QRCode.toDataURL(payload, { width: 320, margin: 1 })
+        .then((url) => { if (!cancelled) setDataUrl(url); })
+        .catch(() => { /* leave fallback text visible */ });
+    });
+    return () => { cancelled = true; };
+  }, [payload]);
+  if (!dataUrl) {
+    return <div className="h-32 w-32 rounded bg-white p-1 flex items-center justify-center text-[10px] text-fg-muted">Generating QR…</div>;
+  }
+  return <img src={dataUrl} alt="Venue staff help QR code" className="h-32 w-32 rounded bg-white p-1" />;
 }
 
 function GuestReminderPreferences({ eventId, activeGuest, guestToken, guestLanguage, palette, guestReminders }: { eventId: string; activeGuest?: PortalGuestEntry; guestToken: string; guestLanguage: string; palette: Palette; guestReminders: PortalInfoResponse['guestReminders'] | null }) {
