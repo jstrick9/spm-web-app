@@ -159,6 +159,9 @@ export function VendorPortal({ vendorId, token }: { vendorId: string; token: str
     queryKey: ['vendorPortal', vendorId, token],
     queryFn: () => sdk.vendors.portalInfo(vendorId, token),
     enabled: !!token,
+    // Keep the run-of-show/layout view fresh on a day-of tablet: the venue
+    // may re-time load-in or swap a zone minutes before arrival.
+    refetchInterval: 60_000,
   });
 
   const portalData = data as any;
