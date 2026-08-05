@@ -91,7 +91,11 @@ export function EventInvitesTab({ eventId }: Props) {
       ${blocks.map(b => {
         if (b.type === 'text') return `<p style="font-size:18px;margin:10px 0;">${b.content.replace(/\n/g, '<br/>')}</p>`;
         if (b.type === 'image') return `<img src="${b.content}" alt="" />`;
-        if (b.type === 'button') return `<a href="#" class="btn">${b.content}</a>`;
+        // A real invite button needs a real link; we don't know the couple's
+        // portal URL at export time, so render the button as inert text with
+        // an explicit note instead of a dead href="#" (which would lose
+        // RSVPs when clicked).
+        if (b.type === 'button') return `<span class="btn">${b.content}</span><p style="font-size:11px;color:#888;margin-top:4px;">RSVP link will be added when you send invitations.</p>`;
         if (b.type === 'map') return `<p>📍 <a href="https://maps.google.com/?q=${encodeURIComponent(b.content)}">${b.content}</a></p>`;
         if (b.type === 'schedule') return `<div style="margin:20px 0;padding:20px;background:rgba(0,0,0,0.05);border-radius:8px;"><strong>Schedule</strong><br/><br/>${b.content.replace(/\n/g, '<br/>')}</div>`;
         return '';
