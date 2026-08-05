@@ -145,7 +145,10 @@ export async function authRoutes(app: FastifyInstance) {
     });
   });
 
-  app.post('/api/auth/login', { config: { rateLimit: { max: 10, timeWindow: '1 minute' } } }, async (req, reply) => {
+  // 30 logins/min per IP: venues share office IPs (a 10-20 person staff
+  // team logging in at shift start would otherwise be blocked). Brute-force
+  // protection is handled by the per-account failed-login lockout below.
+  app.post('/api/auth/login', { config: { rateLimit: { max: 30, timeWindow: '1 minute' } } }, async (req, reply) => {
     const parsed = loginSchema.safeParse(req.body);
     if (!parsed.success) return reply.code(400).send({ error: 'invalid-input' });
 

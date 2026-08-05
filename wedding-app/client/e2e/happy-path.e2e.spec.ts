@@ -29,17 +29,24 @@ test('owner can log in and create a wedding event', async ({ page }) => {
   await expect(page.locator('body')).toContainText(/good evening/i, { timeout: 20_000 });
 
   // ── 2. Dismiss the onboarding welcome tour (auto-opens for the seeded
-  // owner; "Resume later" persists and re-opens it, so walk to the last slide
-  // and complete it — status "completed" is what actually keeps it closed).
-  const nextSlide = page.getByRole('button', { name: /^next$/i });
-  for (let i = 0; i < 8; i++) {
-    if (!(await nextSlide.isVisible().catch(() => false))) break;
-    const clicked = await nextSlide.click({ timeout: 3_000 }).then(() => true).catch(() => false);
-    if (!clicked) break;
+  // owner AFTER the dashboard settles — wait for it first; "Resume later"
+  // persists and re-opens it, so walk to the last slide and complete it —
+  // status "completed" is what actually keeps it closed).
+  const resumeLater = page.getByRole('button', { name: /resume later/i });
+  await resumeLater.waitFor({ state: 'visible', timeout: 15_000 }).catch(() => {});
+  if (await resumeLater.isVisible().catch(() => false)) {
+    const nextSlide = page.getByRole('button', { name: /^next$/i });
+    for (let i = 0; i < 8; i++) {
+      if (!(await nextSlide.isVisible().catch(() => false))) break;
+      await nextSlide.click({ timeout: 3_000 }).catch(() => {});
+    }
+    await page.getByRole('button', { name: /finish tour/i }).click({ timeout: 5_000 }).catch(() => {});
   }
-  await page.getByRole('button', { name: /finish tour/i }).click({ timeout: 5_000 }).catch(() => {});
 
-  // ── 3. Open the create-event dialog from the dashboard ─
+  // ── 3. Ensure no dialog/tour overlay is still open, then open the
+  // create-event dialog from the dashboard. (The onboarding tour opens for
+  // the seeded owner; if its overlay is present, Escape closes it.)
+  await page.keyboard.press('Escape').catch(() => {});
   await page.getByRole('button', { name: /new event/i }).click();
   await expect(page.getByLabel(/event title/i)).toBeVisible({ timeout: 10_000 });
 

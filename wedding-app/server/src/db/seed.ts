@@ -10,6 +10,7 @@
  *   - Budget items, timeline, contracts, inventory
  */
 import { hashPassword } from '../lib/crypto.js';
+import { db } from './database.js';
 import { applyAllMigrations } from './migrate.js';
 import {
   eventsRepo, guestsRepo, orgsRepo, usersRepo,
@@ -71,6 +72,23 @@ if (existingOrgs.length === 0) {
   orgId = existingOrgs[0].id;
   console.log(`[seed] reusing org ${existingOrgs[0].name} (${orgId})`);
 }
+
+// Mark the demo owner's onboarding tour as completed so e2e/a11y harnesses
+// start on a clean dashboard (the welcome modal would otherwise intercept
+// clicks and its async save races the browser automation).
+db.prepare(`UPDATE users SET preferences = ? WHERE id = ?`).run(
+  JSON.stringify({
+    platformConfig: {
+      onboarding: {
+        welcomeTourByOrg: {
+          [orgId]: { status: 'completed', currentSlide: 0, completedSlides: [], completedAt: new Date().toISOString() },
+        },
+      },
+    },
+  }),
+  user.id,
+);
+console.log('[seed] demo owner onboarding tour marked completed');
 
 const events = eventsRepo.listForOrg(orgId);
 if (events.length === 0) {

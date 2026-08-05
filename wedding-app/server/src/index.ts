@@ -134,10 +134,18 @@ export async function buildApp() {
 
   // Global rate limit (route-specific limits override). Public RSVP endpoint
   // gets its own stricter limit; everything else gets a generous baseline.
+  // STATIC ASSETS ARE EXEMPT: the SPA loads 50+ code-split chunks per page
+  // load, so counting them toward the per-IP budget 429'd real users mid-
+  // session (chunks + API + SSE polling easily exceed 300 req/min). Only
+  // /api/* traffic is rate-limited. Tests keep their localhost bypass.
   await app.register(rateLimit, {
     max: 300,
     timeWindow: '1 minute',
-    allowList: process.env.NODE_ENV === 'test' ? ['127.0.0.1', '::1'] : undefined,
+    allowList: (req: { ip: string; url: string }) => {
+      if (process.env.NODE_ENV === 'test' && (req.ip === '127.0.0.1' || req.ip === '::1')) return true;
+      const path = req.url.split('?')[0];
+      return !path.startsWith('/api/');
+    },
   });
 
   // Global error handler. Recognizes:
