@@ -50,9 +50,10 @@ describe('EventInvitesTab', () => {
     expect(screen.getByText('garden')).toBeTruthy();
   });
 
-  it('renders Send to Guests button', async () => {
+  it('renders the honest Mark all sent button (tracking only, not a sender)', async () => {
     render(<EventInvitesTab eventId="e1" />, { wrapper: wrap() });
-    expect(screen.getByText('Send to Guests')).toBeTruthy();
+    expect(screen.getByRole('button', { name: /mark all sent/i })).toBeTruthy();
+    expect(screen.queryByText('Send to Guests')).toBeNull();
   });
 
   it('switches to tracking view', async () => {

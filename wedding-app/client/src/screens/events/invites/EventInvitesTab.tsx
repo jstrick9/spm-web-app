@@ -1,8 +1,10 @@
 /**
  * EventInvitesTab — Phase 24: wired to real invite_tracking backend.
  *
- * "Send to Guests" now calls POST /api/events/:eventId/invite-tracking/send
- * and the tracking view reads real status from the server.
+ * "Mark all sent" calls POST /api/events/:eventId/invite-tracking/send —
+ * invite TRACKING only (no emails are dispatched); the tracking view
+ * reads real status from the server. Use Lifecycle Email Automations to
+ * actually email invitations.
  */
 import React, { useState, useMemo } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
@@ -14,6 +16,7 @@ import { Badge } from '../../../ui/Badge';
 import { Input } from '../../../ui/Input';
 import { Label } from '../../../ui/Label';
 import { useToast } from '../../../ui/Toast';
+import { usePrompt } from '../../../ui/usePrompt';
 import { DataTable, type Column } from '../../../ui/DataTable';
 import { StatCard } from '../../../ui/StatCard';
 import { cn } from '../../../ui/lib/cn';
@@ -28,6 +31,7 @@ interface Block { id: string; type: BlockType; content: string }
 
 export function EventInvitesTab({ eventId }: Props) {
   const { toast } = useToast();
+  const { askConfirm, promptNode } = usePrompt();
   const qc = useQueryClient();
   const [view, setView] = useState<'builder' | 'tracking'>('builder');
 
@@ -58,10 +62,10 @@ export function EventInvitesTab({ eventId }: Props) {
     mutationFn: () => sdk.inviteTracking.bulkSend(eventId),
     onSuccess: (res) => {
       qc.invalidateQueries({ queryKey: ['invite-tracking', eventId] });
-      toast({ title: 'Invitations Sent!', description: `Dispatched to ${res.sent} guests.`, variant: 'success' });
+      toast({ title: 'Tracking updated', description: `Marked ${res.sent} guest(s) as sent (tracking only — no email was dispatched). Use Lifecycle Email Automations to actually email invitations.`, variant: 'success' });
       setView('tracking');
     },
-    onError: () => toast({ title: 'Send failed', variant: 'destructive' }),
+    onError: () => toast({ title: 'Could not update tracking', variant: 'destructive' }),
   });
 
   // ── Builder helpers ───────────────────────────────────
@@ -124,6 +128,8 @@ export function EventInvitesTab({ eventId }: Props) {
   const openRate = totalSent > 0 ? Math.round((counts.opened / totalSent) * 100) : 0;
 
   return (
+    <>
+      {promptNode}
     <div className="space-y-6">
       {/* View toggle + actions */}
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 border-b border-border pb-4">
@@ -134,8 +140,11 @@ export function EventInvitesTab({ eventId }: Props) {
         {view === 'builder' && (
           <div className="flex items-center gap-2">
             <Button variant="outline" size="sm" onClick={handleSaveHtml}><Download className="w-4 h-4 mr-1" /> Export HTML</Button>
-            <Button size="sm" onClick={() => sendMutation.mutate()} isLoading={sendMutation.isPending}>
-              <Send className="w-4 h-4 mr-1" /> Send to Guests
+            <Button size="sm" variant="outline" onClick={async () => {
+              const ok = await askConfirm({ title: 'Mark all invitations as sent?', description: 'This updates invite tracking only — it does NOT email anyone. Use Lifecycle Email Automations to actually send invitations.' });
+              if (ok) sendMutation.mutate();
+            }} isLoading={sendMutation.isPending}>
+              <Send className="w-4 h-4 mr-1" /> Mark all sent
             </Button>
           </div>
         )}
@@ -231,5 +240,6 @@ export function EventInvitesTab({ eventId }: Props) {
       {/* Automated lifecycle emails (RSVP reminders, thank-yous, save-the-dates) */}
       <LifecycleEmailsPanel eventId={eventId} />
     </div>
+    </>
   );
 }
