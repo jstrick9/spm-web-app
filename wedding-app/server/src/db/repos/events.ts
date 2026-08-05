@@ -307,7 +307,12 @@ export const subEventsRepo = {
       if (key in patch) { fields.push(`${col} = ?`); values.push((patch as any)[key] ?? null); }
     }
     if ('inviteOnly' in patch) { fields.push('invite_only = ?'); values.push(patch.inviteOnly ? 1 : 0); }
-    if ('metadata' in patch) { fields.push('metadata = ?'); values.push(stringifyJson(patch.metadata ?? {})); }
+    if ('metadata' in patch) {
+      const current = db.prepare(`SELECT * FROM sub_events WHERE id = ?`).get(id) as SubEventRow | undefined;
+      const stored = (() => { try { return JSON.parse(current?.metadata || '{}'); } catch { return {}; } })();
+      fields.push('metadata = ?');
+      values.push(stringifyJson(deepMergeMetadata(stored, patch.metadata ?? {})));
+    }
     if (!fields.length) return db.prepare(`SELECT * FROM sub_events WHERE id = ?`).get(id) as SubEventRow | undefined;
     values.push(id);
     db.prepare(`UPDATE sub_events SET ${fields.join(', ')} WHERE id = ?`).run(...values);

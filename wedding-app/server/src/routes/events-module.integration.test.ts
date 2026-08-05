@@ -79,6 +79,19 @@ describe('Events module — pipeline integrity', () => {
     expect(meta2.emergency_kit_checklist).toEqual({ config: { restocked: true } });
     // …but the incident from writer A survived the nested write too.
     expect(meta2.emergency_incidents).toEqual([{ id: 'inc-1', title: 'Power outage', severity: 'critical' }]);
+
+    // Sub-event metadata gets the same merge treatment (portal settings +
+    // concurrent edits both survive).
+    const sub = await authed(u.token, 'POST', `/api/events/${event.id}/sub-events`, {
+      title: 'Ceremony', startsAt: '2026-09-12T16:00:00', metadata: { rsvpEnabled: true },
+    });
+    expect(sub.statusCode).toBe(201);
+    const subId = sub.json().subEvent.id;
+    await authed(u.token, 'PATCH', `/api/sub-events/${subId}`, { metadata: { lodgingNote: 'Block at Grand Hotel' } });
+    const subGet = await authed(u.token, 'GET', `/api/events/${event.id}/sub-events`);
+    const subMeta = JSON.parse(subGet.json().subEvents.find((s: any) => s.id === subId).metadata || '{}');
+    expect(subMeta.rsvpEnabled).toBe(true);
+    expect(subMeta.lodgingNote).toBe('Block at Grand Hotel');
   });
 
   it('rejects creating an event directly in a terminal status', async () => {
