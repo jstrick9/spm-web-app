@@ -958,19 +958,18 @@ function UserMenu({ user, onLogout }: { user: SdkUser; onLogout: () => void }) {
             Account Settings
           </a>
 
-          <a
-            href="#"
-            onClick={(e) => {
-              e.preventDefault();
+          <button
+            type="button"
+            onClick={() => {
               setOpen(false);
               window.dispatchEvent(new CustomEvent("wvi:open-shortcuts"));
             }}
-            className="flex items-center gap-2 px-4 py-2.5 text-sm text-fg-muted hover:bg-surface-2 hover:text-fg transition-colors focus-visible:ring-2 focus-visible:ring-brand focus-visible:outline-none"
+            className="w-full text-left flex items-center gap-2 px-4 py-2.5 text-sm text-fg-muted hover:bg-surface-2 hover:text-fg transition-colors focus-visible:ring-2 focus-visible:ring-brand focus-visible:outline-none"
             role="menuitem"
           >
             <Keyboard className="h-4 w-4" aria-hidden="true" />
             Keyboard Shortcuts
-          </a>
+          </button>
 
           <button
             onClick={() => {

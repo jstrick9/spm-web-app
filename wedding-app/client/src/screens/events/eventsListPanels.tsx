@@ -16,6 +16,7 @@ import {
 import { useMemo, useState, type ReactNode } from "react";
 import { calendarDaysUntil } from "../../lib/calendarDays";
 import type { SdkEvent } from "../../sdk/types";
+import { formatDateOnly } from '../../lib/formatDate';
 import type { EventStatusCounts } from "../../sdk/events";
 import { Badge } from "../../ui/Badge";
 import { Card, CardContent } from "../../ui/Card";
@@ -626,7 +627,9 @@ export function KanbanCard({
       <div className="mt-2 flex items-center justify-between text-xs text-fg-muted">
         <span className="inline-flex items-center gap-1">
           <Calendar className="h-3 w-3" />
-          {event.start_date ?? (
+          {event.start_date ? (
+            formatDateOnly(event.start_date)
+          ) : (
             <span className="italic text-fg-subtle">no date</span>
           )}
         </span>
@@ -719,7 +722,7 @@ export function TableView({
     {
       id: "date",
       header: "Date",
-      cell: (e) => e.start_date ?? <span className="text-fg-subtle">—</span>,
+      cell: (e) => e.start_date ? formatDateOnly(e.start_date) : <span className="text-fg-subtle">—</span>,
     },
     {
       id: "status",
