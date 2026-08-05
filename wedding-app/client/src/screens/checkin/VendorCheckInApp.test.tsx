@@ -3,6 +3,8 @@ import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import { VendorCheckInApp } from './VendorCheckInApp';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { ToastProvider } from '../../ui/Toast';
+import { ApiError } from '../../sdk/client';
+import { peek, clear as clearQueue, drain } from '../../dual-write/writeQueue';
 
 vi.mock('html5-qrcode', () => ({
   Html5QrcodeScanner: class {
@@ -61,6 +63,7 @@ describe('VendorCheckInApp', () => {
       statusMap: {},
       counts: { expected: 0, arrived: 0, completed: 0, departed: 0 },
     });
+    clearQueue();
   });
 
   it('renders vendor list and check-in controls', async () => {
@@ -138,5 +141,39 @@ describe('VendorCheckInApp', () => {
       const calls = (sdk.checkins.update as any).mock.calls;
       expect(calls.some((c: unknown[]) => c[0] === 'evt-1' && c[1] === 'v1' && c[2] === 'arrived')).toBe(true);
     });
+  });
+
+  it('queues the update offline and replays it on reconnect (advertised offline retry)', async () => {
+    const { sdk } = await import('../../sdk');
+    (sdk.checkins.update as any).mockRejectedValueOnce(new ApiError('offline', 0, 'network-error'));
+    render(<VendorCheckInApp eventId="evt-1" organizationId="org-1" />, { wrapper: makeWrapper() });
+    await screen.findByText('DJ Snake');
+
+    fireEvent.click(screen.getAllByRole('button', { name: /Mark Arrived/i })[0]);
+    await waitFor(() => {
+      // Offline failure → enqueued, not silently lost
+      const q = peek();
+      expect(q.some((w) => w.domain === 'vendors' && w.op === 'checkin.update' && (w.payload as any).vendorId === 'v1' && (w.payload as any).status === 'arrived')).toBe(true);
+    });
+    // Honest success-flavored toast, not "failed"
+    await waitFor(() => expect(screen.getByText(/Saved on this device/)).toBeTruthy());
+
+    // Reconnect: queue drains and replays the update in order
+    (sdk.checkins.update as any).mockResolvedValue({ checkin: { id: 'c1', vendor_id: 'v1', status: 'arrived' } });
+    await drain();
+    await waitFor(() => expect(peek()).toHaveLength(0));
+    const calls = (sdk.checkins.update as any).mock.calls;
+    expect(calls.some((c: unknown[]) => c[0] === 'evt-1' && c[1] === 'v1' && c[2] === 'arrived')).toBe(true);
+  });
+
+  it('non-offline failures show the real error message (no false offline promise)', async () => {
+    const { sdk } = await import('../../sdk');
+    (sdk.checkins.update as any).mockRejectedValueOnce(new ApiError('server', 500, 'internal-error', { error: 'internal-error', message: 'Disk full' }));
+    render(<VendorCheckInApp eventId="evt-1" organizationId="org-1" />, { wrapper: makeWrapper() });
+    await screen.findByText('DJ Snake');
+    fireEvent.click(screen.getAllByRole('button', { name: /Mark Arrived/i })[0]);
+    await waitFor(() => expect(screen.getByText(/Status update failed/)).toBeTruthy());
+    expect(screen.getByText(/Disk full/)).toBeTruthy();
+    expect(peek()).toHaveLength(0);
   });
 });

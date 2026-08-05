@@ -67,6 +67,13 @@ export function useRealtimeInvalidation(orgId: string | null) {
         qc.invalidateQueries({ queryKey: ['budget', eventId] });
       }
     },
+    // Day-of vendor check-ins (incl. replayed offline writes from the queue):
+    // keep the tablet check-in board fresh across devices.
+    'vendor.checkin': (e: SSEEvent) => {
+      const eventId = (e.payload as any)?.eventId;
+      if (eventId) qc.invalidateQueries({ queryKey: ['checkins', eventId] });
+      qc.invalidateQueries({ queryKey: ['checkins'] });
+    },
     // ── Staff & timeline (MODULE-05 ST-14) ──────────────────────────
     'staff.task_created': () => {
       qc.invalidateQueries({ queryKey: ['staffTasks'] });

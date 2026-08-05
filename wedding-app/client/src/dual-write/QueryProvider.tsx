@@ -25,7 +25,11 @@ function makeClient(): QueryClient {
        */
       onError: (error, _variables, _context, mutation) => {
         if (typeof mutation.options.onError === 'function') return;
-        if (error instanceof ApiError && (error.kind === 'offline' || error.kind === 'unauthorized')) return;
+        // The auth flow owns session-expiry handling (redirect etc.).
+        if (error instanceof ApiError && error.kind === 'unauthorized') return;
+        // Offline errors used to be skipped on the theory that "the write
+        // queue owns retry" — but only check-ins are queued, so every other
+        // mutation failing offline was silently LOST. Surface it honestly.
         emitUnhandledError(error);
       },
     }),

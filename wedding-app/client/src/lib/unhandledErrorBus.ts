@@ -51,6 +51,8 @@ export function describeUnhandledError(err: unknown): { title: string; descripti
         return { title: 'Server error', description: err.message || 'The server hit an unexpected error. Please try again.' };
       case 'unauthorized':
         return { title: 'Session expired', description: 'Please sign in again.' };
+      case 'offline':
+        return { title: 'You are offline', description: "This change wasn't saved. Reconnect and try again." };
       default:
         break;
     }

@@ -68,6 +68,14 @@ describe('useRealtimeInvalidation', () => {
   });
 
   // MODULE-05 ST-14: staff + timeline SSE events must invalidate caches.
+  it('vendor.checkin invalidates checkins for the event and global board', () => {
+    renderWithQC();
+    const invalidate = vi.spyOn(qc, 'invalidateQueries').mockResolvedValue(undefined);
+    capturedHandlers['vendor.checkin']({ payload: { eventId: 'e1', vendorId: 'v1', status: 'arrived' } });
+    expect(invalidate).toHaveBeenCalledWith({ queryKey: ['checkins', 'e1'] });
+    expect(invalidate).toHaveBeenCalledWith({ queryKey: ['checkins'] });
+  });
+
   it('registers handlers for every staff and timeline event', () => {
     renderWithQC();
     for (const type of [

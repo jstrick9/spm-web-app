@@ -2,15 +2,19 @@
  * VendorCheckInApp — Phase 23: wired to real vendor_checkins backend.
  *
  * Status changes now POST to the server and persist across sessions.
- * The service worker's BackgroundSyncPlugin ensures check-ins work
- * even when WiFi drops in the parking lot.
+ * Offline behavior: check-in updates that fail while offline are pushed
+ * onto the persistent write queue and replayed on reconnect (the service
+ * worker's BackgroundSyncPlugin covers staff tasks, not check-ins, so
+ * this is the actual mechanism behind "will retry when back online").
  */
 import React, { useState, useEffect } from 'react';
 import { toCsv } from '../../lib/csv';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { QrCode, Search, LogIn, LogOut, Clock, AlertCircle, Phone, Building2, UserCircle, X, Download, Keyboard, MessageSquare, Loader2, Camera, LockKeyhole } from 'lucide-react';
 import { sdk } from '../../sdk';
+import { ApiError } from '../../sdk/client';
 import type { CheckInStatus } from '../../sdk/checkins';
+import { enqueue, registerExecutor } from '../../dual-write/writeQueue';
 import { useToast } from '../../ui/Toast';
 import { Button } from '../../ui/Button';
 import { Card } from '../../ui/Card';
@@ -18,6 +22,13 @@ import { Badge } from '../../ui/Badge';
 import { Input } from '../../ui/Input';
 import { cn } from '../../ui/lib/cn';
 import { format } from 'date-fns';
+
+// Offline write queue — replay check-in updates in order when back online.
+// The server's vendor.checkin SSE then refreshes every open board.
+registerExecutor('vendors', 'checkin.update', async (w) => {
+  const p = w.payload as { eventId: string; vendorId: string; status: CheckInStatus };
+  await sdk.checkins.update(p.eventId, p.vendorId, p.status);
+});
 
 interface Props { eventId: string; organizationId: string }
 
@@ -56,8 +67,17 @@ export function VendorCheckInApp({ eventId, organizationId }: Props) {
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['checkins', eventId] });
     },
-    onError: () => {
-      toast({ title: 'Status update failed — will retry when online', variant: 'destructive' });
+    onError: (err, variables) => {
+      if (err instanceof ApiError && err.kind === 'offline') {
+        enqueue({
+          domain: 'vendors',
+          op: 'checkin.update',
+          payload: { eventId, vendorId: variables.vendorId, status: variables.status },
+        });
+        toast({ title: 'Saved on this device', description: 'It will sync automatically when you are back online.', variant: 'success' });
+      } else {
+        toast({ title: 'Status update failed', description: err instanceof Error ? err.message : 'Please try again.', variant: 'destructive' });
+      }
     },
   });
 

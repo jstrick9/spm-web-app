@@ -58,10 +58,12 @@ describe('QueryProvider mutation error safety net (UX-6)', () => {
     expect(screen.queryByText(/Disk full/)).toBeNull();
   });
 
-  it('skips offline errors (the write queue owns those)', async () => {
+  it('surfaces offline errors honestly (regression: they were silently dropped)', async () => {
     wrap(<OfflineButton />);
     await userEvent.click(screen.getByText('Offline'));
-    await new Promise((r) => setTimeout(r, 150));
-    expect(screen.queryByText('Something went wrong')).toBeNull();
+    await waitFor(() => {
+      expect(screen.getByText('You are offline')).toBeTruthy();
+    });
+    expect(screen.getByText(/wasn't saved/)).toBeTruthy();
   });
 });
