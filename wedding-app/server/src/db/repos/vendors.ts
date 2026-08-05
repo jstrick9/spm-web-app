@@ -1,4 +1,5 @@
 import { db } from '../database.js';
+import { deepMergeMetadata } from './events.js';
 import { generateOpaqueToken, hashToken, uuid, verifyToken } from '../../lib/crypto.js';
 import { stringifyJson } from '../../lib/json.js';
 
@@ -124,7 +125,14 @@ export const vendorsRepo = {
       if (!spec) continue;
       fields.push(`${spec.col} = ?`);
       if (spec.bool) values.push(v ? 1 : 0);
-      else if (spec.json) values.push(stringifyJson(v));
+      else if (spec.json) {
+        // Deep-merge vendor metadata (RFC 7386): venue staff and the vendor
+        // portal (questionnaire, COI upload, activity stamps) write the same
+        // object concurrently — never clobber one another.
+        const current = this.findById(id);
+        const stored = (() => { try { return JSON.parse(current?.metadata || '{}'); } catch { return {}; } })();
+        values.push(stringifyJson(deepMergeMetadata(stored, v)));
+      }
       else values.push(v ?? null);
     }
     if (fields.length === 0) return this.findById(id);

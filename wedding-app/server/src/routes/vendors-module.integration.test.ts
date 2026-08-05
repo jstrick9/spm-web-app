@@ -50,6 +50,29 @@ async function createVendor(token: string, orgId: string, eventId: string | null
 }
 
 describe('Vendor check-in integrity', () => {
+  it('deep-merges vendor metadata from venue and portal writers', async () => {
+    const { token, orgId } = await register('ve-merge');
+    const e1 = await createEvent(token, orgId);
+    const v = await createVendor(token, orgId, e1.id);
+
+    // Venue staff saves COI fields from their snapshot (no questionnaire yet).
+    const r1 = await authed(token, 'PATCH', `/api/vendors/${v.id}`, {
+      metadata: { coi: { insurer: 'State Farm', policyNumber: 'P-1' } },
+    });
+    expect(r1.statusCode).toBe(200);
+
+    // Vendor portal questionnaire submits from ITS stale base (no COI data).
+    const meta = { questionnaire: { loadInRoute: 'Dock A', powerNeeds: '20A' }, submittedAt: new Date().toISOString() };
+    const r2 = await authed(token, 'PATCH', `/api/vendors/${v.id}`, { metadata: meta });
+    expect(r2.statusCode).toBe(200);
+
+    const get = await authed(token, 'GET', `/api/orgs/${orgId}/vendors`);
+    const vendor = get.json().vendors.find((x: any) => x.id === v.id);
+    const m = JSON.parse(vendor.metadata || '{}');
+    expect(m.coi.insurer).toBe('State Farm');
+    expect(m.questionnaire.loadInRoute).toBe('Dock A');
+  });
+
   it('rejects checking in a vendor from a different event', async () => {
     const { token, orgId } = await register('ve-checkin');
     const e1 = await createEvent(token, orgId);
