@@ -24,12 +24,14 @@ import { usePrompt } from '../../../ui/usePrompt';
 interface Props {
   eventId: string;
   currentUser: SdkUser;
+  /** The sender's role label for server-side thread attribution. */
+  senderRole?: string;
 }
 
 const CATEGORIES = ['general', 'layout', 'logistics', 'vendors', 'urgent'] as const;
 type Category = typeof CATEGORIES[number];
 
-export function ChatSystem({ eventId, currentUser }: Props) {
+export function ChatSystem({ eventId, currentUser, senderRole = 'staff' }: Props) {
   const { ask, askConfirm, promptNode } = usePrompt();
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [input, setInput] = useState('');
@@ -75,7 +77,7 @@ export function ChatSystem({ eventId, currentUser }: Props) {
         eventId,
         threadId: activeCategory,
         senderId: m.sender_id,
-        senderName: m.sender_role || 'User',
+        senderName: m.sender_role ? m.sender_role.replace(/_/g, ' ').replace(/\b\w/g, (c: string) => c.toUpperCase()) : 'User',
         body: m.body,
         createdAt: m.created_at,
         isOwn: m.sender_id === currentUser.id,
@@ -154,7 +156,7 @@ export function ChatSystem({ eventId, currentUser }: Props) {
           try {
             const res: any = await api.post(`/api/messages/${encodeURIComponent(eventId + ':' + msg.threadId)}`, {
               body: msg.body,
-              senderRole: 'planner',
+              senderRole,
             });
             const syncedMsg = {
               ...msg,
@@ -216,7 +218,7 @@ export function ChatSystem({ eventId, currentUser }: Props) {
     try {
       const res: any = await api.post(`/api/messages/${encodeURIComponent(threadId)}`, {
         body: newMsg.body,
-        senderRole: 'planner',
+        senderRole,
       });
 
       // Update the message with server ID and mark as synced

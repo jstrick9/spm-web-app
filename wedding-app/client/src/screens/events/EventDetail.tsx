@@ -610,7 +610,11 @@ export function EventDetail({ eventId, user }: Props & { user: any }) {
             <TabsContent value="chat">
               {guardedTab(
                 "chat",
-                <ChatSystem eventId={eventId} currentUser={user} />,
+                <ChatSystem
+                  eventId={eventId}
+                  currentUser={user}
+                  senderRole={currentUserQuery.data?.memberships?.find((membership: any) => membership.eventId === eventId || membership.organizationId === event.organization_id)?.roleKey ?? 'staff'}
+                />,
               )}
             </TabsContent>
             <TabsContent value="layout">

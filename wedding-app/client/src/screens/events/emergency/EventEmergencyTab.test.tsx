@@ -196,7 +196,7 @@ describe('EventEmergencyTab', () => {
         }),
       },
     });
-    render(<EventEmergencyTab eventId="evt-1" organizationId="org-123" />, { wrapper: TestWrapper });
+    render(<EventEmergencyTab eventId="evt-1" />, { wrapper: TestWrapper });
     await screen.findByText('Weather & Contingency Status');
 
     // Toggle a kit item — our stale mount-time snapshot does NOT contain

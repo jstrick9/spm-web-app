@@ -6,7 +6,7 @@
  *   2. This week's event schedule (7-day strip)
  *   3. Action items requiring attention (overdue RSVPs, unsigned contracts, unpaid vendors)
  */
-import { useMemo } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { calendarDaysUntil } from '../../lib/calendarDays';
 import { useQuery } from '@tanstack/react-query';
 import { AlertTriangle, Calendar, CheckCircle2, Clock, DollarSign, FileSignature, Users } from 'lucide-react';
@@ -42,7 +42,14 @@ export function TodayView({ orgId }: Props) {
 
   const events = eventsQ.data?.events ?? [];
   const vendors = vendorsQ.data?.vendors ?? [];
-  const today = new Date();
+  // Tick once a minute so an open tab rolls over at midnight (and the
+  // "today" / week windows stay correct without needing a refocus).
+  const [now, setNow] = useState(() => new Date());
+  useEffect(() => {
+    const timer = setInterval(() => setNow(new Date()), 60_000);
+    return () => clearInterval(timer);
+  }, []);
+  const today = now;
   const todayStr = localDateKey(today);
 
   // Events happening today
