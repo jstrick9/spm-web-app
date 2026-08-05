@@ -14,6 +14,7 @@ class FakeEventSource {
   url: string;
   onmessage: ((e: { data: string }) => void) | null = null;
   onerror: (() => void) | null = null;
+  onopen: (() => void) | null = null;
   closed = false;
   constructor(url: string) {
     this.url = url;
@@ -88,6 +89,26 @@ describe('createSSEStream token refresh', () => {
     expect(FakeEventSource.instances[1].url).toContain('lastId=7');
 
     stream.close();
+  });
+
+  it('reports connection status: open on connect, error on drop, closed on close', async () => {
+    const stream = createSSEStream('org-1');
+    const statuses: string[] = [];
+    stream.onStatus((s) => statuses.push(s));
+    stream.on('event.created', vi.fn());
+    await Promise.resolve();
+    await Promise.resolve();
+
+    // EventSource.onopen → 'open'
+    FakeEventSource.instances[0].onopen?.();
+    expect(statuses).toContain('open');
+
+    // EventSource.onerror → 'error' (auto-reconnect window)
+    FakeEventSource.instances[0].onerror?.();
+    expect(statuses).toContain('error');
+
+    stream.close();
+    expect(statuses).toContain('closed');
   });
 
   it('close() clears the refresh timer', async () => {

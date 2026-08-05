@@ -21,12 +21,19 @@ export type SSEEventHandler = (event: SSEEvent) => void;
  *   // later:
  *   stream.close();
  */
+export type SSEConnectionStatus = 'connecting' | 'open' | 'closed' | 'error';
+
 export function createSSEStream(orgId: string) {
   let eventSource: EventSource | null = null;
   let lastId = 0;
   let connectedAt = 0;
   let refreshTimer: ReturnType<typeof setTimeout> | null = null;
   const handlers = new Map<string, Set<SSEEventHandler>>();
+  const statusListeners = new Set<(status: SSEConnectionStatus) => void>();
+
+  function emitStatus(status: SSEConnectionStatus) {
+    for (const fn of statusListeners) fn(status);
+  }
 
   async function connect() {
     const mainToken = getToken();
@@ -57,6 +64,13 @@ export function createSSEStream(orgId: string) {
       return; // SSE not available — degrade gracefully
     }
 
+    eventSource.onopen = () => emitStatus('open');
+    eventSource.onerror = () => {
+      // EventSource auto-reconnects; the badge should reflect the dead
+      // window rather than claiming live. (close() emits 'closed' when we
+      // deliberately tear the stream down.)
+      emitStatus('error');
+    };
     eventSource.onmessage = (e) => {
       try {
         const data: SSEEvent = JSON.parse(e.data);
@@ -76,11 +90,6 @@ export function createSSEStream(orgId: string) {
       } catch {
         // Ignore malformed events
       }
-    };
-
-    eventSource.onerror = () => {
-      // EventSource will automatically reconnect
-      // We don't need to do anything special
     };
   }
 
@@ -115,7 +124,14 @@ export function createSSEStream(orgId: string) {
       eventSource.close();
       eventSource = null;
     }
+    emitStatus('closed');
   }
 
-  return { on, off, close, connect };
+  /** Subscribe to connection-state changes (open / error / closed). */
+  function onStatus(fn: (status: SSEConnectionStatus) => void): () => void {
+    statusListeners.add(fn);
+    return () => { statusListeners.delete(fn); };
+  }
+
+  return { on, off, close, connect, onStatus };
 }

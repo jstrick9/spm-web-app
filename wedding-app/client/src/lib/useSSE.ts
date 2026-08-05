@@ -14,7 +14,7 @@
  *   - Deduplicates connections per orgId
  */
 import { useEffect, useRef, useState } from 'react';
-import { createSSEStream, type SSEEvent, type SSEEventHandler } from '../sdk/sse';
+import { createSSEStream, type SSEEvent, type SSEEventHandler, type SSEConnectionStatus } from '../sdk/sse';
 
 type EventHandlerMap = Record<string, SSEEventHandler>;
 
@@ -38,6 +38,9 @@ export function useSSE(
 
     const stream = createSSEStream(orgId);
     streamRef.current = stream;
+    const offStatus = stream.onStatus((status: SSEConnectionStatus) => {
+      setIsConnected(status === 'open');
+    });
 
     // Register all handlers
     const wildcard: SSEEventHandler = (event) => {
@@ -56,6 +59,7 @@ export function useSSE(
     stream.on('*', wildcard);
 
     return () => {
+      offStatus();
       stream.off('*', wildcard);
       stream.close();
       streamRef.current = null;

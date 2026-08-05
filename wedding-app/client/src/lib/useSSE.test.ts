@@ -7,6 +7,7 @@ const mockOn = vi.fn();
 const mockOff = vi.fn();
 const mockClose = vi.fn();
 const mockConnect = vi.fn();
+const mockOnStatus = vi.fn(() => () => {});
 
 vi.mock('../sdk/sse', () => ({
   createSSEStream: vi.fn(() => ({
@@ -14,6 +15,7 @@ vi.mock('../sdk/sse', () => ({
     off: mockOff,
     close: mockClose,
     connect: mockConnect,
+    onStatus: mockOnStatus,
   })),
 }));
 

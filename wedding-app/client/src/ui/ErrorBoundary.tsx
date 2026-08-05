@@ -64,6 +64,9 @@ export class ErrorBoundary extends React.Component<Props, State> {
   };
 
   private handleClearSession = () => {
+    // The real auth token key is 'wedding-jwt' (sdk/client.ts TOKEN_KEY);
+    // 'wvi_auth_token' was a legacy key that never held the JWT.
+    localStorage.removeItem('wedding-jwt');
     localStorage.removeItem('wvi_auth_token');
     sessionStorage.clear();
     window.location.reload();
