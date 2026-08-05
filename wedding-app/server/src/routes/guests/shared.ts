@@ -481,6 +481,35 @@ export function escapeHtml(value: string) {
   return value.replace(/[&<>"]/g, (ch) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[ch] || ch));
 }
 
+/**
+ * Directory-only guest shape for the OPT-IN generic guest directory
+ * (allowGenericGuestDirectory). Directory visitors have NO invitation
+ * token, so they only need enough to find their own name: id + full
+ * name + party name for disambiguation. Everything else — RSVP status,
+ * table/seat/room assignments, lodging access, sub-event invites,
+ * plus-one policy — is personal to each guest and is omitted until a
+ * valid invitation token is presented.
+ */
+export function publicGuestDirectory(g: NonNullable<ReturnType<typeof guestsRepo.findById>>) {
+  return {
+    id: g.id,
+    fullName: g.full_name,
+    tableAssignment: null,
+    seatAssignment: null,
+    roomAssignment: null,
+    allowLodgingAccess: false,
+    subEventInvites: [],
+    subEventStatuses: {},
+    rsvpStatus: null,
+    partyName: g.party_name || null,
+    householdId: null,
+    householdName: null,
+    householdAuthorized: false,
+    inviteStatus: g.allow_portal_access ? 'invited' : 'revoked',
+    plusOneAllowed: false,
+  };
+}
+
 export function isGuestTimelineItem(item: any) {
   const text = `${item.title || ''} ${item.category || ''} ${item.notes || ''}`.toLowerCase();
   const hidden = ['vendor', 'load-in', 'load in', 'load-out', 'load out', 'setup', 'strike', 'staff', 'internal', 'incident', 'prep', 'kitchen', 'security'];

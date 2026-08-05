@@ -434,6 +434,40 @@ describe('Public portal: full RSVP flow', () => {
     expect(ok.statusCode).toBe(201);
   });
 
+  it('4b. Generic guest directory exposes names only — no RSVP/seating PII', async () => {
+    const s = await setupEvent();
+    // Guest data that must NOT leak to anonymous directory visitors.
+    db.prepare(`UPDATE guests SET table_assignment = 'Table 7', seat_assignment = 'Seat 2', room_assignment = 'Rose Room', rsvp_status = 'attending' WHERE id = ?`).run(s.guestId1);
+    db.prepare(`UPDATE guests SET rsvp_status = 'declined' WHERE id = ?`).run(s.guestId2);
+
+    const cfg = await app.inject({ method: 'PUT', url: `/api/events/${s.eventId}/portal-config`,
+      payload: { enabled: true, config: { allowGenericGuestDirectory: true } },
+      headers: { authorization: `Bearer ${s.token}`, 'content-type': 'application/json' } });
+    expect(cfg.statusCode).toBe(200);
+
+    // Anonymous: directory shows names + party only.
+    const anon = await app.inject({ method: 'GET', url: `/api/portal/${s.eventId}/info` });
+    expect(anon.statusCode).toBe(200);
+    expect(anon.json().guests).toHaveLength(2);
+    const dir = anon.json().guests.find((g: any) => g.id === s.guestId1);
+    expect(dir.fullName).toBe('Alice Johnson');
+    expect(dir.partyName).toBe('Johnson Household');
+    expect(dir.rsvpStatus).toBeNull();
+    expect(dir.tableAssignment).toBeNull();
+    expect(dir.seatAssignment).toBeNull();
+    expect(dir.roomAssignment).toBeNull();
+    expect(dir.plusOneAllowed).toBe(false);
+
+    // With the invitation token the same guest sees their personal details.
+    const guestToken = guestsRepo.rotatePortalToken(s.guestId1);
+    const authed = await app.inject({ method: 'GET', url: `/api/portal/${s.eventId}/info?guest=${s.guestId1}&token=${guestToken}` });
+    expect(authed.statusCode).toBe(200);
+    const me = authed.json().guests.find((g: any) => g.id === s.guestId1);
+    expect(me.rsvpStatus).toBe('attending');
+    expect(me.tableAssignment).toBe('Table 7');
+    expect(me.roomAssignment).toBe('Rose Room');
+  });
+
   it('5c. Household members may RSVP using the primary invite\'s token (one link per household)', async () => {
     const s = await setupEvent(); // g1 + g2 share party 'Johnson Household'
     // Only g1 is issued the secure link.

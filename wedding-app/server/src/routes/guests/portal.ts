@@ -8,7 +8,7 @@ import { privateFilePath } from '../../lib/fileStorage.js';
 import { createReadStream, existsSync } from 'node:fs';
 import { assertNoPublicHoneypot, auditPublicSubmission, publicRequestFingerprint } from '../../lib/publicAbuse.js';
 import type { FastifyInstance } from 'fastify';
-import { rsvpSchema, guestLookupSchema, guestHelpSchema, guestQuestionSchema, guestAccessibilityRequestSchema, guestPrivacyRequestSchema, guestReminderPreferencesSchema, guestDayOfHelpSchema, guestMemorySubmissionSchema, guestPostEventFeedbackSchema, guestResendSchema, guestMetadata, guestHouseholdKey, publicGuest, normalizeGuestPostEvent, normalizeGuestDayOf, normalizeGuestReminders, normalizeGuestPrivacy, normalizeGuestCare, normalizeGuestGifts, normalizeGuestFaq, normalizeWayfindingLabels, safeGuestLayoutPayload, verifyGuestPortalToken, activeSmtpIntegrationId, activeSmsIntegrationId, addDaysIso, escapeHtml, isGuestTimelineItem, safeGuestTimelineItem, eventTimezone, guestCalendarIcs, safeGuestHelpRequest, safeGuestHelpReply } from './shared.js';
+import { rsvpSchema, guestLookupSchema, guestHelpSchema, guestQuestionSchema, guestAccessibilityRequestSchema, guestPrivacyRequestSchema, guestReminderPreferencesSchema, guestDayOfHelpSchema, guestMemorySubmissionSchema, guestPostEventFeedbackSchema, guestResendSchema, guestMetadata, guestHouseholdKey, publicGuest, publicGuestDirectory, normalizeGuestPostEvent, normalizeGuestDayOf, normalizeGuestReminders, normalizeGuestPrivacy, normalizeGuestCare, normalizeGuestGifts, normalizeGuestFaq, normalizeWayfindingLabels, safeGuestLayoutPayload, verifyGuestPortalToken, activeSmtpIntegrationId, activeSmsIntegrationId, addDaysIso, escapeHtml, isGuestTimelineItem, safeGuestTimelineItem, eventTimezone, guestCalendarIcs, safeGuestHelpRequest, safeGuestHelpReply } from './shared.js';
 
 export async function guestPortalRoutes(app: FastifyInstance) {
   app.get('/api/portal/:eventId/status', { config: { rateLimit: { max: 60, timeWindow: '1 minute' } } }, async (req) => {
@@ -61,7 +61,10 @@ export async function guestPortalRoutes(app: FastifyInstance) {
     const guestList = tokenGuest
       ? (householdGuests.length ? householdGuests : [tokenGuest]).map((g) => publicGuest(g, true, !!householdKey && allowHouseholdRsvp))
       : genericDirectoryEnabled
-        ? guestsRepo.listForEvent(eventId).filter((g) => g.allow_portal_access).map((g) => publicGuest(g, true, false))
+        // Privacy: the directory shows names only (id + fullName + party
+        // name). RSVP status, seating, lodging, and sub-event data are
+        // personal and stay hidden until a valid invitation token is shown.
+        ? guestsRepo.listForEvent(eventId).filter((g) => g.allow_portal_access).map((g) => publicGuestDirectory(g))
         : [];
     // Include org theme for portal styling
     const org = orgsRepo.findById(event.organization_id);
