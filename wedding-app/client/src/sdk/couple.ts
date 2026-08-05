@@ -343,7 +343,7 @@ export const coupleSdk = {
   reminders(eventId: string): Promise<CoupleReminderSummary> {
     return api.get(`/api/events/${eventId}/couple-reminders`);
   },
-  sendReminderDigest(eventId: string): Promise<{ digest: string; sent: boolean; historyId: string }> {
+  sendReminderDigest(eventId: string): Promise<{ digest: string; sent: boolean; delivered: boolean; deliveryNote: string; historyId: string }> {
     return api.post(`/api/events/${eventId}/couple-reminders/digest`, {});
   },
   privacy(eventId: string): Promise<CouplePrivacySummary> {

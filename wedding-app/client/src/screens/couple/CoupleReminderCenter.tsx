@@ -13,7 +13,7 @@ export function CoupleReminderCenter({ eventId }: { eventId: string }) {
   const notificationPrefsQuery = useQuery({ queryKey: ['couple-notification-preferences', eventId], queryFn: () => sdk.couple.notificationPreferences(eventId), enabled: !!eventId });
   const digestMutation = useMutation({
     mutationFn: () => sdk.couple.sendReminderDigest(eventId),
-    onSuccess: () => { qc.invalidateQueries({ queryKey: ['couple-reminders', eventId] }); toast({ title: 'Wedding planning digest sent', variant: 'success' }); },
+    onSuccess: (res) => { qc.invalidateQueries({ queryKey: ['couple-reminders', eventId] }); toast({ title: res.delivered ? 'Wedding planning digest sent' : 'Digest recorded', description: res.delivered ? 'Emailed to your account.' : 'Saved to your reminder history — connect venue email to get it delivered.', variant: res.delivered ? 'success' : 'default' }); },
   });
   const notificationPrefsMutation = useMutation({
     mutationFn: () => sdk.couple.updateNotificationPreferences(eventId, { digestFrequency: notificationPrefsQuery.data?.preferences.digest_frequency === 'instant' ? 'daily' : 'instant', messageAlerts: true, decisionAlerts: true, dueTaskAlerts: true }),

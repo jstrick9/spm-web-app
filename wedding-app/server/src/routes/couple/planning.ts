@@ -1,4 +1,4 @@
-import { auditRepo, catalogRepo, contractsRepo, coupleAppointmentsRepo, coupleDocumentsRepo, couplePlanningRepo, coupleRequestsRepo, eventsRepo, guestsRepo, layoutsRepo, messagesRepo, paymentLinksRepo, rolesRepo, subEventsRepo, teamInvitationsRepo, timelineRepo, usersRepo, vendorsRepo, venuesRepo } from '../../db/repos/index.js';
+import { auditRepo, catalogRepo, contractsRepo, coupleAppointmentsRepo, coupleDocumentsRepo, couplePlanningRepo, coupleRequestsRepo, eventsRepo, guestsRepo, jobsRepo, layoutsRepo, messagesRepo, paymentLinksRepo, rolesRepo, subEventsRepo, teamInvitationsRepo, timelineRepo, usersRepo, vendorsRepo, venuesRepo } from '../../db/repos/index.js';
 import { localDateString } from '../../lib/time.js';
 import { icsText } from '../../lib/ics.js';
 import { deliverTeamInvitation } from '../../lib/teamInviteDelivery.js';
@@ -92,7 +92,7 @@ export async function couplePlanningRoutes(app: FastifyInstance) {
     return { reminders, history, language: 'couple-friendly', avoidsInternalLanguage: true };
   });
 
-  app.post('/api/events/:eventId/couple-reminders/digest', { preHandler: requireAuth }, async (req, reply) => {
+  app.post('/api/events/:eventId/couple-reminders/digest', { preHandler: requireAuth, config: { rateLimit: { max: 10, timeWindow: '1 minute' } } }, async (req, reply) => {
     const { eventId } = req.params as { eventId: string };
     const event = eventsRepo.findById(eventId);
     if (!event) throw NotFound('event-not-found');
@@ -102,8 +102,34 @@ export async function couplePlanningRoutes(app: FastifyInstance) {
     const reminders = coupleReminderItems({ event, guests: guestsRepo.listForEvent(eventId), planning, payments: paymentLinksRepo.listForEvent(eventId), contracts: contractsRepo.listForEvent(eventId), documents: coupleDocumentsRepo.listForEvent(eventId), appointments: coupleAppointmentsRepo.listForEvent(eventId) });
     const digest = [`${event.title} — Wedding planning digest`, '', ...reminders.slice(0, 10).map((r) => `- ${r.title}: ${r.body}`)].join('\n');
     const id = uuid();
-    db.prepare(`INSERT INTO couple_notification_history (id, organization_id, event_id, user_id, reminder_key, title, body, channel, status, recipient_role) VALUES (?, ?, ?, ?, ?, ?, ?, 'digest', 'sent', 'couple')`).run(id, event.organization_id, eventId, req.auth!.userId, 'planning-digest', 'Wedding planning digest', digest);
-    return reply.code(201).send({ digest, sent: true, historyId: id });
+    // Honest delivery: the digest is recorded in the couple's notification
+    // history. If the org has SMTP connected AND the couple has an email on
+    // file, we also queue a real email; otherwise `delivered` stays false so
+    // the UI doesn't claim anything was sent.
+    let delivered = false;
+    let deliveryNote = 'recorded_in_history';
+    const smtp = db.prepare(`SELECT id FROM integrations WHERE organization_id = ? AND provider = 'email_smtp' AND status = 'connected' LIMIT 1`).get(event.organization_id) as { id: string } | undefined;
+    const requesterEmail = req.auth!.email;
+    if (smtp && requesterEmail) {
+      const job = jobsRepo.enqueue({
+        kind: 'email.send',
+        organizationId: event.organization_id,
+        payload: {
+          integrationId: smtp.id,
+          to: requesterEmail,
+          subject: `${event.title} — wedding planning digest`,
+          text: digest,
+          html: `<pre style="font-family: ui-monospace, monospace; white-space: pre-wrap;">${digest.replace(/&/g, '&amp;').replace(/</g, '&lt;')}</pre>`,
+          headers: { 'X-WVI-Email-Type': 'couple-digest' },
+        },
+        maxAttempts: 3,
+      });
+      void job;
+      delivered = true;
+      deliveryNote = 'email_job_queued';
+    }
+    db.prepare(`INSERT INTO couple_notification_history (id, organization_id, event_id, user_id, reminder_key, title, body, channel, status, recipient_role) VALUES (?, ?, ?, ?, ?, ?, ?, 'digest', ?, 'couple')`).run(id, event.organization_id, eventId, req.auth!.userId, 'planning-digest', 'Wedding planning digest', digest, delivered ? 'sent' : 'queued');
+    return reply.code(201).send({ digest, sent: delivered, delivered, deliveryNote, historyId: id });
   });
 
   app.get('/api/events/:eventId/couple-privacy', { preHandler: requireAuth }, async (req) => {

@@ -351,6 +351,10 @@ describe('Auth: logout', () => {
     const digest = await app.inject({ method: 'POST', url: `/api/events/${eventId}/couple-reminders/digest`, headers: { authorization: `Bearer ${reg.json().token}` } });
     expect(digest.statusCode).toBe(201);
     expect(digest.json().digest).toContain('Wedding planning digest');
+    // Honest delivery: no SMTP connected in tests → recorded, not 'sent'.
+    expect(digest.json().delivered).toBe(false);
+    expect(digest.json().deliveryNote).toBe('recorded_in_history');
+    expect(digest.json().sent).toBe(false);
 
     const appointment = await app.inject({ method: 'POST', url: `/api/events/${eventId}/couple-appointments`, payload: { appointmentType: 'tasting', title: 'Menu Tasting', startsAt: '2026-08-01T14:00:00', endsAt: '2026-08-01T15:00:00', note: 'Prefer Thursday afternoon' }, headers: { authorization: `Bearer ${reg.json().token}`, 'content-type': 'application/json' } });
     expect(appointment.statusCode).toBe(201);
