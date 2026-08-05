@@ -163,9 +163,18 @@ export async function drain(): Promise<void> {
           continue;
         }
         if (e.kind === 'unauthorized') {
-          // Token died; queue stays until user re-auths.
+          // Token died; queue stays until user re-auths (startAutoReplay
+          // drains again on 'token-changed').
           notify({ kind: 'replay-failed', write: head, reason: 'unauthorized', willRetry: true });
           return;
+        }
+        if (e.kind === 'validation' || e.kind === 'forbidden') {
+          // Permanent: the payload is rejected by the server (malformed or
+          // no permission) and retrying can never change that. Drop and let
+          // the UI surface it instead of blocking the queue head for 5 rounds.
+          write(read().slice(1));
+          notify({ kind: 'replay-failed', write: head, reason: e.code ?? e.kind, willRetry: false });
+          continue;
         }
         if (e.kind === 'offline') {
           // Still offline; stop and wait for next 'server-reachable' event.
@@ -199,6 +208,10 @@ export function startAutoReplay(): void {
   autoStarted = true;
   subscribe((e: ClientEvent) => {
     if (e.kind === 'server-reachable') void drain();
+    // Re-auth after an 'unauthorized' pause: 'server-reachable' won't fire
+    // again (the 401 response already marked the server reachable), so the
+    // queue would otherwise sit forever after a fresh login.
+    if (e.kind === 'token-changed' && e.hasToken) void drain();
   });
   // Try once on startup too, in case there's a leftover queue from a
   // previous session and the server is up.

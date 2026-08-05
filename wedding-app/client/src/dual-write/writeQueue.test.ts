@@ -104,3 +104,53 @@ describe('queue events', () => {
     expect(evs).toEqual(['queued', 'replay-start', 'replay-success', 'drained']);
   });
 });
+
+describe('drain permanent errors', () => {
+  it('validation (400) drops the write immediately instead of burning retries', async () => {
+    const calls: number[] = [];
+    registerExecutor('payments', 'create', async () => {
+      calls.push(1);
+      throw new ApiError('validation', 400, 'invalid-input');
+    });
+    enqueue({ domain: 'payments', op: 'create', payload: {} });
+    await drain();
+    expect(calls.length).toBe(1);       // no retry loop
+    expect(size()).toBe(0);             // dropped immediately
+  });
+
+  it('forbidden (403) drops the write immediately', async () => {
+    const calls: number[] = [];
+    registerExecutor('guests', 'update', async () => {
+      calls.push(1);
+      throw new ApiError('forbidden', 403, 'forbidden');
+    });
+    enqueue({ domain: 'guests', op: 'update', payload: {} });
+    await drain();
+    expect(calls.length).toBe(1);
+    expect(size()).toBe(0);
+  });
+});
+
+describe('re-auth drain after unauthorized pause', () => {
+  it('drains the queue again when a fresh token arrives (token-changed)', async () => {
+    const { startAutoReplay } = await import('./writeQueue.js');
+    const { setToken } = await import('../sdk/client.js');
+
+    let failOnce = true;
+    registerExecutor('events', 'create', async () => {
+      if (failOnce) { failOnce = false; throw new ApiError('unauthorized', 401, 'unauthenticated'); }
+    });
+    startAutoReplay();
+    enqueue({ domain: 'events', op: 'create', payload: {} });
+
+    // First drain: 401 pauses the queue with the write intact.
+    await drain();
+    expect(size()).toBe(1);
+
+    // Re-auth fires 'token-changed' → auto-replay must resume draining.
+    setToken('fresh-jwt');
+    await new Promise((r) => setTimeout(r, 50));
+    expect(size()).toBe(0);
+    setToken(null);
+  });
+});
