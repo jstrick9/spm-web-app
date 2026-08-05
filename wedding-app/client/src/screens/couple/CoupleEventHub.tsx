@@ -508,7 +508,7 @@ export function CoupleEventHub({ eventId }: { eventId: string }) {
     const summary = [
       `${event.title} — Wedding Summary`,
       `Venue: ${venueName}`,
-      `Date: ${event.start_date || 'TBD'}`,
+      `Date: ${formatDateOnly(event.start_date)}`,
       `Ceremony: ${ceremonyTime} · ${ceremonySpace}`,
       `Reception: ${receptionTime} · ${receptionSpace}`,
       `Guests: ${totalGuests || 'TBD'} · RSVP ${rsvpPct}%`,
