@@ -1,3 +1,4 @@
+import { sanitizeNotificationUrl } from './lib/swUrl';
 import { clientsClaim } from 'workbox-core';
 import { precacheAndRoute, cleanupOutdatedCaches } from 'workbox-precaching';
 import { registerRoute } from 'workbox-routing';
@@ -27,7 +28,10 @@ registerRoute(
   })
 );
 
-// 2. Network First for Public Portal Read APIs (Offline Fallback)
+// 2. Network First for Public Portal READ APIs (Offline Fallback)
+// GET-only: POST endpoints (RSVP submit, help requests, privacy requests,
+// memory submissions, guest feedback) must reach the server and are handled
+// by the app's own offline write queue — never intercepted or cached here.
 registerRoute(
   /\/api\/portal\/.*/i,
   new NetworkFirst({
@@ -39,7 +43,8 @@ registerRoute(
       }),
     ],
     networkTimeoutSeconds: 5,
-  })
+  }),
+  'GET'
 );
 
 // 3. BACKGROUND SYNC (Offline Check-Ins / Operations)
@@ -113,9 +118,12 @@ self.addEventListener('push', (event: any) => {
 
 self.addEventListener('notificationclick', (event: any) => {
   event.notification.close();
-  
-  // If the push notification payload included a specific URL (like a specific event detail page)
-  const urlToOpen = event.notification.data?.url || '/';
+
+  // If the push notification payload included a specific URL (like a specific
+  // event detail page), sanitize it: only same-origin paths or app hash routes
+  // are allowed. A crafted push payload must never navigate the browser to an
+  // arbitrary origin (open-redirect / phishing surface).
+  const urlToOpen = sanitizeNotificationUrl(event.notification.data?.url, self.location.origin);
 
   event.waitUntil(
     self.clients.matchAll({ type: 'window', includeUncontrolled: true }).then((windowClients: any[]) => {
