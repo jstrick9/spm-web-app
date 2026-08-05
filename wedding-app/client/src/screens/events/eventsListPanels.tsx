@@ -14,6 +14,7 @@ import {
   X,
 } from "lucide-react";
 import { useMemo, useState, type ReactNode } from "react";
+import { calendarDaysUntil } from "../../lib/calendarDays";
 import type { SdkEvent } from "../../sdk/types";
 import type { EventStatusCounts } from "../../sdk/events";
 import { Badge } from "../../ui/Badge";
@@ -186,16 +187,10 @@ export function eventComplexityScore(event: SdkEvent): {
 }
 
 export function eventDaysUntil(event: SdkEvent): number | null {
-  if (!event.start_date) return null;
-  // Calendar-day arithmetic in LOCAL time. Parsing "YYYY-MM-DD" as a Date
-  // would treat it as UTC midnight, which makes "day of" (days === 0) fire
-  // up to ~12 hours early in US timezones.
-  const now = new Date();
-  const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
-  const [y, m, d] = event.start_date.split('-').map(Number);
-  if (!y || !m || !d) return null;
-  const eventDay = new Date(y, m - 1, d);
-  return Math.round((eventDay.getTime() - today.getTime()) / 86_400_000);
+  // Local calendar-day arithmetic — see lib/calendarDays.ts. Parsing a bare
+  // "YYYY-MM-DD" as a Date would treat it as UTC midnight, making "day of"
+  // (days === 0) fire up to ~12 hours early in US timezones.
+  return calendarDaysUntil(event.start_date);
 }
 
 export function applyManagerPipelineFilter(

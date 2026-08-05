@@ -7,6 +7,7 @@
  *   3. Action items requiring attention (overdue RSVPs, unsigned contracts, unpaid vendors)
  */
 import { useMemo } from 'react';
+import { calendarDaysUntil } from '../../lib/calendarDays';
 import { useQuery } from '@tanstack/react-query';
 import { AlertTriangle, Calendar, CheckCircle2, Clock, DollarSign, FileSignature, Users } from 'lucide-react';
 import { sdk } from '../../sdk';
@@ -66,13 +67,13 @@ export function TodayView({ orgId }: Props) {
     // Events within 30 days with low RSVP rates
     const upcoming = events.filter(e => {
       if (!e.start_date || e.status === 'completed' || e.status === 'cancelled') return false;
-      const daysUntil = Math.ceil((new Date(e.start_date).getTime() - Date.now()) / 86400000);
-      return daysUntil > 0 && daysUntil <= 30;
+      const daysUntil = calendarDaysUntil(e.start_date);
+      return daysUntil !== null && daysUntil > 0 && daysUntil <= 30;
     });
 
     for (const e of upcoming) {
-      const daysUntil = Math.ceil((new Date(e.start_date!).getTime() - Date.now()) / 86400000);
-      if (e.guest_count > 0 && daysUntil <= 14) {
+      const daysUntil = calendarDaysUntil(e.start_date);
+      if (e.guest_count > 0 && daysUntil !== null && daysUntil <= 14) {
         items.push({
           icon: <Users className="h-4 w-4 text-warning" />,
           label: `${e.title}: ${daysUntil} days away`,
@@ -87,8 +88,8 @@ export function TodayView({ orgId }: Props) {
     for (const e of upcoming) {
       const deadline = (e as any).rsvp_deadline;
       if (deadline) {
-        const daysToDeadline = Math.ceil((new Date(deadline).getTime() - Date.now()) / 86400000);
-        if (daysToDeadline > 0 && daysToDeadline <= 14) {
+        const daysToDeadline = calendarDaysUntil(deadline);
+        if (daysToDeadline !== null && daysToDeadline > 0 && daysToDeadline <= 14) {
           items.push({
             icon: <Users className="h-4 w-4 text-danger" />,
             label: `RSVP deadline in ${daysToDeadline} days: ${e.title}`,

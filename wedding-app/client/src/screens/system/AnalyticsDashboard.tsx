@@ -21,13 +21,6 @@ function parseMetadata(value: unknown): Record<string, any> {
   try { return typeof value === 'string' ? JSON.parse(value) : value as Record<string, any>; } catch { return {}; }
 }
 
-function eventDaysUntil(startDate?: string | null) {
-  if (!startDate) return null;
-  const ms = new Date(startDate).getTime() - Date.now();
-  if (Number.isNaN(ms)) return null;
-  return Math.ceil(ms / 86_400_000);
-}
-
 function downloadTextFile(filename: string, content: string) {
   const blob = new Blob([content], { type: 'text/plain' });
   const url = URL.createObjectURL(blob);
