@@ -46,6 +46,22 @@ function getActionMeta(action: string) {
   return ACTION_META[action] ?? { label: action.replace(/\./g, ' ').replace(/\b\w/g, c => c.toUpperCase()), color: 'default', icon: '📋' };
 }
 
+/** Curated quick-filter chips — applied server-side (whole history, not just the loaded page). */
+const QUICK_ACTIONS = [
+  'event.create', 'event.update', 'event.delete',
+  'guest.create', 'guest.update', 'guest.delete', 'rsvp.submit',
+  'contract.create', 'contract.signed',
+  'vendor.create', 'budget.create', 'payment.create',
+  'user.login', 'user.logout', 'member.invite.existing_user', 'org.branding.update',
+];
+
+const TIME_RANGE_LABELS: Record<string, string> = { '24h': 'last 24 hours', '7d': 'last 7 days', '30d': 'last 30 days' };
+
+function timeRangeAfter(range: '24h' | '7d' | '30d'): string {
+  const hours = range === '24h' ? 24 : range === '7d' ? 24 * 7 : 24 * 30;
+  return new Date(Date.now() - hours * 3_600_000).toISOString();
+}
+
 function renderAuditDetails(log: SdkAuditLog) {
   if (!log.details || log.details === '{}') return null;
   try {
@@ -65,24 +81,32 @@ export function AuditLog({ orgId }: Props) {
   const [search, setSearch] = useState('');
   const [actionFilter, setActionFilter] = useState<string | null>(null);
   const [before, setBefore] = useState<string | undefined>(undefined);
+  const [actorEmail, setActorEmail] = useState('');
+  const [timeRange, setTimeRange] = useState<'all' | '24h' | '7d' | '30d'>('all');
   const [managerAuditFilter, setManagerAuditFilter] = useState<'all' | 'manager_ops' | 'pii' | 'approvals' | 'communications'>('all');
   const currentUserQuery = useQuery({ queryKey: ['me', 'audit-role'], queryFn: () => sdk.auth.me(), staleTime: 60_000 });
   const managerMode = currentUserQuery.data ? (currentUserQuery.data.memberships?.some((membership: any) => membership.organizationId === orgId && String(membership.roleKey).toLowerCase() === 'manager') ?? false) : (typeof window !== 'undefined' && localStorage.getItem('wvi_registration_role') === 'venue_manager');
   const debouncedSearch = useDebouncedValue(search, 250);
-  // A new search starts from the newest page.
-  useEffect(() => { setBefore(undefined); }, [debouncedSearch]);
+  const debouncedActorEmail = useDebouncedValue(actorEmail.trim(), 400);
+
+  // Any filter change starts from the newest page — paging back into history
+  // and then changing the filter would otherwise show a filtered slice of an
+  // old window, which reads as "missing" records (UX-6).
+  useEffect(() => { setBefore(undefined); }, [debouncedSearch, debouncedActorEmail, actionFilter, timeRange]);
 
   const { data, isLoading } = useQuery({
-    queryKey: ['audit', orgId, actionFilter, before, debouncedSearch],
+    queryKey: ['audit', orgId, actionFilter, before, debouncedSearch, debouncedActorEmail, timeRange],
     queryFn: () => sdk.audit.list(orgId, {
       limit: 200,
       action: actionFilter ?? undefined,
       before,
-      actorEmail: debouncedSearch.includes('@') ? debouncedSearch : undefined,
+      after: timeRange === 'all' ? undefined : timeRangeAfter(timeRange),
+      actorEmail: debouncedActorEmail || undefined,
     }),
   });
 
   const logs = data?.logs ?? [];
+  const serverFilterActive = Boolean(actionFilter || debouncedActorEmail || timeRange !== 'all');
 
   // Client-side search filter
   const filtered = useMemo(() => {
@@ -106,15 +130,6 @@ export function AuditLog({ orgId }: Props) {
     );
   }, [logs, debouncedSearch, managerAuditFilter]);
 
-  // Extract unique action types for filter chips
-  const actionTypes = useMemo(() => {
-    const types = new Map<string, number>();
-    for (const l of logs) {
-      types.set(l.action, (types.get(l.action) ?? 0) + 1);
-    }
-    return Array.from(types.entries()).sort((a, b) => b[1] - a[1]).slice(0, 10);
-  }, [logs]);
-
   return (
     <>
       <PageHeader
@@ -122,36 +137,81 @@ export function AuditLog({ orgId }: Props) {
         description="A chronological record of all actions taken in your organization."
       />
       <PageBody className="space-y-5">
-        {/* Toolbar */}
+        {/* Toolbar (UX-6: server-side actor / action / time-range filters) */}
         <div className="flex flex-wrap items-center gap-3">
           <div className="relative flex-1 min-w-[200px] max-w-sm">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-fg-muted" />
-            <Input placeholder="Search actions, users…" className="pl-9" value={search} onChange={e => setSearch(e.target.value)} />
+            <Input placeholder="Search actions, users…" className="pl-9" value={search} onChange={e => setSearch(e.target.value)} aria-label="Search loaded records" />
           </div>
 
-          <div className="flex items-center gap-1.5 flex-wrap overflow-x-auto pb-1 sm:pb-0 sm:overflow-visible">
-            <button
-              onClick={() => setActionFilter(null)}
-              className={`px-2.5 py-1 rounded-full text-xs font-medium transition-colors cursor-pointer
-                ${!actionFilter ? 'bg-brand text-on-brand' : 'bg-surface-2 text-fg-muted hover:bg-surface-2/80'}`}
-            >
-              All ({logs.length})
-            </button>
-            {actionTypes.map(([action, count]) => {
-              const meta = getActionMeta(action);
-              return (
-                <button
-                  key={action}
-                  onClick={() => setActionFilter(actionFilter === action ? null : action)}
-                  className={`px-2.5 py-1 rounded-full text-xs font-medium transition-colors cursor-pointer
-                    ${actionFilter === action ? 'bg-brand text-on-brand' : 'bg-surface-2 text-fg-muted hover:bg-surface-2/80'}`}
-                >
-                  {meta.icon} {meta.label} ({count})
-                </button>
-              );
-            })}
+          <div className="relative min-w-[220px]">
+            <User className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-fg-muted" />
+            <Input
+              placeholder="Filter by actor email (exact)…"
+              className="pl-9 pr-8"
+              value={actorEmail}
+              onChange={e => setActorEmail(e.target.value)}
+              aria-label="Filter by actor email"
+            />
+            {actorEmail && (
+              <button
+                onClick={() => setActorEmail('')}
+                aria-label="Clear actor email filter"
+                className="absolute right-2 top-1/2 -translate-y-1/2 text-fg-subtle hover:text-fg text-xs underline cursor-pointer"
+              >
+                Clear
+              </button>
+            )}
           </div>
+
+          <label className="flex items-center gap-2 text-xs font-medium text-fg-muted">
+            <Clock className="h-4 w-4" />
+            <select
+              value={timeRange}
+              onChange={e => setTimeRange(e.target.value as typeof timeRange)}
+              aria-label="Time range"
+              className="h-9 rounded-md border border-border bg-surface px-2 text-sm text-fg focus:outline-none focus:ring-2 focus:ring-brand/40 cursor-pointer"
+            >
+              <option value="all">All time</option>
+              <option value="24h">Last 24 hours</option>
+              <option value="7d">Last 7 days</option>
+              <option value="30d">Last 30 days</option>
+            </select>
+          </label>
         </div>
+
+        <div className="flex items-center gap-1.5 flex-wrap overflow-x-auto pb-1 sm:pb-0 sm:overflow-visible">
+          <button
+            onClick={() => setActionFilter(null)}
+            className={`px-2.5 py-1 rounded-full text-xs font-medium transition-colors cursor-pointer
+              ${!actionFilter ? 'bg-brand text-on-brand' : 'bg-surface-2 text-fg-muted hover:bg-surface-2/80'}`}
+          >
+            All
+          </button>
+          {QUICK_ACTIONS.map((action) => {
+            const meta = getActionMeta(action);
+            return (
+              <button
+                key={action}
+                onClick={() => setActionFilter(actionFilter === action ? null : action)}
+                className={`px-2.5 py-1 rounded-full text-xs font-medium transition-colors cursor-pointer
+                  ${actionFilter === action ? 'bg-brand text-on-brand' : 'bg-surface-2 text-fg-muted hover:bg-surface-2/80'}`}
+              >
+                {meta.icon} {meta.label}
+              </button>
+            );
+          })}
+        </div>
+
+        {serverFilterActive && (
+          <div className="flex flex-wrap items-center gap-2 text-xs">
+            <span className="inline-flex items-center gap-1 rounded-full bg-brand/10 border border-brand/20 px-2.5 py-1 font-medium text-brand">
+              <Filter className="h-3 w-3" aria-hidden />
+              Server-filtered{actionFilter ? ` · ${getActionMeta(actionFilter).label}` : ''}{debouncedActorEmail ? ` · actor ${debouncedActorEmail}` : ''}{timeRange !== 'all' ? ` · ${TIME_RANGE_LABELS[timeRange]}` : ''}
+            </span>
+            <Button size="xs" variant="ghost" onClick={() => { setActionFilter(null); setActorEmail(''); setTimeRange('all'); }}>Clear all filters</Button>
+          </div>
+        )}
 
         {managerMode && (
           <div className="grid gap-4 lg:grid-cols-[1.1fr_0.9fr]">
@@ -218,7 +278,7 @@ export function AuditLog({ orgId }: Props) {
           <Card>
             <CardContent className="py-16 text-center text-fg-muted text-sm">
               <ClipboardList className="h-8 w-8 mx-auto mb-2 text-fg-subtle" />
-              {search || actionFilter ? 'No logs match your filters.' : 'No activity recorded yet.'}
+              {search || serverFilterActive ? 'No logs match your filters.' : 'No activity recorded yet.'}
             </CardContent>
           </Card>
         ) : (

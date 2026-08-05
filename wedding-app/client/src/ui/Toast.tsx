@@ -15,10 +15,11 @@ import * as ToastPrimitive from '@radix-ui/react-toast';
 import { cva, type VariantProps } from 'class-variance-authority';
 import { X } from 'lucide-react';
 import {
-  createContext, forwardRef, useCallback, useContext, useState,
+  createContext, forwardRef, useCallback, useContext, useEffect, useState,
   type ComponentPropsWithoutRef, type ElementRef, type ReactNode,
 } from 'react';
 import { cn } from './lib/cn';
+import { describeUnhandledError, subscribeUnhandledErrors } from '../lib/unhandledErrorBus.js';
 
 const toastVariants = cva(
   [
@@ -61,11 +62,21 @@ export function ToastProvider({ children }: { children: ReactNode }) {
 
   const toast = useCallback((t: Omit<ToastData, 'id'>) => {
     const id = `t-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`;
-    setItems((prev) => [...prev, { id, durationMs: 1000, ...t }]);
+    setItems((prev) => [...prev, { id, durationMs: 5000, ...t }]);
   }, []);
   const dismiss = useCallback((id: string) => {
     setItems((prev) => prev.filter((t) => t.id !== id));
   }, []);
+
+  // UX-6: surface mutations that failed without a component-level handler.
+  // The QueryProvider safety net emits here; we render a destructive toast
+  // with copy tailored to the error kind (permission / not found / server…).
+  useEffect(() => {
+    return subscribeUnhandledErrors((err) => {
+      const { title, description } = describeUnhandledError(err);
+      toast({ title, description, variant: 'destructive', durationMs: 8000 });
+    });
+  }, [toast]);
 
   return (
     <ToastContext.Provider value={{ toast, dismiss }}>

@@ -6,13 +6,29 @@
  *   - refetchOnWindowFocus: true (catches RSVPs submitted in another tab)
  *   - staleTime: 30s default; per-query overrides for hot data
  */
-import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import { QueryClient, QueryClientProvider, MutationCache } from '@tanstack/react-query';
 import { ReactQueryDevtools } from '@tanstack/react-query-devtools';
 import { useMemo, type ReactNode } from 'react';
 import { ApiError } from '../sdk/client.js';
+import { emitUnhandledError } from '../lib/unhandledErrorBus.js';
 
 function makeClient(): QueryClient {
   return new QueryClient({
+    mutationCache: new MutationCache({
+      /**
+       * Global safety net for mutations that don't handle their own errors
+       * (UX-6): without this, a failed delete/save with no `onError` fails
+       * silently and the user sees nothing. Callers that pass their own
+       * `onError` are skipped (they own the UX), and offline/unauthorized
+       * errors are skipped because the write queue and the auth flow own
+       * those. ToastProvider subscribes and renders the destructive toast.
+       */
+      onError: (error, _variables, _context, mutation) => {
+        if (typeof mutation.options.onError === 'function') return;
+        if (error instanceof ApiError && (error.kind === 'offline' || error.kind === 'unauthorized')) return;
+        emitUnhandledError(error);
+      },
+    }),
     defaultOptions: {
       queries: {
         staleTime: 30_000,
