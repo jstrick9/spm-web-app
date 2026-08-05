@@ -48,6 +48,7 @@ vi.mock('../../config/ConfigProvider', () => ({
 import { usePermission }     from '../../lib/usePermission';
 import { sdk }               from '../../sdk';
 import { DashboardScreen }   from './DashboardScreen';
+import { ToastProvider }     from '../../ui/Toast';
 
 const TODAY = new Date().toISOString().slice(0, 10);
 const TOMORROW = new Date(Date.now() + 86400000).toISOString().slice(0, 10);
@@ -98,7 +99,9 @@ function renderDashboard(orgId = 'org-1', onCreateEvent = vi.fn()) {
   const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   const view = render(
     <QueryClientProvider client={qc}>
-      <DashboardScreen user={MOCK_USER as any} orgId={orgId} onCreateEvent={onCreateEvent} />
+      <ToastProvider>
+        <DashboardScreen user={MOCK_USER as any} orgId={orgId} onCreateEvent={onCreateEvent} />
+      </ToastProvider>
     </QueryClientProvider>,
   );
   return { ...view, onCreateEvent };

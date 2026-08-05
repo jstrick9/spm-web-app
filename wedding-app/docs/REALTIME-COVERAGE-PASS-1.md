@@ -58,3 +58,16 @@ the five server-only events, invalidating `['vendors', eventId]`,
 - `tsc --noEmit` clean on both apps.
 - SSE diff is now empty in both directions (all broadcast types handled;
   all handlers have a real broadcast source).
+
+## Follow-up — unhandled promise rejections in click handlers
+
+- `CoupleEventHub` planning-task "Ask" button called
+  `sdk.couple.askPlanningTaskQuestion` with no catch — a network/4xx failure
+  was a silent unhandled rejection. Now shows a destructive toast.
+- `DashboardScreen` layout approval queue "Approve" / "Request changes"
+  buttons called `sdk.layouts.queueDecision` with no catch. Now wrapped with
+  success/error toasts.
+- `DashboardScreen.test.tsx` now wraps renders in `ToastProvider` (the new
+  `useToast` hook requires it).
+- Automated sweep confirms zero remaining unhandled `await sdk.*` patterns
+  in click/submit handlers.
