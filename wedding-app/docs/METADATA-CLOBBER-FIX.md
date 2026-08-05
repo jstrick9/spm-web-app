@@ -37,10 +37,12 @@ object back on every change. Consequence:
   same guard asserted for sub-event metadata.
 - `guests-module.integration.test.ts` +1: couple hub meal-choice metadata
   and guest-portal reminder preferences (two stale writers) both survive.
+- `vendors-module.integration.test.ts` +1: venue COI fields and the vendor
+  portal questionnaire (two stale writers) both survive.
 - `EventEmergencyTab.test.tsx` +1: a "concurrent tablet" incident appears
   in the write payload after toggling a kit item (refresh-before-write).
 
 ## Verification
 
-- Server **570 tests / 80 files** · Client **886 tests / 134 files**.
+- Server **571 tests / 80 files** · Client **886 tests / 134 files**.
 - `tsc --noEmit` clean both apps; client build + bundle budgets satisfied.
