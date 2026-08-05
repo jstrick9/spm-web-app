@@ -24,6 +24,8 @@ export type SSEEventHandler = (event: SSEEvent) => void;
 export function createSSEStream(orgId: string) {
   let eventSource: EventSource | null = null;
   let lastId = 0;
+  let connectedAt = 0;
+  let refreshTimer: ReturnType<typeof setTimeout> | null = null;
   const handlers = new Map<string, Set<SSEEventHandler>>();
 
   async function connect() {
@@ -41,6 +43,16 @@ export function createSSEStream(orgId: string) {
 
       const url = `/api/orgs/${orgId}/events/stream?token=${encodeURIComponent(sseToken)}&lastId=${lastId}`;
       eventSource = new EventSource(url);
+      // SSE tokens are short-lived (5 min) so the main JWT never appears in
+      // URLs. Refresh the token BEFORE it expires: on expiry the server
+      // closes the stream and EventSource would otherwise retry the SAME
+      // dead token forever, silently killing real-time updates.
+      connectedAt = Date.now();
+      if (refreshTimer) clearTimeout(refreshTimer);
+      refreshTimer = setTimeout(() => {
+        close();
+        connect();
+      }, 4 * 60 * 1000);
     } catch {
       return; // SSE not available — degrade gracefully
     }
@@ -98,6 +110,7 @@ export function createSSEStream(orgId: string) {
   }
 
   function close() {
+    if (refreshTimer) { clearTimeout(refreshTimer); refreshTimer = null; }
     if (eventSource) {
       eventSource.close();
       eventSource = null;
