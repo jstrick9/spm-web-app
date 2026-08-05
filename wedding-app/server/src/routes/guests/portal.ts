@@ -1,5 +1,6 @@
 import { auditRepo, coupleDocumentsRepo, eventsRepo, guestsRepo, jobsRepo, layoutsRepo, orgsRepo, portalConfigRepo, rsvpRepo, subEventsRepo, timelineRepo } from '../../db/repos/index.js';
 import { appPublicBaseUrl } from '../../lib/appBaseUrl.js';
+import { icsText } from '../../lib/ics.js';
 import { db } from '../../db/database.js';
 import { hashPassword, verifyPassword, uuid } from '../../lib/crypto.js';
 import { can } from '../../lib/rbac.js';
@@ -593,8 +594,13 @@ export async function guestPortalRoutes(app: FastifyInstance) {
     }
     const meta = (() => { try { return JSON.parse(sub.metadata || '{}'); } catch { return {}; } })() as Record<string, any>;
     const dt = (value: string | null) => value ? new Date(value).toISOString().replace(/[-:]/g, '').replace(/\.\d{3}Z$/, 'Z') : '';
-    const description = [meta.helpText, meta.parking ? `Parking: ${meta.parking}` : '', meta.dressCode ? `Dress code: ${meta.dressCode}` : '', meta.lateArrivalInstructions ? `Late arrival: ${meta.lateArrivalInstructions}` : ''].filter(Boolean).join('\\n');
-    const ics = ['BEGIN:VCALENDAR','VERSION:2.0','PRODID:-//Wedding Venue Intelligence//Guest Portal//EN','BEGIN:VEVENT',`UID:${sub.id}@wvi`,`SUMMARY:${String(sub.title).replace(/\n/g, ' ')}`,`DTSTART:${dt(sub.starts_at)}`,sub.ends_at ? `DTEND:${dt(sub.ends_at)}` : '',meta.location ? `LOCATION:${String(meta.location).replace(/\n/g, ' ')}` : '',`DESCRIPTION:${description.replace(/\n/g, '\\n')}`,'END:VEVENT','END:VCALENDAR'].filter(Boolean).join('\r\n');
+    const description = [
+      meta.helpText ? icsText(meta.helpText) : '',
+      meta.parking ? `Parking: ${icsText(meta.parking)}` : '',
+      meta.dressCode ? `Dress code: ${icsText(meta.dressCode)}` : '',
+      meta.lateArrivalInstructions ? `Late arrival: ${icsText(meta.lateArrivalInstructions)}` : '',
+    ].filter(Boolean).join('\n');
+    const ics = ['BEGIN:VCALENDAR','VERSION:2.0','PRODID:-//Wedding Venue Intelligence//Guest Portal//EN','BEGIN:VEVENT',`UID:${sub.id}@wvi`,`SUMMARY:${icsText(sub.title)}`,`DTSTART:${dt(sub.starts_at)}`,sub.ends_at ? `DTEND:${dt(sub.ends_at)}` : '',meta.location ? `LOCATION:${icsText(meta.location)}` : '',`DESCRIPTION:${description}`,'END:VEVENT','END:VCALENDAR'].filter(Boolean).join('\r\n');
     return reply.header('content-type', 'text/calendar; charset=utf-8').header('content-disposition', `attachment; filename="${sub.id}.ics"`).send(ics);
   });
 

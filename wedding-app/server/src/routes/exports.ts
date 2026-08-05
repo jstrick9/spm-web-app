@@ -5,6 +5,7 @@ import { guestsRepo, vendorsRepo, eventsRepo, timelineRepo, staffTasksRepo, layo
 import { budgetRepo } from '../db/repos/budget.js';
 import { Forbidden } from '../lib/errors.js';
 import { toCsv } from '../lib/csv.js';
+import { icsText } from '../lib/ics.js';
 import { buildOperationsPacketManifest, buildOperationsPacketZip, type OperationsPacketData } from '../lib/operationsPacket.js';
 
 function collectOperationsPacketData(eventId: string): OperationsPacketData {
@@ -189,7 +190,7 @@ export async function exportRoutes(app: FastifyInstance) {
       `DTSTAMP:${now}`,
       start ? `DTSTART;VALUE=DATE:${start}` : '',
       end ? `DTEND;VALUE=DATE:${end}` : '',
-      `SUMMARY:${event.title.replace(/[,;\\]/g, ' ')}`,
+      `SUMMARY:${icsText(event.title)}`,
       `DESCRIPTION:${event.guest_count} guests · Budget $${((event.budget_cents ?? 0) / 100).toLocaleString()}`,
       event.status ? `STATUS:${event.status === 'completed' ? 'COMPLETED' : 'CONFIRMED'}` : '',
       'END:VEVENT',
