@@ -16,14 +16,55 @@ import type { PermissionId } from '../lib/permissions.js';
  * This helper resolves the event from the thread, 404s if it doesn't exist,
  * and authorizes against that event's org. Returns the validated eventId.
  */
+/**
+ * Parse the event id from a thread id. Canonical shape is
+ * `${eventId}:${category}` (e.g. `e1:couple-venue`, `e1:vendor-v123`).
+ * The staff vendor chat historically used `vendor:${eventId}:${vendorId}` —
+ * accept it for authorization but treat `${eventId}:vendor-${vendorId}` as
+ * the canonical thread so staff and the vendor portal share one conversation.
+ */
+function parseThreadEventId(threadId: string): string | null {
+  const parts = threadId.split(':');
+  if (parts.length === 2 && parts[0]) return parts[0];
+  if (parts.length === 3 && parts[0] === 'vendor' && parts[1]) return parts[1];
+  return null;
+}
+
+/** The user's role key scoped to this event (event membership, else org membership). */
+function roleKeyForEvent(req: FastifyRequest, eventId: string): string | null {
+  const event = eventsRepo.findById(eventId);
+  const m = req.auth!.memberships.find((x) => x.eventId === eventId)
+    ?? (event ? req.auth!.memberships.find((x) => x.organizationId === event.organization_id) : undefined);
+  return m ? String(m.roleKey) : null;
+}
+
 function authorizeThread(req: FastifyRequest, threadId: string, permission: PermissionId): string {
-  const eventId = threadId.split(':')[0];
+  const eventId = parseThreadEventId(threadId);
   if (!eventId) throw NotFound();
   const event = eventsRepo.findById(eventId);
   if (!event) throw NotFound();
   const orgMap = eventsRepo.orgMapForUser(req.auth!.userId);
   if (!can(req.auth!.memberships, { eventId }, permission, orgMap)) throw Forbidden();
+
+  // Couple accounts are limited to their own event's couple threads
+  // (`${eventId}:couple-*`). Reading/posting to vendor or ops threads
+  // (venue↔vendor coordination, staff broadcasts) is outside their scope.
+  const roleKey = roleKeyForEvent(req, eventId);
+  const category = threadId.split(':')[1] ?? '';
+  if (roleKey === 'couple' && !category.startsWith('couple-')) {
+    throw Forbidden('couple-thread-scope');
+  }
   return eventId;
+}
+
+/**
+ * sender_role is DERIVED server-side from the user's membership on the
+ * thread's event. The client-supplied value was spoofable (any string, e.g.
+ * 'manager' or 'venue') and is ignored — messages are labeled with the
+ * sender's real role, which also prevents impersonation in vendor threads.
+ */
+function derivedSenderRole(req: FastifyRequest, eventId: string): string {
+  return roleKeyForEvent(req, eventId) ?? 'staff';
 }
 
 const broadcastSchema = z.object({
@@ -93,7 +134,7 @@ export async function messageRoutes(app: FastifyInstance) {
 
   app.post('/api/messages/:threadId', { preHandler: requireAuth }, async (req, reply) => {
     const { threadId } = req.params as { threadId: string };
-    authorizeThread(req, threadId, 'messages.send');
+    const eventId = authorizeThread(req, threadId, 'messages.send');
     const parsed = z.object({
       body: z.string().min(1).max(10000),
       senderRole: z.string().min(1).max(40),
@@ -103,7 +144,7 @@ export async function messageRoutes(app: FastifyInstance) {
       message: messagesRepo.send({
         threadId,
         senderId: req.auth!.userId,
-        senderRole: parsed.data.senderRole,
+        senderRole: derivedSenderRole(req, eventId),
         body: parsed.data.body,
       }),
     });

@@ -50,7 +50,10 @@ export function VendorCommunicationsHub({ eventId, organizationId }: Props) {
   }, [vendors, activeVendorId]);
 
   // Load messages from server when vendor changes
-  const threadId = activeVendorId ? `vendor:${eventId}:${activeVendorId}` : null;
+  // Canonical thread shape — shares the SAME conversation as the vendor's
+    // portal ("Direct Coordinator Live Chat"): ${eventId}:vendor-${vendorId}.
+    // (The legacy `vendor:${eventId}:${vendorId}` shape 404'd server-side.)
+    const threadId = activeVendorId ? `${eventId}:vendor-${activeVendorId}` : null;
 
   const loadMessages = useCallback(async () => {
     if (!threadId) return;
@@ -88,7 +91,7 @@ export function VendorCommunicationsHub({ eventId, organizationId }: Props) {
       for (const v of vendors) {
         const tid = `vendor:${eventId}:${v.id}`;
         try {
-          await api.post(`/api/messages/${encodeURIComponent(tid)}`, { body: input.trim(), senderRole: 'venue' });
+          await api.post(`/api/messages/${encodeURIComponent(tid)}`, { body: input.trim(), senderRole: 'venue' /* server derives the real role; value ignored */ });
         } catch {}
       }
       toast({ title: 'Broadcast Sent', description: `Message delivered to ${vendors.length} vendors.`, variant: 'success' });
