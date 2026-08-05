@@ -89,7 +89,20 @@ export function RunSheet({ eventId }: Props) {
 
   // Mutation to persist wedding pace and other runsheet controls to SQLite metadata
   const saveMetadataMutation = useMutation({
-    mutationFn: (newMetadata: any) => sdk.events.update(eventId, { metadata: newMetadata }),
+    mutationFn: async (newMetadata: any) => {
+      // Refresh-before-write (see EventEmergencyTab): avoid clobbering
+      // concurrent changes made by other staff devices.
+      let base: Record<string, any> = metadata;
+      try {
+        const fresh = await qc.fetchQuery({ queryKey: ['event', eventId], queryFn: () => sdk.events.get(eventId), staleTime: 0 });
+        const raw = fresh?.event?.metadata;
+        if (raw) {
+          const parsed = typeof raw === 'string' ? (() => { try { return JSON.parse(raw); } catch { return null; } })() : raw;
+          if (parsed && typeof parsed === 'object') base = parsed;
+        }
+      } catch { /* offline/error — fall back to mount-time snapshot */ }
+      return sdk.events.update(eventId, { metadata: { ...base, ...newMetadata } });
+    },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['event', eventId] });
     },

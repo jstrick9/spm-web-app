@@ -181,6 +181,37 @@ describe('EventEmergencyTab', () => {
     });
   });
 
+  it('refresh-before-write keeps a concurrent tablet\'s incident (no clobber)', async () => {
+    // Another coordinator logged a NEW incident after we loaded the tab.
+    (sdk.events.get as any).mockResolvedValue({
+      event: {
+        id: 'evt-1', title: 'Manor Autumn Wedding', organization_id: 'org-123', status: 'planning',
+        metadata: JSON.stringify({
+          emergency_active_plan: 'plan-a',
+          emergency_kit_checklist: [{ id: 'bobby-pins', label: 'Bobby Pins & Hair Ties', status: 'stocked' }],
+          emergency_incidents: [
+            { id: 'inc-old', title: 'Caterer is 15m late', description: 'x', severity: 'minor', status: 'reported', assignedTo: 'Planner Jane', createdAt: new Date().toISOString() },
+            { id: 'inc-new', title: 'Power outage near stage', description: 'Logged from tablet B', severity: 'critical', status: 'reported', assignedTo: null, createdAt: new Date().toISOString() },
+          ],
+        }),
+      },
+    });
+    render(<EventEmergencyTab eventId="evt-1" organizationId="org-123" />, { wrapper: TestWrapper });
+    await screen.findByText('Weather & Contingency Status');
+
+    // Toggle a kit item — our stale mount-time snapshot does NOT contain
+    // inc-new, but refresh-before-write must pick it up before saving.
+    const firstKit = screen.getAllByText('Bobby Pins & Hair Ties')[0];
+    fireEvent.click(firstKit);
+
+    await waitFor(() => {
+      const calls = (sdk.events.update as any).mock.calls;
+      expect(calls.length).toBeGreaterThan(0);
+      const payload = calls[calls.length - 1][1] as { metadata: { emergency_incidents?: Array<{ id: string }> } };
+      expect(payload.metadata.emergency_incidents?.some((i) => i.id === 'inc-new')).toBe(true);
+    });
+  });
+
   it('allows toggling Plan B safety compliance items and broadcasting announcements', async () => {
     (sdk.events.update as any).mockResolvedValue({ event: {} });
 

@@ -5,6 +5,36 @@ import { slugifyUnique } from '../../lib/slug.js';
 
 export type EventStatus = 'lead' | 'hold' | 'booked' | 'planning' | 'final_review' | 'completed' | 'cancelled' | 'lost';
 
+/**
+ * RFC 7386 (JSON Merge Patch) style merge for event metadata.
+ *
+ * PATCH /api/events/:id historically REPLACED the whole metadata object.
+ * Several day-of surfaces (emergency tab, run sheet, setup checklist)
+ * read metadata once and write the entire object back, so two concurrent
+ * writers (two coordinators, two tablets) silently clobbered each other's
+ * changes — worst case: a logged incident disappearing. Deep-merge
+ * semantics let concurrent writers to DIFFERENT sub-keys both survive
+ * while single-writer behavior is unchanged (merging an object into an
+ * identical base is a no-op).
+ */
+export function deepMergeMetadata(base: unknown, patch: unknown): unknown {
+  if (patch === null) return null;
+  if (Array.isArray(patch)) return patch;
+  if (
+    typeof patch === 'object' &&
+    typeof base === 'object' &&
+    base !== null &&
+    !Array.isArray(base)
+  ) {
+    const out: Record<string, unknown> = { ...(base as Record<string, unknown>) };
+    for (const [k, v] of Object.entries(patch as Record<string, unknown>)) {
+      out[k] = deepMergeMetadata(out[k], v);
+    }
+    return out;
+  }
+  return patch;
+}
+
 export interface EventRow {
   id: string;
   organization_id: string;
@@ -98,8 +128,10 @@ export const eventsRepo = {
       }
     }
     if (patch.metadata) {
+      const current = this.findById(id);
+      const stored = (() => { try { return JSON.parse(current?.metadata || '{}'); } catch { return {}; } })();
       fields.push('metadata = ?');
-      values.push(stringifyJson(patch.metadata));
+      values.push(stringifyJson(deepMergeMetadata(stored, patch.metadata)));
     }
     if (fields.length === 0) return this.findById(id);
     values.push(id);

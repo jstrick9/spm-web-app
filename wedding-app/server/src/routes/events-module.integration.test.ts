@@ -46,6 +46,41 @@ async function createEvent(token: string, orgId: string, payload: Record<string,
 }
 
 describe('Events module — pipeline integrity', () => {
+  it('deep-merges concurrent metadata writes so day-of data is never clobbered', async () => {
+    const u = await register('merge');
+    const event = await createEvent(u.token, u.orgId);
+
+    // Coordinator A logs an incident (stale base: no kit state).
+    const patchA = await authed(u.token, 'PATCH', `/api/events/${event.id}`, {
+      metadata: { emergency_incidents: [{ id: 'inc-1', title: 'Power outage', severity: 'critical' }] },
+    });
+    expect(patchA.statusCode).toBe(200);
+
+    // Coordinator B toggles a kit item from her OWN stale base (no incident).
+    // With wholesale replace this would erase A's incident — regression guard.
+    const patchB = await authed(u.token, 'PATCH', `/api/events/${event.id}`, {
+      metadata: { emergency_kit_checklist: [{ id: 'kit-1', status: 'low' }] },
+    });
+    expect(patchB.statusCode).toBe(200);
+
+    const get = await authed(u.token, 'GET', `/api/events/${event.id}`);
+    const meta = JSON.parse(get.json().event.metadata || '{}');
+    expect(meta.emergency_incidents).toEqual([{ id: 'inc-1', title: 'Power outage', severity: 'critical' }]);
+    expect(meta.emergency_kit_checklist).toEqual([{ id: 'kit-1', status: 'low' }]);
+
+    // Nested object merge (RFC 7386): a partial update to a sub-object keeps
+    // sibling keys.
+    const patchC = await authed(u.token, 'PATCH', `/api/events/${event.id}`, {
+      metadata: { emergency_kit_checklist: { config: { restocked: true } } },
+    });
+    expect(patchC.statusCode).toBe(200);
+    const meta2 = JSON.parse((await authed(u.token, 'GET', `/api/events/${event.id}`)).json().event.metadata || '{}');
+    // scalar array key replaced wholesale (RFC 7386)…
+    expect(meta2.emergency_kit_checklist).toEqual({ config: { restocked: true } });
+    // …but the incident from writer A survived the nested write too.
+    expect(meta2.emergency_incidents).toEqual([{ id: 'inc-1', title: 'Power outage', severity: 'critical' }]);
+  });
+
   it('rejects creating an event directly in a terminal status', async () => {
     const { token, orgId } = await register('ev-terminal');
     for (const status of ['completed', 'cancelled', 'lost']) {

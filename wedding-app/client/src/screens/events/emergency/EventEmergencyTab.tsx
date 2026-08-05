@@ -119,7 +119,22 @@ export function EventEmergencyTab({ eventId }: Props) {
 
   // Mutation to persist state updates back to SQLite metadata column
   const saveMetadataMutation = useMutation({
-    mutationFn: (newMetadata: any) => sdk.events.update(eventId, { metadata: newMetadata }),
+    mutationFn: async (newMetadata: any) => {
+      // Refresh-before-write: base the write on the freshest metadata so
+      // concurrent changes (another tablet logging an incident, toggling a
+      // kit item) are not clobbered by our mount-time snapshot. The server
+      // also deep-merges metadata, so different sub-keys always survive.
+      let base: Record<string, any> = metadata;
+      try {
+        const fresh = await qc.fetchQuery({ queryKey: ['event', eventId], queryFn: () => sdk.events.get(eventId), staleTime: 0 });
+        const raw = fresh?.event?.metadata;
+        if (raw) {
+          const parsed = typeof raw === 'string' ? (() => { try { return JSON.parse(raw); } catch { return null; } })() : raw;
+          if (parsed && typeof parsed === 'object') base = parsed;
+        }
+      } catch { /* offline/error — fall back to mount-time snapshot */ }
+      return sdk.events.update(eventId, { metadata: { ...base, ...newMetadata } });
+    },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['event', eventId] });
     },
