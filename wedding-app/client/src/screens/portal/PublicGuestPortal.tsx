@@ -588,9 +588,19 @@ export function PublicGuestPortal({ eventId }: { eventId: string }) {
                             className="justify-between h-auto py-3 whitespace-normal text-left"
                             style={{ borderColor: portalPalette.border, color: portalPalette.fg }}
                             onClick={async () => {
-                              await sdk.feedback.votePoll(eventId, poll.id, opt.id);
-                              const res = await sdk.feedback.getPolls(eventId);
-                              setPolls(res.polls);
+                              try {
+                                await sdk.feedback.votePoll(eventId, poll.id, opt.id);
+                              } catch (voteErr: any) {
+                                // One vote per device session (server-enforced):
+                                // a repeat tap is not an error to the guest.
+                                if (voteErr?.code !== 'already-voted') {
+                                  setError('Could not record your vote. Please try again.');
+                                }
+                              }
+                              try {
+                                const res = await sdk.feedback.getPolls(eventId);
+                                setPolls(res.polls);
+                              } catch { /* poll list refresh is best-effort */ }
                             }}
                             aria-label={`Vote for: ${opt.text} (${opt.votes} votes)`}
                           >
