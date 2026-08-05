@@ -120,6 +120,13 @@ describe('CP-01 — couple-write authorization', () => {
     expect(coupleRequest.statusCode).toBe(201);
     expect(sseCount(owner.orgId, 'couple.request_created')).toBe(1);
 
+    // Design review submission broadcasts so venue managers see it live.
+    const staffDesignReview = await app.inject({ method: 'POST', url: `/api/events/${eventId}/couple-design/submit-review`, payload: { note: 'x' }, headers: staffAuth });
+    expect(staffDesignReview.statusCode).toBe(403);
+    const coupleDesignReview = await app.inject({ method: 'POST', url: `/api/events/${eventId}/couple-design/submit-review`, payload: { note: 'Please review our choices' }, headers: coupleAuth });
+    expect(coupleDesignReview.statusCode).toBe(201);
+    expect(sseCount(owner.orgId, 'couple.design_submitted')).toBe(1);
+
     // Guest seating
     const guest = guestsRepo.create(owner.orgId, eventId, { fullName: 'Aunt Mary', email: 'mary@example.com' } as never);
     const staffSeating = await app.inject({ method: 'PATCH', url: `/api/events/${eventId}/couple-guests/${guest.id}/seating`, payload: { tableAssignment: 'T1' }, headers: staffAuth });

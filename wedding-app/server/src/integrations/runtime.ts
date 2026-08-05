@@ -16,6 +16,7 @@
  *     admin UI can show "needs reconnecting")
  */
 import { integrationsRepo } from '../db/repos/integrations.js';
+import { broadcastSSE } from '../routes/sse.js';
 import { openSecret } from '../lib/secrets.js';
 import { parseJson } from '../lib/json.js';
 import { getProvider } from './registry.js';
@@ -115,6 +116,7 @@ export async function verifyIntegration(integrationId: string): Promise<void> {
   try {
     await provider.verify(ctx);
     integrationsRepo.setStatus(integrationId, 'connected', null);
+    broadcastSSE(ctx.organizationId, 'integration.connected', { integrationId, providerId });
     integrationsRepo.markSynced(integrationId);
     integrationsRepo.logEvent({
       integrationId, organizationId: ctx.organizationId,
@@ -123,6 +125,7 @@ export async function verifyIntegration(integrationId: string): Promise<void> {
   } catch (err) {
     const msg = (err as Error).message;
     integrationsRepo.setStatus(integrationId, 'error', msg);
+    broadcastSSE(ctx.organizationId, 'integration.error', { integrationId, providerId, error: msg });
     integrationsRepo.logEvent({
       integrationId, organizationId: ctx.organizationId,
       direction: 'outbound', kind: `${providerId}.verify`, status: 'error', errorMessage: msg,

@@ -28,6 +28,7 @@ import {
   emailTemplatesRepo,
 } from '../db/repos/index.js';
 import { runTrigger } from '../jobs/lifecycleEmails.js';
+import { broadcastSSE } from './sse.js';
 
 const TRIGGERS = ['rsvp_reminder', 'thank_you', 'save_the_date', 'manual'] as const;
 type Trigger = (typeof TRIGGERS)[number];
@@ -164,6 +165,7 @@ export async function lifecycleEmailRoutes(app: FastifyInstance) {
         ip: req.ip,
       });
 
+      broadcastSSE(event.organization_id, 'lifecycle_email.sent', { eventId, triggerType, scheduled: result.scheduled }, req.auth!.userId);
       return { result };
     },
   );

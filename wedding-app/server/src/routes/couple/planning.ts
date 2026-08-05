@@ -402,6 +402,7 @@ export async function couplePlanningRoutes(app: FastifyInstance) {
     const metadata = parseEventMetadata(event);
     const request = coupleRequestsRepo.create({ organizationId: event.organization_id, eventId, requesterUserId: req.auth!.userId, requestType: 'design_preferences_review', note: parsed.data.note, metadata: { source: 'couple_design_preferences', preferences: metadata.coupleDesignPreferences ?? {}, aiSummary: designSummary(metadata.coupleDesignPreferences ?? {}) } });
     eventsRepo.update(eventId, { metadata: { ...metadata, coupleDesignReviewStatus: 'pending', coupleDesignReviewRequestId: request.id, coupleDesignUpdatedAt: new Date().toISOString(), coupleDesignUpdatedBy: req.auth!.email } } as never);
+    broadcastSSE(event.organization_id, 'couple.design_submitted', { eventId, requestId: request.id }, req.auth!.userId);
     return reply.code(201).send({ request: safeRequest(request) });
   });
 

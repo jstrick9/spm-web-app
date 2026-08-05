@@ -195,4 +195,44 @@ describe('useRealtimeInvalidation', () => {
     expect(spy).toHaveBeenCalledWith({ queryKey: ['integrations'] });
     expect(spy).toHaveBeenCalledWith({ queryKey: ['integration-providers'] });
   });
+
+  // Vendor + staff-area events (server broadcasts) keep tabs fresh across devices.
+  it('registers handlers for vendor and staff-area events', () => {
+    renderWithQC();
+    for (const type of ['vendor.updated', 'vendor.deleted', 'vendor.payment', 'staff.area_created', 'staff.area_deleted']) {
+      expect(capturedHandlers[type], type).toBeDefined();
+    }
+  });
+
+  it('vendor.updated invalidates vendor lists for the event and the couple board', () => {
+    renderWithQC();
+    const spy = vi.spyOn(qc, 'invalidateQueries');
+    capturedHandlers['vendor.updated']({ id: 11, type: 'vendor.updated', payload: { eventId: 'evt-11', vendorId: 'v-1' }, actorUserId: null, timestamp: '' });
+    expect(spy).toHaveBeenCalledWith({ queryKey: ['vendors', 'evt-11'] });
+    expect(spy).toHaveBeenCalledWith({ queryKey: ['vendor-board'] });
+    expect(spy).toHaveBeenCalledWith({ queryKey: ['vendor-matches', 'evt-11'] });
+  });
+
+  it('vendor.deleted invalidates vendor lists and portal tokens', () => {
+    renderWithQC();
+    const spy = vi.spyOn(qc, 'invalidateQueries');
+    capturedHandlers['vendor.deleted']({ id: 12, type: 'vendor.deleted', payload: { eventId: 'evt-12' }, actorUserId: null, timestamp: '' });
+    expect(spy).toHaveBeenCalledWith({ queryKey: ['vendors', 'evt-12'] });
+    expect(spy).toHaveBeenCalledWith({ queryKey: ['vendor-portal-tokens'] });
+  });
+
+  it('vendor.payment invalidates payment and vendor queries', () => {
+    renderWithQC();
+    const spy = vi.spyOn(qc, 'invalidateQueries');
+    capturedHandlers['vendor.payment']({ id: 13, type: 'vendor.payment', payload: { eventId: 'evt-13', vendorId: 'v-2' }, actorUserId: null, timestamp: '' });
+    expect(spy).toHaveBeenCalledWith({ queryKey: ['vendorPayments'] });
+    expect(spy).toHaveBeenCalledWith({ queryKey: ['vendors', 'evt-13'] });
+  });
+
+  it('staff.area events invalidate staffing requirements', () => {
+    renderWithQC();
+    const spy = vi.spyOn(qc, 'invalidateQueries');
+    capturedHandlers['staff.area_created']({ id: 14, type: 'staff.area_created', payload: {}, actorUserId: null, timestamp: '' });
+    expect(spy).toHaveBeenCalledWith({ queryKey: ['staffingRequirements'] });
+  });
 });

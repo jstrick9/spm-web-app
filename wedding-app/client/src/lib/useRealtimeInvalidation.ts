@@ -74,6 +74,37 @@ export function useRealtimeInvalidation(orgId: string | null) {
       if (eventId) qc.invalidateQueries({ queryKey: ['checkins', eventId] });
       qc.invalidateQueries({ queryKey: ['checkins'] });
     },
+    // Vendor list/payment mutations — keep vendor tabs, run sheets, the
+    // couple vendor board, and payment dialogs fresh across devices.
+    'vendor.updated': (e: SSEEvent) => {
+      qc.invalidateQueries({ queryKey: ['vendors'] });
+      qc.invalidateQueries({ queryKey: ['vendor-board'] });
+      const eventId = (e.payload as any)?.eventId;
+      if (eventId) {
+        qc.invalidateQueries({ queryKey: ['vendors', eventId] });
+        qc.invalidateQueries({ queryKey: ['vendor-matches', eventId] });
+      }
+    },
+    'vendor.deleted': (e: SSEEvent) => {
+      qc.invalidateQueries({ queryKey: ['vendors'] });
+      qc.invalidateQueries({ queryKey: ['vendor-board'] });
+      qc.invalidateQueries({ queryKey: ['vendor-portal-tokens'] });
+      const eventId = (e.payload as any)?.eventId;
+      if (eventId) qc.invalidateQueries({ queryKey: ['vendors', eventId] });
+    },
+    'vendor.payment': (e: SSEEvent) => {
+      qc.invalidateQueries({ queryKey: ['vendorPayments'] });
+      qc.invalidateQueries({ queryKey: ['vendors'] });
+      const eventId = (e.payload as any)?.eventId;
+      if (eventId) qc.invalidateQueries({ queryKey: ['vendors', eventId] });
+    },
+    // Staff areas feed the staffing-requirements panel.
+    'staff.area_created': () => {
+      qc.invalidateQueries({ queryKey: ['staffingRequirements'] });
+    },
+    'staff.area_deleted': () => {
+      qc.invalidateQueries({ queryKey: ['staffingRequirements'] });
+    },
     // ── Staff & timeline (MODULE-05 ST-14) ──────────────────────────
     'staff.task_created': () => {
       qc.invalidateQueries({ queryKey: ['staffTasks'] });

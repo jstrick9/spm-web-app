@@ -144,6 +144,10 @@ describe('Lifecycle email send engine', () => {
     expect(log).toHaveLength(2);
     expect(log.every((e) => e.status === 'sent')).toBe(true);
     expect(log.map((e) => e.subject).sort()).toEqual(['Thank you Amy!', 'Thank you Ben!']);
+
+    // The send is broadcast so the lifecycle-emails tab refreshes live.
+    const sse = db.prepare(`SELECT COUNT(*) AS n FROM sse_events WHERE organization_id = ? AND event_type = 'lifecycle_email.sent'`).get(s.orgId) as { n: number };
+    expect(sse.n).toBeGreaterThan(0);
   });
 
   it('is idempotent — re-sending the same trigger schedules nothing new', async () => {

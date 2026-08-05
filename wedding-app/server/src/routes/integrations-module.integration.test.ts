@@ -84,6 +84,9 @@ describe('IN-02 — Twilio verify reaches the API', () => {
     await expect(verifyIntegration('twilio-1')).rejects.toThrow();
     const row = db.prepare(`SELECT status FROM integrations WHERE id = 'twilio-1'`).get() as { status: string };
     expect(row.status).toBe('error');
+    // The failure is broadcast so the integrations hub refreshes live.
+    const sse = db.prepare(`SELECT COUNT(*) AS n FROM sse_events WHERE organization_id = ? AND event_type = 'integration.error'`).get(owner.orgId) as { n: number };
+    expect(sse.n).toBeGreaterThan(0);
   });
 });
 
