@@ -358,14 +358,17 @@ export function CreateEventDialog({
         rsvpDeadline: values.rsvpDeadline || undefined,
         metadata,
       });
-      return res.event;
+      return { event: res.event, duplicateWarning: res.duplicateWarning ?? null };
     },
-    onSuccess: (event) => {
+    onSuccess: (result) => {
+      const { event, duplicateWarning } = result;
       qc.invalidateQueries({ queryKey: ["events", orgId] });
       toast({
-        title: "Event created",
-        description: event.title,
-        variant: "success",
+        title: duplicateWarning ? "Event created — possible duplicate" : "Event created",
+        description: duplicateWarning
+          ? `${event.title} on the same date matches “${duplicateWarning.matchedTitle}” (${duplicateWarning.matchedStatus}). Double-check you aren't logging the same wedding twice.`
+          : event.title,
+        variant: duplicateWarning ? "default" : "success",
       });
       form.reset();
       onOpenChange(false);

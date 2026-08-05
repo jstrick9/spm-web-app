@@ -64,7 +64,7 @@ export const eventsSdk = {
     return api.get(`/api/events/${eventId}`);
   },
 
-  create(input: CreateEventInput): Promise<{ event: SdkEvent }> {
+  create(input: CreateEventInput): Promise<{ event: SdkEvent; duplicateWarning?: { matchedEventId: string; matchedStatus: string; matchedTitle: string } | null }> {
     return api.post('/api/events', input);
   },
 

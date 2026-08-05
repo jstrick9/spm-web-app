@@ -60,6 +60,23 @@ describe('CreateEventDialog', () => {
     expect(onOpenChange).toHaveBeenCalledWith(false);
   });
 
+  it('warns about a possible duplicate when the server flags one', async () => {
+    server.use(http.post('/api/events', async () =>
+      HttpResponse.json({
+        event: { id: 'new-1', organization_id: 'org-1', title: 'Smith Wedding', slug: 'sw', status: 'lead', start_date: '2026-09-12', end_date: null, guest_count: 0, primary_contact_user_id: null, budget_cents: null, metadata: '{}', created_at: '' },
+        duplicateWarning: { matchedEventId: 'old-1', matchedStatus: 'booked', matchedTitle: 'Smith Wedding' },
+      }, { status: 201 })
+    ));
+    const onCreated = vi.fn();
+    render(harness(<CreateEventDialog orgId="org-1" open onOpenChange={vi.fn()} onCreated={onCreated} />));
+    await userEvent.type(screen.getByLabelText(/Event title/i), 'Smith Wedding');
+    await userEvent.click(screen.getByRole('button', { name: /Create event/i }));
+    await waitFor(() => expect(onCreated).toHaveBeenCalledTimes(1));
+    // Duplicate warning is surfaced, and creation still succeeds.
+    expect(screen.getByText(/possible duplicate/i)).toBeTruthy();
+    expect(screen.getByText(/Smith Wedding/i).closest('[role="status"]') ?? document.body).toBeTruthy();
+  });
+
   it('on server error: shows a toast and stays open', async () => {
     server.use(http.post('/api/events', () =>
       HttpResponse.json({ error: 'forbidden' }, { status: 403 })

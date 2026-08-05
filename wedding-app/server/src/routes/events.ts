@@ -200,6 +200,23 @@ export async function eventRoutes(app: FastifyInstance) {
         ip: req.ip,
       });
     }
+    let duplicateWarning: { matchedEventId: string; matchedStatus: string; matchedTitle: string } | null = null;
+    if (parsed.data.startDate && parsed.data.venueId) {
+      const dupes = eventsRepo.listForOrg(parsed.data.organizationId, { status: ['lead', 'hold', 'booked', 'planning', 'final_review'] })
+        // Same couple + same date ANYWHERE in the venue (space conflicts
+        // already catch same-space; this catches the same wedding logged
+        // twice in different spaces).
+        .filter((e) => e.start_date === parsed.data.startDate && e.title.trim().toLowerCase() === parsed.data.title.trim().toLowerCase() && !e.deleted_at);
+      if (dupes.length > 0) {
+        duplicateWarning = { matchedEventId: dupes[0].id, matchedStatus: dupes[0].status, matchedTitle: dupes[0].title };
+        auditRepo.log({
+          organizationId: parsed.data.organizationId, actorUserId: req.auth!.userId,
+          actorLabel: req.auth!.email, action: 'event.create.duplicate_warning',
+          targetType: 'event', targetId: dupes[0].id, ip: req.ip,
+          details: { duplicateTitle: parsed.data.title, startDate: parsed.data.startDate, matchedEventId: dupes[0].id, matchedStatus: dupes[0].status },
+        });
+      }
+    }
     const event = eventsRepo.create({
       organizationId: parsed.data.organizationId,
       title: parsed.data.title,
@@ -221,7 +238,7 @@ export async function eventRoutes(app: FastifyInstance) {
       targetType: 'event', targetId: event.id, ip: req.ip,
     });
     broadcastSSE(parsed.data.organizationId, "event.created", { eventId: event.id, title: event.title }, req.auth!.userId);
-    return reply.code(201).send({ event });
+    return reply.code(201).send({ event, duplicateWarning });
   });
 
   app.get('/api/events/:eventId/day-of-contact', { preHandler: requireAuth }, async (req) => {

@@ -2,6 +2,7 @@ import './../test/setup.js';
 import { describe, it, expect, beforeAll, beforeEach } from 'vitest';
 import { buildApp } from '../index.js';
 import { db } from '../db/database.js';
+import { uuid } from '../lib/crypto.js';
 import type { FastifyInstance } from 'fastify';
 
 let app: FastifyInstance;
@@ -102,6 +103,37 @@ describe('Events module — pipeline integrity', () => {
     const subMeta = JSON.parse(subGet.json().subEvents.find((s: any) => s.id === subId).metadata || '{}');
     expect(subMeta.rsvpEnabled).toBe(true);
     expect(subMeta.lodgingNote).toBe('Block at Grand Hotel');
+  });
+
+  it('flags duplicate same-name same-date events across spaces (double-booking guard)', async () => {
+    const u = await register('dup');
+    // Two real venues (same-space conflicts 409 before the duplicate check).
+    const v1 = uuid();
+    const v2 = uuid();
+    db.prepare(`INSERT INTO venues (id, organization_id, name, category, environment) VALUES (?, ?, 'Garden', 'ceremony', 'outdoor')`).run(v1, u.orgId);
+    db.prepare(`INSERT INTO venues (id, organization_id, name, category, environment) VALUES (?, ?, 'Ballroom', 'reception', 'indoor')`).run(v2, u.orgId);
+
+    const first = await authed(u.token, 'POST', '/api/events', {
+      organizationId: u.orgId, title: 'Smith Wedding', startDate: '2026-09-12', venueId: v1,
+    });
+    expect(first.statusCode).toBe(201);
+
+    // Same couple, same date, DIFFERENT space → duplicate warning, not blocked.
+    const dup = await authed(u.token, 'POST', '/api/events', {
+      organizationId: u.orgId, title: 'Smith Wedding', startDate: '2026-09-12', venueId: v2,
+    });
+    expect(dup.statusCode).toBe(201);
+    expect(dup.json().duplicateWarning).toBeTruthy();
+    expect(dup.json().duplicateWarning.matchedEventId).toBe(first.json().event.id);
+    const audit = db.prepare(`SELECT COUNT(*) AS n FROM audit_logs WHERE action = 'event.create.duplicate_warning' AND target_id = ?`).get(first.json().event.id) as { n: number };
+    expect(audit.n).toBe(1);
+
+    // A different date is not flagged.
+    const other = await authed(u.token, 'POST', '/api/events', {
+      organizationId: u.orgId, title: 'Smith Wedding', startDate: '2026-10-01', venueId: v2,
+    });
+    expect(other.statusCode).toBe(201);
+    expect(other.json().duplicateWarning).toBeNull();
   });
 
   it('rejects creating an event directly in a terminal status', async () => {
