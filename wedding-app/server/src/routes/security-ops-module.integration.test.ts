@@ -73,7 +73,9 @@ describe('SO-03 — SSE stream token policy', () => {
     });
     expect(streamStatus.status).toBe(200);
     expect(streamStatus.contentType).toContain('text/event-stream');
-    expect(streamStatus.firstChunk).toContain('data:');
+    // The stream opens with the immediate keep-alive comment; real events
+    // (data:) follow when the org has any.
+    expect(streamStatus.firstChunk).toMatch(/^: connected/);
   });
 
   it('rejects a disabled user\'s sse-token', async () => {
