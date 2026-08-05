@@ -4,7 +4,7 @@ import { requireAuth } from '../middleware/auth.js';
 import { can } from '../lib/rbac.js';
 import { eventsRepo } from '../db/repos/index.js';
 import { BadRequest, Forbidden, NotFound } from '../lib/errors.js';
-import { assertNoPublicHoneypot, auditPublicSubmission } from '../lib/publicAbuse.js';
+import { assertNoPublicHoneypot, auditPublicSubmission, publicRequestFingerprint } from '../lib/publicAbuse.js';
 import { uuid } from '../lib/crypto.js';
 
 const pollSchema = z.object({
@@ -72,6 +72,17 @@ export async function feedbackRoutes(app: FastifyInstance) {
 
     const option = poll.options.find((o: any) => o.id === optionId);
     if (option) {
+      // Dedup by device session so a single guest can't inflate results
+      // by re-voting (the public endpoint is anonymous; rate limiting
+      // alone only caps abuse to 30/min).
+      const session = publicRequestFingerprint(req);
+      const votedSessions: string[] = Array.isArray(poll.votedSessions) ? poll.votedSessions : [];
+      // One vote per device session per poll (switching options doesn't
+      // grant extra votes).
+      if (votedSessions.includes(session)) throw BadRequest('already-voted');
+      votedSessions.push(session);
+      if (votedSessions.length > 500) votedSessions.splice(0, votedSessions.length - 500);
+      poll.votedSessions = votedSessions;
       option.votes = (option.votes || 0) + 1;
       saveEventMeta(eventId, meta);
       auditPublicSubmission(req, {

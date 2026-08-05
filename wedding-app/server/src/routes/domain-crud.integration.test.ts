@@ -249,6 +249,16 @@ describe('Feedback / Polls', () => {
       payload: { optionId: 'opt1' }, headers: { 'content-type': 'application/json' } });
     expect(vr.statusCode).toBe(200);
     expect(vr.json().poll.options.find((o: any) => o.id === 'opt1').votes).toBe(1);
+
+    // Same device session cannot re-vote (vote-inflation guard).
+    const dup = await app.inject({ method: 'POST', url: `/api/events/${s.eventId}/polls/${pollId}/vote`,
+      payload: { optionId: 'opt1' }, headers: { 'content-type': 'application/json' } });
+    expect(dup.statusCode).toBe(400);
+    expect(dup.json().error).toBe('already-voted');
+    // Different option, same session — still one vote per (session, option).
+    const dup2 = await app.inject({ method: 'POST', url: `/api/events/${s.eventId}/polls/${pollId}/vote`,
+      payload: { optionId: 'opt2' }, headers: { 'content-type': 'application/json' } });
+    expect(dup2.statusCode).toBe(400);
   });
 });
 
