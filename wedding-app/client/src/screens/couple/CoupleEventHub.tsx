@@ -101,7 +101,6 @@ export function CoupleEventHub({ eventId }: { eventId: string }) {
     queryFn: () => sdk.events.get(eventId),
   });
   const event = data?.event;
-  const orgQuery = useQuery({ queryKey: ['couple-org', event?.organization_id], queryFn: () => sdk.orgs.get(event!.organization_id), enabled: !!event?.organization_id });
   const guestsQuery = useQuery({ queryKey: ['couple-guests', eventId], queryFn: () => sdk.couple.guests(eventId), enabled: !!eventId });
   const privacyQuery = useQuery({ queryKey: ['couple-privacy', eventId], queryFn: () => sdk.couple.privacy(eventId), enabled: !!eventId });
   const calendarQuery = useQuery({ queryKey: ['couple-calendar', eventId], queryFn: () => sdk.couple.calendar(eventId), enabled: !!eventId });
@@ -335,14 +334,17 @@ export function CoupleEventHub({ eventId }: { eventId: string }) {
 
   const countdown = daysUntil(event?.start_date);
   const metadata = useMemo(() => safeMetadata(event?.metadata), [event?.metadata]);
-  const orgSettings = useMemo(() => safeMetadata(orgQuery.data?.organization?.settings), [orgQuery.data?.organization?.settings]);
-  const venueName = orgQuery.data?.organization?.name || metadata.venueName || 'Your venue';
+  // Venue name + support email come from the event payload itself
+  // (enriched server-side) — the old /api/orgs/:id fetch 403'd for
+  // event-only members (couples) on every hub load.
+  const venueName = (event as any)?.organizationName || metadata.venueName || 'Your venue';
+  const supportEmail = (event as any)?.supportEmail ?? null;
   const ceremonySpace = metadata.ceremonySpace || metadata.ceremony_space || 'Ceremony space pending venue confirmation';
   const receptionSpace = metadata.receptionSpace || metadata.reception_space || 'Reception space pending venue confirmation';
   const ceremonyTime = metadata.ceremonyTime || metadata.ceremony_time || metadata.ceremonyStartsAt || 'Ceremony time TBD';
   const receptionTime = metadata.receptionTime || metadata.reception_time || metadata.receptionStartsAt || 'Reception time TBD';
   const venueContact = metadata.venueContactName || metadata.coordinatorName || 'Venue coordinator';
-  const venueContactEmail = metadata.venueContactEmail || metadata.coordinatorEmail || orgSettings.supportEmail;
+  const venueContactEmail = metadata.venueContactEmail || metadata.coordinatorEmail || supportEmail;
   const plannerContact = metadata.plannerName || metadata.plannerContactName || 'Planner not added yet';
   const emergencyContact = metadata.eventWeekContact || metadata.emergencyContact || 'Event-week contact will appear closer to the wedding';
   const rsvpDeadline = (event as any)?.rsvp_deadline || metadata.rsvpDeadline || addDays(event?.start_date, -30);

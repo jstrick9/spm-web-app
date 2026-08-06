@@ -35,12 +35,18 @@ export async function feedbackRoutes(app: FastifyInstance) {
   };
 
   // ─── Polls ──────────────────────────────────────────────
-  app.get('/api/events/:eventId/polls', { preHandler: requireAuth }, async (req) => {
+  // GET is PUBLIC on purpose: the guest portal renders polls for guests
+  // (the vote endpoint below is public + rate-limited too), so requiring
+  // auth here made the portal's poll section permanently empty — every
+  // guest load fired a 403 that the client swallowed. Poll content lives in
+  // event metadata and is guest-visible by design; the response returns
+  // ONLY the polls (no other metadata).
+  app.get('/api/events/:eventId/polls', { config: { rateLimit: { max: 60, timeWindow: '1 minute' } } }, async (req, reply) => {
     const { eventId } = req.params as { eventId: string };
-    const orgMap = eventsRepo.orgMapForUser(req.auth!.userId);
-    if (!can(req.auth!.memberships, { eventId }, 'feedback.view', orgMap)) throw Forbidden();
+    const event = eventsRepo.findById(eventId);
+    if (!event) throw NotFound();
     const { meta } = getEventMeta(eventId);
-    return { polls: meta.polls || [] };
+    return reply.send({ polls: meta.polls || [] });
   });
 
   app.post('/api/events/:eventId/polls', { preHandler: requireAuth }, async (req) => {

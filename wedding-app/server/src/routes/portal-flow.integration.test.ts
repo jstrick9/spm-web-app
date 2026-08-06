@@ -344,6 +344,31 @@ describe('Public portal: full RSVP flow', () => {
     }
   });
 
+  it('1j3. Event payload enriches org name + support email so couples never call /api/orgs/:id (403)', async () => {
+    const s = await setupEvent();
+    // Give the org a support email in settings.
+    db.prepare(`UPDATE organizations SET settings = ? WHERE id = ?`).run(JSON.stringify({ supportEmail: 'help@venue.test' }), s.orgId);
+    // Register a couple and attach them to the event (event-only membership).
+    const couple = await app.inject({ method: 'POST', url: '/api/auth/register',
+      payload: { email: `couple-orgname-${Math.random().toString(36).slice(2)}@x.com`, password: 'testpass123', fullName: 'Couple', orgName: 'Temp' },
+      headers: { 'content-type': 'application/json' } });
+    const role = db.prepare(`SELECT id FROM roles WHERE key='couple' AND is_system=1`).get() as { id: string };
+    db.prepare(`INSERT INTO event_memberships (id, event_id, user_id, role_id, status) VALUES (?, ?, ?, ?, 'active')`)
+      .run(`em-${Math.random().toString(36).slice(2)}`, s.eventId, couple.json().user.id, role.id);
+
+    // Regression: the couple used to call GET /api/orgs/:venueOrgId to
+    // learn the venue name — that 403s for event-only members, leaving the
+    // hub stuck on "Your venue" + a console error on every load.
+    const orgProbe = await app.inject({ method: 'GET', url: `/api/orgs/${s.orgId}`, headers: { authorization: `Bearer ${couple.json().token}` } });
+    expect(orgProbe.statusCode).toBe(403);
+
+    // The event payload must carry what the hub needs instead.
+    const evt = await app.inject({ method: 'GET', url: `/api/events/${s.eventId}`, headers: { authorization: `Bearer ${couple.json().token}` } });
+    expect(evt.statusCode).toBe(200);
+    expect(evt.json().event.organizationName).toBe('Venue');
+    expect(evt.json().event.supportEmail).toBe('help@venue.test');
+  });
+
   it('1k. Portal status exposes disabled recovery support contact without broad guest data', async () => {
     const s = await setupEvent();
     const cfg = await app.inject({ method: 'PUT', url: `/api/events/${s.eventId}/portal-config`,

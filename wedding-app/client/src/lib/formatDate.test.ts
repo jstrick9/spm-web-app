@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, afterEach } from 'vitest';
-import { formatDateOnly, parseDateOnly, daysUntilDateOnly, isPastDateTime } from './formatDate';
+import { formatDateOnly, parseDateOnly, daysUntilDateOnly, isPastDateTime, localDateString } from './formatDate';
 
 describe('formatDateOnly', () => {
   it('formats YYYY-MM-DD without timezone drift', () => {
@@ -115,5 +115,24 @@ describe('isPastDateTime — "late" only when the item\'s OWN day+time passed', 
     expect(isPastDateTime(null)).toBe(false);
     expect(isPastDateTime(undefined)).toBe(false);
     expect(isPastDateTime('garbage')).toBe(false);
+  });
+});
+
+describe('localDateString — local calendar "today" for date-only comparisons', () => {
+  it('uses the LOCAL date, not UTC (regression: US evenings)', () => {
+    // 2026-09-12 23:00 in New York = 2026-09-13 03:00 UTC. The old
+    // toISOString().slice(0,10) derivation returned '2026-09-13' — an
+    // event on local Sep 12 was dropped from "today".
+    const tz = process.env.TZ;
+    process.env.TZ = 'America/New_York';
+    try {
+      expect(localDateString(new Date(2026, 8, 12, 23, 0))).toBe('2026-09-12');
+    } finally {
+      if (tz === undefined) delete process.env.TZ; else process.env.TZ = tz;
+    }
+  });
+
+  it('zero-pads month and day', () => {
+    expect(localDateString(new Date(2026, 0, 5))).toBe('2026-01-05');
   });
 });

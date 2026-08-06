@@ -78,6 +78,21 @@ export function isPastDateTime(value: string | null | undefined, now = new Date(
 }
 
 /**
+ * Local calendar date string ('YYYY-MM-DD') for the given Date (default now).
+ *
+ * Deriving "today" with `new Date().toISOString().slice(0,10)` gives the
+ * UTC date — during US evening hours UTC is already the next LOCAL day, so
+ * "today's events" and "due today" comparisons silently shift by one day.
+ * Use this when comparing against user-entered date-only values (which
+ * carry calendar-day semantics).
+ */
+export function localDateString(date = new Date()): string {
+  const m = String(date.getMonth() + 1).padStart(2, '0');
+  const d = String(date.getDate()).padStart(2, '0');
+  return `${date.getFullYear()}-${m}-${d}`;
+}
+
+/**
  * Whole calendar days from today (local) to a date-only string; negative
  * when the date is past. DST-safe (compares y/m/d, not raw timestamps).
  */

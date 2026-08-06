@@ -322,7 +322,17 @@ export async function eventRoutes(app: FastifyInstance) {
     if (!event) throw NotFound();
     const orgMap = eventsRepo.orgMapForUser(req.auth!.userId);
     if (!can(req.auth!.memberships, { eventId }, 'events.view', orgMap)) throw Forbidden();
-    return { event };
+    // Enrich with the organization's name + support email so event-scoped
+    // users (couples, planners) don't have to call /api/orgs/:id — which
+    // 403s for users who are event members but not org members (the couple
+    // hub used to fire that failing request on every load and always fell
+    // back to "Your venue").
+    const org = db.prepare(`SELECT name, settings FROM organizations WHERE id = ?`).get(event.organization_id) as { name: string; settings: string } | undefined;
+    let supportEmail: string | null = null;
+    if (org) {
+      try { const s = JSON.parse(org.settings || '{}'); supportEmail = s?.supportEmail ?? null; } catch { /* ignore malformed settings */ }
+    }
+    return { event: { ...event, organizationName: org?.name ?? null, supportEmail } };
   });
 
   app.post('/api/events/:eventId/final-review/checks', { preHandler: requireAuth }, async (req) => {

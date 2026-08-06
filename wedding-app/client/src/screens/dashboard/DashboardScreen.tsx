@@ -61,7 +61,7 @@ import {
 } from "lucide-react";
 import { useSSE } from "../../lib/useSSE";
 import { sdk } from "../../sdk";
-import { formatDateOnly, parseDateOnly } from "../../lib/formatDate";
+import { formatDateOnly, parseDateOnly, localDateString } from "../../lib/formatDate";
 import { usePermission } from "../../lib/usePermission";
 import { useToast } from "../../ui/Toast";
 import { PageBody, PageHeader } from "../../ui/AppShell";
@@ -214,15 +214,17 @@ export function DashboardScreen({
     ? Math.round((rec.budgetRange.median * Math.max(totalActive, 1)) / 100)
     : null;
 
-  // Today's events (starts today)
-  const today = new Date().toISOString().slice(0, 10);
+  // Today's events (starts today). LOCAL calendar date — the old UTC
+  // slice shifted a day during US evening hours, hiding today's events
+  // from the Today section and showing tomorrow's instead.
+  const today = localDateString();
   const todaysEvents = (eventsQuery.data?.events ?? []).filter(
     (e: any) => e.start_date?.slice(0, 10) === today,
   );
   const upcomingEvents = (eventsQuery.data?.events ?? [])
     .filter((e: any) => e.start_date?.slice(0, 10) > today)
     .slice(0, 5);
-  const tomorrow = new Date(Date.now() + 86400000).toISOString().slice(0, 10);
+  const tomorrow = localDateString(new Date(Date.now() + 86_400_000));
   const tomorrowEvents = (eventsQuery.data?.events ?? []).filter(
     (e: any) => e.start_date?.slice(0, 10) === tomorrow,
   );

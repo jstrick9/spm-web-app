@@ -73,6 +73,29 @@ describe('Public endpoint abuse controls', () => {
     expect(dup.json().error).toBe('already-submitted');
   });
 
+  it('serves polls to the PUBLIC guest portal (no auth) — regression: GET was auth-only, portal polls were always empty + 403 on every load', async () => {
+    const s = await setup();
+    db.prepare(`UPDATE events SET metadata = ? WHERE id = ?`).run(JSON.stringify({ polls: [{ id: 'poll-guest-1', question: 'Which appetizer?', status: 'active', options: [{ id: 'o1', text: 'Bruschetta', votes: 2 }, { id: 'o2', text: 'Sliders', votes: 1 }] }] }), s.eventId);
+
+    // Anonymous (no auth, no token): the guest portal loads polls this way.
+    const anon = await app.inject({ method: 'GET', url: `/api/events/${s.eventId}/polls` });
+    expect(anon.statusCode).toBe(200);
+    expect(anon.json().polls).toHaveLength(1);
+    expect(anon.json().polls[0].question).toBe('Which appetizer?');
+
+    // A random OTHER user (no membership) can also read poll content —
+    // polls are guest-visible by design (the vote endpoint is public).
+    const outsider = await app.inject({ method: 'POST', url: '/api/auth/register',
+      payload: { email: `outsider-${Math.random().toString(36).slice(2)}@x.com`, password: 'testpass123', fullName: 'Outsider', orgName: 'Other' },
+      headers: { 'content-type': 'application/json' } });
+    const outsiderRes = await app.inject({ method: 'GET', url: `/api/events/${s.eventId}/polls`, headers: { authorization: `Bearer ${outsider.json().token}` } });
+    expect(outsiderRes.statusCode).toBe(200);
+
+    // Garbage event id still 404s (no information leak).
+    const missing = await app.inject({ method: 'GET', url: `/api/events/does-not-exist/polls` });
+    expect(missing.statusCode).toBe(404);
+  });
+
   it('rejects public poll vote honeypot submissions and audits the block', async () => {
     const s = await setup();
     const poll = { id: 'poll-1', question: 'Song?', status: 'active', options: [{ id: 'opt-1', text: 'A', votes: 0 }] };
