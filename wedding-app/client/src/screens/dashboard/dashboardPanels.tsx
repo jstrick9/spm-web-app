@@ -702,7 +702,12 @@ export function OperationsTicker({ orgId }: { orgId: string | null }) {
           </button>
         ))}
       </div>
-      <CardContent className="flex-1 overflow-y-auto p-3 space-y-2.5 bg-bg/30">
+      <CardContent
+        role="region"
+        aria-label="Live operations feed"
+        tabIndex={0}
+        className="flex-1 overflow-y-auto p-3 space-y-2.5 bg-bg/30 focus-visible:outline-2 focus-visible:outline-brand"
+      >
         {filteredItems.length === 0 ? (
           <div className="h-full flex items-center justify-center text-xs text-fg-subtle italic font-serif py-12">
             No events in this category yet.

@@ -187,4 +187,30 @@ test.describe('Accessibility @a11y', () => {
     reportViolations('event detail', results.violations as AxeViolation[]);
     expect(results.violations).toHaveLength(0);
   });
+
+  test('authenticated dashboard has no detectable WCAG A/AA violations', async ({ page, request }) => {
+    // The dashboard is the first screen every venue user sees after login.
+    const login = await request.post('/api/auth/login', { data: { email: 'owner@demo.local', password: 'wedding123' } });
+    const { token } = await login.json();
+    const orgId = (await (await request.get('/api/orgs', { headers: { authorization: `Bearer ${token}` } })).json()).organizations[0].id;
+    await request.put('/api/users/me/preferences', {
+      headers: { authorization: `Bearer ${token}`, 'content-type': 'application/json' },
+      data: { onboarding: { welcomeTourByOrg: { [orgId]: { status: 'completed', currentSlide: 0, completedSlides: [], completedAt: new Date().toISOString() } } } },
+    });
+
+    await page.goto('/#/');
+    await page.getByLabel(/email address/i).fill('owner@demo.local');
+    await page.getByLabel(/^password$/i).fill('wedding123');
+    await page.getByRole('button', { name: /sign in securely/i }).click();
+    await expect(page.locator('body')).toContainText(/good (morning|afternoon|evening)/i, { timeout: 20_000 });
+    // Wait for dashboard data (cards render after API calls settle).
+    await expect(page.locator('body')).toContainText(/command center|active events/i, { timeout: 20_000 }).catch(() => {});
+
+    const results = await new AxeBuilder({ page })
+      .withTags(WCAG_TAGS)
+      .exclude('canvas')
+      .analyze();
+    reportViolations('dashboard', results.violations as AxeViolation[]);
+    expect(results.violations).toHaveLength(0);
+  });
 });
