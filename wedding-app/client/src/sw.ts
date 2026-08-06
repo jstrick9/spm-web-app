@@ -47,9 +47,13 @@ registerRoute(
   'GET'
 );
 
-// 3. BACKGROUND SYNC (Offline Check-Ins / Operations)
-// When a staff member is checking in vendors on an iPad in the parking lot and loses WiFi,
-// the requests are caught by this BackgroundSync plugin. When WiFi returns, Workbox automatically replays them.
+// 3. BACKGROUND SYNC (staff task updates)
+// Staff-task PATCHes are queued by the service worker when the network is
+// down. NOTE: vendor check-ins are deliberately NOT routed here — the app's
+// own persistent write queue (dual-write/writeQueue.ts) owns those, because
+// it gives the user visible feedback ("Saved on this device") and replays
+// deterministically on reconnect. Two queues for the same writes would
+// double-replay and silently swallow the app's offline UX.
 const bgSyncPlugin = new BackgroundSyncPlugin('wvi-offline-queue', {
   maxRetentionTime: 24 * 60, // Retry for max of 24 Hours
 });
@@ -60,14 +64,6 @@ registerRoute(
     plugins: [bgSyncPlugin]
   }),
   'PATCH'
-);
-
-registerRoute(
-  /\/api\/events\/.*\/checkins/i,
-  new NetworkFirst({
-    plugins: [bgSyncPlugin]
-  }),
-  'POST'
 );
 
 registerRoute(

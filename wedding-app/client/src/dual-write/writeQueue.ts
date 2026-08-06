@@ -58,6 +58,12 @@ const executors = new Map<string, Executor>();
  */
 export function registerExecutor(domain: Domain, op: string, fn: Executor): void {
   executors.set(`${domain}:${op}`, fn);
+  // A domain chunk (lazy-loaded) just registered its replay executor — if
+  // there are queued writes for it (e.g. the startup drain found none and
+  // bailed), retry draining now that the executor exists.
+  if (read().some((w) => w.domain === domain && w.op === op)) {
+    void drain();
+  }
 }
 
 // ─── Listeners ─────────────────────────────────────
@@ -138,10 +144,13 @@ export async function drain(): Promise<void> {
       const head = q[0];
       const exec = executors.get(`${head.domain}:${head.op}`);
       if (!exec) {
-        // No executor registered → drop and continue (defensive)
-        write(q.slice(1));
-        notify({ kind: 'replay-failed', write: head, reason: 'no-executor', willRetry: false });
-        continue;
+        // Executor not registered yet (the domain chunk may still be
+        // loading). Keep the write and stop — registerExecutor() kicks a
+        // drain when the executor arrives. DROPPING here silently lost
+        // writes: the app's startup drain (100ms) raced the lazy-loaded
+        // check-in chunk and wiped the queue.
+        notify({ kind: 'replay-failed', write: head, reason: 'no-executor', willRetry: true });
+        return;
       }
 
       notify({ kind: 'replay-start', write: head });

@@ -17,7 +17,29 @@ test.use({ viewport: { width: 1440, height: 1400 } });
  * the create-event form submitting through the real API, and the post-create
  * redirect into EventDetail.
  */
-test('owner can log in and create a wedding event', async ({ page }) => {
+test('owner can log in and create a wedding event', async ({ page, request }) => {
+  // ── 0. Deterministic tour state: complete the owner's onboarding tour
+  // via API so a previously-interrupted run can never leave the modal open
+  // and intercept clicks (the modal persists `in_progress` across runs).
+  const tourLogin = await request.post('/api/auth/login', {
+    data: { email: 'owner@demo.local', password: 'wedding123' },
+  });
+  if (tourLogin.ok()) {
+    const tourToken = (await tourLogin.json()).token;
+    const orgs = await (await request.get('/api/orgs', { headers: { authorization: `Bearer ${tourToken}` } })).json();
+    const tourOrgId = orgs.organizations[0].id;
+    await request.put('/api/users/me/preferences', {
+      headers: { authorization: `Bearer ${tourToken}`, 'content-type': 'application/json' },
+      data: {
+        onboarding: {
+          welcomeTourByOrg: {
+            [tourOrgId]: { status: 'completed', currentSlide: 0, completedSlides: [], completedAt: new Date().toISOString() },
+          },
+        },
+      },
+    });
+  }
+
   // ── 1. Login ───────────────────────────────────────────
   await page.goto('/#/');
   await page.getByLabel(/email address/i).fill('owner@demo.local');

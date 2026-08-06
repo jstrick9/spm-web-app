@@ -86,10 +86,10 @@ describe('drain', () => {
     expect(size()).toBe(0);   // dropped after MAX_ATTEMPTS
   });
 
-  it('drops writes with no registered executor', async () => {
+  it('keeps writes with no registered executor (lazy chunk may still load)', async () => {
     enqueue({ domain: 'audit', op: 'nonexistent-op', payload: {} });
     await drain();
-    expect(size()).toBe(0);
+    expect(size()).toBe(1); // retained, not silently dropped
   });
 });
 
@@ -152,5 +152,36 @@ describe('re-auth drain after unauthorized pause', () => {
     await new Promise((r) => setTimeout(r, 50));
     expect(size()).toBe(0);
     setToken(null);
+  });
+});
+
+describe('no-executor retention (lazy chunk race)', () => {
+  it('keeps a queued write when no executor is registered yet (no silent drop)', async () => {
+    enqueue({ domain: 'vendors', op: 'checkin.update', payload: { eventId: 'e1', vendorId: 'v1', status: 'arrived' } });
+    await drain();
+    // The write must STILL be in the queue — never dropped.
+    expect(size()).toBe(1);
+  });
+
+  it('drains automatically once the executor registers (lazy chunk arrives)', async () => {
+    let replayed = 0;
+    registerExecutor('vendors', 'checkin.update', async () => { replayed++; });
+    enqueue({ domain: 'vendors', op: 'checkin.update', payload: { eventId: 'e1', vendorId: 'v1', status: 'arrived' } });
+
+    // First drain: no executor for THIS op yet → write kept.
+    // (registerExecutor above registered the executor BEFORE enqueue in this
+    // test, so simulate the race by registering AFTER enqueue.)
+    // Reset: clear the queue, enqueue, drain with no executor, THEN register.
+    clear();
+    enqueue({ domain: 'staff', op: 'task.update', payload: { id: 't1' } });
+    await drain();
+    expect(size()).toBe(1); // kept (no executor)
+
+    // Now the lazy chunk loads and registers its executor → auto-drain.
+    let replayed2 = 0;
+    registerExecutor('staff', 'task.update', async () => { replayed2++; });
+    await new Promise((r) => setTimeout(r, 50));
+    expect(replayed2).toBe(1);
+    expect(size()).toBe(0);
   });
 });
