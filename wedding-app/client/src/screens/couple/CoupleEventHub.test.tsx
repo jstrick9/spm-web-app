@@ -11,7 +11,7 @@ vi.mock('../../sdk/venues', () => ({
 
 vi.mock('../../sdk', () => ({
   sdk: {
-    events: { dayOfContact: vi.fn().mockResolvedValue({ contact: { name: 'Avery', phone: '555-0100', hours: '8 AM–11 PM' } }), coupleUpdates: vi.fn().mockResolvedValue({ updates: [] }), acknowledgeCoupleUpdate: vi.fn().mockResolvedValue({ ok: true }), get: vi.fn().mockResolvedValue({ event: { id: 'e1', organization_id: 'org1', title: 'Taylor & Morgan Wedding', start_date: '2026-09-12', guest_count: 100, metadata: JSON.stringify({ ceremonySpace: 'Garden Lawn', receptionSpace: 'Grand Ballroom', ceremonyTime: '4:30 PM', venueContactName: 'Avery Coordinator' }) } }) },
+    events: { dayOfContact: vi.fn().mockResolvedValue({ contact: { name: 'Avery', phone: '555-0100', hours: '8 AM–11 PM' } }), coupleUpdates: vi.fn().mockResolvedValue({ updates: [] }), acknowledgeCoupleUpdate: vi.fn().mockResolvedValue({ ok: true }), get: vi.fn().mockResolvedValue({ event: { id: 'e1', organization_id: 'org1', organizationName: 'Willow Creek Estate', supportEmail: 'help@venue.test', title: 'Taylor & Morgan Wedding', start_date: '2026-09-12', guest_count: 100, metadata: JSON.stringify({ ceremonySpace: 'Garden Lawn', receptionSpace: 'Grand Ballroom', ceremonyTime: '4:30 PM', venueContactName: 'Avery Coordinator' }) } }) },
     orgs: { get: vi.fn().mockResolvedValue({ organization: { id: 'org1', name: 'Willow Creek Estate', settings: JSON.stringify({ supportEmail: 'help@venue.test' }) } }) },
     guests: { list: vi.fn().mockResolvedValue({ guests: [{ id: 'g1', full_name: 'Guest One', email: 'guest@example.com', metadata: '{}' }], counts: { pending: 20, attending: 70, declined: 5, maybe: 5 } }) },
     contracts: { list: vi.fn().mockResolvedValue({ contracts: [{ id: 'c1', status: 'sent' }] }) },

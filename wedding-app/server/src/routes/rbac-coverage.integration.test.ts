@@ -293,7 +293,7 @@ describe('Route-level RBAC enforcement: feedback', () => {
     expect(res.statusCode).toBe(200);
   });
 
-  it('guest CANNOT view polls', async () => {
+  it('guest CAN view polls (public by design — the guest portal renders them and the vote endpoint is public)', async () => {
     const o = await registerOwner();
     const g = await createUserWithRole(o.token, o.orgId, 'guest');
     const evtRes = await req(o.token, 'POST', '/api/events', {
@@ -301,6 +301,19 @@ describe('Route-level RBAC enforcement: feedback', () => {
     });
     const eventId = evtRes.json().event.id;
     const res = await req(g.token, 'GET', `/api/events/${eventId}/polls`);
+    expect(res.statusCode).toBe(200);
+  });
+
+  it('guest CANNOT CREATE polls (feedback.manage is staff-only)', async () => {
+    const o = await registerOwner();
+    const g = await createUserWithRole(o.token, o.orgId, 'guest');
+    const evtRes = await req(o.token, 'POST', '/api/events', {
+      organizationId: o.orgId, title: 'Poll Test 3',
+    });
+    const eventId = evtRes.json().event.id;
+    const res = await req(g.token, 'POST', `/api/events/${eventId}/polls`, {
+      question: 'Sneaky poll', options: [{ text: 'A' }],
+    });
     expect(res.statusCode).toBe(403);
   });
 });
