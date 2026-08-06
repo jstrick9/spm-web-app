@@ -165,4 +165,15 @@ describe('SO-02 — secrets-key guidance', () => {
       if (originalNodeEnv !== undefined) process.env.NODE_ENV = originalNodeEnv;
     }
   });
+
+  it('SO-05 — CSP allows the Google Fonts CDN for venue-custom fonts (no silent fallback)', async () => {
+    const res = await app.inject({ method: 'GET', url: '/api/health' });
+    const csp = res.headers['content-security-policy'] as string;
+    expect(csp).toContain("style-src 'self' 'unsafe-inline' https://fonts.googleapis.com");
+    expect(csp).toContain("font-src 'self' data: https://fonts.gstatic.com");
+    // The rest of the policy stays tight.
+    expect(csp).toContain("script-src 'self'");
+    expect(csp).toContain("default-src 'self'");
+    expect(csp).toContain("object-src 'none'");
+  });
 });

@@ -42,6 +42,35 @@ export function localDateString(date = new Date()): string {
 }
 
 /**
+ * Today (local calendar date) + N days as 'YYYY-MM-DD'.
+ *
+ * The previous pattern (`new Date(); d.setDate(d.getDate()+n); d.toISOString()
+ * .slice(0,10)`) derived "today" in UTC — during US evening hours UTC is
+ * already the NEXT local day, so SLA deadlines and email idempotency keys
+ * silently shifted by one day.
+ */
+export function addDaysFromToday(days: number): string {
+  const d = new Date();
+  d.setDate(d.getDate() + days);
+  return localDateString(d);
+}
+
+/**
+ * Add whole days to a date-only string using local calendar arithmetic
+ * (DST-safe; '2026-02-28' + 1 → '2026-03-01' regardless of timezone).
+ * Returns null for missing/garbage input.
+ */
+export function addDaysDateOnly(value: string | null | undefined, days: number): string | null {
+  if (!value) return null;
+  const m = /^(\d{4})-(\d{2})-(\d{2})/.exec(value);
+  if (!m) return null;
+  const [, y, mo, d] = m;
+  const dt = new Date(Number(y), Number(mo) - 1, Number(d) + days);
+  if (Number.isNaN(dt.getTime())) return null;
+  return localDateString(dt);
+}
+
+/**
  * Human-readable calendar date for user-facing documents (travel cards,
  * packet text exports). Renders "September 12, 2026" for YYYY-MM-DD and
  * ISO values; never throws on garbage input (falls back to the raw value).

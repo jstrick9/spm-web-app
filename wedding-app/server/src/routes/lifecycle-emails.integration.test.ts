@@ -166,6 +166,36 @@ describe('Lifecycle email send engine', () => {
     expect(scheduledEmailsRepo.listForEvent(s.eventId).filter((e) => e.guest_id)).toHaveLength(1);
   });
 
+  it('renders date-only merge fields on the correct calendar day in US timezones', async () => {
+    const prevTz = process.env.TZ;
+    process.env.TZ = 'America/New_York';
+    try {
+      const s = await setup();
+      connectSmtp(s.orgId);
+      db.prepare(`UPDATE events SET start_date = '2026-09-12', rsvp_deadline = '2026-08-15' WHERE id = ?`).run(s.eventId);
+      const tpl = emailTemplatesRepo.create(s.orgId, {
+        name: 'Dates', subject: 'Wedding {{event_date}}',
+        bodyHtml: '<p>RSVP by {{rsvp_deadline}}</p>', createdBy: s.userId,
+      });
+      await req(s.token, 'PUT', `/api/orgs/${s.orgId}/email-automations`, { templateId: tpl.id, triggerType: 'thank_you' });
+      guestsRepo.create(s.orgId, s.eventId, { fullName: 'Amy', email: 'amy@x.com', rsvpStatus: 'attending' });
+
+      await req(s.token, 'POST', `/api/events/${s.eventId}/lifecycle-emails/send`, { triggerType: 'thank_you' });
+
+      const log = scheduledEmailsRepo.listForEvent(s.eventId).filter((e) => e.guest_id);
+      expect(log).toHaveLength(1);
+      // Regression: `new Date('2026-09-12')` renders "September 11, 2026" in
+      // America/New_York — guests were told the wedding was a day early.
+      expect(log[0].subject).toBe('Wedding September 12, 2026');
+      // The rendered body travels in the email.send job payload.
+      const job = db.prepare(`SELECT payload FROM job_queue WHERE kind = 'email.send' ORDER BY created_at DESC LIMIT 1`).get() as { payload: string } | undefined;
+      expect(job).toBeTruthy();
+      expect(JSON.parse(job!.payload).html).toContain('RSVP by August 15, 2026');
+    } finally {
+      if (prevTz === undefined) delete process.env.TZ; else process.env.TZ = prevTz;
+    }
+  });
+
   it('no-ops gracefully when no SMTP integration is connected', async () => {
     const s = await setup();
     const tpl = emailTemplatesRepo.create(s.orgId, { name: 'T', subject: 'S', bodyHtml: 'B', createdBy: s.userId });

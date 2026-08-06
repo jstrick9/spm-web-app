@@ -315,6 +315,35 @@ describe('Public portal: full RSVP flow', () => {
   });
 
 
+  it('1j2. Post-event section does not unlock a day early in US timezones', async () => {
+    const prevTz = process.env.TZ;
+    process.env.TZ = 'America/New_York';
+    try {
+      const pad = (n: number) => String(n).padStart(2, '0');
+      const iso = (d: Date) => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+      const today = new Date();
+      const tomorrow = new Date(today.getFullYear(), today.getMonth(), today.getDate() + 1);
+      const yesterday = new Date(today.getFullYear(), today.getMonth(), today.getDate() - 1);
+
+      // TOMORROW's event must NOT show the post-event section yet. The old
+      // code parsed the date-only start_date as UTC midnight, which in NY
+      // is 'today 20:00' — so the section unlocked the evening BEFORE.
+      const s = await setupEvent();
+      db.prepare(`UPDATE events SET start_date = ? WHERE id = ?`).run(iso(tomorrow), s.eventId);
+      const guestToken = guestsRepo.rotatePortalToken(s.guestId1);
+      const info = await app.inject({ method: 'GET', url: `/api/portal/${s.eventId}/info?guest=${s.guestId1}&token=${guestToken}` });
+      expect(info.statusCode).toBe(200);
+      expect(info.json().guestPostEvent.afterEvent).toBe(false);
+
+      // YESTERDAY's event must show it.
+      db.prepare(`UPDATE events SET start_date = ? WHERE id = ?`).run(iso(yesterday), s.eventId);
+      const info2 = await app.inject({ method: 'GET', url: `/api/portal/${s.eventId}/info?guest=${s.guestId1}&token=${guestToken}` });
+      expect(info2.json().guestPostEvent.afterEvent).toBe(true);
+    } finally {
+      if (prevTz === undefined) delete process.env.TZ; else process.env.TZ = prevTz;
+    }
+  });
+
   it('1k. Portal status exposes disabled recovery support contact without broad guest data', async () => {
     const s = await setupEvent();
     const cfg = await app.inject({ method: 'PUT', url: `/api/events/${s.eventId}/portal-config`,

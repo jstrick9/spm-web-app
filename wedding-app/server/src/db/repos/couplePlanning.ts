@@ -1,6 +1,7 @@
 import { db } from '../database.js';
 import { uuid } from '../../lib/crypto.js';
 import { stringifyJson } from '../../lib/json.js';
+import { addDaysDateOnly } from '../../lib/time.js';
 
 export type CoupleTaskOwner = 'couple' | 'venue' | 'planner' | 'vendor';
 export type CoupleTaskStatus = 'not_started' | 'in_progress' | 'completed' | 'blocked';
@@ -54,11 +55,10 @@ const BASE_TEMPLATES: TemplateTask[] = [
 ];
 
 function dueDate(weddingDate: string | null | undefined, offset: number): string | null {
-  if (!weddingDate) return null;
-  const d = new Date(`${weddingDate}T12:00:00`);
-  if (Number.isNaN(d.getTime())) return null;
-  d.setDate(d.getDate() + offset);
-  return d.toISOString().slice(0, 10);
+  // Local calendar arithmetic: the old UTC-slice output shifted a day for
+  // UTC-positive timezones (local noon → next-day UTC) and confused
+  // "due" day comparisons.
+  return addDaysDateOnly(weddingDate, offset);
 }
 
 function appendHistory(row: CouplePlanningTaskRow, actor: string, action: string, note?: string) {

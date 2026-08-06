@@ -16,7 +16,7 @@ import {
 import { useMemo, useState, type ReactNode } from "react";
 import { calendarDaysUntil } from "../../lib/calendarDays";
 import type { SdkEvent } from "../../sdk/types";
-import { formatDateOnly } from '../../lib/formatDate';
+import { formatDateOnly, daysUntilDateOnly } from '../../lib/formatDate';
 import type { EventStatusCounts } from "../../sdk/events";
 import { Badge } from "../../ui/Badge";
 import { Card, CardContent } from "../../ui/Card";
@@ -150,10 +150,7 @@ export function operationalStatusFor(event: SdkEvent): {
           ? "success"
           : "warning",
     };
-  const start = event.start_date ? new Date(event.start_date) : null;
-  const days = start
-    ? Math.ceil((start.getTime() - Date.now()) / 86400000)
-    : null;
+  const days = daysUntilDateOnly(event.start_date);
   if (event.status === "completed")
     return { label: "Closeout", variant: "info" };
   if (days !== null && days <= 0) return { label: "Day-of", variant: "danger" };

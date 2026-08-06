@@ -77,3 +77,58 @@ test('brand fonts load and theme init runs (CSP-clean)', async ({ page, request 
   expect(fontsCss.status()).toBe(200);
   expect(await fontsCss.text()).toContain('@font-face');
 });
+
+test('venue-custom Google Fonts are NOT blocked by the CSP', async ({ page, request }) => {
+  // ── 0. Owner session; set a venue-custom heading font via org config ─
+  const login = await request.post('/api/auth/login', { data: { email: 'owner@demo.local', password: 'wedding123' } });
+  expect(login.ok()).toBeTruthy();
+  const { token } = await login.json();
+  const orgs = await (await request.get('/api/orgs', { headers: { authorization: `Bearer ${token}` } })).json();
+  const orgId = orgs.organizations[0].id as string;
+
+  const before = (await (await request.get(`/api/orgs/${orgId}/config`, { headers: { authorization: `Bearer ${token}` } })).json()) as { config: any };
+  const config = { ...(before.config ?? {}), branding: { ...(before.config?.branding ?? {}), headingFont: 'Playfair Display' } };
+  await request.put(`/api/orgs/${orgId}/config`, {
+    headers: { authorization: `Bearer ${token}`, 'content-type': 'application/json' },
+    data: config,
+  });
+  await request.put('/api/users/me/preferences', {
+    headers: { authorization: `Bearer ${token}`, 'content-type': 'application/json' },
+    data: { onboarding: { welcomeTourByOrg: { [orgId]: { status: 'completed', currentSlide: 0, completedSlides: [], completedAt: new Date().toISOString() } } } },
+  });
+
+  // ── 1. Load the app with the custom font configured ─────────────────
+  const cspErrors: string[] = [];
+  const fontLoads: string[] = [];
+  page.on('console', (m) => { if (m.type() === 'error' && /content security policy/i.test(m.text())) cspErrors.push(m.text().slice(0, 160)); });
+  page.on('response', (r) => { if (r.url().includes('fonts.googleapis.com') || r.url().includes('fonts.gstatic.com')) fontLoads.push(`${r.status()} ${r.url().slice(0, 90)}`); });
+
+  await page.goto('/#/');
+  await page.getByLabel(/email address/i).fill('owner@demo.local');
+  await page.getByLabel(/^password$/i).fill('wedding123');
+  await page.getByRole('button', { name: /sign in securely/i }).click();
+  await expect(page.locator('body')).toContainText(/good (morning|afternoon|evening)/i, { timeout: 20_000 });
+
+  // ThemeProvider injects a Google Fonts stylesheet for the custom font —
+  // it must load (200), not be CSP-blocked.
+  await expect.poll(() => fontLoads.length, { timeout: 15_000 }).toBeGreaterThan(0);
+  expect(fontLoads.every((l) => l.startsWith('200')), `font loads: ${fontLoads.join(' | ')}`).toBeTruthy();
+  expect(cspErrors, `CSP violations: ${cspErrors.join(' | ')}`).toHaveLength(0);
+
+  // The custom font is actually used for display text.
+  const family = await page.evaluate(() => {
+    const probe = document.createElement('div');
+    probe.className = 'font-display';
+    document.body.appendChild(probe);
+    const fam = getComputedStyle(probe).fontFamily;
+    probe.remove();
+    return fam;
+  });
+  expect(family).toContain('Playfair Display');
+
+  // ── 2. Restore the original config ───────────────────────────────────
+  await request.put(`/api/orgs/${orgId}/config`, {
+    headers: { authorization: `Bearer ${token}`, 'content-type': 'application/json' },
+    data: before.config ?? {},
+  });
+});

@@ -33,3 +33,36 @@ export function formatDateOnly(value: string | null | undefined): string {
     year: "numeric",
   });
 }
+
+/**
+ * Parse a "YYYY-MM-DD" calendar date into a LOCAL Date (local midnight).
+ *
+ * `new Date("2026-09-12")` parses as UTC midnight, which lands on the
+ * PREVIOUS day in every UTC-negative timezone (i.e. all of the US) — so
+ * any calendar alignment (day cells, month grouping) or day-count done
+ * against a date-only column must use this helper. Timeline items with
+ * real times (ISO with time) keep using `new Date()`.
+ */
+export function parseDateOnly(value: string | null | undefined): Date | null {
+  if (!value) return null;
+  const m = /^(\d{4})-(\d{2})-(\d{2})/.exec(value);
+  if (m) {
+    const [, y, mo, d] = m;
+    const parsed = new Date(Number(y), Number(mo) - 1, Number(d));
+    if (!Number.isNaN(parsed.getTime())) return parsed;
+  }
+  const parsed = new Date(value);
+  return Number.isNaN(parsed.getTime()) ? null : parsed;
+}
+
+/**
+ * Whole calendar days from today (local) to a date-only string; negative
+ * when the date is past. DST-safe (compares y/m/d, not raw timestamps).
+ */
+export function daysUntilDateOnly(value: string | null | undefined): number | null {
+  const target = parseDateOnly(value);
+  if (!target) return null;
+  const now = new Date();
+  const utcDays = (d: Date) => Date.UTC(d.getFullYear(), d.getMonth(), d.getDate()) / 86_400_000;
+  return Math.round(utcDays(target) - utcDays(now));
+}

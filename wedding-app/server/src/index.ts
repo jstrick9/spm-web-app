@@ -103,6 +103,10 @@ export async function buildApp() {
   // Lightweight, dependency-free alternative to @fastify/helmet. CSP is
   // permissive enough for the Vite-built SPA (inline styles via Tailwind) but
   // blocks plugin/object embeds and frames. Tighten per deployment as needed.
+  // fonts.googleapis.com / fonts.gstatic.com are the Google Fonts CDN the
+  // ThemeProvider uses for VENUE-CUSTOM fonts (the default brand fonts are
+  // self-hosted in client/public/fonts); without these directives the
+  // custom-font picker silently fell back to system fonts.
   app.addHook('onSend', async (_req, reply, payload) => {
     reply.header('X-Content-Type-Options', 'nosniff');
     reply.header('X-Frame-Options', 'DENY');
@@ -113,7 +117,8 @@ export async function buildApp() {
       [
         "default-src 'self'",
         "img-src 'self' data: blob:",
-        "style-src 'self' 'unsafe-inline'",
+        "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
+        "font-src 'self' data: https://fonts.gstatic.com",
         "script-src 'self'",
         "connect-src 'self'",
         "frame-ancestors 'none'",

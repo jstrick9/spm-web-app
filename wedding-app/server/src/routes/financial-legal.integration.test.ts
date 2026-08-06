@@ -71,4 +71,38 @@ describe('financial/legal operations', () => {
     expect(list.json().financialLegal.paymentDueRisk.overdue).toBe(1);
     expect(list.json().financialLegal.paymentDueRisk.pendingCents).toBe(250000);
   });
+
+  it('due-date risk does not shift a day in US timezones (date-only parse regression)', async () => {
+    const prevTz = process.env.TZ;
+    process.env.TZ = 'America/New_York';
+    try {
+      const s = await setup();
+      const pad = (n: number) => String(n).padStart(2, '0');
+      const now = new Date();
+      const todayStr = `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())}`;
+      const tomorrow = new Date(now.getFullYear(), now.getMonth(), now.getDate() + 1);
+      const tomorrowStr = `${tomorrow.getFullYear()}-${pad(tomorrow.getMonth() + 1)}-${pad(tomorrow.getDate())}`;
+
+      // Due TODAY (must be 'due soon', NEVER overdue — the old UTC parse
+      // rolled 'YYYY-MM-DD' back a day and flagged it overdue) and due
+      // TOMORROW (must also be due soon, not overdue).
+      await req(s.token, 'POST', `/api/events/${s.eventId}/payments`, {
+        provider: 'manual', amountCents: 10000, metadata: { dueDate: todayStr, milestone: 'Due today' },
+      });
+      await req(s.token, 'POST', `/api/events/${s.eventId}/payments`, {
+        provider: 'manual', amountCents: 20000, metadata: { dueDate: tomorrowStr, milestone: 'Due tomorrow' },
+      });
+      // A genuinely past payment stays overdue.
+      await req(s.token, 'POST', `/api/events/${s.eventId}/payments`, {
+        provider: 'manual', amountCents: 30000, metadata: { dueDate: '2020-01-01', milestone: 'Past due' },
+      });
+
+      const list = await req(s.token, 'GET', `/api/events/${s.eventId}/financial-legal`);
+      const risk = list.json().financialLegal.paymentDueRisk;
+      expect(risk.overdue).toBe(1);
+      expect(risk.dueSoon).toBe(2);
+    } finally {
+      if (prevTz === undefined) delete process.env.TZ; else process.env.TZ = prevTz;
+    }
+  });
 });

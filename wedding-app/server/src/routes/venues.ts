@@ -6,6 +6,7 @@ import { venuesRepo, layoutsRepo, auditRepo, catalogRepo, eventsRepo } from '../
 import { BadRequest, Forbidden, NotFound } from '../lib/errors.js';
 import { saveDataUri, savePublicDocumentDataUri } from '../lib/fileStorage.js';
 import { db } from '../db/database.js';
+import { localDateString, addDaysFromToday } from '../lib/time.js';
 
 const venueSchema = z.object({
   name:          z.string().min(1).max(200),
@@ -60,7 +61,7 @@ export async function venueRoutes(app: FastifyInstance) {
 
   app.get('/api/orgs/:orgId/space-calendar', { preHandler: requireAuth }, async (req) => {
     const { orgId } = req.params as { orgId: string }; if (!can(req.auth!.memberships, { organizationId: orgId }, 'venues.view')) throw Forbidden();
-    const { startsAt, endsAt } = req.query as { startsAt?: string; endsAt?: string }; const start = startsAt || new Date().toISOString().slice(0, 10); const end = endsAt || new Date(Date.now() + 31 * 86400000).toISOString().slice(0, 10);
+    const { startsAt, endsAt } = req.query as { startsAt?: string; endsAt?: string }; const start = startsAt || localDateString(); const end = endsAt || addDaysFromToday(31);
     if (!/^\d{4}-\d{2}-\d{2}$/.test(start) || !/^\d{4}-\d{2}-\d{2}$/.test(end) || start > end) throw BadRequest('invalid-calendar-range');
     const spaces = venuesRepo.listForOrg(orgId).filter((venue) => venue.approval_status === 'approved').map((venue) => ({ id: venue.id, name: venue.name, capacity: venue.capacity, category: venue.category }));
     const commitments = db.prepare(`SELECT e.id, e.title, e.status, e.start_date, e.end_date, e.guest_count, e.venue_id, v.name AS venue_name, v.capacity AS venue_capacity FROM events e LEFT JOIN venues v ON v.id=e.venue_id WHERE e.organization_id=? AND e.deleted_at IS NULL AND e.start_date <= ? AND COALESCE(e.end_date, e.start_date) >= ? ORDER BY e.start_date`).all(orgId, end, start);

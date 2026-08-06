@@ -1,3 +1,4 @@
+import { parseDateOnly } from '../../../lib/formatDate';
 import React from 'react';
 import { format } from 'date-fns';
 
@@ -29,7 +30,7 @@ export function ContractPrintView({ contract, event, venueName }: Props) {
              <div>
                 <strong className="block text-xs uppercase tracking-wider text-gray-500 mb-1">Event Details</strong>
                 <div>Event: {event?.title || 'TBD'}</div>
-                <div>Date: {event?.start_date ? format(new Date(event.start_date), 'MMMM d, yyyy') : 'TBD'}</div>
+                <div>Date: {event?.start_date ? format(parseDateOnly(event.start_date) ?? new Date(0), 'MMMM d, yyyy') : 'TBD'}</div>
                 {contract.amountCents && <div>Contract Value: ${(contract.amountCents / 100).toLocaleString()}</div>}
              </div>
           </div>

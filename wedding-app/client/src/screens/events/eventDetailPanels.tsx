@@ -28,7 +28,7 @@ import {
   FileSpreadsheet,
 } from "lucide-react";
 import { sdk, downloadFile } from "../../sdk";
-import { formatDateOnly } from "../../lib/formatDate";
+import { formatDateOnly, daysUntilDateOnly } from "../../lib/formatDate";
 import { usePrompt } from "../../ui/usePrompt";
 import { AccessDenied } from "../../ui/AccessDenied";
 import { Badge } from "../../ui/Badge";
@@ -258,9 +258,7 @@ export function OverviewTab({
   const layoutReady = layouts.some(
     (layout: any) => layout.approval_status === "approved",
   );
-  const daysUntil = event.start_date
-    ? Math.ceil((new Date(event.start_date).getTime() - Date.now()) / 86400000)
-    : null;
+  const daysUntil = daysUntilDateOnly(event.start_date);
   const eventWeekMode =
     daysUntil !== null &&
     daysUntil >= 0 &&

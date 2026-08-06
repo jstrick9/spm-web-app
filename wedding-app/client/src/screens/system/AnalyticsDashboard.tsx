@@ -1,3 +1,4 @@
+import { parseDateOnly } from '../../lib/formatDate';
 import React, { useMemo } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { PageBody, PageHeader } from '../../ui/AppShell';
@@ -437,7 +438,7 @@ function RevenueChart({ events }: { events: any[] }) {
     for (const e of events) {
       if (!e.start_date || !e.budget_cents) continue;
       if (!['booked', 'planning', 'completed'].includes(e.status)) continue;
-      const d = new Date(e.start_date);
+      const d = parseDateOnly(e.start_date) ?? new Date(0);
       const key = d.toLocaleDateString(undefined, { month: 'short', year: '2-digit' });
       if (key in months) months[key] += e.budget_cents / 100;
     }

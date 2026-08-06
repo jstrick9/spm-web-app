@@ -29,6 +29,7 @@ import {
   integrationsRepo,
   auditRepo,
 } from '../db/repos/index.js';
+import { formatDateLong, localDateString } from '../lib/time.js';
 
 export type TriggerType = 'rsvp_reminder' | 'thank_you' | 'save_the_date' | 'manual';
 
@@ -65,20 +66,11 @@ function buildMergeFields(
   return {
     guest_name: guest.full_name,
     event_title: event.title,
-    event_date: event.start_date
-      ? new Date(event.start_date).toLocaleDateString('en-US', {
-          month: 'long',
-          day: 'numeric',
-          year: 'numeric',
-        })
-      : 'TBD',
-    rsvp_deadline: event.rsvp_deadline
-      ? new Date(event.rsvp_deadline).toLocaleDateString('en-US', {
-          month: 'long',
-          day: 'numeric',
-          year: 'numeric',
-        })
-      : '',
+    // Date-only values: formatDateLong parses 'YYYY-MM-DD' as a calendar
+    // date — `new Date('YYYY-MM-DD')` would render the PREVIOUS day in US
+    // timezones (guests would be told the wedding is a day early).
+    event_date: event.start_date ? formatDateLong(event.start_date) : 'TBD',
+    rsvp_deadline: event.rsvp_deadline ? formatDateLong(event.rsvp_deadline) : '',
     portal_link: `${process.env.BASE_URL ?? 'https://your-venue.com'}/#/portal/${event.organization_id}`,
     survey_link: `${process.env.BASE_URL ?? 'https://your-venue.com'}/#/survey/${event.id}`,
   };
@@ -131,7 +123,7 @@ export async function runTrigger(
 
   let scheduled = 0;
   let skipped = 0;
-  const today = new Date().toISOString().slice(0, 10); // YYYY-MM-DD idempotency key
+  const today = localDateString(); // YYYY-MM-DD idempotency key (LOCAL date: the old UTC date rolled over during US evenings, allowing duplicate reminder sends)
 
   for (const guest of guests) {
     // Skip if already sent for this (event + guest + trigger + day)

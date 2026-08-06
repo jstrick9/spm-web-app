@@ -6,6 +6,7 @@ import { can } from '../../lib/rbac.js';
 import { auditRepo, eventsRepo, guestsRepo, jobsRepo, rsvpRepo, portalConfigRepo, layoutsRepo, orgsRepo, guestIdentityRepo } from '../../db/repos/index.js';
 import { BadRequest, Forbidden, NotFound } from '../../lib/errors.js';
 import { hashPassword, verifyPassword, uuid } from '../../lib/crypto.js';
+import { localDateString, addDaysFromToday } from '../../lib/time.js';
 import { verifyCapabilitySecret } from '../../lib/capability.js';
 import { assertNoPublicHoneypot, auditPublicSubmission } from '../../lib/publicAbuse.js';
 import { db } from '../../db/database.js';
@@ -223,8 +224,11 @@ export function normalizeGuestPostEvent(
   event: any,
   extra: { galleryDocuments?: Array<{ id: string; filename: string; mimeType: string | null; url: string; notes: string | null }> } = {},
 ) {
-  const start = event.start_date ? new Date(event.start_date).getTime() : 0;
-  const afterEvent = start ? Date.now() >= start : false;
+  // Date-only comparison (lexicographic YYYY-MM-DD is calendar-correct and
+  // timezone-safe): `new Date('YYYY-MM-DD').getTime()` is UTC midnight, so
+  // in US timezones the post-event section used to unlock the EVENING
+  // BEFORE the wedding.
+  const afterEvent = event.start_date ? localDateString() >= event.start_date : false;
   const linksRaw = Array.isArray(portalConfig.memoryPhotoLinks) ? portalConfig.memoryPhotoLinks : Array.isArray(metadata.memoryPhotoLinks) ? metadata.memoryPhotoLinks : [];
   const links = linksRaw.map((link: any, index: number) => ({ id: String(link.id || `memory-${index}`), label: String(link.label || link.title || `Memory link ${index + 1}`), url: String(link.url || ''), description: String(link.description || '') })).filter((link: any) => /^https?:\/\//i.test(link.url));
   if (portalConfig.memoryShareUrl || metadata.memoryShareUrl) links.push({ id: 'memory-share', label: 'Memory/photo sharing link', url: String(portalConfig.memoryShareUrl || metadata.memoryShareUrl), description: '' });
@@ -479,9 +483,9 @@ export function activeSmsIntegrationId(organizationId: string) {
 }
 
 export function addDaysIso(days: number) {
-  const d = new Date();
-  d.setDate(d.getDate() + days);
-  return d.toISOString().slice(0, 10);
+  // Local calendar arithmetic: the old UTC-slice version produced
+  // tomorrow+N during US evening hours (SLA deadlines landed a day late).
+  return addDaysFromToday(days);
 }
 
 import { icsText } from '../../lib/ics.js';
@@ -584,7 +588,7 @@ export function safeGuestHelpRequest(row: any) {
     assignedTo: row.assigned_to,
     resolutionNote: row.resolution_note,
     slaDueAt: row.sla_due_at,
-    slaStatus: row.status === 'resolved' || row.status === 'closed' ? 'closed' : row.sla_due_at && row.sla_due_at < new Date().toISOString().slice(0, 10) ? 'overdue' : row.sla_due_at ? 'on_track' : 'unset',
+    slaStatus: row.status === 'resolved' || row.status === 'closed' ? 'closed' : row.sla_due_at && row.sla_due_at < localDateString() ? 'overdue' : row.sla_due_at ? 'on_track' : 'unset',
     lastReplyAt: row.last_reply_at,
     lastReplyChannel: row.last_reply_channel,
     lastReplyJobId: row.last_reply_job_id,

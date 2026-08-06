@@ -8,6 +8,7 @@ import { createReadStream, existsSync } from 'node:fs';
 import { db } from '../../db/database.js';
 import { uuid } from '../../lib/crypto.js';
 import { BadRequest, Forbidden, NotFound } from '../../lib/errors.js';
+import { localDateString, addDaysFromToday } from '../../lib/time.js';
 
 export const createRequestSchema = z.object({
   requestType: z.enum(['partner_invite', 'planner_request', 'account_recovery', 'identity_verification','venue_question','event_change_request','guest_portal_update','rsvp_reminder_request']),
@@ -568,22 +569,23 @@ export function couplePostEventSummary(input: {
 }
 
 export function addYears(date: string, years: number) {
-  const d = new Date(`${date}T12:00:00`);
+  const m = /^(\d{4})-(\d{2})-(\d{2})/.exec(date);
+  if (!m) return null;
+  const d = new Date(Number(m[1]) + years, Number(m[2]) - 1, Number(m[3]));
   if (Number.isNaN(d.getTime())) return null;
-  d.setFullYear(d.getFullYear() + years);
-  return d.toISOString().slice(0, 10);
+  return localDateString(d);
 }
 
 
 export function addDaysIso(days: number) {
-  const d = new Date();
-  d.setDate(d.getDate() + days);
-  return d.toISOString().slice(0, 10);
+  // Local calendar arithmetic — the old UTC-slice version shifted by one
+  // day during US evening hours.
+  return addDaysFromToday(days);
 }
 
 export function enrichPostEventRequest(request: ReturnType<typeof safeRequest>) {
   const metadata = request.metadata as Record<string, any>;
-  const today = new Date().toISOString().slice(0, 10);
+  const today = localDateString();
   const slaDueAt = metadata.slaDueAt || null;
   return {
     ...request,
@@ -613,7 +615,7 @@ export function coupleReminderItems(input: {
   documents: ReturnType<typeof coupleDocumentsRepo.listForEvent>;
   appointments: ReturnType<typeof coupleAppointmentsRepo.listForEvent>;
 }) {
-  const today = new Date().toISOString().slice(0, 10);
+  const today = localDateString();
   const rsvpDeadline = input.event?.rsvp_deadline || (() => { try { return JSON.parse(input.event?.metadata || '{}').rsvpDeadline; } catch { return null; } })();
   const pendingGuests = input.guests.filter((g) => g.rsvp_status === 'pending').length;
   const reminders: Array<{ key: string; title: string; body: string; dueAt: string | null; priority: 'high' | 'medium' | 'low'; channel: 'in_app' | 'email' | 'sms' | 'digest'; recipientRole: 'couple' | 'partner' | 'planner' }> = [];

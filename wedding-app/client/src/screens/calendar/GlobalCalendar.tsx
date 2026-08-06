@@ -2,6 +2,7 @@ import React, { useState, useMemo } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { Calendar as CalendarIcon, ChevronLeft, ChevronRight, LayoutGrid, List } from 'lucide-react';
 import { format, addMonths, subMonths, startOfMonth, endOfMonth, eachDayOfInterval, isSameMonth, isSameDay, isToday } from 'date-fns';
+import { parseDateOnly } from '../../lib/formatDate';
 import { sdk } from '../../sdk';
 import { PageBody, PageHeader } from '../../ui/AppShell';
 import { Button } from '../../ui/Button';
@@ -90,7 +91,7 @@ export function GlobalCalendar({ orgId }: Props) {
             ) : (
               days.map((day, i) => {
                 const isCurrentMonth = isSameMonth(day, currentDate);
-                const dayEvents = events.filter(e => e.start_date && isSameDay(new Date(e.start_date), day));
+                const dayEvents = events.filter(e => e.start_date && isSameDay(parseDateOnly(e.start_date) ?? new Date(0), day));
                 
                 return (
                   <div 

@@ -104,15 +104,22 @@ function findShiftConflict(orgId: string, staffId: string, startsAt: string, end
 
 /** MODULE-05: availability-window enforcement shared by create + update. */
 function checkAvailabilityWindow(orgId: string, staffId: string, startsAt: string, endsAt: string, overrideReason?: string) {
+  // Shifts arrive as LOCAL (naive) datetimes from the client and
+  // availability slots are LOCAL wall-clock ('HH:MM' + local weekday).
+  // Comparing via UTC getters (getUTCDay / toISOString) shifted every US
+  // shift by UTC offset — a 9am-5pm shift exactly matching the Monday slot
+  // was rejected as "outside availability". Use local calendar components.
   const start = new Date(startsAt);
   const end = new Date(endsAt);
-  const day = start.getUTCDay();
-  const startTime = start.toISOString().slice(11, 16);
-  const endTime = end.toISOString().slice(11, 16);
+  const pad = (n: number) => String(n).padStart(2, '0');
+  const day = start.getDay();
+  const startTime = `${pad(start.getHours())}:${pad(start.getMinutes())}`;
+  const endTime = `${pad(end.getHours())}:${pad(end.getMinutes())}`;
+  const sameLocalDay = start.toDateString() === end.toDateString();
   const availability = db.prepare(
     `SELECT starts_at, ends_at FROM staff_weekly_availability WHERE organization_id=? AND staff_id=? AND day_of_week=?`,
   ).all(orgId, staffId, day) as Array<{ starts_at: string; ends_at: string }>;
-  const withinAvailability = availability.some((slot) => startTime >= slot.starts_at && endTime <= slot.ends_at && start.toISOString().slice(0, 10) === end.toISOString().slice(0, 10));
+  const withinAvailability = availability.some((slot) => startTime >= slot.starts_at && endTime <= slot.ends_at && sameLocalDay);
   if (availability.length > 0 && !withinAvailability && !overrideReason?.trim()) {
     throw BadRequest('staff-availability-override-required', { staffId, dayOfWeek: day, startTime, endTime });
   }

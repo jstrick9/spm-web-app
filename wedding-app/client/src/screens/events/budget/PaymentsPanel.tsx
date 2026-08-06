@@ -23,6 +23,7 @@ import { StatCard } from '../../../ui/StatCard';
 import { DataTable, type Column } from '../../../ui/DataTable';
 import { useToast } from '../../../ui/Toast';
 import { usePermission } from '../../../lib/usePermission';
+import { parseDateOnly, daysUntilDateOnly } from '../../../lib/formatDate';
 import { cn } from '../../../ui/lib/cn';
 import {
   Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle, DialogTrigger,
@@ -273,12 +274,11 @@ export function PaymentsPanel({ eventId }: Props) {
         const dueDateStr = meta.dueDate;
         let isOverdueOrUrgent = false;
         if (dueDateStr && p.status !== 'completed' && p.status !== 'refunded') {
-          const due = new Date(dueDateStr);
-          due.setHours(0,0,0,0);
-          const today = new Date();
-          today.setHours(0,0,0,0);
-          const diffDays = Math.ceil((due.getTime() - today.getTime()) / (1000 * 60 * 60 * 24));
-          if (diffDays <= 7) {
+          // dueDate is date-only ('YYYY-MM-DD'); daysUntilDateOnly is
+          // timezone/DST-safe (raw `new Date('YYYY-MM-DD')` shifts a day in
+          // US timezones and mislabels due/overdue payments).
+          const diffDays = daysUntilDateOnly(dueDateStr);
+          if (diffDays !== null && diffDays <= 7) {
             isOverdueOrUrgent = true;
           }
         }
@@ -299,14 +299,10 @@ export function PaymentsPanel({ eventId }: Props) {
         const meta = typeof p.metadata === 'string' ? JSON.parse(p.metadata || '{}') : (p.metadata || {});
         const dueDateStr = meta.dueDate;
         if (!dueDateStr) return <span className="text-fg-subtle text-xs">—</span>;
-        
-        const due = new Date(dueDateStr);
-        due.setHours(0,0,0,0);
-        const today = new Date();
-        today.setHours(0,0,0,0);
-        const diffDays = Math.ceil((due.getTime() - today.getTime()) / (1000 * 60 * 60 * 24));
-        const isOverdue = diffDays < 0;
-        const isUrgent = diffDays >= 0 && diffDays <= 7;
+
+        const diffDays = daysUntilDateOnly(dueDateStr);
+        const isOverdue = diffDays !== null && diffDays < 0;
+        const isUrgent = diffDays !== null && diffDays >= 0 && diffDays <= 7;
         const finalized = p.status === 'completed' || p.status === 'refunded';
 
         return (
@@ -314,7 +310,7 @@ export function PaymentsPanel({ eventId }: Props) {
             "text-xs font-semibold",
             !finalized && isOverdue ? "text-danger font-black" : (!finalized && isUrgent ? "text-amber-600 font-bold" : "text-fg-subtle")
           )}>
-            {new Date(dueDateStr).toLocaleDateString()}
+            {parseDateOnly(dueDateStr)?.toLocaleDateString() ?? dueDateStr}
             {!finalized && isOverdue && " (Overdue)"}
             {!finalized && isUrgent && " (Due soon)"}
           </span>

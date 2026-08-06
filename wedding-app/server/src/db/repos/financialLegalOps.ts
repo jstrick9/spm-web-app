@@ -111,9 +111,15 @@ export const financialLegalOpsRepo = {
       let meta: any = {};
       try { meta = JSON.parse(payment.metadata || '{}'); } catch {}
       if (!meta.dueDate) continue;
-      const due = new Date(meta.dueDate);
-      due.setHours(0, 0, 0, 0);
-      const diffDays = Math.ceil((due.getTime() - now.getTime()) / 86_400_000);
+      // meta.dueDate is a date-only 'YYYY-MM-DD' value; `new Date('YYYY-MM-DD')`
+      // parses as UTC midnight and lands on the PREVIOUS day in every US
+      // timezone — a payment due TODAY would be flagged overdue a day early.
+      // Compare calendar-date components instead (DST- and timezone-safe).
+      const [y, m, d] = String(meta.dueDate).split('-').map(Number);
+      if (!y || !m || !d) continue;
+      const dueDays = Date.UTC(y, m - 1, d) / 86_400_000;
+      const todayDays = Date.UTC(now.getFullYear(), now.getMonth(), now.getDate()) / 86_400_000;
+      const diffDays = Math.round(dueDays - todayDays);
       if (diffDays < 0) overdue += 1;
       else if (diffDays <= 7) dueSoon += 1;
     }
