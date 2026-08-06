@@ -233,6 +233,18 @@ export function CoupleEventHub({ eventId }: { eventId: string }) {
   const importPreviewMutation = useMutation({
     mutationFn: () => sdk.couple.importPreview(eventId, importCsv),
   });
+  const importGuestsMutation = useMutation({
+    mutationFn: () => sdk.couple.importGuests(eventId, importCsv),
+    onSuccess: (result) => {
+      qc.invalidateQueries({ queryKey: ['couple-guests', eventId] });
+      toast({
+        title: result.imported > 0 ? `${result.imported} guests imported` : 'No new guests imported',
+        description: result.skipped > 0 ? `${result.skipped} row(s) skipped (duplicates or missing names).` : 'Your guest list is up to date.',
+        variant: 'success',
+      });
+    },
+    onError: (err: any) => toast({ title: 'Could not import guests', description: err?.message || 'Please try again.', variant: 'destructive' }),
+  });
   const portalUpdateMutation = useMutation({
     mutationFn: () => sdk.couple.requestGuestPortalUpdate(eventId, { config: portalDraft, note: 'Couple requested guest RSVP portal content updates before launch.' }),
     onSuccess: () => { qc.invalidateQueries({ queryKey: ['couple-guest-portal', eventId] }); qc.invalidateQueries({ queryKey: ['couple-requests', eventId] }); toast({ title: 'Guest portal update sent for venue approval', variant: 'success' }); },
@@ -798,8 +810,8 @@ export function CoupleEventHub({ eventId }: { eventId: string }) {
               </CardContent>
             </Card>
             <Card>
-              <CardHeader><CardTitle className="text-base">Guest import concierge</CardTitle><CardDescription>Preview only — validates spreadsheet cleanup before saving anything.</CardDescription></CardHeader>
-              <CardContent className="space-y-3"><textarea value={importCsv} onChange={(e) => setImportCsv(e.target.value)} className="min-h-32 w-full rounded-md border border-border bg-surface p-2 text-xs font-mono" /><Button size="sm" variant="outline" onClick={() => importPreviewMutation.mutate()} isLoading={importPreviewMutation.isPending}>Preview import</Button>{importPreviewMutation.data && <div className="rounded-lg border border-border bg-surface-2 p-3 text-xs"><p><strong>{importPreviewMutation.data.rowCount}</strong> rows detected. Nothing saved yet.</p><p>Warnings: {importPreviewMutation.data.warnings.join(' · ') || 'none'}</p><p>Duplicate signals: {importPreviewMutation.data.duplicateSignals.join(', ') || 'none'}</p><p>Household suggestions: {importPreviewMutation.data.householdSuggestions.join(', ') || 'none'}</p></div>}<a className="text-xs font-bold text-brand underline" href={`/api/events/${eventId}/couple-guests/export.csv`} onClick={(e) => { e.preventDefault(); downloadAuth(`/api/events/${eventId}/couple-guests/export.csv`, 'couple-guests.csv'); }}>Download privacy-safe guest CSV</a><div className="rounded-lg border border-border bg-surface-2 p-3 text-xs text-fg-muted"><strong>Communication preview:</strong> RSVP reminders should mention deadline {rsvpDeadline || 'TBD'}, guest name, RSVP link, meal/accessibility reminder, and venue support contact before sending.</div></CardContent>
+              <CardHeader><CardTitle className="text-base">Guest import concierge</CardTitle><CardDescription>Paste your spreadsheet, preview the cleanup, then import the guest list in one click.</CardDescription></CardHeader>
+              <CardContent className="space-y-3"><textarea value={importCsv} onChange={(e) => { setImportCsv(e.target.value); importGuestsMutation.reset(); }} aria-label="Guest list CSV" className="min-h-32 w-full rounded-md border border-border bg-surface p-2 text-xs font-mono" /><div className="flex flex-wrap items-center gap-2"><Button size="sm" variant="outline" onClick={() => importPreviewMutation.mutate()} isLoading={importPreviewMutation.isPending}>Preview import</Button>{importPreviewMutation.data && <Button size="sm" onClick={() => importGuestsMutation.mutate()} isLoading={importGuestsMutation.isPending} disabled={importGuestsMutation.isSuccess || importPreviewMutation.data.rowCount === 0}>{importGuestsMutation.isSuccess ? `Imported ${importGuestsMutation.data?.imported ?? 0} guest(s)` : `Import ${importPreviewMutation.data.rowCount} guest(s)`}</Button>}</div>{importPreviewMutation.data && <div className="rounded-lg border border-border bg-surface-2 p-3 text-xs"><p><strong>{importPreviewMutation.data.rowCount}</strong> rows detected. Nothing saved yet.</p><p>Warnings: {importPreviewMutation.data.warnings.join(' · ') || 'none'}</p><p>Duplicate signals: {importPreviewMutation.data.duplicateSignals.join(', ') || 'none'}</p><p>Household suggestions: {importPreviewMutation.data.householdSuggestions.join(', ') || 'none'}</p>{importGuestsMutation.data?.skipped ? <p className="mt-1 text-warning">Skipped {importGuestsMutation.data.skipped} row(s) — duplicate emails/names or missing names.</p> : null}</div>}<a className="text-xs font-bold text-brand underline" href={`/api/events/${eventId}/couple-guests/export.csv`} onClick={(e) => { e.preventDefault(); downloadAuth(`/api/events/${eventId}/couple-guests/export.csv`, 'couple-guests.csv'); }}>Download privacy-safe guest CSV</a><div className="rounded-lg border border-border bg-surface-2 p-3 text-xs text-fg-muted"><strong>Communication preview:</strong> RSVP reminders should mention deadline {rsvpDeadline || 'TBD'}, guest name, RSVP link, meal/accessibility reminder, and venue support contact before sending.</div></CardContent>
             </Card>
           </div>
 

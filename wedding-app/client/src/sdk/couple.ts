@@ -504,6 +504,9 @@ export const coupleSdk = {
   importPreview(eventId: string, csv: string): Promise<{ rowCount: number; headers: string[]; warnings: string[]; duplicateSignals: string[]; householdSuggestions: string[]; willSave: boolean }> {
     return api.post(`/api/events/${eventId}/couple-guests/import-preview`, { csv });
   },
+  importGuests(eventId: string, csv: string): Promise<{ imported: number; skipped: number; warnings: string[]; duplicateSignals: string[] }> {
+    return api.post(`/api/events/${eventId}/couple-guests/import`, { csv });
+  },
   planning(eventId: string): Promise<{ tasks: CouplePlanningTask[]; template: { packageKey: string; cultureKey: string; source: string } }> {
     return api.get(`/api/events/${eventId}/couple-planning`);
   },

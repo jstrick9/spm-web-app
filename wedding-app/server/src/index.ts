@@ -142,6 +142,12 @@ export async function buildApp() {
     max: 300,
     timeWindow: '1 minute',
     allowList: (req: { ip: string; url: string }) => {
+      // E2E harnesses (Playwright suites) share one IP and hammer auth
+      // endpoints (register 5/min, login 30/min) across many tests — they
+      // self-DoS with 429s. The bypass is an EXPLICIT opt-in env var the
+      // harness sets; production deployments never set it. The rate-limiter
+      // itself stays covered by integration tests using non-allowlisted IPs.
+      if (process.env.E2E_RATE_LIMIT_BYPASS === '1') return true;
       if (process.env.NODE_ENV === 'test' && (req.ip === '127.0.0.1' || req.ip === '::1')) return true;
       const path = req.url.split('?')[0];
       return !path.startsWith('/api/');

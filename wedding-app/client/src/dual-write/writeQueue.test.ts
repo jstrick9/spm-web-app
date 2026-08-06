@@ -49,6 +49,68 @@ describe('drain', () => {
     expect(size()).toBe(2);   // neither was removed
   });
 
+  it('offline failure schedules an automatic retry (no server-reachable event needed)', async () => {
+    vi.useFakeTimers();
+    try {
+      const calls: string[] = [];
+      registerExecutor('events', 'create', async () => {
+        calls.push('attempt');
+        if (calls.length === 1) throw new ApiError('offline', 0, 'network-error');
+      });
+      enqueue({ domain: 'events', op: 'create', payload: {} });
+      await drain();
+      expect(calls).toEqual(['attempt']);   // first attempt failed
+      expect(size()).toBe(1);               // write kept
+
+      // Backoff elapses → the retry timer drains automatically and succeeds.
+      await vi.advanceTimersByTimeAsync(10_000);
+      expect(calls).toEqual(['attempt', 'attempt']);
+      expect(size()).toBe(0);               // replayed and removed
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('offline retry backoff grows with attempts', async () => {
+    vi.useFakeTimers();
+    try {
+      const calls: string[] = [];
+      registerExecutor('events', 'create', async () => {
+        calls.push('attempt');
+        throw new ApiError('offline', 0, 'network-error');
+      });
+      enqueue({ domain: 'events', op: 'create', payload: {} });
+      await drain();                        // attempt 1 at t=0
+      await vi.advanceTimersByTimeAsync(2_000);  // retry 1 at ~t=2s
+      expect(calls.length).toBe(2);
+      await vi.advanceTimersByTimeAsync(3_999);  // retry 2 not yet (4s backoff)
+      expect(calls.length).toBe(2);
+      await vi.advanceTimersByTimeAsync(1);      // t=6s → retry 2
+      expect(calls.length).toBe(3);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('transient 5xx schedules an automatic retry too', async () => {
+    vi.useFakeTimers();
+    try {
+      const calls: string[] = [];
+      registerExecutor('events', 'create', async () => {
+        calls.push('attempt');
+        if (calls.length === 1) throw new ApiError('server', 500, 'internal-error');
+      });
+      enqueue({ domain: 'events', op: 'create', payload: {} });
+      await drain();
+      expect(size()).toBe(1);
+      await vi.advanceTimersByTimeAsync(10_000);
+      expect(calls).toEqual(['attempt', 'attempt']);
+      expect(size()).toBe(0);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
   it('on conflict: drops the write and emits replay-conflict', async () => {
     const events: string[] = [];
     const unsub = subscribeQueue((e) => events.push(e.kind));

@@ -2,7 +2,7 @@ import { sanitizeNotificationUrl } from './lib/swUrl';
 import { clientsClaim } from 'workbox-core';
 import { precacheAndRoute, cleanupOutdatedCaches } from 'workbox-precaching';
 import { registerRoute } from 'workbox-routing';
-import { NetworkFirst, CacheFirst } from 'workbox-strategies';
+import { NetworkFirst } from 'workbox-strategies';
 import { ExpirationPlugin } from 'workbox-expiration';
 import { BackgroundSyncPlugin } from 'workbox-background-sync';
 
@@ -14,21 +14,7 @@ precacheAndRoute(self.__WB_MANIFEST || []);
 self.skipWaiting();
 clientsClaim();
 
-// 1. Static Assets Cache (Google Fonts)
-registerRoute(
-  /^https:\/\/(fonts\.googleapis\.com|fonts\.gstatic\.com)\/.*/i,
-  new CacheFirst({
-    cacheName: 'google-fonts',
-    plugins: [
-      new ExpirationPlugin({
-        maxEntries: 20,
-        maxAgeSeconds: 60 * 60 * 24 * 365, // 1 year
-      }),
-    ],
-  })
-);
-
-// 2. Network First for Public Portal READ APIs (Offline Fallback)
+// 1. Network First for Public Portal READ APIs (Offline Fallback)
 // GET-only: POST endpoints (RSVP submit, help requests, privacy requests,
 // memory submissions, guest feedback) must reach the server and are handled
 // by the app's own offline write queue — never intercepted or cached here.
@@ -47,7 +33,7 @@ registerRoute(
   'GET'
 );
 
-// 3. BACKGROUND SYNC (staff task updates)
+// 2. BACKGROUND SYNC (staff task updates)
 // Staff-task PATCHes are queued by the service worker when the network is
 // down. NOTE: vendor check-ins are deliberately NOT routed here — the app's
 // own persistent write queue (dual-write/writeQueue.ts) owns those, because
@@ -83,7 +69,7 @@ registerRoute(
 );
 
 
-// 4. PUSH NOTIFICATIONS API
+// 3. PUSH NOTIFICATIONS API
 self.addEventListener('push', (event: any) => {
   if (!event.data) return;
   

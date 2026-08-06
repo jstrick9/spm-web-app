@@ -48,7 +48,7 @@ test('owner can log in and create a wedding event', async ({ page, request }) =>
 
   // Authenticated shell: the dashboard is reachable (proves the session
   // bootstrapped and the app shell mounted).
-  await expect(page.locator('body')).toContainText(/good evening/i, { timeout: 20_000 });
+  await expect(page.locator('body')).toContainText(/good (morning|afternoon|evening)/i, { timeout: 20_000 });
 
   // ── 2. Dismiss the onboarding welcome tour (auto-opens for the seeded
   // owner AFTER the dashboard settles — wait for it first; "Resume later"

@@ -76,7 +76,7 @@ test('offline check-in write survives and replays on reconnect', async ({ page, 
   await page.getByLabel(/email address/i).fill('owner@demo.local');
   await page.getByLabel(/^password$/i).fill('wedding123');
   await page.getByRole('button', { name: /sign in securely/i }).click();
-  await expect(page.locator('body')).toContainText(/good evening/i, { timeout: 20_000 });
+  await expect(page.locator('body')).toContainText(/good (morning|afternoon|evening)/i, { timeout: 20_000 });
 
   // ── 2. Open the check-in board online ────────────────────────────────
   await page.goto(`/#/events/${eventId}/check-in`);
@@ -110,8 +110,13 @@ test('offline check-in write survives and replays on reconnect', async ({ page, 
   expect(write.payload.eventId).toBe(eventId);
 
   // ── 6. Connectivity returns; reload like a reconnected tablet ────────
+  // Use page.reload() — page.goto(sameUrl) can silently no-op under the
+  // service worker, which would leave the old document (and its undrained
+  // queue) running. waitUntil 'domcontentloaded': the SW-controlled build
+  // can delay `load`; the queue auto-drains on DOM ready and the assertions
+  // below poll the server API, so `load` is not required.
   await page.unroute('**/api/events/*/checkins');
-  await page.reload({ timeout: 30_000 });
+  await page.reload({ waitUntil: 'domcontentloaded', timeout: 30_000 });
 
   // ── 7. The queue drains automatically → server now shows 'arrived' ───
   await expect

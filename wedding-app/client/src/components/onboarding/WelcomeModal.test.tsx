@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { render, screen, fireEvent } from '@testing-library/react';
+import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import { WelcomeModal } from './WelcomeModal';
 import { ToastProvider } from '../../ui/Toast';
 
@@ -73,5 +73,57 @@ describe('WelcomeModal', () => {
     });
 
     expect(screen.queryByText('Start with your venue setup')).not.toBeInTheDocument();
+  });
+
+  it('closes the tour when the completed config arrives AFTER mount (async load race)', async () => {
+    // userConfig loads asynchronously; the first render sees an empty config
+    // and opens the tour. When the real (completed) config arrives the modal
+    // must close — otherwise users who finished the tour see it re-open on
+    // slow loads.
+    const { rerender } = renderWelcome('owner');
+    expect(await screen.findByText('Start with your venue setup')).toBeInTheDocument();
+
+    rerender(
+      <ToastProvider>
+        <WelcomeModal
+          memberships={[{ roleKey: 'owner' } as any]}
+          orgId="org-1"
+          userConfig={{
+            onboarding: {
+              welcomeTourByOrg: {
+                'org-1': { status: 'completed', currentSlide: 6, completedSlides: [] },
+              },
+            },
+          } as any}
+          onComplete={vi.fn()}
+        />
+      </ToastProvider>,
+    );
+
+    await waitFor(() => expect(screen.queryByText('Start with your venue setup')).not.toBeInTheDocument());
+  });
+
+  it('closes the tour when a dismissed config arrives after mount', async () => {
+    const { rerender } = renderWelcome('owner');
+    expect(await screen.findByText('Start with your venue setup')).toBeInTheDocument();
+
+    rerender(
+      <ToastProvider>
+        <WelcomeModal
+          memberships={[{ roleKey: 'owner' } as any]}
+          orgId="org-1"
+          userConfig={{
+            onboarding: {
+              welcomeTourByOrg: {
+                'org-1': { status: 'dismissed', currentSlide: 0, completedSlides: [] },
+              },
+            },
+          } as any}
+          onComplete={vi.fn()}
+        />
+      </ToastProvider>,
+    );
+
+    await waitFor(() => expect(screen.queryByText('Start with your venue setup')).not.toBeInTheDocument());
   });
 });

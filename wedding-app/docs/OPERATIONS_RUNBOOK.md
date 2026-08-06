@@ -89,9 +89,11 @@ credential.
 
 After 5 failed logins an account is locked for `LOGIN_LOCKOUT_MS`
 (default 300000 = 5 minutes; set in `.env`). Login is also rate-limited to
-10/min per IP. To unlock an account immediately (support action): clear
-`failed_login_count` and `locked_until` on the user row, or wait out the
-window.
+30/min per IP (registration 5/min). To unlock an account immediately
+(support action): clear `failed_login_count` and `locked_until` on the user
+row, or wait out the window. E2E/CI harnesses that share one IP should set
+`E2E_RATE_LIMIT_BYPASS=1` on the server process — an explicit opt-in that is
+never set in production deployments.
 
 ## Deployment gate
 

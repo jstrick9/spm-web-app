@@ -19,24 +19,14 @@
     <meta name="apple-mobile-web-app-title" content="WVI Platform">
 
 
-    <!-- Fonts: preconnect for perf -->
-    <link rel="preconnect" href="https://fonts.googleapis.com">
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link
-      href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Fraunces:opsz,wght@9..144,400;9..144,500;9..144,700&family=JetBrains+Mono:wght@400;500&display=swap"
-      rel="stylesheet"
-    >
+    <!-- Fonts: self-hosted (same-origin) — the server CSP (style-src 'self')
+         blocks Google Fonts, and self-hosting keeps the PWA offline-capable
+         and precacheable. -->
+    <link rel="stylesheet" href="/fonts/fonts.css">
 
-    <!-- Prevent flash of incorrect theme: read preference before paint -->
-    <script>
-      (function () {
-        try {
-          var pref = localStorage.getItem('wedding.theme');
-          var dark = pref === 'dark' || (!pref && window.matchMedia('(prefers-color-scheme: dark)').matches);
-          if (dark) document.documentElement.classList.add('dark');
-        } catch (_) { /* private mode */ }
-      })();
-    </script>
+    <!-- Prevent flash of incorrect theme: read preference before paint.
+         External file on purpose: CSP script-src 'self' blocks inline scripts. -->
+    <script src="/theme-init.js"></script>
   </head>
   <body>
     <div id="root"></div>

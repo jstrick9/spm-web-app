@@ -84,6 +84,20 @@ describe('Push subscription endpoints', () => {
     expect(r2.json().subscription.id).toBe(r1.json().subscription.id);
   });
 
+  it('POST /api/push/subscribe rejects subscribing to an org you are not a member of', async () => {
+    const owner = await register();
+    const outsider = await register();
+    const res = await req(outsider.token, 'POST', '/api/push/subscribe', {
+      endpoint: 'https://fcm.googleapis.com/fcm/send/cross-org-probe',
+      keys: { p256dh: 'k', auth: 'a' },
+      organizationId: owner.orgId,
+    });
+    // Cross-org subscription is a notification-spam / PII-leak vector: an
+    // outsider must never be able to register a device against an org they
+    // are not a member of.
+    expect(res.statusCode).toBe(403);
+  });
+
   it('GET /api/push/subscriptions lists user subscriptions', async () => {
     const u = await register();
     await req(u.token, 'POST', '/api/push/subscribe', {

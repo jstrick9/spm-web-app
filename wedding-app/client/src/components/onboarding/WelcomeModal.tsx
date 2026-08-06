@@ -306,10 +306,17 @@ export function WelcomeModal({ memberships, orgId, userConfig, onUserConfigChang
   useEffect(() => {
     if (!orgId || slides.length === 0) return;
     const status = storedState?.status ?? 'not_started';
-    if (status !== 'completed' && status !== 'dismissed') {
-      setSlide(Math.min(storedState?.currentSlide ?? 0, slides.length - 1));
-      setOpen(true);
+    if (status === 'completed' || status === 'dismissed') {
+      // The user already finished/dismissed the tour. IMPORTANT: userConfig
+      // loads async — the first effect run can see status 'not_started'
+      // (empty config) and open the modal; when the real config arrives we
+      // MUST close it again. Without this, users who completed the tour see
+      // it re-open on slow loads (and e2e suites flake on the modal).
+      setOpen(false);
+      return;
     }
+    setSlide(Math.min(storedState?.currentSlide ?? 0, slides.length - 1));
+    setOpen(true);
   }, [orgId, slides.length, storedState?.status, storedState?.currentSlide]);
 
   useEffect(() => {

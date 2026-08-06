@@ -170,14 +170,103 @@ export async function coupleGuestsRoutes(app: FastifyInstance) {
     if (!headers.includes('mailingaddress')) warnings.push('Mailing address column is recommended for invitations/save-the-dates.');
     const seenNames = new Set<string>();
     const duplicates: string[] = [];
+    const existingEmails = new Set(existing.map((g) => String(g.email || '').toLowerCase()).filter(Boolean));
+    const existingNames = new Set(existing.map((g) => g.fullName.toLowerCase()));
     rows.forEach((row) => {
       const name = row[headers.indexOf('fullname')]?.toLowerCase();
       const email = row[headers.indexOf('email')]?.toLowerCase();
       if (name && seenNames.has(name)) duplicates.push(name);
       if (name) seenNames.add(name);
-      if (email && existing.some((g) => String(g.email || '').toLowerCase() === email)) duplicates.push(email);
+      if (email && existingEmails.has(email)) duplicates.push(email);
+      // Fallback key for rows without an email (matches the import route).
+      if (!email && name && existingNames.has(name)) duplicates.push(name);
     });
     return { rowCount: rows.length, headers, warnings, duplicateSignals: Array.from(new Set(duplicates)).slice(0, 25), householdSuggestions: rows.map((row) => row[headers.indexOf('householdname')] || row[headers.indexOf('partyname')]).filter(Boolean).slice(0, 25), willSave: false };
+  });
+
+  // ─── Bulk guest import (the other half of import-preview) ───────────
+  // The preview endpoint analyzes a CSV but never saves; this endpoint
+  // performs the actual import with the same parsing + dedupe rules, so a
+  // couple can paste their spreadsheet and get real guests out of it.
+  app.post('/api/events/:eventId/couple-guests/import', { preHandler: requireAuth }, async (req, reply) => {
+    const { eventId } = req.params as { eventId: string };
+    const event = eventsRepo.findById(eventId);
+    if (!event) throw NotFound('event-not-found');
+    const orgMap = eventsRepo.orgMapForUser(req.auth!.userId);
+    if (!can(req.auth!.memberships, { eventId }, 'events.view', orgMap)) throw Forbidden();
+    const parsed = importPreviewSchema.safeParse(req.body);
+    if (!parsed.success) throw BadRequest('invalid-input', parsed.error.issues);
+    const lines = parsed.data.csv.trim().split(/\r?\n/).filter(Boolean);
+    if (lines.length > 2001) throw BadRequest('too-many-rows', 'Import is limited to 2,000 guest rows.');
+    const headers = lines[0] ? parseCsvLine(lines[0]).map((h) => h.toLowerCase().replace(/\s+/g, '')) : [];
+    const rows = lines.slice(1).map(parseCsvLine);
+    const nameIdx = headers.indexOf('fullname');
+    if (nameIdx === -1) throw BadRequest('missing-fullname-column', 'The CSV needs a "Full Name" column.');
+    const emailIdx = headers.indexOf('email');
+    const phoneIdx = headers.indexOf('phone');
+    const householdIdx = Math.max(headers.indexOf('householdname'), headers.indexOf('partyname'));
+    const addressIdx = headers.indexOf('mailingaddress');
+    const rsvpIdx = headers.indexOf('rsvpstatus');
+    const mealIdx = headers.indexOf('mealchoice');
+    const tagsIdx = headers.indexOf('tags');
+    const dietaryIdx = headers.indexOf('dietaryrestrictions');
+    const accessibilityIdx = headers.indexOf('accessibilitynotes');
+
+    const existing = guestsRepo.listForEvent(eventId);
+    const existingEmails = new Set(existing.map((g) => String(g.email || '').toLowerCase()).filter(Boolean));
+    // Name is the FALLBACK dedupe key for rows without an email (many
+    // guests — grandparents, kids — have no email; re-importing a fixed
+    // spreadsheet must not duplicate them). Rows WITH an email are keyed by
+    // email only: two guests with the same name but different emails are
+    // legitimately different people and must both import.
+    const existingNames = new Set(existing.map((g) => g.full_name.toLowerCase()));
+    const VALID_RSVP = new Set(['pending', 'attending', 'declined', 'maybe']);
+    const warnings: string[] = [];
+    const duplicates: string[] = [];
+    let skipped = 0;
+    const seenNames = new Set<string>();
+    const inputs: Parameters<typeof guestsRepo.create>[2][] = [];
+
+    for (const row of rows) {
+      const cell = (idx: number) => (idx >= 0 && idx < row.length ? row[idx] : '');
+      const fullName = cell(nameIdx).trim();
+      const email = cell(emailIdx).trim().toLowerCase();
+      if (!fullName) { skipped += 1; continue; }
+      if (email && existingEmails.has(email)) { skipped += 1; duplicates.push(email); continue; }
+      const nameKey = fullName.toLowerCase();
+      if (!email && existingNames.has(nameKey)) { skipped += 1; duplicates.push(fullName); continue; }
+      if (seenNames.has(nameKey)) { skipped += 1; duplicates.push(fullName); continue; }
+      seenNames.add(nameKey);
+      let rsvpStatus = cell(rsvpIdx).trim().toLowerCase() || 'pending';
+      if (!VALID_RSVP.has(rsvpStatus)) {
+        warnings.push(`Row "${fullName}": invalid RSVP status "${rsvpStatus}" — set to pending.`);
+        rsvpStatus = 'pending';
+      }
+      const householdName = cell(householdIdx).trim();
+      inputs.push({
+        fullName,
+        email: email || undefined,
+        phone: cell(phoneIdx).trim() || undefined,
+        partyName: householdName || undefined,
+        rsvpStatus: rsvpStatus as 'pending' | 'attending' | 'declined' | 'maybe',
+        dietaryRestrictions: cell(dietaryIdx).trim() || undefined,
+        accessibilityNotes: cell(accessibilityIdx).trim() || undefined,
+        metadata: {
+          mailingAddress: cell(addressIdx),
+          mealChoice: cell(mealIdx),
+          householdName,
+          coupleGuestTags: cell(tagsIdx).split('|').map((t) => t.trim()).filter(Boolean),
+        },
+      });
+    }
+    if (!headers.includes('email')) warnings.push('Email column is recommended for RSVP reminders.');
+    // Transactional insert; 'skip' mode double-guards against emails that
+    // arrived between the pre-check and the write.
+    const result = guestsRepo.bulkCreate(event.organization_id, eventId, 'skip', inputs);
+    const imported = result.inserted;
+    skipped += result.skipped;
+    auditRepo.log({ organizationId: event.organization_id, actorUserId: req.auth!.userId, actorLabel: req.auth!.email, action: 'couple.guest.import', targetType: 'event', targetId: eventId, ip: req.ip, details: { imported, skipped, rows: rows.length } });
+    return reply.code(201).send({ imported, skipped, warnings, duplicateSignals: Array.from(new Set(duplicates)).slice(0, 25) });
   });
 
   app.get('/api/events/:eventId/couple-guests/export.csv', { preHandler: requireAuth }, async (req, reply) => {

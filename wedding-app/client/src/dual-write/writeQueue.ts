@@ -127,6 +127,41 @@ export function clear(): void {
 let draining = false;
 
 /**
+ * Bounded exponential backoff for transient failures (offline / 5xx).
+ *
+ * The queue can NOT rely on 'server-reachable' transitions alone: that
+ * event only fires on a false→true flip, which stops happening once the
+ * app settles — a single transient failure (brief WiFi blip, service
+ * worker mid-update after a reload, flaky NAT) would otherwise strand the
+ * queued write forever. Each transient failure schedules the next attempt:
+ * 2s, 4s, 8s, ... capped at 60s. The write is persisted across reloads, so
+ * this only needs to survive until connectivity actually returns.
+ */
+const RETRY_BASE_MS = 2_000;
+const RETRY_CAP_MS = 60_000;
+
+let retryTimer: ReturnType<typeof setTimeout> | null = null;
+
+function retryDelayMs(attempts: number): number {
+  return Math.min(RETRY_BASE_MS * 2 ** Math.min(Math.max(attempts - 1, 0), 5), RETRY_CAP_MS);
+}
+
+function scheduleRetry(attempts: number): void {
+  if (retryTimer) clearTimeout(retryTimer);
+  retryTimer = setTimeout(() => {
+    retryTimer = null;
+    void drain();
+  }, retryDelayMs(attempts));
+}
+
+/** Persist the head write's attempt count (so backoff grows across retries). */
+function persistAttempts(head: QueuedWrite): void {
+  const q = read();
+  if (q[0] && q[0].clientId === head.clientId) q[0] = head;
+  write(q);
+}
+
+/**
  * Drain the queue, attempting each write in order. Stops on the first
  * permanent failure (5xx, will retry on next tick) or when the queue
  * is empty.
@@ -186,22 +221,28 @@ export async function drain(): Promise<void> {
           continue;
         }
         if (e.kind === 'offline') {
-          // Still offline; stop and wait for next 'server-reachable' event.
+          // Still offline (or a transient failure that LOOKS like offline —
+          // e.g. a fetch that died during a service-worker update). Keep the
+          // write and retry with exponential backoff; 'server-reachable'
+          // transitions (if any) drain immediately as before.
+          persistAttempts(head);
           notify({ kind: 'replay-failed', write: head, reason: 'offline', willRetry: true });
+          scheduleRetry(head.attempts);
           return;
         }
-        // 5xx / validation / other
+        // 5xx / other
         head.lastError = reason;
         if (head.attempts >= MAX_ATTEMPTS) {
           write(read().slice(1));
           notify({ kind: 'replay-failed', write: head, reason, willRetry: false });
           continue;
         }
-        // Persist attempt count and stop (back off; next drain will retry)
-        const q2 = read();
-        q2[0] = head;
-        write(q2);
+        // Persist attempt count and back off (retry automatically too —
+        // a single 5xx must not strand the queue until some other event
+        // happens to trigger a drain).
+        persistAttempts(head);
         notify({ kind: 'replay-failed', write: head, reason, willRetry: true });
+        scheduleRetry(head.attempts);
         return;
       }
     }

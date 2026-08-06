@@ -51,7 +51,10 @@ npm --prefix client exec -- playwright install chromium >/dev/null 2>&1 || \
 
 # ─── 4. Boot the server ──────────────────────────────────
 echo "[a11y] starting server..."
-JWT_SECRET="${JWT_SECRET:-a11y-ci-secret}" NODE_ENV=production \
+# E2E_RATE_LIMIT_BYPASS=1: the Playwright suite shares one IP and would
+# otherwise self-DoS on the auth endpoints' per-IP budgets (register 5/min,
+# login 30/min). Explicit opt-in for harness runs only.
+JWT_SECRET="${JWT_SECRET:-a11y-ci-secret}" NODE_ENV=production E2E_RATE_LIMIT_BYPASS=1 \
   node server/dist/index.js > /tmp/a11y-server.log 2>&1 &
 SERVER_PID=$!
 cleanup() {
