@@ -49,14 +49,14 @@
     --color-accent-soft:   245 237 218;
 
     /* ─── Semantic / status ────────────────────────── */
-    --color-success:       16 125 86;
+    --color-success:       15 118 80; /* #0F7650 — darkened for 4.87:1 AA contrast on success-soft */
     --color-success-soft:  220 244 234;
     /* Dark enough for AA text contrast on warning-soft and light surfaces. */
     --color-warning:       146 85 0;
     --color-warning-soft:  254 243 199;
     --color-danger:        185 28 28;
     --color-danger-soft:   254 226 226;
-    --color-info:          37 99 235;
+    --color-info:          32 88 222; /* #2058DE — darkened for 4.9:1 AA contrast on info-soft */
     --color-info-soft:     219 234 254;
 
     /* ─── Data viz palette (categorical, 8 colors, color-blind safe) */
@@ -116,6 +116,7 @@
     --color-accent:        228 196 124;
     --color-accent-soft:   58 48 28;
 
+    --color-success:       64 200 115; /* #40C873 — light green for AA contrast on dark surfaces */
     --color-success-soft:  18 50 38;
     --color-warning-soft:  64 44 8;
     --color-danger-soft:   72 28 28;

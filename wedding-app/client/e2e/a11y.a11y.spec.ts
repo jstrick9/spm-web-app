@@ -117,4 +117,74 @@ test.describe('Accessibility @a11y', () => {
     reportViolations('guest portal (RSVP tab)', rsvpResults.violations as AxeViolation[]);
     expect(rsvpResults.violations).toHaveLength(0);
   });
+
+  test('authenticated couple hub has no detectable WCAG A/AA violations', async ({ page, request }) => {
+    // The a11y gate previously scanned only public surfaces; the couple hub
+    // is the couple's main daily surface. Register + invite a fresh couple
+    // so the hub renders with a real event.
+    const coupleEmail = `a11y-couple-${Date.now()}@example.com`;
+    await request.post('/api/auth/register', {
+      data: { email: coupleEmail, password: 'testpass123', fullName: 'A11y Couple', orgName: 'Tmp' },
+    });
+    const login = await request.post('/api/auth/login', { data: { email: 'owner@demo.local', password: 'wedding123' } });
+    const { token } = await login.json();
+    const orgId = (await (await request.get('/api/orgs', { headers: { authorization: `Bearer ${token}` } })).json()).organizations[0].id;
+    const events = (await (await request.get(`/api/orgs/${orgId}/events`, { headers: { authorization: `Bearer ${token}` } })).json()).events;
+    const event = events.find((e: any) => e.title === 'Smith & Jones Wedding') ?? events[0];
+    await request.post(`/api/events/${event.id}/couple-invitations`, {
+      headers: { authorization: `Bearer ${token}`, 'content-type': 'application/json' },
+      data: { email: coupleEmail, roleKey: 'couple' },
+    });
+    const coupleLogin = await request.post('/api/auth/login', { data: { email: coupleEmail, password: 'testpass123' } });
+    const coupleToken = (await coupleLogin.json()).token;
+    const coupleOrgs = await (await request.get('/api/orgs', { headers: { authorization: `Bearer ${coupleToken}` } })).json();
+    await request.put('/api/users/me/preferences', {
+      headers: { authorization: `Bearer ${coupleToken}`, 'content-type': 'application/json' },
+      data: { onboarding: { welcomeTourByOrg: { [coupleOrgs.organizations[0].id]: { status: 'completed', currentSlide: 0, completedSlides: [], completedAt: new Date().toISOString() } } } },
+    });
+
+    await page.goto('/#/');
+    await page.getByLabel(/email address/i).fill(coupleEmail);
+    await page.getByLabel(/^password$/i).fill('testpass123');
+    await page.getByRole('button', { name: /sign in securely/i }).click();
+    await expect(page.locator('body')).toContainText(/your wedding hub/i, { timeout: 20_000 });
+    await expect(page.getByText(event.title).first()).toBeVisible({ timeout: 20_000 });
+
+    const results = await new AxeBuilder({ page })
+      .withTags(WCAG_TAGS)
+      .exclude('canvas')
+      .analyze();
+    reportViolations('couple hub', results.violations as AxeViolation[]);
+    expect(results.violations).toHaveLength(0);
+  });
+
+  test('authenticated event detail has no detectable WCAG A/AA violations', async ({ page, request }) => {
+    // The event detail screen (with its tab row) is the venue team's busiest
+    // surface — previously never axe-scanned.
+    const login = await request.post('/api/auth/login', { data: { email: 'owner@demo.local', password: 'wedding123' } });
+    const { token } = await login.json();
+    const orgId = (await (await request.get('/api/orgs', { headers: { authorization: `Bearer ${token}` } })).json()).organizations[0].id;
+    await request.put('/api/users/me/preferences', {
+      headers: { authorization: `Bearer ${token}`, 'content-type': 'application/json' },
+      data: { onboarding: { welcomeTourByOrg: { [orgId]: { status: 'completed', currentSlide: 0, completedSlides: [], completedAt: new Date().toISOString() } } } },
+    });
+    const events = (await (await request.get(`/api/orgs/${orgId}/events`, { headers: { authorization: `Bearer ${token}` } })).json()).events;
+    const event = events.find((e: any) => e.title === 'Smith & Jones Wedding') ?? events[0];
+
+    await page.goto('/#/');
+    await page.getByLabel(/email address/i).fill('owner@demo.local');
+    await page.getByLabel(/^password$/i).fill('wedding123');
+    await page.getByRole('button', { name: /sign in securely/i }).click();
+    await expect(page.locator('body')).toContainText(/good (morning|afternoon|evening)/i, { timeout: 20_000 });
+
+    await page.goto(`/#/events/${event.id}`);
+    await expect(page.locator('body')).toContainText(/smith & jones wedding/i, { timeout: 20_000 });
+
+    const results = await new AxeBuilder({ page })
+      .withTags(WCAG_TAGS)
+      .exclude('canvas')
+      .analyze();
+    reportViolations('event detail', results.violations as AxeViolation[]);
+    expect(results.violations).toHaveLength(0);
+  });
 });
