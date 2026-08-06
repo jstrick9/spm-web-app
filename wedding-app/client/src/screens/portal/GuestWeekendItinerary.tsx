@@ -3,6 +3,7 @@ import { CalendarDays, HelpCircle, MapPin } from 'lucide-react';
 import { Badge } from '../../ui/Badge';
 import { Button } from '../../ui/Button';
 import type { PortalGuestEntry } from '../../sdk/portalTypes';
+import { parseDateOnly } from '../../lib/formatDate';
 
 type Palette = { surface: string; border: string; fg: string; fgMuted: string; primary: string; primaryFg: string };
 
@@ -10,7 +11,12 @@ type ScheduleTab = 'wedding' | 'subevents';
 
 function dayKey(value?: string | null) {
   if (!value) return 'Date TBD';
-  return new Date(value).toLocaleDateString(undefined, { weekday: 'long', month: 'long', day: 'numeric' });
+  // Date-only starts (e.g. '2026-09-11') parse via parseDateOnly as LOCAL
+  // calendar dates — raw `new Date()` shifts them to the previous day in
+  // US timezones, so sub-events grouped under the wrong weekday/date.
+  const local = parseDateOnly(value);
+  const parsed = local ?? new Date(value);
+  return parsed.toLocaleDateString(undefined, { weekday: 'long', month: 'long', day: 'numeric' });
 }
 
 export function GuestWeekendItinerary({

@@ -25,7 +25,7 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '../..
 import { Button }                  from '../../ui/Button';
 import { Label }                   from '../../ui/Label';
 import { usePrompt }              from '../../ui/usePrompt';
-import { formatDateOnly }       from '../../lib/formatDate';
+import { formatDateOnly, parseDateOnly } from '../../lib/formatDate';
 import { Map as MapIcon, Home, Send, CloudRain, HelpCircle, Bus, Gift, Mail, Contrast, Languages, RefreshCw, ShieldAlert, Type } from 'lucide-react';
 import { Badge }                   from '../../ui/Badge';
 import { cn }                      from '../../ui/lib/cn';
@@ -391,9 +391,7 @@ export function PublicGuestPortal({ eventId }: { eventId: string }) {
         )}
         <p className="mt-2 text-sm uppercase tracking-widest" style={{ color: portalPalette.fgMuted }}>
           {info.startDate
-            ? new Date(info.startDate).toLocaleDateString(undefined, {
-                weekday: 'long', year: 'numeric', month: 'long', day: 'numeric',
-              })
+            ? (() => { const d = parseDateOnly(info.startDate) ?? new Date(info.startDate); return d.toLocaleDateString(undefined, { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' }); })()
             : 'TBD'}
         </p>
         <div className="mt-3 flex flex-wrap items-center justify-center gap-2" aria-label="Public portal accessibility preferences">

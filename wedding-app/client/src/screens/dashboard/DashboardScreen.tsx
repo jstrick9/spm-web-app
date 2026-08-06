@@ -61,7 +61,7 @@ import {
 } from "lucide-react";
 import { useSSE } from "../../lib/useSSE";
 import { sdk } from "../../sdk";
-import { formatDateOnly } from "../../lib/formatDate";
+import { formatDateOnly, parseDateOnly } from "../../lib/formatDate";
 import { usePermission } from "../../lib/usePermission";
 import { useToast } from "../../ui/Toast";
 import { PageBody, PageHeader } from "../../ui/AppShell";
@@ -733,9 +733,7 @@ export function DashboardScreen({
                               </p>
                               <p className="text-[11px] text-fg-subtle mt-0.5">
                                 {event.start_date
-                                  ? new Date(
-                                      event.start_date,
-                                    ).toLocaleDateString("en-US", {
+                                  ? (parseDateOnly(event.start_date) ?? new Date(event.start_date)).toLocaleDateString("en-US", {
                                       weekday: "short",
                                       month: "short",
                                       day: "numeric",
