@@ -8,6 +8,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../..
 import { Skeleton } from '../../ui/Skeleton';
 import { useToast } from '../../ui/Toast';
 import { usePrompt } from '../../ui/usePrompt';
+import { downloadFile } from '../../sdk/client';
 
 const ICONS: Record<string, any> = {
   visionBoard: Palette,
@@ -50,6 +51,16 @@ export function CoupleAdvancedPlanning({ eventId }: { eventId: string }) {
   const { ask, promptNode } = usePrompt();
   const { toast } = useToast();
   const qc = useQueryClient();
+  // Authenticated download: these export endpoints require the JWT — a
+  // plain <a href download> navigates without the Authorization header and
+  // 401s (the AUTH-DOWNLOADS pattern; this surface was missed).
+  const downloadAuth = async (url: string, filename?: string) => {
+    try {
+      await downloadFile(url, { filename });
+    } catch (err: any) {
+      toast({ title: 'Could not download export', description: err?.message || 'Please try again.', variant: 'destructive' });
+    }
+  };
   const query = useQuery({ queryKey: ['couple-advanced-planning', eventId], queryFn: () => sdk.couple.advancedPlanning(eventId), enabled: !!eventId });
   const [draft, setDraft] = useState<Record<string, any>>(defaultDraft());
   useEffect(() => { if (query.data?.plan) setDraft((current) => ({ ...current, ...query.data!.plan })); }, [query.data?.plan]);
@@ -87,7 +98,7 @@ export function CoupleAdvancedPlanning({ eventId }: { eventId: string }) {
 
         <div className="grid gap-3 lg:grid-cols-3 text-sm"><label className="rounded-lg border border-border bg-surface-2 p-3"><strong>Rain-plan communication</strong><textarea value={draft.rainPlan?.communicationDraft || ''} onChange={(e) => setDraft((d) => ({ ...d, rainPlan: { ...(d.rainPlan || {}), communicationDraft: e.target.value } }))} className="mt-2 min-h-20 w-full rounded-md border border-border bg-surface p-2 text-sm" /></label><label className="rounded-lg border border-border bg-surface-2 p-3"><strong>Guest travel microsite welcome</strong><textarea value={draft.travelMicrosite?.welcome || ''} onChange={(e) => setDraft((d) => ({ ...d, travelMicrosite: { ...(d.travelMicrosite || {}), welcome: e.target.value } }))} className="mt-2 min-h-20 w-full rounded-md border border-border bg-surface p-2 text-sm" /></label><label className="rounded-lg border border-border bg-surface-2 p-3"><strong>Music do-not-play</strong><textarea value={(draft.music?.doNotPlay || []).join('\n')} onChange={(e) => setDraft((d) => ({ ...d, music: { ...(d.music || {}), doNotPlay: e.target.value.split('\n').filter(Boolean) } }))} className="mt-2 min-h-20 w-full rounded-md border border-border bg-surface p-2 text-sm" /></label></div>
 
-        <div className="flex flex-wrap gap-2"><Button size="sm" onClick={() => saveMutation.mutate()} isLoading={saveMutation.isPending}>Save advanced planning suite</Button>{(query.data?.exports || []).map((item) => <Button key={item.href} asChild size="sm" variant="outline"><a href={item.href} download>{item.label}</a></Button>)}</div>
+        <div className="flex flex-wrap gap-2"><Button size="sm" onClick={() => saveMutation.mutate()} isLoading={saveMutation.isPending}>Save advanced planning suite</Button>{(query.data?.exports || []).map((item) => <Button key={item.href} size="sm" variant="outline" onClick={() => downloadAuth(item.href, item.label.includes('microsite') ? 'guest-travel-microsite.txt' : item.label.includes('packet') ? 'planning-packet.txt' : undefined)}>{item.label}</Button>)}</div>
       </CardContent>
     </Card>
   );

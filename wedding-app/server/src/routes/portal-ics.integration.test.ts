@@ -67,6 +67,22 @@ describe('guest portal sub-event .ics export', () => {
     expect(granted.statusCode).toBe(403); // unknown guest still denied
   });
 
+  it('guest calendar.ics carries timeline items on the WEDDING day (event-anchored items)', async () => {
+    const { token, eventId } = await setup();
+    // Simulate the client fix: a timeline item created for a Sep 12
+    // wedding, anchored to the wedding day (16:30 local NY = 20:30Z).
+    db.prepare(`UPDATE events SET start_date = '2026-09-12' WHERE id = ?`).run(eventId);
+    db.prepare(`INSERT INTO timeline_events (id, organization_id, event_id, title, category, starts_at, duration_min)
+      VALUES ('tl-ics-1', (SELECT organization_id FROM events WHERE id = ?), ?, 'Ceremony', 'ceremony', '2026-09-12T20:30:00.000Z', 30)`).run(eventId, eventId);
+
+    const res = await app.inject({ method: 'GET', url: `/api/portal/${eventId}/calendar.ics` });
+    expect(res.statusCode).toBe(200);
+    // Regression: when items were anchored to the CREATION date, the ICS
+    // carried the wrong day; the DTSTART must be the wedding day.
+    expect(res.body).toContain('DTSTART:20260912T203000Z');
+    expect(res.body).toContain('SUMMARY:Ceremony');
+  });
+
   it('event export .ics escapes title and neutralizes CR/LF (no line injection)', async () => {
     const { token, eventId } = await setup();
     db.prepare(`UPDATE events SET title = 'Smith\r\nX-EVIL:1 Wedding; Final, v2', start_date = '2026-09-12' WHERE id = ?`).run(eventId);
