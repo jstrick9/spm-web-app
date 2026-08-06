@@ -64,7 +64,11 @@ test('couple sees the venue name and guests see venue polls', async ({ page, req
   await expect(page.getByText(event.title).first()).toBeVisible({ timeout: 20_000 });
 
   // Regression: this used to read "Your venue" (the org fetch 403'd).
-  await expect(page.getByText(orgName).first()).toBeVisible({ timeout: 15_000 });
+  // Poll until the venue name appears — the hub renders progressively and
+  // the name can arrive after the event title on slow loads.
+  await expect
+    .poll(() => page.getByText(orgName).first().isVisible().catch(() => false), { timeout: 20_000, intervals: [500] })
+    .toBe(true);
 
   // ── 2. Guest portal shows the venue poll ─────────────────────────────
   await page.goto(`/#/portal/${eventId}?guest=${guestId}&token=${guestToken}`);
