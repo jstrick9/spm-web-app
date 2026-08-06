@@ -58,9 +58,9 @@ export async function guestCoreRoutes(app: FastifyInstance) {
     if (!event) throw NotFound();
     const orgMap = eventsRepo.orgMapForUser(req.auth!.userId);
     if (!can(req.auth!.memberships, { eventId }, 'guests.view', orgMap)) throw Forbidden();
-    const rows = db.prepare(`SELECT g.full_name, g.email, g.phone, g.party_name, g.table_assignment, g.seat_assignment, g.room_assignment, g.dietary_restrictions, g.accessibility_notes, g.metadata, r.meal_choice, r.dietary_notes, r.special_needs, r.notes, r.submitted_at
+    const rows = db.prepare(`SELECT g.full_name, g.email, g.phone, g.party_name, g.table_assignment, g.seat_assignment, g.room_assignment, g.dietary_restrictions, g.accessibility_notes, g.metadata, r.meal_choice, r.dietary_notes, r.special_needs, r.notes, r.submitted_at, r.late_submission
       FROM guests g
-      LEFT JOIN rsvp_submissions r ON r.id = (SELECT id FROM rsvp_submissions WHERE guest_id = g.id ORDER BY submitted_at DESC LIMIT 1)
+      LEFT JOIN rsvp_submissions r ON r.id = (SELECT id FROM rsvp_submissions WHERE guest_id = g.id ORDER BY rowid DESC LIMIT 1)
       WHERE g.event_id = ? AND g.deleted_at IS NULL
       ORDER BY g.full_name`).all(eventId) as Array<Record<string, any>>;
     const rowsOut: Array<Record<string, any>> = rows.map((r) => {
@@ -70,8 +70,9 @@ export async function guestCoreRoutes(app: FastifyInstance) {
       // submission may be absent (e.g. RSVP captured by phone and entered by
       // the couple). Coalesce so catering always sees the effective choice.
       const mealChoice = r.meal_choice || meta.mealChoice || '';
-      const cateringNotes = [r.special_needs, r.notes, meta.coupleNotes ? `Couple note: ${meta.coupleNotes}` : ''].filter(Boolean).join(' | ');
-      return { ...r, mealChoice, cateringNotes };
+      const lateFlag = Number(r.late_submission) ? '⚠ LATE RSVP (after deadline)' : '';
+      const cateringNotes = [lateFlag, r.special_needs, r.notes, meta.coupleNotes ? `Couple note: ${meta.coupleNotes}` : ''].filter(Boolean).join(' | ');
+      return { ...r, mealChoice, cateringNotes, lateSubmission: Number(r.late_submission) ? true : false };
     });
     const csv = [
       ['Guest','Email','Phone','Household','Table','Seat','Lodging','Meal choice','Dietary restrictions','Allergies / dietary notes','Accessibility needs','Catering notes','Submitted at'].map(csvCell).join(','),
@@ -157,9 +158,16 @@ export async function guestCoreRoutes(app: FastifyInstance) {
        try { layoutPayload = typeof layout.payload === 'string' ? JSON.parse(layout.payload) : layout.payload; } catch {}
     }
 
+    // Attach the late-submission flag (latest RSVP arrived after the
+    // deadline) so the venue guest list can flag headcount surprises.
+    const lateMap = new Map<string, boolean>();
+    for (const row of db.prepare(`SELECT guest_id FROM rsvp_submissions WHERE event_id = ? AND late_submission = 1`).all(eventId) as Array<{ guest_id: string | null }>) {
+      if (row.guest_id) lateMap.set(row.guest_id, true);
+    }
+    const guests = guestsRepo.listForEvent(eventId).map((g) => (lateMap.has(g.id) ? { ...g, lateSubmission: true } : g));
     return {
       layout: layoutPayload,
-      guests: guestsRepo.listForEvent(eventId),
+      guests,
       counts: guestsRepo.countByStatus(eventId),
     };
   });

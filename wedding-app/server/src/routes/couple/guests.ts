@@ -1,4 +1,5 @@
 import { auditRepo, eventsRepo, guestsRepo } from '../../db/repos/index.js';
+import { db } from '../../db/database.js';
 import { appPublicBaseUrl } from '../../lib/appBaseUrl.js';
 import { requireAuth } from '../../middleware/auth.js';
 import { can } from '../../lib/rbac.js';
@@ -71,6 +72,15 @@ export async function coupleGuestsRoutes(app: FastifyInstance) {
     const orgMap = eventsRepo.orgMapForUser(req.auth!.userId);
     if (!can(req.auth!.memberships, { eventId }, 'events.view', orgMap)) throw Forbidden();
     const guests = guestsRepo.listForEvent(eventId).map(safeGuest);
+    // Late-submission flag from the guest's LATEST RSVP submission (venue
+    // needs to know when a headcount arrived after the RSVP deadline).
+    const lateMap = new Map<string, boolean>();
+    for (const row of db.prepare(`SELECT guest_id, late_submission FROM rsvp_submissions WHERE event_id = ? AND late_submission = 1`).all(eventId) as Array<{ guest_id: string | null; late_submission: number }>) {
+      if (row.guest_id) lateMap.set(row.guest_id, true);
+    }
+    for (const guest of guests) {
+      if (lateMap.has(guest.id)) (guest as any).lateSubmission = true;
+    }
     const counts = guestsRepo.countByStatus(eventId);
     const householdMap = new Map<string, typeof guests>();
     for (const guest of guests) {

@@ -315,6 +315,44 @@ describe('Public portal: full RSVP flow', () => {
   });
 
 
+  it('1j3b. RSVP submissions after the deadline are flagged late (venue signal)', async () => {
+    const s = await setupEvent();
+    const token = guestsRepo.rotatePortalToken(s.guestId1);
+
+    // No deadline → not late.
+    let res = await app.inject({ method: 'POST', url: `/api/portal/${s.eventId}/rsvp`, payload: { guestId: s.guestId1, token, attending: true }, headers: { 'content-type': 'application/json' } });
+    expect(res.statusCode).toBe(201);
+    let row = db.prepare(`SELECT late_submission FROM rsvp_submissions WHERE guest_id = ? ORDER BY rowid DESC LIMIT 1`).get(s.guestId1) as { late_submission: number };
+    expect(row.late_submission).toBe(0);
+
+    // Deadline in the far past → late.
+    db.prepare(`UPDATE events SET rsvp_deadline = '2020-01-01' WHERE id = ?`).run(s.eventId);
+    const evtCheck = db.prepare(`SELECT rsvp_deadline FROM events WHERE id = ?`).get(s.eventId) as { rsvp_deadline: string | null };
+    res = await app.inject({ method: 'POST', url: `/api/portal/${s.eventId}/rsvp`, payload: { guestId: s.guestId1, token, attending: false }, headers: { 'content-type': 'application/json' } });
+    expect(res.statusCode).toBe(201);
+    row = db.prepare(`SELECT late_submission FROM rsvp_submissions WHERE guest_id = ? ORDER BY rowid DESC LIMIT 1`).get(s.guestId1) as { late_submission: number };
+    expect(row.late_submission).toBe(1);
+
+    // A late submission is audited.
+    const audit = db.prepare(`SELECT action FROM audit_logs WHERE action = 'public.rsvp.late_submission' ORDER BY created_at DESC LIMIT 1`).get() as { action: string } | undefined;
+    expect(audit?.action).toBe('public.rsvp.late_submission');
+
+    // The catering export surfaces the LATE marker in catering notes.
+    const csv = await app.inject({ method: 'GET', url: `/api/events/${s.eventId}/catering-dietary-export.csv`, headers: { authorization: `Bearer ${s.token}` } });
+    expect(csv.statusCode).toBe(200);
+    expect(csv.body).toContain('LATE RSVP');
+
+    // The venue guest list carries the flag.
+    const list = await app.inject({ method: 'GET', url: `/api/events/${s.eventId}/guests`, headers: { authorization: `Bearer ${s.token}` } });
+    const g = list.json().guests.find((x: any) => x.id === s.guestId1);
+    expect(g.lateSubmission).toBe(true);
+
+    // The couple guest list carries it too.
+    const coupleList = await app.inject({ method: 'GET', url: `/api/events/${s.eventId}/couple-guests`, headers: { authorization: `Bearer ${s.token}` } });
+    const cg = coupleList.json().guests.find((x: any) => x.id === s.guestId1);
+    expect(cg.lateSubmission).toBe(true);
+  });
+
   it('1j2. Post-event section does not unlock a day early in US timezones', async () => {
     const prevTz = process.env.TZ;
     process.env.TZ = 'America/New_York';

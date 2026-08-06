@@ -285,6 +285,8 @@ export const rsvpRepo = {
     dietaryNotes?: string;
     specialNeeds?: string;
     notes?: string;
+    /** True when the submission arrived after the event's RSVP deadline. */
+    lateSubmission?: boolean;
     ip?: string;
     userAgent?: string;
   }): string {
@@ -293,8 +295,8 @@ export const rsvpRepo = {
       `INSERT INTO rsvp_submissions
          (id, organization_id, event_id, guest_id, attending, attending_days,
           meal_choice, plus_one_name, plus_one_meal_choice,
-          dietary_notes, special_needs, notes, submitted_ip, user_agent)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+          dietary_notes, special_needs, notes, late_submission, submitted_ip, user_agent)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
     ).run(
       id, input.organizationId, input.eventId,
       input.guestId ?? null,
@@ -306,6 +308,7 @@ export const rsvpRepo = {
       input.dietaryNotes ?? null,
       input.specialNeeds ?? null,
       input.notes ?? null,
+      input.lateSubmission ? 1 : 0,
       input.ip ?? null,
       input.userAgent ?? null,
     );

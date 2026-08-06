@@ -11,6 +11,7 @@ import { privateFilePath } from '../../lib/fileStorage.js';
 import { createReadStream, existsSync } from 'node:fs';
 import { assertNoPublicHoneypot, auditPublicSubmission, publicRequestFingerprint } from '../../lib/publicAbuse.js';
 import type { FastifyInstance } from 'fastify';
+import { localDateString } from '../../lib/time.js';
 import { rsvpSchema, guestLookupSchema, guestHelpSchema, guestQuestionSchema, guestAccessibilityRequestSchema, guestPrivacyRequestSchema, guestReminderPreferencesSchema, guestDayOfHelpSchema, guestMemorySubmissionSchema, guestPostEventFeedbackSchema, guestResendSchema, guestMetadata, guestHouseholdKey, publicGuest, publicGuestDirectory, normalizeGuestPostEvent, normalizeGuestDayOf, normalizeGuestReminders, normalizeGuestPrivacy, normalizeGuestCare, normalizeGuestGifts, normalizeGuestFaq, normalizeWayfindingLabels, safeGuestLayoutPayload, verifyGuestPortalToken, activeSmtpIntegrationId, activeSmsIntegrationId, addDaysIso, escapeHtml, isGuestTimelineItem, safeGuestTimelineItem, eventTimezone, guestCalendarIcs, safeGuestHelpRequest, safeGuestHelpReply } from './shared.js';
 
 export async function guestPortalRoutes(app: FastifyInstance) {
@@ -695,12 +696,21 @@ export async function guestPortalRoutes(app: FastifyInstance) {
     }
 
     const isRsvpEdit = parsed.data.guestId ? ((db.prepare(`SELECT COUNT(*) AS n FROM rsvp_submissions WHERE guest_id = ?`).get(parsed.data.guestId) as { n: number }).n > 0) : false;
+    // Late-submission flag: when the venue set an RSVP deadline, a
+    // submission that arrives after it must be visible to the venue (they
+    // finalize catering counts off the deadline). Compared as LOCAL
+    // calendar dates so US-evening submissions aren't misdated.
+    const lateSubmission = !!event.rsvp_deadline && localDateString() > event.rsvp_deadline;
+    if (lateSubmission) {
+      auditPublicSubmission(req, { organizationId: event.organization_id, action: 'rsvp.late_submission', targetType: 'event', targetId: eventId, details: { guestId: parsed.data.guestId ?? null, rsvpDeadline: event.rsvp_deadline } });
+    }
     const rsvpId = rsvpRepo.submit({
       organizationId: event.organization_id, eventId,
       guestId: parsed.data.guestId,
       attending: parsed.data.attending,
       status: parsed.data.status,
       attendingDays: parsed.data.attendingDays,
+      lateSubmission,
       mealChoice: parsed.data.mealChoice,
       plusOneName: parsed.data.plusOneName,
       plusOneMealChoice: parsed.data.plusOneMealChoice,

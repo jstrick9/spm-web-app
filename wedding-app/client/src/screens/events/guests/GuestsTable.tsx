@@ -236,6 +236,11 @@ export function GuestsTable({
                       aria-label={`Change RSVP status for ${g.full_name}, currently ${g.rsvp_status}`}
                     >
                       <RsvpBadge status={g.rsvp_status} />
+                      {(g as any).lateSubmission && (
+                        <span className="ml-1.5 inline-flex items-center rounded-full border border-warning/40 bg-warning-soft px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wide text-warning" title="RSVP arrived after the RSVP deadline">
+                          Late RSVP
+                        </span>
+                      )}
                     </button>
                   </DropdownMenuTrigger>
                   <DropdownMenuContent align="start">
