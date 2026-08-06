@@ -225,7 +225,13 @@ export function EventDetail({ eventId, user }: Props & { user: any }) {
   // pipeline stage (e.g. staff/emergency/portal for sales-stage leads).
   const visibleTabs = useMemo(
     () => filterTabsForStage(
-      TAB_DEFS.filter((t) => hasPermission(t.permission) && (t.id !== 'guests' || isCoupleForEvent)),
+      // The Guests tab is gated by guests.view for BOTH venue staff and
+      // couples. (It was briefly "reserved for couples", which left venue
+      // staff with no path to per-event guest management or the guest-help
+      // inbox — guests who requested help during event week were invisible
+      // to the venue team, and the org-wide Guest Browser's click-through
+      // dead-ended on AccessDenied.)
+      TAB_DEFS.filter((t) => hasPermission(t.permission)),
       eventQuery.data?.event?.status,
     ),
     [perms, isCoupleForEvent, eventQuery.data?.event?.status],
@@ -558,7 +564,7 @@ export function EventDetail({ eventId, user }: Props & { user: any }) {
               />
             </TabsContent>
             <TabsContent value="guests">
-              {isCoupleForEvent ? guardedTab("guests", <EventGuestsTab eventId={eventId} />) : <AccessDenied feature="Couple guest management" />}
+              {guardedTab("guests", <EventGuestsTab eventId={eventId} />)}
             </TabsContent>
             <TabsContent value="invites">
               {guardedTab("invites", <EventInvitesTab eventId={eventId} />)}

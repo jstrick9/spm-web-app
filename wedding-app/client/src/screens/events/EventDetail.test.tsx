@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { render, screen, waitFor } from '@testing-library/react';
+import { render, screen, waitFor, fireEvent } from '@testing-library/react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { EventDetail } from './EventDetail';
 import { sdk } from '../../sdk';
@@ -87,6 +87,7 @@ function wrap() {
 
 describe('EventDetail', () => {
   beforeEach(() => {
+    permissionState.permissions = {};
     vi.clearAllMocks();
     localStorage.clear();
     routerState.query = new URLSearchParams();
@@ -131,9 +132,18 @@ describe('EventDetail', () => {
     render(<EventDetail eventId="e1" user={{ id: 'u1', email: 'test@x.com' }} />, { wrapper: wrap() });
     await waitFor(() => {
       expect(screen.getByText('Overview')).toBeTruthy();
-      expect(screen.queryByText('Guests')).toBeNull();
+      expect(screen.getByText('Guests')).toBeTruthy(); // guests.view granted → staff see the tab
       expect(screen.getByText('Budget')).toBeTruthy();
       expect(screen.getByText('Settings')).toBeTruthy();
+    });
+  });
+
+  it('shows the Guests tab for venue staff with guests.view (regression: was couple-only, staff lost guest help inbox + per-event guest management)', async () => {
+    // Staff user (no couple membership on the event). beforeEach grants all
+    // permissions including guests.view — the tab must render for them.
+    render(<EventDetail eventId="e1" user={{ id: 'u1', email: 'test@x.com' }} />, { wrapper: wrap() });
+    await waitFor(() => {
+      expect(screen.getByRole('tab', { name: /guests/i })).toBeTruthy();
     });
   });
 

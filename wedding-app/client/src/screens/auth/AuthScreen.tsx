@@ -184,6 +184,7 @@ export function AuthScreen({ onAuth }: { onAuth: (u: SdkUser, m?: SdkMembership[
           e.code === 'email-already-registered' ? 'That email is already registered.' :
           e.code === 'couple-invite-required' ? 'Booked couples should use the invitation link sent by the venue. If you need a new link, contact your venue coordinator.' :
           e.kind === 'offline' ? 'Server unreachable. Check your connection.' :
+          e.kind === 'rate-limited' ? 'Too many attempts — please wait a minute before trying again.' :
           e.kind === 'server' ? 'The server hit an internal error. Try again in a moment — if it persists, restart the server so pending updates finish applying.' :
           e.message,
         variant: 'destructive',
