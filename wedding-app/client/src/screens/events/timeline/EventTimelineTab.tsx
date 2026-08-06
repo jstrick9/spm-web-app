@@ -43,6 +43,14 @@ export function EventTimelineTab({ eventId, organizationId }: Props) {
     queryFn: () => sdk.timeline.list(eventId),
   });
 
+  // The wedding date anchors new timeline items (so reminders, ICS
+  // exports, and late-checks use the right day, not the creation day).
+  const { data: eventData } = useQuery({
+    queryKey: ['event', eventId],
+    queryFn: () => sdk.events.get(eventId),
+  });
+  const eventStartDate = eventData?.event?.start_date ?? null;
+
   const { data: readinessData, isLoading: readinessLoading } = useQuery({
     queryKey: ['event-readiness', eventId],
     queryFn: () => sdk.timeline.readiness(eventId),
@@ -198,8 +206,11 @@ export function EventTimelineTab({ eventId, organizationId }: Props) {
   const applyTimelineTemplate = async (templateId: TimelineTemplateId) => {
     setTemplateBusy(templateId);
     try {
-      const base = new Date();
-      base.setHours(9, 0, 0, 0);
+      // Anchor the template to the WEDDING day at 9 AM (the old code
+      // anchored to today, so template items carried the creation date).
+      const base = eventStartDate
+        ? new Date(`${eventStartDate}T09:00:00`)
+        : (() => { const d = new Date(); d.setHours(9, 0, 0, 0); return d; })();
       const template = TIMELINE_TEMPLATES[templateId];
       for (const item of template.items) {
         const startsAt = new Date(base.getTime() + item.offsetMin * 60_000);
@@ -543,6 +554,7 @@ export function EventTimelineTab({ eventId, organizationId }: Props) {
       {(createOpen || !!editItem) && (
         <TimelineItemFormDialog
           eventId={eventId}
+          eventStartDate={eventStartDate}
           open={createOpen || !!editItem}
           onOpenChange={(v) => {
             if (!v) {

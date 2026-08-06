@@ -7,6 +7,7 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '../..
 import { Skeleton } from '../../../ui/Skeleton';
 import { Badge } from '../../../ui/Badge';
 import { format, parseISO } from 'date-fns';
+import { isPastDateTime } from '../../../lib/formatDate';
 
 import { ManagerTimelineState, TimelineDiffEntry, TimelineAudience, ApprovalStatus, timelineMetadata, plainLanguageIssue, approvalLabel } from './timelineState';
 
@@ -43,7 +44,7 @@ export function ManagerTimelineCommandCenter({
 }) {
   const now = Date.now();
   const missingAssignments = items.filter(item => !item.vendor_id && !item.assigned_to && !timelineMetadata(item).assignedContactName);
-  const lateItems = items.filter(item => item.completed !== 1 && new Date(item.starts_at).getTime() < now);
+  const lateItems = items.filter(item => item.completed !== 1 && isPastDateTime(item.starts_at));
   const reviewChecks = [
     { label: 'At least one timeline item exists', complete: items.length > 0 },
     { label: 'Critical readiness issues resolved or explained', complete: !readiness?.issues?.some(i => i.severity === 'critical') },
@@ -197,7 +198,7 @@ export function ManagerTimelineItemActions({ item, vendors, staffTasks, onUpdate
   const assignedStaffTask = staffTasks.find(task => task.id === meta.assignedStaffTaskId || task.assignee_name === item.assigned_to || task.title === item.assigned_to);
   const assignedName = assignedVendor?.name || assignedStaffTask?.assignee_name || assignedStaffTask?.title || meta.assignedContactName || item.assigned_to;
   const phone = assignedVendor?.phone || assignedStaffTask?.assignee_phone || meta.assignedContactPhone;
-  const isLate = item.completed !== 1 && new Date(item.starts_at).getTime() < Date.now();
+  const isLate = item.completed !== 1 && isPastDateTime(item.starts_at);
   const incidents = Array.isArray(meta.incidentAnnotations) ? meta.incidentAnnotations : [];
 
   const handleAssignmentChange = (value: string) => {

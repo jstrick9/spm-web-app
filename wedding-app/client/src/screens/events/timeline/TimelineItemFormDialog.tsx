@@ -28,13 +28,16 @@ interface Props {
   onOpenChange: (open: boolean) => void;
   eventId: string;
   item: SdkTimelineItem | null;
+  /** The event's start_date ('YYYY-MM-DD') — timeline items are anchored to
+   *  the WEDDING day so reminders, ICS exports, and late-checks align. */
+  eventStartDate?: string | null;
 }
 
 const CATEGORIES = [
   'ceremony', 'reception', 'photography', 'vendor_arrival', 'prep', 'other'
 ];
 
-export function TimelineItemFormDialog({ open, onOpenChange, eventId, item }: Props) {
+export function TimelineItemFormDialog({ open, onOpenChange, eventId, item, eventStartDate }: Props) {
   const qc = useQueryClient();
   const { toast } = useToast();
 
@@ -63,12 +66,17 @@ export function TimelineItemFormDialog({ open, onOpenChange, eventId, item }: Pr
 
   const mutation = useMutation({
     mutationFn: async (values: FormValues) => {
-      // Build a valid ISO timestamp from form time inputs 
-      // since the DB expects ISO strings, but the UI is focused on time-of-day.
-      // We will anchor it to today's date for storage.
-      const startsAt = new Date();
+      // Build a valid ISO timestamp from form time inputs.
+      // Anchor to the EVENT's wedding date when known — anchoring to
+      // TODAY stored every item on the creation day: guest ICS exports
+      // showed the ceremony on the wrong day, and items were flagged
+      // "late" the same evening they were created (readiness + reminders
+      // broke for future weddings).
       const [hh, mm] = values.time.split(':');
-      startsAt.setHours(parseInt(hh, 10), parseInt(mm, 10), 0, 0);
+      const pad = (n: string) => n.padStart(2, '0');
+      const startsAt = eventStartDate
+        ? new Date(`${eventStartDate}T${pad(hh)}:${pad(mm)}:00`)
+        : (() => { const d = new Date(); d.setHours(parseInt(hh, 10), parseInt(mm, 10), 0, 0); return d; })();
 
       const durationMin = values.durationMinStr ? parseInt(values.durationMinStr, 10) : undefined;
       

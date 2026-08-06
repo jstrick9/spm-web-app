@@ -56,6 +56,28 @@ export function parseDateOnly(value: string | null | undefined): Date | null {
 }
 
 /**
+ * "Is this instant's calendar day + time already past?" — the honest late
+ * check for scheduled items (timeline events, shifts).
+ *
+ * A raw `new Date(x).getTime() < Date.now()` marks items as late as soon
+ * as their CLOCK TIME passes on ANY day — so a ceremony at 4:30 PM stored
+ * for a future wedding date became "late" at 4:30 PM on the day it was
+ * CREATED. This helper treats an item as late only when its own calendar
+ * day has passed, or the day is today and the clock time has passed.
+ */
+export function isPastDateTime(value: string | null | undefined, now = new Date()): boolean {
+  if (!value) return false;
+  const parsed = new Date(value);
+  if (Number.isNaN(parsed.getTime())) return false;
+  const day = parseDateOnly(value);
+  if (!day) return false;
+  const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+  if (day.getTime() < today.getTime()) return true;   // its day already passed
+  if (day.getTime() > today.getTime()) return false;  // future day — never "late" yet
+  return parsed.getTime() < now.getTime();            // today: late once the time passes
+}
+
+/**
  * Whole calendar days from today (local) to a date-only string; negative
  * when the date is past. DST-safe (compares y/m/d, not raw timestamps).
  */

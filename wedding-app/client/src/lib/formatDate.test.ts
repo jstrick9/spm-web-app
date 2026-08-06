@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, afterEach } from 'vitest';
-import { formatDateOnly, parseDateOnly, daysUntilDateOnly } from './formatDate';
+import { formatDateOnly, parseDateOnly, daysUntilDateOnly, isPastDateTime } from './formatDate';
 
 describe('formatDateOnly', () => {
   it('formats YYYY-MM-DD without timezone drift', () => {
@@ -90,5 +90,30 @@ describe('daysUntilDateOnly — DST-safe whole-day countdown', () => {
   it('returns null for missing dates', () => {
     expect(daysUntilDateOnly(null)).toBeNull();
     expect(daysUntilDateOnly('')).toBeNull();
+  });
+});
+
+describe('isPastDateTime — "late" only when the item\'s OWN day+time passed', () => {
+  const now = new Date(2026, 8, 12, 14, 0); // Sep 12, 2026 2:00 PM local
+
+  it('a future-dated item is never late, even after its clock time on the creation day', () => {
+    // 4:30 PM on Sep 30 — created Sep 12. Old code flagged it "late" at
+    // 4:30 PM on Sep 12 (the creation day); the honest answer is false.
+    expect(isPastDateTime('2026-09-30T16:30:00', now)).toBe(false);
+  });
+
+  it('a same-day item becomes late only after its time passes', () => {
+    expect(isPastDateTime('2026-09-12T13:00:00', now)).toBe(true);   // 1 PM < 2 PM
+    expect(isPastDateTime('2026-09-12T15:00:00', now)).toBe(false);  // 3 PM > 2 PM
+  });
+
+  it('a past-day item is late regardless of the clock time', () => {
+    expect(isPastDateTime('2026-09-10T23:59:00', now)).toBe(true);
+  });
+
+  it('handles null/garbage safely', () => {
+    expect(isPastDateTime(null)).toBe(false);
+    expect(isPastDateTime(undefined)).toBe(false);
+    expect(isPastDateTime('garbage')).toBe(false);
   });
 });
