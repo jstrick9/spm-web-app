@@ -107,4 +107,43 @@ test('guest submits an RSVP through the wizard with their secure link', async ({
   expect(row, 'guest must appear in the catering export').toBeTruthy();
   expect(row![dietaryIdx]).toContain('Vegetarian');
   expect(row![submittedIdx]).toBeTruthy();
+
+  // ── 5. EDIT: the guest changes their RSVP (latest submission wins) ──
+  // Reopen the portal with the same link and submit a decline.
+  await page.goto(`/#/portal/${eventId}?guest=${guestId}&token=${guestToken}`);
+  await expect(page.locator('h1')).toBeVisible({ timeout: 20_000 });
+  // Returning guest: the home tab shows their saved RSVP with an
+  // "Edit response" button.
+  await expect(page.getByText('Response: attending').first()).toBeVisible({ timeout: 15_000 });
+  await page.getByRole('button', { name: /edit response/i }).click();
+  const form2 = page.getByRole('form', { name: 'RSVP form' });
+  await expect(form2).toBeVisible({ timeout: 15_000 });
+  await expect(form2.getByLabel('Your Name', { exact: true })).toHaveValue(guestId, { timeout: 10_000 });
+  await form2.getByRole('button', { name: 'Continue' }).click();          // → party
+  await form2.getByRole('button', { name: 'Regretfully decline' }).click();
+  await form2.getByPlaceholder(/optional private note for the couple/i).fill('Date conflict, sorry!');
+  // Programmatic element clicks: a coordinate click on the footer's
+  // Continue button can land on the re-rendered Submit RSVP button (same
+  // position) and submit the form in the same interaction. element.click()
+  // dispatches on the Continue node only — deterministic.
+  await form2.getByRole('button', { name: 'Continue' }).evaluate((el) => (el as HTMLButtonElement).click()); // → party
+  await expect(form2.getByText('Plus-one', { exact: true })).toBeVisible({ timeout: 10_000 });
+  await form2.getByRole('button', { name: 'Continue' }).evaluate((el) => (el as HTMLButtonElement).click()); // → meal
+  await expect(form2.getByText('Meal choice', { exact: true })).toBeVisible({ timeout: 10_000 });
+  await form2.getByRole('button', { name: 'Continue' }).evaluate((el) => (el as HTMLButtonElement).click()); // → review
+  const submitBtn = form2.getByRole('button', { name: 'Submit RSVP' });
+  await expect(submitBtn).toBeVisible({ timeout: 10_000 });
+  const privacy = form2.locator('input[type="checkbox"]').first();
+  if (!(await privacy.isChecked().catch(() => true))) {
+    await privacy.evaluate((el) => ((el as HTMLInputElement).checked = true) && el.dispatchEvent(new Event('change', { bubbles: true })));
+  }
+  await submitBtn.evaluate((el) => (el as HTMLButtonElement).click());
+  await expect(page.getByText('Response: declined').first()).toBeVisible({ timeout: 15_000 });
+
+  // Server: the guest is now declined; the decline note was recorded.
+  const afterEdit = (await (await request.get(`/api/events/${eventId}/couple-guests`, {
+    headers: { authorization: `Bearer ${token}` },
+  })).json()) as { guests: Array<any> };
+  const edited = afterEdit.guests.find((g: any) => g.id === guestId);
+  expect(edited.rsvpStatus, 'latest submission must win').toBe('declined');
 });

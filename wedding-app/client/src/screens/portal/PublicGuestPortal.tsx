@@ -63,6 +63,53 @@ const DEFAULT_PALETTE = {
 
 type Palette = typeof DEFAULT_PALETTE;
 
+/**
+ * PrecisionCountdown — self-contained wedding-day countdown.
+ *
+ * Only THIS component re-renders on its 10s tick; the old implementation
+ * kept `nowTime` in the portal root, re-rendering the ENTIRE portal tree
+ * (including the multi-step RSVP wizard) every 10 seconds.
+ */
+function PrecisionCountdown({ startDate, palette }: { startDate: string; palette: Palette }) {
+  const [nowTime, setNowTime] = useState(Date.now());
+  useEffect(() => {
+    const interval = setInterval(() => setNowTime(Date.now()), 10000);
+    return () => clearInterval(interval);
+  }, []);
+  const diff = new Date(startDate).getTime() - nowTime;
+  const isPast = diff < 0;
+  const days = Math.max(0, Math.floor(diff / 86400000));
+  const hours = Math.max(0, Math.floor((diff % 86400000) / 3600000));
+  const minutes = Math.max(0, Math.floor((diff % 3600000) / 60000));
+  return (
+    <div className="text-center py-6 px-4 rounded-2xl border" style={{ borderColor: palette.border, background: palette.surface }}>
+      <span className="text-[10px] uppercase font-bold tracking-widest block mb-1.5" style={{ color: palette.primary }}>Wedding Day Countdown</span>
+      {isPast ? (
+        <div className="font-display text-2xl py-4" style={{ color: palette.primary }}>
+          🎉 Congratulations! It's Celebration Time!
+        </div>
+      ) : (
+        <div className="flex justify-center items-center gap-4 sm:gap-6 py-2">
+          <div className="text-center">
+            <div className="font-display text-4xl sm:text-5xl font-black" style={{ color: palette.primary }}>{days}</div>
+            <div className="text-[9px] uppercase tracking-wider text-fg-subtle mt-0.5 font-sans font-bold">Days</div>
+          </div>
+          <div className="font-display text-2xl sm:text-3xl text-fg-subtle opacity-40">:</div>
+          <div className="text-center">
+            <div className="font-display text-4xl sm:text-5xl font-black" style={{ color: palette.primary }}>{hours}</div>
+            <div className="text-[9px] uppercase tracking-wider text-fg-subtle mt-0.5 font-sans font-bold">Hours</div>
+          </div>
+          <div className="font-display text-2xl sm:text-3xl text-fg-subtle opacity-40">:</div>
+          <div className="text-center">
+            <div className="font-display text-4xl sm:text-5xl font-black" style={{ color: palette.primary }}>{minutes}</div>
+            <div className="text-[9px] uppercase tracking-wider text-fg-subtle mt-0.5 font-sans font-bold">Minutes</div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
 // ── PublicGuestPortal ─────────────────────────────────────────────────────
 
 export function PublicGuestPortal({ eventId }: { eventId: string }) {
@@ -100,7 +147,6 @@ export function PublicGuestPortal({ eventId }: { eventId: string }) {
   const [guestPostEvent,  setGuestPostEvent] = useState<PortalInfoResponse['guestPostEvent'] | null>(null);
   const [largeTextMode,   setLargeTextMode]  = useState(() => localStorage.getItem('wvi_guest_large_text') === '1');
   const [highContrastMode,setHighContrastMode] = useState(() => localStorage.getItem('wvi_guest_high_contrast') === '1');
-  const [nowTime,         setNowTime]        = useState(Date.now());
   const [scheduleTab,     setScheduleTab]    = useState<'wedding' | 'subevents'>('wedding');
   const [guestToken,      setGuestToken]      = useState('');
   const [guestLanguage,   setGuestLanguage]   = useState('en');
@@ -136,13 +182,6 @@ export function PublicGuestPortal({ eventId }: { eventId: string }) {
       g.fullName.split(' ').slice(-1)[0] === activeLastName
     );
   }, [activeGuest, guests, selectedGuestId]);
-
-  useEffect(() => {
-    const interval = setInterval(() => {
-      setNowTime(Date.now());
-    }, 10000);
-    return () => clearInterval(interval);
-  }, []);
 
   useEffect(() => { localStorage.setItem('wvi_guest_large_text', largeTextMode ? '1' : '0'); }, [largeTextMode]);
   useEffect(() => { localStorage.setItem('wvi_guest_high_contrast', highContrastMode ? '1' : '0'); }, [highContrastMode]);
@@ -459,43 +498,9 @@ export function PublicGuestPortal({ eventId }: { eventId: string }) {
               />
             </Suspense>
 
-            {/* Precision Countdown */}
-            {info.startDate && (() => {
-              const diff = new Date(info.startDate!).getTime() - nowTime;
-              const isPast = diff < 0;
-              
-              const days = Math.max(0, Math.floor(diff / 86400000));
-              const hours = Math.max(0, Math.floor((diff % 86400000) / 3600000));
-              const minutes = Math.max(0, Math.floor((diff % 3600000) / 60000));
-
-              return (
-                <div className="text-center py-6 px-4 rounded-2xl border" style={{ borderColor: portalPalette.border, background: portalPalette.surface }}>
-                  <span className="text-[10px] uppercase font-bold tracking-widest block mb-1.5" style={{ color: portalPalette.primary }}>Wedding Day Countdown</span>
-                  {isPast ? (
-                    <div className="font-display text-2xl py-4" style={{ color: portalPalette.primary }}>
-                      🎉 Congratulations! It's Celebration Time!
-                    </div>
-                  ) : (
-                    <div className="flex justify-center items-center gap-4 sm:gap-6 py-2">
-                      <div className="text-center">
-                        <div className="font-display text-4xl sm:text-5xl font-black" style={{ color: portalPalette.primary }}>{days}</div>
-                        <div className="text-[9px] uppercase tracking-wider text-fg-subtle mt-0.5 font-sans font-bold">Days</div>
-                      </div>
-                      <div className="font-display text-2xl sm:text-3xl text-fg-subtle opacity-40">:</div>
-                      <div className="text-center">
-                        <div className="font-display text-4xl sm:text-5xl font-black" style={{ color: portalPalette.primary }}>{hours}</div>
-                        <div className="text-[9px] uppercase tracking-wider text-fg-subtle mt-0.5 font-sans font-bold">Hours</div>
-                      </div>
-                      <div className="font-display text-2xl sm:text-3xl text-fg-subtle opacity-40">:</div>
-                      <div className="text-center">
-                        <div className="font-display text-4xl sm:text-5xl font-black" style={{ color: portalPalette.primary }}>{minutes}</div>
-                        <div className="text-[9px] uppercase tracking-wider text-fg-subtle mt-0.5 font-sans font-bold">Minutes</div>
-                      </div>
-                    </div>
-                  )}
-                </div>
-              );
-            })()}
+            {/* Precision Countdown — self-contained (does not re-render the
+                whole portal on each tick) */}
+            {info.startDate && <PrecisionCountdown startDate={info.startDate} palette={portalPalette} />}
 
             {/* Weather & rain plan — venue-authored note only (no fabricated forecasts) */}
             {guestTravel?.weatherRainPlanNote?.trim() && (
