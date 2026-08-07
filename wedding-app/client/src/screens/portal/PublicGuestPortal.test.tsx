@@ -39,7 +39,11 @@ vi.mock('../../sdk', () => ({
     portal:   { info: vi.fn(), status: vi.fn(), submitRsvp: vi.fn(), lookup: vi.fn(), requestHelp: vi.fn(), askQuestion: vi.fn(), requestAccessibility: vi.fn(), requestPrivacy: vi.fn(), saveReminderPreferences: vi.fn(), dayOfHelp: vi.fn(), submitMemory: vi.fn(), submitGuestFeedback: vi.fn(), resendLink: vi.fn(), messages: vi.fn() },
     feedback: { getPolls: vi.fn(), votePoll: vi.fn() },
   },
-  ApiError: class ApiError extends Error {},
+  ApiError: class ApiError extends Error {
+    constructor(public readonly kind: string, public readonly status: number, public readonly code: string) {
+      super(`${status} ${code}`);
+    }
+  },
 }));
 
 /**
@@ -78,7 +82,7 @@ vi.mock('react-konva', () => ({
   Text:   () => null,
 }));
 
-import { sdk } from '../../sdk';
+import { sdk, ApiError } from '../../sdk';
 import { PublicGuestPortal } from './PublicGuestPortal';
 
 // ── Fixtures ──────────────────────────────────────────────────────────────
@@ -805,5 +809,37 @@ describe('PublicGuestPortal — Phase 34b regression suite', () => {
     // Verify Roommates dashboard lists Bob Johnson as roommate
     expect(screen.getByText(/My Roommates \/ Suite Group/i)).toBeInTheDocument();
     expect(screen.getByText('Bob Johnson')).toBeInTheDocument();
+  });
+});
+
+describe('secure-link resend rate-limit UX', () => {
+  it('shows a friendly message instead of failing silently when resend is rate-limited', async () => {
+    vi.mocked(sdk.portal.info).mockResolvedValue(BASE_INFO as never);
+    renderPortal();
+    await screen.findByText('Guest Welcome / Start Here');
+
+    vi.mocked(sdk.portal.resendLink).mockRejectedValueOnce(new ApiError('rate-limited', 429, 'rate-limited') as never);
+
+    fireEvent.click(screen.getByRole('button', { name: 'Request secure link' }));
+    const dialog = await screen.findByRole('dialog');
+    fireEvent.change(dialog.querySelector('input') as HTMLInputElement, { target: { value: 'guest@example.com' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Save' }));
+
+    expect((await screen.findAllByText(/Too many link requests in the last minute/i)).length).toBeGreaterThanOrEqual(1);
+  });
+
+  it('shows a friendly message when a guest help request is rate-limited', async () => {
+    vi.mocked(sdk.portal.info).mockResolvedValue(BASE_INFO as never);
+    renderPortal();
+    await screen.findByText('Guest Welcome / Start Here');
+
+    vi.mocked(sdk.portal.requestHelp).mockRejectedValueOnce(new ApiError('rate-limited', 429, 'rate-limited') as never);
+
+    fireEvent.click(screen.getByRole('button', { name: 'I cannot find my name' }));
+    const dialog = await screen.findByRole('dialog');
+    fireEvent.change(dialog.querySelectorAll('input')[0] as HTMLInputElement, { target: { value: 'guest@example.com' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Save' }));
+
+    expect((await screen.findAllByText(/Too many help requests in the last minute/i)).length).toBeGreaterThanOrEqual(1);
   });
 });

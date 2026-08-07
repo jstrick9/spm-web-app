@@ -273,7 +273,7 @@ export const portalSdk = {
   submitRsvp(
     eventId: string,
     input: PortalRsvpInput,
-  ): Promise<{ ok: boolean; rsvpId: string; confirmation?: { status: string; emailJobId?: string; smsJobId?: string } }> {
+  ): Promise<{ ok: boolean; rsvpId: string; lateSubmission?: boolean; confirmation?: { status: string; emailJobId?: string; smsJobId?: string } }> {
     return api.post(`/api/portal/${eventId}/rsvp`, input, { auth: false });
   },
 };

@@ -47,7 +47,7 @@ export function GuestRsvpWizard({
   const [memberAccessibility, setMemberAccessibility] = useState<Record<string, string>>({});
   const [subEventStatuses, setSubEventStatuses] = useState<Record<string, 'attending' | 'declined' | 'unsure'>>({});
   const [error, setError] = useState('');
-  const [receipt, setReceipt] = useState<{ rsvpId: string; summary: string[] } | null>(null);
+  const [receipt, setReceipt] = useState<{ rsvpId: string; summary: string[]; lateSubmission?: boolean } | null>(null);
   const [emailReminderConsent, setEmailReminderConsent] = useState(false);
   const [smsReminderConsent, setSmsReminderConsent] = useState(false);
   const [privacyAcknowledged, setPrivacyAcknowledged] = useState(false);
@@ -158,7 +158,7 @@ export function GuestRsvpWizard({
         ...invitedSubEvents.map((sub: any) => `${sub.title}: ${subEventStatuses[sub.id] || 'unsure'}`),
       ];
       try { localStorage.removeItem(draftKey); } catch {}
-      setReceipt({ rsvpId: response.rsvpId, summary });
+      setReceipt({ rsvpId: response.rsvpId, summary, lateSubmission: response.lateSubmission === true });
       setStep('confirm');
     } catch (err) {
       const apiErr = err as Error & { kind?: string; code?: string };
@@ -173,7 +173,7 @@ export function GuestRsvpWizard({
   }
 
   if (step === 'confirm' && receipt) {
-    return <Card className="shadow-lg text-center" style={{ borderColor: palette.border }}><CardHeader><CardTitle className="font-display text-3xl">RSVP saved</CardTitle><CardDescription style={{ color: palette.fgMuted }}>Your response was recorded. If your invitation has email/SMS, a confirmation receipt may be sent by the venue.</CardDescription></CardHeader><CardContent className="space-y-4"><div className="rounded-xl border p-4 text-left text-sm" style={{ borderColor: palette.border, background: palette.accentSoft }}>{receipt.summary.map((line) => <div key={line} className="py-1">{line}</div>)}</div><div className="flex flex-wrap justify-center gap-3"><Button variant="outline" onClick={onReturnHome}>Return Home</Button>{isAttending && <Button variant="outline" onClick={onFindSeat}><MapIcon className="w-4 h-4 mr-1" /> Find Your Seat</Button>}<Button onClick={() => setStep('identify')}>Edit response</Button></div></CardContent></Card>;
+    return <Card className="shadow-lg text-center" style={{ borderColor: palette.border }}><CardHeader><CardTitle className="font-display text-3xl">RSVP saved</CardTitle><CardDescription style={{ color: palette.fgMuted }}>Your response was recorded. If your invitation has email/SMS, a confirmation receipt may be sent by the venue.</CardDescription></CardHeader><CardContent className="space-y-4"><div className="rounded-xl border p-4 text-left text-sm" style={{ borderColor: palette.border, background: palette.accentSoft }}>{receipt.summary.map((line) => <div key={line} className="py-1">{line}</div>)}</div>{receipt.lateSubmission && <div className="rounded-xl border border-warning/40 bg-warning-soft/20 p-3 text-left text-xs text-warning"><strong>Submitted after the RSVP deadline</strong><p className="mt-1" style={{ color: palette.fgMuted }}>Your response was still recorded, but the couple/venue may already be finalizing catering and seating. Contact them directly if your plans changed.</p></div>}<div className="flex flex-wrap justify-center gap-3"><Button variant="outline" onClick={onReturnHome}>Return Home</Button>{isAttending && <Button variant="outline" onClick={onFindSeat}><MapIcon className="w-4 h-4 mr-1" /> Find Your Seat</Button>}<Button onClick={() => setStep('identify')}>Edit response</Button></div></CardContent></Card>;
   }
 
   return (

@@ -338,8 +338,17 @@ export function PublicGuestPortal({ eventId }: { eventId: string }) {
       ],
     });
     if (!values) return;
-    const res = await sdk.portal.requestHelp(eventId, { kind, name: lookupQuery || activeGuest?.fullName, email: values.email || undefined, message: values.message || undefined, guestId: selectedGuestId || undefined });
-    setLookupMessage(res.message);
+    try {
+      const res = await sdk.portal.requestHelp(eventId, { kind, name: lookupQuery || activeGuest?.fullName, email: values.email || undefined, message: values.message || undefined, guestId: selectedGuestId || undefined });
+      setLookupMessage(res.message);
+    } catch (err: any) {
+      const e = err as ApiError;
+      setLookupMessage(
+        e.kind === 'rate-limited'
+          ? 'Too many help requests in the last minute — please wait a moment and try again.'
+          : e.message || 'Could not send your help request. Please try again in a minute.',
+      );
+    }
   }
 
   async function resendSecureLink() {
@@ -349,8 +358,17 @@ export function PublicGuestPortal({ eventId }: { eventId: string }) {
       if (!asked) return;
       email = asked;
     }
-    const res = await sdk.portal.resendLink(eventId, { email, name: lookupQuery || undefined });
-    setLookupMessage(res.message);
+    try {
+      const res = await sdk.portal.resendLink(eventId, { email, name: lookupQuery || undefined });
+      setLookupMessage(res.message);
+    } catch (err: any) {
+      const e = err as ApiError;
+      setLookupMessage(
+        e.kind === 'rate-limited'
+          ? 'Too many link requests in the last minute — please wait a moment and try again.'
+          : e.message || 'Could not request a secure link. Please try again in a minute.',
+      );
+    }
   }
 
   function saveGuestEventDetails() {
@@ -601,7 +619,7 @@ export function PublicGuestPortal({ eventId }: { eventId: string }) {
                                 setPolls(res.polls);
                               } catch { /* poll list refresh is best-effort */ }
                             }}
-                            aria-label={`Vote for: ${opt.text} (${opt.votes} votes)`}
+                            aria-label={`Vote for: ${opt.text} (${opt.votes} ${opt.votes === 1 ? 'vote' : 'votes'})`}
                           >
                             <span>{opt.text}</span>
                             <Badge
@@ -613,7 +631,7 @@ export function PublicGuestPortal({ eventId }: { eventId: string }) {
                                 color:        portalPalette.fg,
                               }}
                             >
-                              {opt.votes} votes
+                              {opt.votes} {opt.votes === 1 ? "vote" : "votes"}
                             </Badge>
                           </Button>
                         ))}
