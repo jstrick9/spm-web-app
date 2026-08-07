@@ -1,3 +1,4 @@
+import { useState } from "react";
 import {
   Settings,
   CalendarDays,
@@ -19,6 +20,7 @@ import {
   Inbox,
   Accessibility,
   ClipboardList,
+  Plus,
 } from "lucide-react";
 import { Button } from "../../../../ui/Button";
 import {
@@ -34,9 +36,27 @@ export interface PortalSubEventsCardProps {
   isLoading: any;
   subEvents: any[];
   updateSubEventMutation: any;
+  createSubEventMutation?: any;
 }
 
-export function PortalSubEventsCard({ isLoading, subEvents, updateSubEventMutation }: PortalSubEventsCardProps) {
+export function PortalSubEventsCard({ isLoading, subEvents, updateSubEventMutation, createSubEventMutation }: PortalSubEventsCardProps) {
+  // Creating sub-events (rehearsal dinner, welcome party, brunch, after
+  // party) was impossible from the UI — the SDK/server supported it but no
+  // screen wired it. Guests never saw weekend itinerary cards unless the
+  // venue created sub-events by API.
+  const [newTitle, setNewTitle] = useState("");
+  const [newStartsAt, setNewStartsAt] = useState("");
+  const [newInviteOnly, setNewInviteOnly] = useState(false);
+
+  const canCreate = !!createSubEventMutation;
+  const create = () => {
+    if (!newTitle.trim() || !newStartsAt) return;
+    createSubEventMutation.mutate({ title: newTitle.trim(), startsAt: newStartsAt, inviteOnly: newInviteOnly });
+    setNewTitle("");
+    setNewStartsAt("");
+    setNewInviteOnly(false);
+  };
+
   return (
           <Card>
             <CardHeader>
@@ -44,7 +64,19 @@ export function PortalSubEventsCard({ isLoading, subEvents, updateSubEventMutati
               <CardDescription>Structured fields for rehearsal dinner, welcome party, brunch, after-party, and invite-only guest itinerary cards.</CardDescription>
             </CardHeader>
             <CardContent className="space-y-3">
-              {subEvents.length === 0 ? <p className="rounded-lg border border-dashed border-border p-3 text-sm text-fg-muted">No sub-events created yet. Add rehearsal dinner or weekend events from the event timeline/sub-event tools.</p> : subEvents.map((sub: any) => {
+              {canCreate && (
+                <div className="rounded-lg border border-brand/20 bg-brand-soft/10 p-3 space-y-2">
+                  <div className="text-sm font-bold flex items-center gap-2"><Plus className="h-4 w-4 text-brand" /> Add a sub-event</div>
+                  <div className="grid gap-2 sm:grid-cols-[1fr_auto_auto_auto]">
+                    <Input aria-label="Sub-event title" placeholder="Rehearsal dinner, welcome party, brunch…" value={newTitle} onChange={(e) => setNewTitle(e.target.value)} />
+                    <Input aria-label="Sub-event start time" type="datetime-local" value={newStartsAt} onChange={(e) => setNewStartsAt(e.target.value)} />
+                    <label className="flex items-center gap-2 text-sm whitespace-nowrap"><input type="checkbox" checked={newInviteOnly} onChange={(e) => setNewInviteOnly(e.target.checked)} /> Invite-only</label>
+                    <Button size="sm" onClick={create} disabled={!newTitle.trim() || !newStartsAt || createSubEventMutation?.isPending} isLoading={createSubEventMutation?.isPending}>Add sub-event</Button>
+                  </div>
+                  <p className="text-xs text-fg-muted">The new sub-event appears in guests' weekend itinerary; then add guest-facing details below.</p>
+                </div>
+              )}
+              {subEvents.length === 0 ? <p className="rounded-lg border border-dashed border-border p-3 text-sm text-fg-muted">{canCreate ? "No sub-events yet. Use the form above to add the first one." : "No sub-events created yet. Add rehearsal dinner or weekend events from the event timeline/sub-event tools."}</p> : subEvents.map((sub: any) => {
                 const meta = typeof sub.metadata === 'string' ? JSON.parse(sub.metadata || '{}') : sub.metadata || {};
                 const save = () => {
                   const fields = ['eventType','location','host','dressCode','parking','dietaryFields','lateArrivalInstructions','contactName','contactEmail','helpText'];
