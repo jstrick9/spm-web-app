@@ -26,6 +26,7 @@ import { Button }                  from '../../ui/Button';
 import { Label }                   from '../../ui/Label';
 import { usePrompt }              from '../../ui/usePrompt';
 import { formatDateOnly, parseDateOnly } from '../../lib/formatDate';
+import { countdownParts } from './countdown';
 import { Map as MapIcon, Home, Send, CloudRain, HelpCircle, Bus, Gift, Mail, Contrast, Languages, RefreshCw, ShieldAlert, Type } from 'lucide-react';
 import { Badge }                   from '../../ui/Badge';
 import { cn }                      from '../../ui/lib/cn';
@@ -76,11 +77,15 @@ function PrecisionCountdown({ startDate, palette }: { startDate: string; palette
     const interval = setInterval(() => setNowTime(Date.now()), 10000);
     return () => clearInterval(interval);
   }, []);
-  const diff = new Date(startDate).getTime() - nowTime;
-  const isPast = diff < 0;
-  const days = Math.max(0, Math.floor(diff / 86400000));
-  const hours = Math.max(0, Math.floor((diff % 86400000) / 3600000));
-  const minutes = Math.max(0, Math.floor((diff % 3600000) / 60000));
+  // Target LOCAL midnight of the wedding day (parseDateOnly) — raw
+  // `new Date('YYYY-MM-DD')` is UTC midnight, which flips the countdown
+  // to "Celebration Time" while the wedding is still in progress in
+  // non-UTC timezones.
+  const parts = countdownParts(startDate, nowTime);
+  const isPast = parts.isPast;
+  const days = parts.days;
+  const hours = parts.hours;
+  const minutes = parts.minutes;
   return (
     <div className="text-center py-6 px-4 rounded-2xl border" style={{ borderColor: palette.border, background: palette.surface }}>
       <span className="text-[10px] uppercase font-bold tracking-widest block mb-1.5" style={{ color: palette.primary }}>Wedding Day Countdown</span>

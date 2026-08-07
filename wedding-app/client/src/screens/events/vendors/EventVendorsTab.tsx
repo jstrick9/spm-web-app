@@ -25,6 +25,7 @@ import {
   Star,
 } from "lucide-react";
 import { sdk, downloadFile } from "../../../sdk";
+import { daysUntilDateOnly, formatDateOnly } from "../../../lib/formatDate";
 import { Button } from "../../../ui/Button";
 import { Input } from "../../../ui/Input";
 import { Card, CardContent, CardHeader, CardTitle } from "../../../ui/Card";
@@ -278,12 +279,22 @@ export function EventVendorsTab({ eventId, organizationId }: Props) {
     }
     const expires = meta.coiExpirationDate;
     if (expires) {
-      const expDate = new Date(expires);
-      const today = new Date();
-      // Set hours to zero for clean comparison
-      expDate.setHours(0, 0, 0, 0);
-      today.setHours(0, 0, 0, 0);
-      if (expDate < today) {
+      // coiExpirationDate is DATE-ONLY ('YYYY-MM-DD'); raw
+      // `new Date(expires)` parses as UTC midnight, which lands on the
+      // PREVIOUS day in US timezones and would flag a COI as "Expired" a
+      // day early. Compare calendar dates via the TZ/DST-safe helpers.
+      const daysUntil = daysUntilDateOnly(expires);
+      if (daysUntil === null) {
+        return {
+          status: "at-risk",
+          label: "At Risk (No COI)",
+          insurer: meta.coiInsurer,
+          policy: meta.coiPolicyNumber,
+          expires,
+          color: "danger" as const,
+        };
+      }
+      if (daysUntil < 0) {
         return {
           status: "expired",
           label: "Expired COI",
@@ -293,9 +304,6 @@ export function EventVendorsTab({ eventId, organizationId }: Props) {
           color: "danger" as const,
         };
       }
-      const daysUntil = Math.ceil(
-        (expDate.getTime() - today.getTime()) / 86400000,
-      );
       if (daysUntil <= 30) {
         return {
           status: "expiring",
@@ -545,7 +553,7 @@ export function EventVendorsTab({ eventId, organizationId }: Props) {
                     : "text-[9px] text-fg-subtle"
                 }
               >
-                Expires: {new Date(coi.expires).toLocaleDateString()}
+                Expires: {formatDateOnly(coi.expires)}
               </span>
             )}
             {coiReviewMeta(v).reviewedBy && (

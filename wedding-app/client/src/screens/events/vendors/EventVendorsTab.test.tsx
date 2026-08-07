@@ -172,4 +172,38 @@ describe('EventVendorsTab COI review workflow', () => {
     expect(sdkCreatePortalToken).not.toHaveBeenCalled();
     openSpy.mockRestore();
   });
+
+  it('flags a COI as EXPIRED only after its calendar date passes (never a day early)', async () => {
+    // Date-only strings in LOCAL calendar terms so the test is TZ-agnostic.
+    const pad = (n: number) => String(n).padStart(2, '0');
+    const now = new Date();
+    const yesterday = new Date(now.getFullYear(), now.getMonth(), now.getDate() - 1);
+    const yesterdayStr = `${yesterday.getFullYear()}-${pad(yesterday.getMonth() + 1)}-${pad(yesterday.getDate())}`;
+    sdkList.mockResolvedValue({
+      vendors: [{
+        id: 'v-exp', name: 'Expired Co', category: 'Catering',
+        metadata: JSON.stringify({ coiReceived: true, coiVerificationStatus: 'approved', coiExpirationDate: yesterdayStr }),
+      }],
+    });
+    render(<EventVendorsTab eventId="evt-1" organizationId="org-1" />, { wrapper: makeWrapper() });
+    await screen.findAllByText('Expired Co');
+    expect(screen.getByText(/Expired COI/i)).toBeInTheDocument();
+  });
+
+  it('flags a COI expiring within 30 days as Expiring Soon (and today is not expired)', async () => {
+    const pad = (n: number) => String(n).padStart(2, '0');
+    const now = new Date();
+    const soon = new Date(now.getFullYear(), now.getMonth(), now.getDate() + 10);
+    const soonStr = `${soon.getFullYear()}-${pad(soon.getMonth() + 1)}-${pad(soon.getDate())}`;
+    sdkList.mockResolvedValue({
+      vendors: [{
+        id: 'v-soon', name: 'Soon Co', category: 'Florist',
+        metadata: JSON.stringify({ coiReceived: true, coiVerificationStatus: 'approved', coiExpirationDate: soonStr }),
+      }],
+    });
+    render(<EventVendorsTab eventId="evt-1" organizationId="org-1" />, { wrapper: makeWrapper() });
+    await screen.findAllByText('Soon Co');
+    expect(screen.getByText(/COI Expiring Soon/i)).toBeInTheDocument();
+    expect(screen.queryByText(/Expired COI/i)).not.toBeInTheDocument();
+  });
 });
