@@ -112,4 +112,39 @@ describe('Couple intake questionnaire', () => {
       headers: { authorization: `Bearer ${strangerToken}`, 'content-type': 'application/json' } });
     expect([403, 404]).toContain(put.statusCode);
   });
+
+  it('couples cannot attach answers to a foreign org\'s question (cross-org contamination)', async () => {
+    const s = await setup();
+    // Another org's question (same title, different owner).
+    const otherReg = await app.inject({ method: 'POST', url: '/api/auth/register',
+      payload: { email: `q-other-${Math.random().toString(36).slice(2)}@x.com`, password: 'testpass123', fullName: 'Other', orgName: 'OtherVenue' },
+      headers: { 'content-type': 'application/json' } });
+    const otherToken = otherReg.json().token;
+    const otherOrgId = otherReg.json().organizationId;
+    const foreignQ = await app.inject({ method: 'POST', url: `/api/orgs/${otherOrgId}/questions`,
+      payload: { question: 'Foreign question?', answerType: 'text' },
+      headers: { authorization: `Bearer ${otherToken}`, 'content-type': 'application/json' } });
+    const foreignQuestionId = foreignQ.json().question.id;
+
+    const put = await app.inject({ method: 'PUT', url: `/api/events/${s.eventId}/answers/${foreignQuestionId}`,
+      payload: { answer: 'cross-org pollution' },
+      headers: { authorization: `Bearer ${s.coupleToken}`, 'content-type': 'application/json' } });
+    expect(put.statusCode).toBe(400);
+    expect(put.json().error).toBe('question-org-mismatch');
+
+    // The foreign org's answer view is NOT polluted.
+    const otherAnswers = await app.inject({ method: 'GET', url: `/api/orgs/${otherOrgId}/questions/${foreignQuestionId}/answers`,
+      headers: { authorization: `Bearer ${otherToken}` } });
+    expect(otherAnswers.statusCode).toBe(200);
+    expect(otherAnswers.json().answers).toHaveLength(0);
+  });
+
+  it('answering a nonexistent question returns an explicit 404', async () => {
+    const s = await setup();
+    const put = await app.inject({ method: 'PUT', url: `/api/events/${s.eventId}/answers/does-not-exist`,
+      payload: { answer: 'nope' },
+      headers: { authorization: `Bearer ${s.coupleToken}`, 'content-type': 'application/json' } });
+    expect(put.statusCode).toBe(404);
+    expect(put.json().error).toBe('question-not-found');
+  });
 });

@@ -97,6 +97,15 @@ export async function questionRoutes(app: FastifyInstance) {
       (m) => m.eventId === eventId && String((m as any).roleKey ?? '').toLowerCase() === 'couple',
     );
     if (!isCoupleMember && !can(req.auth!.memberships, { eventId }, 'events.edit', orgMap)) throw Forbidden();
+    // The question must exist AND belong to the event's org — otherwise a
+    // couple could attach answers to a question from a foreign org, and that
+    // org's "View answers" would show a contaminated answer row for an event
+    // it does not own.
+    const event = eventsRepo.findById(eventId);
+    if (!event) throw NotFound('event-not-found');
+    const question = eventQuestionsRepo.findById(questionId);
+    if (!question) throw NotFound('question-not-found');
+    if (question.organization_id !== event.organization_id) throw BadRequest('question-org-mismatch');
     const parsed = z.object({ answer: z.string() }).safeParse(req.body);
     if (!parsed.success) throw BadRequest('invalid-input', parsed.error.issues);
     return {
