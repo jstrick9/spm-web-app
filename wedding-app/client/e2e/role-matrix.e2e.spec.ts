@@ -90,6 +90,30 @@ test('planner sees planning surfaces but is blocked from admin/venue/inventory m
   expect(allErrors, `planner role-matrix pass produced console/network errors:\n${allErrors.join('\n')}`).toEqual([]);
 });
 
+test('owner without the registration flag still gets the venue-wide ops widgets (space calendar, staffing calendar)', async ({ page, request }) => {
+  // Regression: manager-mode flags were keyed to a localStorage registration
+  // artifact (wvi_registration_role), so owners/admins and invite-joined
+  // managers never saw the venue-wide ops widgets. Registering via the API
+  // sets NO flag — exactly the case that used to fail.
+  const email = `owner-${Date.now()}@example.com`;
+  const reg = await request.post('/api/auth/register', {
+    data: { email, password: 'testpass123', fullName: 'Owner Ops', orgName: `Ops Venue ${Date.now()}` },
+  });
+  expect(reg.ok()).toBeTruthy();
+  const login = await request.post('/api/auth/login', { data: { email, password: 'testpass123' } });
+  const memberToken = (await login.json()).token;
+  const me = await (await request.get('/api/auth/me', { headers: { authorization: `Bearer ${memberToken}` } })).json();
+  const orgId = me.memberships.find((m: any) => m.organizationId)?.organizationId as string;
+  await request.put('/api/users/me/preferences', {
+    headers: { authorization: `Bearer ${memberToken}`, 'content-type': 'application/json' },
+    data: { onboarding: { welcomeTourByOrg: { [orgId]: { status: 'completed', currentSlide: 0, completedSlides: [], completedAt: new Date().toISOString() } } } },
+  });
+
+  await loginAs(page, email);
+  await expect(page.getByText(/Venue space calendar/i).first()).toBeVisible({ timeout: 20_000 });
+  await expect(page.getByText(/Staffing calendar/i).first()).toBeVisible({ timeout: 15_000 });
+});
+
 test('staff sees operational surfaces but is blocked from catalog/questions/admin and event editing', async ({ page, request }) => {
   const { email, token, orgId } = await setupMember(request, 'sys_staff', 'staff');
 

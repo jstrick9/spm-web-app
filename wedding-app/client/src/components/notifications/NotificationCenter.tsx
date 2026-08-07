@@ -67,12 +67,18 @@ function saveReadIds(ids: Set<string>) {
   localStorage.setItem(STORAGE_KEY, JSON.stringify(arr));
 }
 
-export function NotificationCenter({ memberships = [] }: { memberships?: SdkMembership[] }) {
+export function NotificationCenter({ memberships = [], orgId = null }: { memberships?: SdkMembership[]; orgId?: string | null }) {
   const [open, setOpen] = useState(false);
   const [notifications, setNotifications] = useState<Notification[]>([]);
   const [readIds, setReadIds] = useState<Set<string>>(getReadIds);
   const [managerPreset, setManagerPreset] = useState(() => localStorage.getItem('wvi_manager_notification_preset') || 'balanced');
-  const managerMode = typeof window !== 'undefined' && localStorage.getItem('wvi_registration_role') === 'venue_manager';
+  // Registration-path flag OR the venue-management tier in the ACTIVE org
+  // (owner/admin/manager) — the flag alone hid manager presets from owners,
+  // admins, and invite-joined managers. Scoped to orgId so a user's own
+  // unrelated org membership can't unlock the tier.
+  const managerMode =
+    (typeof window !== 'undefined' && localStorage.getItem('wvi_registration_role') === 'venue_manager') ||
+    (!!orgId && memberships.some((m) => m.organizationId === orgId && ['owner', 'admin', 'manager'].includes(String(m.roleKey).toLowerCase())));
   const { navigate } = useRouter();
   // Push notifications subscribe against the user's first organization
   // membership (the bell is a global header control).

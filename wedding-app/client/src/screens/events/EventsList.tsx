@@ -56,9 +56,13 @@ import type { ViewMode, StatusFilter, ManagerPipelineFilter } from './eventsList
 
 interface Props {
   orgId: string;
+  /** True when the user holds an owner/admin/manager membership in the org
+   *  (venue-management tier) — the manager-ops pipeline is not just for the
+   *  registration-path manager persona. */
+  managerMode?: boolean;
 }
 
-export function EventsList({ orgId }: Props) {
+export function EventsList({ orgId, managerMode = false }: Props) {
   const { navigate } = useRouter();
   const [search, setSearch] = useState("");
   const debouncedSearch = useDebouncedValue(search, 250);
@@ -68,11 +72,14 @@ export function EventsList({ orgId }: Props) {
     useState<ManagerPipelineFilter>("all");
   const [createOpen, setCreateOpen] = useState(false);
   const [createPreset, setCreatePreset] = useState<'lead' | 'planning' | undefined>(undefined);
+  // Registration-path flag OR the org's venue-management tier (owner/admin/
+  // manager) — the flag alone hid the manager ops pipeline from owners,
+  // admins, and invite-joined managers.
   const isManager = (() => {
     try {
-      return localStorage.getItem("wvi_registration_role") === "venue_manager";
+      return managerMode || localStorage.getItem("wvi_registration_role") === "venue_manager";
     } catch {
-      return false;
+      return managerMode;
     }
   })();
 

@@ -379,6 +379,7 @@ function AuthenticatedApp({
         onLogout={onLogout}
         onOpenCommandPalette={() => setPaletteOpen(true)}
         memberships={memberships}
+        orgId={orgId}
       >
         <Suspense fallback={<Loading />}>
           <Routes
@@ -533,7 +534,7 @@ function Routes({
     if (!orgId) return <Loading />;
     return (
       <RequirePermission permission="events.view" feature="Events">
-        <EventsList orgId={orgId} />
+        <EventsList orgId={orgId} managerMode={memberships.some((m: any) => m.organizationId === orgId && ['owner', 'admin', 'manager'].includes(String(m.roleKey).toLowerCase()))} />
       </RequirePermission>
     );
   }

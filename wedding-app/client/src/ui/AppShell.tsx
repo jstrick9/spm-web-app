@@ -75,6 +75,8 @@ import { NAV_ITEM_META, NAV_PERMISSION_IDS } from './appShellNavigation';
 import { usePrompt } from './usePrompt';
 
 export interface AppShellProps {
+  /** Active org id — scopes the venue-management-tier checks (manager mode). */
+  orgId?: string | null;
   user: SdkUser;
   currentPath?: string;
   onLogout: () => void;
@@ -90,6 +92,7 @@ export function AppShell({
   onLogout,
   onOpenCommandPalette,
   memberships = [],
+  orgId = null,
   children,
 }: AppShellProps) {
   const { ask, askConfirm, promptNode } = usePrompt();
@@ -333,7 +336,7 @@ export function AppShell({
             <HelpCircle className="h-5 w-5" aria-hidden="true" />
           </Button>
           <ThemeToggle />
-          <NotificationCenter memberships={memberships} />
+          <NotificationCenter memberships={memberships} orgId={orgId} />
           <UserMenu user={user} onLogout={onLogout} />
         </div>
       </header>

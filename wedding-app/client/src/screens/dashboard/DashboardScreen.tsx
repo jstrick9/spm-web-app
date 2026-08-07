@@ -237,8 +237,12 @@ export function DashboardScreen({
   const focusEvent = managerEvents[0];
   const roleKeys =
     meQuery.data?.memberships?.map((membership) => membership.roleKey) ?? [];
+  // The registration-path flag alone missed owners/admins (and anyone who
+  // joined via an invitation), hiding the venue-wide ops widgets (space
+  // calendar, staffing calendar, portfolio readiness) from the people with
+  // the most authority to act on them.
   const isManager =
-    roleKeys.includes("manager") ||
+    roleKeys.some((key) => ["owner", "admin", "manager"].includes(key)) ||
     localStorage.getItem("wvi_registration_role") === "venue_manager";
 
   const approvalQueueQuery = useQuery({ queryKey: ['layout-approval-queue', orgId], queryFn: () => sdk.layouts.approvalQueue(orgId!), enabled: !!orgId && canApproveLayouts, staleTime: 30_000 });
