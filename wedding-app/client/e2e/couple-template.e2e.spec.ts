@@ -90,7 +90,8 @@ test('couple applies a venue-approved starting plan template', async ({ page, re
   // ── 1. Apply the template ──
   const useBtn = page.getByRole('button', { name: 'Use this template' }).first();
   await useBtn.evaluate((el) => el.scrollIntoView({ block: 'center', inline: 'nearest' }));
-  await useBtn.click();
+  // the hub re-renders on SSE refetches (full-suite churn) — force-click
+  await useBtn.click({ force: true });
   await expect(page.getByText('Template applied as your layout proposal').first()).toBeVisible({ timeout: 15_000 });
 
   // ── 2. Server-side verification: a layout proposal now exists ──

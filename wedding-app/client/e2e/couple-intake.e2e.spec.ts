@@ -16,11 +16,10 @@ const BASE = process.env.A11Y_BASE_URL || 'http://localhost:3000';
 /** Headless Chromium's first fill after an SPA navigation can silently
  *  no-op — click first, retry once if the value didn't stick. */
 async function fillInput(locator: import('@playwright/test').Locator, value: string): Promise<void> {
-  await locator.evaluate((el) => el.scrollIntoView({ block: 'center' }));
-  await locator.click();
+  // the hub re-renders on SSE refetches (full-suite churn) — fill() retries
+  // the silent first-fill quirk without a stability-gated click
   await locator.fill(value);
   if ((await locator.inputValue()) !== value) {
-    await locator.click();
     await locator.fill(value);
   }
   await expect(locator).toHaveValue(value);
@@ -97,7 +96,9 @@ test('couple answers the venue intake questionnaire and the venue sees it', asyn
   // the Save button lives in the group header — anchor on the run-unique
   // group heading and walk up to the group card
   const ceremonyGroup = page.getByText(groupName, { exact: true }).locator('xpath=ancestor::div[contains(concat(" ", normalize-space(@class), " "), " rounded-xl ")][1]');
-  await ceremonyGroup.getByRole('button', { name: 'Save group' }).click();
+  const saveBtn = ceremonyGroup.getByRole('button', { name: 'Save group' });
+  await saveBtn.evaluate((el) => el.scrollIntoView({ block: 'center' }));
+  await saveBtn.click({ force: true });
   await expect(page.getByText('Intake answers saved').first()).toBeVisible({ timeout: 15_000 });
   await expect(page.getByText(/1\/1 answered/).first()).toBeVisible({ timeout: 10_000 });
 
