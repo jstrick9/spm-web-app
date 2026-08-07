@@ -188,6 +188,35 @@ test.describe('Accessibility @a11y', () => {
     expect(results.violations).toHaveLength(0);
   });
 
+  test('authenticated calendar has no detectable WCAG A/AA violations', async ({ page, request }) => {
+    // The global calendar gained accessible names on its icon-only nav
+    // buttons and keyboard-operable event chips — scan it to keep them honest.
+    const login = await request.post('/api/auth/login', { data: { email: 'owner@demo.local', password: 'wedding123' } });
+    const { token } = await login.json();
+    const orgId = (await (await request.get('/api/orgs', { headers: { authorization: `Bearer ${token}` } })).json()).organizations[0].id;
+    await request.put('/api/users/me/preferences', {
+      headers: { authorization: `Bearer ${token}`, 'content-type': 'application/json' },
+      data: { onboarding: { welcomeTourByOrg: { [orgId]: { status: 'completed', currentSlide: 0, completedSlides: [], completedAt: new Date().toISOString() } } } },
+    });
+
+    await page.goto('/#/');
+    await page.getByLabel(/email address/i).fill('owner@demo.local');
+    await page.getByLabel(/^password$/i).fill('wedding123');
+    await page.getByRole('button', { name: /sign in securely/i }).click();
+    await expect(page.locator('body')).toContainText(/good (morning|afternoon|evening)/i, { timeout: 20_000 });
+
+    await page.goto('/#/calendar');
+    await expect(page.getByRole('heading', { name: 'Event Calendar' })).toBeVisible({ timeout: 15_000 });
+    await page.waitForTimeout(1200);
+
+    const results = await new AxeBuilder({ page })
+      .withTags(WCAG_TAGS)
+      .exclude('canvas')
+      .analyze();
+    reportViolations('calendar', results.violations as AxeViolation[]);
+    expect(results.violations).toHaveLength(0);
+  });
+
   test('authenticated dashboard has no detectable WCAG A/AA violations', async ({ page, request }) => {
     // The dashboard is the first screen every venue user sees after login.
     const login = await request.post('/api/auth/login', { data: { email: 'owner@demo.local', password: 'wedding123' } });

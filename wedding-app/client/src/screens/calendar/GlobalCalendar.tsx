@@ -98,7 +98,10 @@ export function GlobalCalendar({ orgId }: Props) {
                     key={i} 
                     className={cn(
                       "min-h-[100px] p-1.5 border-b border-r border-border flex flex-col gap-1 transition-colors hover:bg-surface-2/50",
-                      !isCurrentMonth && "bg-surface-2/30 opacity-50",
+                      // Dim out-of-month cells via background tint + a darker
+                      // text token — NEVER cell opacity, which drops the day
+                      // number to ~2.3:1 contrast (WCAG AA failure).
+                      !isCurrentMonth && "bg-surface-2/40",
                       (i + 1) % 7 === 0 && "border-r-0",
                       i >= 35 && "border-b-0"
                     )}
@@ -106,7 +109,7 @@ export function GlobalCalendar({ orgId }: Props) {
                     <div className="flex justify-between items-center px-1">
                       <span className={cn(
                         "text-xs font-medium w-6 h-6 flex items-center justify-center rounded-full",
-                        isToday(day) ? "bg-brand text-brand-fg" : "text-fg-muted"
+                        isToday(day) ? "bg-brand text-brand-fg" : isCurrentMonth ? "text-fg-muted" : "text-fg-subtle"
                       )}>
                         {format(day, 'd')}
                       </span>
