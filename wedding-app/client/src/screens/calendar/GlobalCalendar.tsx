@@ -1,8 +1,8 @@
 import React, { useState, useMemo } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { Calendar as CalendarIcon, ChevronLeft, ChevronRight, LayoutGrid, List } from 'lucide-react';
+import { ChevronLeft, ChevronRight } from 'lucide-react';
 import { format, addMonths, subMonths, startOfMonth, endOfMonth, eachDayOfInterval, isSameMonth, isSameDay, isToday } from 'date-fns';
-import { parseDateOnly } from '../../lib/formatDate';
+import { parseDateOnly, formatDateOnly } from '../../lib/formatDate';
 import { sdk } from '../../sdk';
 import { PageBody, PageHeader } from '../../ui/AppShell';
 import { Button } from '../../ui/Button';
@@ -55,13 +55,13 @@ export function GlobalCalendar({ orgId }: Props) {
         description="Global view of all scheduled weddings and events."
         actions={
           <div className="flex items-center gap-2 bg-surface p-1 rounded-md border border-border">
-            <Button variant="ghost" size="icon" className="h-8 w-8" onClick={prevMonth}>
+            <Button variant="ghost" size="icon" className="h-8 w-8" aria-label="Previous month" onClick={prevMonth}>
               <ChevronLeft className="w-4 h-4" />
             </Button>
-            <Button variant="ghost" className="h-8 text-sm px-3" onClick={today}>
+            <Button variant="ghost" className="h-8 text-sm px-3" onClick={today} aria-label="Jump to current month">
               Today
             </Button>
-            <Button variant="ghost" size="icon" className="h-8 w-8" onClick={nextMonth}>
+            <Button variant="ghost" size="icon" className="h-8 w-8" aria-label="Next month" onClick={nextMonth}>
               <ChevronRight className="w-4 h-4" />
             </Button>
           </div>
@@ -116,12 +116,21 @@ export function GlobalCalendar({ orgId }: Props) {
                       {dayEvents.map(e => {
                         const meta = STATUS_META[e.status];
                         return (
-                          <div 
+                          <div
                             key={e.id}
+                            role="button"
+                            tabIndex={0}
+                            aria-label={`Open ${e.title}${e.start_date ? ` on ${formatDateOnly(e.start_date)}` : ''}`}
                             onClick={() => navigate(`/events/${e.id}`)}
+                            onKeyDown={(ev) => {
+                              if (ev.key === 'Enter' || ev.key === ' ') {
+                                ev.preventDefault();
+                                navigate(`/events/${e.id}`);
+                              }
+                            }}
                             className={cn(
                               "text-[10px] px-1.5 py-1 rounded cursor-pointer truncate font-medium border",
-                              "hover:brightness-95 transition-all"
+                              "hover:brightness-95 focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-brand transition-all"
                             )}
                             style={{
                               backgroundColor: `${meta.dotColor}20`,

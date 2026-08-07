@@ -6,7 +6,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../..
 import { Input } from '../../ui/Input';
 import { Label } from '../../ui/Label';
 import { sdk } from '../../sdk';
-import { formatDateOnly, parseDateOnly } from '../../lib/formatDate';
+import { formatDateOnly } from '../../lib/formatDate';
 import type { PortalGuestEntry, PortalInfoResponse } from '../../sdk/portalTypes';
 
 type Palette = {
@@ -151,7 +151,7 @@ function GuestEventDashboard({ info, guestHome, activeGuest, palette, setActiveT
       <CardContent className="space-y-4 text-sm">
         <div className="grid gap-3 sm:grid-cols-4">
           <SummaryTile label="Event type" value={String(guestHome?.eventType || info.eventType || 'wedding').replace(/_/g, ' ')} palette={palette} />
-          <SummaryTile label="Date / time" value={info.startDate ? (parseDateOnly(info.startDate) ?? new Date(info.startDate)).toLocaleString(undefined, { dateStyle: 'medium', timeStyle: 'short' }) : 'TBD'} palette={palette} />
+          <SummaryTile label="Date" value={info.startDate ? formatDateOnly(info.startDate) : 'TBD'} palette={palette} />
           <SummaryTile label="Location" value={guestHome?.locationSummary || info.locationSummary || 'Venue details pending'} palette={palette} />
           <SummaryTile label="Last updated" value={guestHome?.lastUpdatedAt || info.lastUpdatedAt ? new Date((guestHome?.lastUpdatedAt || info.lastUpdatedAt)!).toLocaleDateString() : 'Recently'} palette={palette} />
         </div>
@@ -270,7 +270,7 @@ function GuestEventDayMobileMode({ eventId, info, activeGuest, guestToken, palet
       <CardContent className="space-y-4 text-sm">
         <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
           <DayOfTile label="Address" value={guestTravel?.venueAddress || info.locationSummary || 'Address pending'} palette={palette} />
-          <DayOfTile label="Schedule" value={info.startDate ? (parseDateOnly(info.startDate) ?? new Date(info.startDate)).toLocaleString(undefined, { dateStyle: 'medium', timeStyle: 'short' }) : 'Schedule pending'} palette={palette} />
+          <DayOfTile label="Schedule" value={info.startDate ? formatDateOnly(info.startDate) : 'Schedule pending'} palette={palette} />
           <DayOfTile label="Table / seat" value={activeGuest?.tableAssignment ? `${activeGuest.tableAssignment}${activeGuest.seatAssignment ? ` · Seat ${activeGuest.seatAssignment}` : ''}` : 'Seat not assigned yet'} palette={palette} />
           <DayOfTile label="Shuttle" value={guestTravel?.shuttleSchedule || 'Shuttle details pending'} palette={palette} />
           <DayOfTile label="Contact" value={[dayOf.contactLabel, dayOf.contactPhone || dayOf.contactEmail].filter(Boolean).join(' · ') || 'Contact pending'} palette={palette} />

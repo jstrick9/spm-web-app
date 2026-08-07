@@ -117,4 +117,21 @@ describe('AuthScreen first-time owner UX', () => {
     expect(screen.queryByText(/internal-error/i)).not.toBeInTheDocument();
     expect(onAuth).not.toHaveBeenCalled();
   });
+
+  it('normalizes the URL to the app root after a successful auth (address bar no longer lies)', async () => {
+    const user = userEvent.setup();
+    const { onAuth } = renderAuth();
+
+    // Registration runs the same post-auth URL normalization as sign-in.
+    await user.click(screen.getByRole('button', { name: /create my venue account/i }));
+    await user.type(screen.getByLabelText(/your full name/i), 'Jane Owner');
+    await user.type(screen.getByLabelText(/venue \/ organization name/i), 'Willow Creek Estate');
+    await user.type(screen.getByLabelText(/email address/i), 'jane@example.com');
+    await user.type(screen.getByLabelText(/^password$/i), 'securepass123');
+    const createButtons = screen.getAllByRole('button', { name: /^create my venue account$/i });
+    await user.click(createButtons[createButtons.length - 1]);
+
+    await waitFor(() => expect(onAuth).toHaveBeenCalled());
+    expect(window.location.hash).toBe('#/');
+  });
 });

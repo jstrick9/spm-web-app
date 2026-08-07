@@ -298,7 +298,12 @@ export function PaymentsPanel({ eventId }: Props) {
       cell: (p) => {
         const meta = typeof p.metadata === 'string' ? JSON.parse(p.metadata || '{}') : (p.metadata || {});
         const dueDateStr = meta.dueDate;
-        if (!dueDateStr) return <span className="text-fg-subtle text-xs">—</span>;
+        // The milestone label is the venue's invoice-style name for this
+        // payment ("Deposit", "Installment 1", "Final Balance") — without
+        // it a payment with no due date is indistinguishable from the
+        // others in the list.
+        const milestoneLabel = meta.milestone || (meta.invoiceNumber ? `Invoice ${meta.invoiceNumber}` : '');
+        if (!dueDateStr && !milestoneLabel) return <span className="text-fg-subtle text-xs">—</span>;
 
         const diffDays = daysUntilDateOnly(dueDateStr);
         const isOverdue = diffDays !== null && diffDays < 0;
@@ -310,7 +315,9 @@ export function PaymentsPanel({ eventId }: Props) {
             "text-xs font-semibold",
             !finalized && isOverdue ? "text-danger font-black" : (!finalized && isUrgent ? "text-amber-600 font-bold" : "text-fg-subtle")
           )}>
-            {parseDateOnly(dueDateStr)?.toLocaleDateString() ?? dueDateStr}
+            {milestoneLabel && <span className="text-fg">{milestoneLabel}</span>}
+            {milestoneLabel && dueDateStr && <span> · </span>}
+            {dueDateStr ? parseDateOnly(dueDateStr)?.toLocaleDateString() ?? dueDateStr : null}
             {!finalized && isOverdue && " (Overdue)"}
             {!finalized && isUrgent && " (Due soon)"}
           </span>

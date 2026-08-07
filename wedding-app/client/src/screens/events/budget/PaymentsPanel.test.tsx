@@ -46,6 +46,24 @@ describe('PaymentsPanel', () => {
     expect(screen.getByText('pending')).toBeInTheDocument();
   });
 
+  it('shows the milestone label (venue invoice name) for every payment, even without a due date', async () => {
+    listMock.mockResolvedValue({
+      payments: [
+        { id: 'p1', event_id: 'e1', contract_id: null, provider: 'manual', amount_cents: 250000, status: 'pending', payment_url: null, paid_at: null, created_at: '', metadata: { milestone: 'Deposit', dueDate: '' } },
+        { id: 'p2', event_id: 'e1', contract_id: null, provider: 'manual', amount_cents: 5000, status: 'completed', payment_url: null, paid_at: '2026-01-01', created_at: '', metadata: { milestone: 'Final Balance', dueDate: '2026-09-01' } },
+      ],
+      totals: { total: 255000, paid: 5000, pending: 250000 },
+    });
+    render(<PaymentsPanel eventId="e1" />, { wrapper: wrap() });
+    // A payment with ONLY a milestone (no due date) must show the label —
+    // previously the "Due Date / Milestone" cell rendered "—" and the
+    // venue could not tell payments apart.
+    expect(await screen.findByText('Deposit')).toBeInTheDocument();
+    // Both label and date render when both exist.
+    expect(screen.getByText('Final Balance')).toBeInTheDocument();
+  });
+
+
   it('offers "Collect Payment" for an unpaid stripe link and opens the checkout', async () => {
     const openSpy = vi.spyOn(window, 'open').mockReturnValue(null);
     render(<PaymentsPanel eventId="e1" />, { wrapper: wrap() });

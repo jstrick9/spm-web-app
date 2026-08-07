@@ -83,6 +83,11 @@ export function AuthScreen({ onAuth }: { onAuth: (u: SdkUser, m?: SdkMembership[
       if (res.redirectTo) localStorage.setItem('wvi_post_auth_redirect', res.redirectTo);
       const me = await sdk.auth.me();
       onAuth(me.user, me.memberships);
+      // Normalize the URL so the address bar stops lying after sign-in
+      // (e.g. /login, /register, /reset-password). A pending post-auth
+      // redirect (couple hub / deep link) still wins via App-level effect.
+      window.history.replaceState(null, '', '#/');
+      window.dispatchEvent(new HashChangeEvent('hashchange'));
       toast({ title: 'Signed in with magic link', description: 'Opening your private wedding hub.', variant: 'success' });
     }).catch((err: ApiError) => {
       if (!cancelled) toast({ title: 'Magic link failed', description: err.message, variant: 'destructive' });
@@ -166,6 +171,11 @@ export function AuthScreen({ onAuth }: { onAuth: (u: SdkUser, m?: SdkMembership[
       }
       const me = await sdk.auth.me();
       onAuth(me.user, me.memberships);
+      // Normalize the URL so the address bar stops lying after sign-in
+      // (e.g. /login, /register, /reset-password). A pending post-auth
+      // redirect (couple hub / deep link) still wins via App-level effect.
+      window.history.replaceState(null, '', '#/');
+      window.dispatchEvent(new HashChangeEvent('hashchange'));
       toast({
         title: mode === 'login' ? 'Successfully signed in' : accountRole === 'couple' ? 'Wedding hub ready' : 'Venue account created',
         description: mode === 'login'
@@ -229,6 +239,8 @@ export function AuthScreen({ onAuth }: { onAuth: (u: SdkUser, m?: SdkMembership[
       await sdk.auth.login(DEMO_EMAIL, DEMO_PASSWORD);
       const me = await sdk.auth.me();
       onAuth(me.user, me.memberships);
+      window.history.replaceState(null, '', '#/');
+      window.dispatchEvent(new HashChangeEvent('hashchange'));
       toast({
         title: managerMode ? 'Exploring manager training sandbox' : 'Exploring demo workspace',
         description: managerMode ? 'Manager training mode is on. Practice today queue, event operations, check-in, and escalations with sample data.' : 'Demo learning mode is on. Use sample events to learn before entering real operations.',

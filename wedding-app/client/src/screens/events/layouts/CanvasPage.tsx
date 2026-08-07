@@ -81,11 +81,10 @@ export function CanvasPage({ event }: Props) {
   });
   const guests = guestsData?.guests || [];
 
-  const { data: decorData } = useQuery({
-    queryKey: ['decor', event.organization_id],
-    queryFn: () => sdk.catalog.list(event.organization_id, 'decor' as any),
-  });
-  
+  // NOTE: no venue catalog fetch for decor — the server's catalog kinds are
+  // table|fixture|chair|wall_style|linen|guideline|spacing|template, so a
+  // 'decor' kind request 400s (invalid-kind) on every Layout open. The decor
+  // palette below is the source of truth for decor objects.
   const DECOR_ITEMS = [
     { label: 'Floral Centerpiece', type: 'decor', props: { width: 20, height: 20, shape: 'circle', color: '#fbcfe8' } },
     { label: 'Candle Cluster', type: 'decor', props: { width: 10, height: 10, shape: 'circle', color: '#fef08a' } },
