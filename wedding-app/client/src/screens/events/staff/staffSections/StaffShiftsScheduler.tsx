@@ -42,6 +42,9 @@ export interface StaffShiftsSchedulerProps {
   setNewShiftAvailabilityOverrideReason: React.Dispatch<React.SetStateAction<any>>;
   meData: any;
   createShiftMutation: any;
+  saveShiftMutation?: any;
+  editingShiftId?: string | null;
+  onEditShift?: (shift: any) => void;
   deleteShiftMutation: any;
   clockInMutation: any;
   clockOutMutation: any;
@@ -54,7 +57,7 @@ export interface StaffShiftsSchedulerProps {
   canManage?: boolean;
 }
 
-export function StaffShiftsScheduler({ newShiftRole, setNewShiftRole, addShiftOpen, setAddShiftOpen, newShiftStaffId, setNewShiftStaffId, newShiftStartsAt, setNewShiftStartsAt, newShiftEndsAt, setNewShiftEndsAt, newShiftNotes, setNewShiftNotes, newShiftContactName, setNewShiftContactName, newShiftContactPhone, setNewShiftContactPhone, newShiftContactEmail, setNewShiftContactEmail, newShiftRadioChannel, setNewShiftRadioChannel, newShiftHandoffNotes, setNewShiftHandoffNotes, newShiftAvailabilityOverrideReason, setNewShiftAvailabilityOverrideReason, meData, createShiftMutation, deleteShiftMutation, clockInMutation, clockOutMutation, shifts, members, hasCoordinator, hasSetup, hasCleaning, canManage = true }: StaffShiftsSchedulerProps) {
+export function StaffShiftsScheduler({ newShiftRole, setNewShiftRole, addShiftOpen, setAddShiftOpen, newShiftStaffId, setNewShiftStaffId, newShiftStartsAt, setNewShiftStartsAt, newShiftEndsAt, setNewShiftEndsAt, newShiftNotes, setNewShiftNotes, newShiftContactName, setNewShiftContactName, newShiftContactPhone, setNewShiftContactPhone, newShiftContactEmail, setNewShiftContactEmail, newShiftRadioChannel, setNewShiftRadioChannel, newShiftHandoffNotes, setNewShiftHandoffNotes, newShiftAvailabilityOverrideReason, setNewShiftAvailabilityOverrideReason, meData, createShiftMutation, saveShiftMutation, editingShiftId, onEditShift, deleteShiftMutation, clockInMutation, clockOutMutation, shifts, members, hasCoordinator, hasSetup, hasCleaning, canManage = true }: StaffShiftsSchedulerProps) {
   const { ask, askConfirm, promptNode } = usePrompt();
   return (
     <>
@@ -211,7 +214,7 @@ export function StaffShiftsScheduler({ newShiftRole, setNewShiftRole, addShiftOp
                        <CardContent className="pt-4">
                           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                              {shifts.map((s: any) => {
-                                const staffMember = members.find((m: any) => m.userId === s.staff_id);
+                                const staffMember = members.find((m: any) => (m.user_id || m.userId) === s.staff_id);
                                 const name = staffMember ? (staffMember.fullName || staffMember.email) : 'Assigned Crew Member';
                                 const isClockedIn = s.clocked_in_at && !s.clocked_out_at;
                                 const isClockedOut = s.clocked_in_at && s.clocked_out_at;
@@ -273,7 +276,7 @@ export function StaffShiftsScheduler({ newShiftRole, setNewShiftRole, addShiftOp
            {addShiftOpen && (
               <div className="bg-white p-5 rounded-2xl border border-paper-border space-y-4 shadow-md font-semibold text-xs text-fg animate-in slide-in-from-top-4">
                  <h4 className="text-xs font-bold text-fg uppercase tracking-wider font-serif border-b pb-2 flex items-center gap-1.5 text-brand">
-                    <Sparkles className="w-4 h-4 text-brand animate-pulse" /> Create Crew Shift Assignment
+                    <Sparkles className="w-4 h-4 text-brand animate-pulse" /> {editingShiftId ? 'Edit Crew Shift Assignment' : 'Create Crew Shift Assignment'}
                  </h4>
                  
                  <div className="grid grid-cols-1 sm:grid-cols-4 gap-3">
@@ -286,7 +289,7 @@ export function StaffShiftsScheduler({ newShiftRole, setNewShiftRole, addShiftOp
                        >
                           <option value="">Select crew member...</option>
                           {members.map((m: any) => (
-                             <option key={m.userId} value={m.userId}>{m.fullName || m.email}</option>
+                             <option key={m.user_id || m.userId} value={m.user_id || m.userId}>{m.fullName || m.email}</option>
                           ))}
                        </select>
                     </div>
@@ -345,11 +348,11 @@ export function StaffShiftsScheduler({ newShiftRole, setNewShiftRole, addShiftOp
                  </div>
 
                  <Button 
-                    onClick={() => createShiftMutation.mutate()} 
-                    disabled={!newShiftStaffId || !newShiftStartsAt || !newShiftEndsAt || createShiftMutation.isPending}
+                    onClick={() => (editingShiftId && saveShiftMutation ? saveShiftMutation.mutate() : createShiftMutation.mutate())} 
+                    disabled={!newShiftStaffId || !newShiftStartsAt || !newShiftEndsAt || createShiftMutation.isPending || (saveShiftMutation?.isPending ?? false)}
                     className="w-full font-bold h-10 mt-2"
                  >
-                    Schedule Shift
+                    {editingShiftId ? 'Save Shift Changes' : 'Schedule Shift'}
                  </Button>
               </div>
            )}
@@ -362,7 +365,7 @@ export function StaffShiftsScheduler({ newShiftRole, setNewShiftRole, addShiftOp
                  </div>
               ) : (
                  shifts.map((s: any) => {
-                    const staffMember = members.find((m: any) => m.userId === s.staff_id);
+                    const staffMember = members.find((m: any) => (m.user_id || m.userId) === s.staff_id);
                     return (
                        <Card key={s.id} className="border-paper-border bg-white shadow-xs p-4 flex items-center justify-between gap-4 font-semibold text-xs text-fg">
                           <div className="flex items-center gap-3">
@@ -385,18 +388,31 @@ export function StaffShiftsScheduler({ newShiftRole, setNewShiftRole, addShiftOp
                              </div>
                           </div>
 
-                          <Button 
-                             variant="ghost" 
-                             size="icon" 
-                             className="h-8 w-8 text-danger hover:bg-danger/10 shrink-0"
-                             onClick={async () => {
-                                if (await askConfirm({ title: 'Delete this staff shift?', destructive: true })) {
-                                   deleteShiftMutation.mutate(s.id);
-                                }
-                             }}
-                          >
-                             <Trash2 className="w-4 h-4" />
-                          </Button>
+                          <div className="flex items-center gap-1 shrink-0">
+                             {onEditShift && (
+                                <Button
+                                   variant="outline"
+                                   size="xs"
+                                   className="h-8"
+                                   onClick={() => onEditShift(s)}
+                                   aria-label={`Edit shift for ${staffMember ? (staffMember.fullName || staffMember.email) : 'crew member'}`}
+                                >
+                                   <Settings2 className="w-3.5 h-3.5 mr-1" /> Edit
+                                </Button>
+                             )}
+                             <Button 
+                                variant="ghost" 
+                                size="icon" 
+                                className="h-8 w-8 text-danger hover:bg-danger/10 shrink-0"
+                                onClick={async () => {
+                                   if (await askConfirm({ title: 'Delete this staff shift?', destructive: true })) {
+                                      deleteShiftMutation.mutate(s.id);
+                                   }
+                                }}
+                             >
+                                <Trash2 className="w-4 h-4" />
+                             </Button>
+                          </div>
                        </Card>
                     );
                  })

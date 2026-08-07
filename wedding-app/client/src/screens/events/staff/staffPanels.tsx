@@ -64,7 +64,7 @@ export function VenueManagerStaffingCommandCenter({ tasks, shifts, allShifts, me
               <h3 className="text-xs font-bold text-brand flex items-center gap-2"><MapPin className="h-4 w-4" /> On-site roster map</h3>
               <div className="mt-3 grid gap-2">
                 {shifts.map((s: any) => {
-                  const name = s.contact_name || members.find((m: any) => m.userId === s.staff_id)?.fullName || members.find((m: any) => m.userId === s.staff_id)?.email || 'Crew member';
+                  const name = s.contact_name || members.find((m: any) => (m.user_id || m.userId) === s.staff_id)?.fullName || members.find((m: any) => (m.user_id || m.userId) === s.staff_id)?.email || 'Crew member';
                   const live = s.clocked_in_at && !s.clocked_out_at;
                   return <div key={s.id} className="flex items-center justify-between rounded-lg border border-border bg-surface-2 p-2 text-xs"><span>{name}</span><Badge variant={live ? 'success' : 'outline'}>{live ? 'on site' : s.role}</Badge></div>;
                 })}
@@ -132,7 +132,7 @@ export function VenueManagerStaffingCommandCenter({ tasks, shifts, allShifts, me
 function buildCrewContactRows(tasks: SdkStaffTask[], shifts: any[], members: any[]) {
   const rows: Array<{ key: string; name: string; role?: string; phone?: string; email?: string; source: string }> = [];
   for (const shift of shifts) {
-    const member = members.find((m: any) => m.userId === shift.staff_id);
+    const member = members.find((m: any) => (m.user_id || m.userId) === shift.staff_id);
     const name = shift.contact_name || member?.fullName || member?.email || 'Crew member';
     rows.push({ key: `shift-${shift.id}`, name, role: shift.role, phone: shift.contact_phone, email: shift.contact_email || member?.email, source: 'shift' });
   }

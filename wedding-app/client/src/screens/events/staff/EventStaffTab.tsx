@@ -228,6 +228,74 @@ export function EventStaffTab({ eventId, organizationId }: Props) {
     onSuccess: () => qc.invalidateQueries({ queryKey: ['staffTasks', eventId] })
   });
 
+  // Editing shifts was impossible from the UI (create/delete/clock only)
+  // even though updateShift exists server-side — a wrong time or crew
+  // change meant delete + recreate, losing clock-in state. Editing reuses
+  // the create dialog, prefilled, and upserts via updateShift.
+  const [editingShiftId, setEditingShiftId] = useState<string | null>(null);
+
+  const saveShiftMutation = useMutation({
+    mutationFn: () => {
+      const payload = {
+        staffId: newShiftStaffId,
+        role: newShiftRole,
+        startsAt: newShiftStartsAt,
+        endsAt: newShiftEndsAt,
+        notes: newShiftNotes,
+        eventId,
+        contactName: newShiftContactName || undefined,
+        contactPhone: newShiftContactPhone || undefined,
+        contactEmail: newShiftContactEmail || undefined,
+        radioChannel: newShiftRadioChannel || undefined,
+        handoffNotes: newShiftHandoffNotes || undefined,
+        availabilityOverrideReason: newShiftAvailabilityOverrideReason || undefined,
+      };
+      return editingShiftId
+        ? sdk.staff.updateShift(editingShiftId, payload)
+        : sdk.staff.createShift(organizationId, payload);
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['staffShifts', eventId] });
+      toast({ title: editingShiftId ? 'Staff shift updated' : 'Staff shift scheduled successfully', variant: 'success' });
+      setEditingShiftId(null);
+      resetShiftForm();
+      setAddShiftOpen(false);
+    },
+    onError: (e: any) => {
+      toast({ title: e?.code === 'staff-availability-override-required' ? 'Availability override required' : 'Failed to save shift', description: e?.code === 'staff-availability-override-required' ? 'This shift is outside the staff member’s recurring hours. Add a manager override reason to continue.' : e.message, variant: 'destructive' });
+    },
+  });
+
+  const resetShiftForm = () => {
+    setNewShiftStaffId('');
+    setNewShiftRole('setup');
+    setNewShiftStartsAt('');
+    setNewShiftEndsAt('');
+    setNewShiftNotes('');
+    setNewShiftContactName('');
+    setNewShiftContactPhone('');
+    setNewShiftContactEmail('');
+    setNewShiftRadioChannel('Ops 1');
+    setNewShiftHandoffNotes('');
+    setNewShiftAvailabilityOverrideReason('');
+  };
+
+  const beginEditShift = (shift: any) => {
+    setEditingShiftId(shift.id);
+    setNewShiftStaffId(shift.staff_id || '');
+    setNewShiftRole(shift.role || 'setup');
+    setNewShiftStartsAt(shift.starts_at ? String(shift.starts_at).slice(0, 16) : '');
+    setNewShiftEndsAt(shift.ends_at ? String(shift.ends_at).slice(0, 16) : '');
+    setNewShiftNotes(shift.notes || '');
+    setNewShiftContactName(shift.contact_name || '');
+    setNewShiftContactPhone(shift.contact_phone || '');
+    setNewShiftContactEmail(shift.contact_email || '');
+    setNewShiftRadioChannel(shift.radio_channel || 'Ops 1');
+    setNewShiftHandoffNotes(shift.handoff_notes || '');
+    setNewShiftAvailabilityOverrideReason('');
+    setAddShiftOpen(true);
+  };
+
   const createShiftMutation = useMutation({
     mutationFn: () => {
        return sdk.staff.createShift(organizationId, {
@@ -545,7 +613,7 @@ Owner notification rule: ${ownerNotify || incidentSeverity === 'critical' ? 'not
       <StaffTasksKanban priorityFilter={priorityFilter} setPriorityFilter={setPriorityFilter} statusFilter={statusFilter} setStatusFilter={setStatusFilter} setEditTask={setEditTask} swipingTaskId={swipingTaskId} swipeOffset={swipeOffset} isSwiping={isSwiping} blockNextClick={blockNextClick} setCreateOpen={setCreateOpen} setMapOverlayOpen={setMapOverlayOpen} handleTouchStart={handleTouchStart} handleTouchMove={handleTouchMove} handleTouchEnd={handleTouchEnd} toggleTaskStatus={toggleTaskStatus} handleDragStart={handleDragStart} handleDragEnd={handleDragEnd} handleDragOver={handleDragOver} handleDragLeave={handleDragLeave} handleDrop={handleDrop} tasks={tasks} phases={phases} filteredTasks={filteredTasks} totalTasksCount={totalTasksCount} completedTasksCount={completedTasksCount} completionRatio={completionRatio} activeLayout={activeLayout} handleKeyboardMove={handleKeyboardMove} canManage={canManageStaff} />
       ) : (
         /* Shifts Scheduler Panel (Phase 1) */
-      <StaffShiftsScheduler newShiftRole={newShiftRole} setNewShiftRole={setNewShiftRole} addShiftOpen={addShiftOpen} setAddShiftOpen={setAddShiftOpen} newShiftStaffId={newShiftStaffId} setNewShiftStaffId={setNewShiftStaffId} newShiftStartsAt={newShiftStartsAt} setNewShiftStartsAt={setNewShiftStartsAt} newShiftEndsAt={newShiftEndsAt} setNewShiftEndsAt={setNewShiftEndsAt} newShiftNotes={newShiftNotes} setNewShiftNotes={setNewShiftNotes} newShiftContactName={newShiftContactName} setNewShiftContactName={setNewShiftContactName} newShiftContactPhone={newShiftContactPhone} setNewShiftContactPhone={setNewShiftContactPhone} newShiftContactEmail={newShiftContactEmail} setNewShiftContactEmail={setNewShiftContactEmail} newShiftRadioChannel={newShiftRadioChannel} setNewShiftRadioChannel={setNewShiftRadioChannel} newShiftHandoffNotes={newShiftHandoffNotes} setNewShiftHandoffNotes={setNewShiftHandoffNotes} newShiftAvailabilityOverrideReason={newShiftAvailabilityOverrideReason} setNewShiftAvailabilityOverrideReason={setNewShiftAvailabilityOverrideReason} meData={meData} createShiftMutation={createShiftMutation} deleteShiftMutation={deleteShiftMutation} clockInMutation={clockInMutation} clockOutMutation={clockOutMutation} shifts={shifts} members={members} hasCoordinator={hasCoordinator} hasSetup={hasSetup} hasCleaning={hasCleaning} canManage={canManageStaff} />
+      <StaffShiftsScheduler newShiftRole={newShiftRole} setNewShiftRole={setNewShiftRole} addShiftOpen={addShiftOpen} setAddShiftOpen={setAddShiftOpen} newShiftStaffId={newShiftStaffId} setNewShiftStaffId={setNewShiftStaffId} newShiftStartsAt={newShiftStartsAt} setNewShiftStartsAt={setNewShiftStartsAt} newShiftEndsAt={newShiftEndsAt} setNewShiftEndsAt={setNewShiftEndsAt} newShiftNotes={newShiftNotes} setNewShiftNotes={setNewShiftNotes} newShiftContactName={newShiftContactName} setNewShiftContactName={setNewShiftContactName} newShiftContactPhone={newShiftContactPhone} setNewShiftContactPhone={setNewShiftContactPhone} newShiftContactEmail={newShiftContactEmail} setNewShiftContactEmail={setNewShiftContactEmail} newShiftRadioChannel={newShiftRadioChannel} setNewShiftRadioChannel={setNewShiftRadioChannel} newShiftHandoffNotes={newShiftHandoffNotes} setNewShiftHandoffNotes={setNewShiftHandoffNotes} newShiftAvailabilityOverrideReason={newShiftAvailabilityOverrideReason} setNewShiftAvailabilityOverrideReason={setNewShiftAvailabilityOverrideReason} meData={meData} createShiftMutation={createShiftMutation} saveShiftMutation={saveShiftMutation} editingShiftId={editingShiftId} onEditShift={beginEditShift} deleteShiftMutation={deleteShiftMutation} clockInMutation={clockInMutation} clockOutMutation={clockOutMutation} shifts={shifts} members={members} hasCoordinator={hasCoordinator} hasSetup={hasSetup} hasCleaning={hasCleaning} canManage={canManageStaff} />
       )}
 
       <StaffOverlayDialogs editTask={editTask} setEditTask={setEditTask} incidentSeverity={incidentSeverity} setIncidentSeverity={setIncidentSeverity} createOpen={createOpen} setCreateOpen={setCreateOpen} mapOverlayOpen={mapOverlayOpen} setMapOverlayOpen={setMapOverlayOpen} setupWizardOpen={setupWizardOpen} setSetupWizardOpen={setSetupWizardOpen} incidentOpen={incidentOpen} setIncidentOpen={setIncidentOpen} incidentText={incidentText} setIncidentText={setIncidentText} ownerNotify={ownerNotify} setOwnerNotify={setOwnerNotify} applyStaffSetupTemplate={applyStaffSetupTemplate} createIncidentMutation={createIncidentMutation} activeLayout={activeLayout} renderMiniMapSvg={renderMiniMapSvg} eventId={eventId} organizationId={organizationId} />

@@ -244,6 +244,30 @@ describe('StaffShiftsScheduler', () => {
     await user.click(screen.getByRole('button', { name: /schedule staff shift/i }));
     expect(setAddShiftOpen).toHaveBeenCalledWith(true);
   });
+
+  it('member options use the snake_case user_id from the members API (regression: m.userId was undefined → option values silently fell back to emails → server rejected every shift with staff-not-in-org)', async () => {
+    const user = userEvent.setup();
+    render(<StaffShiftsScheduler {...schedulerProps({
+      addShiftOpen: true,
+      members: [{ user_id: 'u-1', fullName: 'Jordan Crew', email: 'jordan@x.com' }] as any,
+    })} />);
+    const select = screen.getByText('Assigned Staff Member').closest('div')!.querySelector('select')!;
+    const options = Array.from(select.options);
+    expect(options.map((o) => o.value)).toContain('u-1');
+    expect(options.map((o) => o.value)).not.toContain('jordan@x.com');
+  });
+
+  it('renders an Edit button per shift and pre-fills the scheduler from the shift row (snake_case)', async () => {
+    const user = userEvent.setup();
+    const onEdit = vi.fn();
+    render(<StaffShiftsScheduler {...schedulerProps({
+      shifts: [{ id: 's1', role: 'setup', staff_id: 'u-1', starts_at: '2026-09-12T08:00:00', ends_at: '2026-09-12T12:00:00' }] as any,
+      members: [{ user_id: 'u-1', fullName: 'Jordan Crew', email: 'jordan@x.com' }] as any,
+      onEditShift: onEdit as any,
+    })} />);
+    await user.click(screen.getByRole('button', { name: /edit shift for jordan crew/i }));
+    expect(onEdit).toHaveBeenCalledWith(expect.objectContaining({ id: 's1', staff_id: 'u-1' }));
+  });
 });
 
 // ── StaffOverlayDialogs ────────────────────────────────────
