@@ -108,3 +108,17 @@ surface they walk (ERR_ABORTED navigation noise is excluded):
   **JSON string** in API responses.
 - The couple-side post-event summary exposes `survey.npsScore` (from event
   metadata) and `nps.score`; there is no `postEvent.nps.totalResponses`.
+
+## Addendum (same session, follow-up commits)
+
+- `edb560b` — **GlobalCalendar out-of-month day numbers failed WCAG AA**
+  (2.3:1): the cell's `opacity-50` dimmed the day number below threshold.
+  Out-of-month cells now dim via background tint + the darker `fg-subtle`
+  token instead of cell opacity. The a11y gate now axe-scans the calendar
+  too (6 scans). E2e added: public NPS survey (fresh event per run — the
+  one-response-per-device rule 409s a second submit, which the app treats
+  as success but the clean-gate flags), couple advanced-planning "Ask
+  venue" escalation.
+- `pending` — e2e: couple signs a fresh venue agreement (legal documents
+  are append-only — PATCH cannot unsign, so each run creates its own
+  contract), events pipeline list (counts → filter → click-through).
