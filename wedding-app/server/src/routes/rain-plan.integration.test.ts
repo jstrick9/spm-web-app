@@ -12,7 +12,7 @@ beforeAll(async () => {
 });
 
 beforeEach(() => {
-  for (const t of ['events', 'venues', 'organization_memberships', 'organizations', 'users']) {
+  for (const t of ['audit_logs', 'events', 'venues', 'organization_memberships', 'organizations', 'users']) {
     try { db.prepare(`DELETE FROM ${t}`).run(); } catch { /* noop */ }
   }
 });
@@ -92,6 +92,36 @@ describe('Rain-plan alternate space', () => {
     expect(audit).toBeTruthy();
     expect(JSON.parse(audit!.details).fromVenueId).toBe(lawnId);
     expect(JSON.parse(audit!.details).toVenueId).toBe(tentId);
+  });
+
+  it('keeps the ORIGINAL space across repeat activations (activate→activate→restore returns home)', async () => {
+    const { token, orgId } = await register();
+    const lawn = await authed(token, 'POST', `/api/orgs/${orgId}/venues`, { name: 'Lawn', capacity: 300 });
+    const tent = await authed(token, 'POST', `/api/orgs/${orgId}/venues`, { name: 'Tent', capacity: 150 });
+    const lawnId = lawn.json().venue.id;
+    const tentId = tent.json().venue.id;
+    const masterLayout = { zones: [{ type: 'exit' }, { type: 'accessible_route' }, { type: 'power' }, { type: 'loading' }] };
+    await authed(token, 'PATCH', `/api/venues/${lawnId}`, { approvalStatus: 'approved', masterLayout });
+    await authed(token, 'PATCH', `/api/venues/${tentId}`, { approvalStatus: 'approved', masterLayout });
+    await authed(token, 'PATCH', `/api/venues/${lawnId}`, { metadata: { rainPlanVenueId: tentId } });
+
+    const evt = await authed(token, 'POST', '/api/events', { organizationId: orgId, title: 'Repeat Activate', venueId: lawnId, startDate: '2026-09-12' });
+    const eventId = evt.json().event.id;
+
+    await authed(token, 'POST', `/api/events/${eventId}/activate-rain-plan`, {});
+    // Second activation while already on the backup space: idempotent no-op
+    // (200, alreadyActive), and must NOT clobber the original home venue.
+    const second = await authed(token, 'POST', `/api/events/${eventId}/activate-rain-plan`, {});
+    expect(second.statusCode).toBe(200);
+    expect(second.json().alreadyActive).toBe(true);
+    expect(second.json().event.venue_id).toBe(tentId);
+    const meta2 = (() => { try { return JSON.parse(second.json().event.metadata || '{}'); } catch { return {}; } })();
+    expect(meta2.previousVenueId).toBe(lawnId);
+
+    // Restore still returns to the ORIGINAL lawn, not the backup tent.
+    const restored = await authed(token, 'POST', `/api/events/${eventId}/activate-rain-plan`, { restore: true });
+    expect(restored.statusCode).toBe(200);
+    expect(restored.json().event.venue_id).toBe(lawnId);
   });
 
   it('restores the event to its original space after activation', async () => {

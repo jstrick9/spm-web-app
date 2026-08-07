@@ -231,6 +231,18 @@ export async function venueRoutes(app: FastifyInstance) {
       });
     }
 
+    // Already on the backup space (a previous activation recorded the home):
+    // re-activation is a no-op success rather than a confusing error.
+    if (typeof eventMeta.previousVenueId === 'string' && eventMeta.previousVenueId) {
+      const current = event.venue_id ? venuesRepo.findById(event.venue_id) : undefined;
+      return reply.code(200).send({
+        event,
+        activated: true,
+        alreadyActive: true,
+        rainPlan: { fromVenue: current?.name ?? event.venue_id ?? '', toVenue: current?.name ?? event.venue_id ?? '' },
+      });
+    }
+
     if (!event.venue_id) throw BadRequest('rain-plan-requires-venue');
     const venue = venuesRepo.findById(event.venue_id);
     if (!venue) throw NotFound('venue-not-found');
@@ -244,7 +256,9 @@ export async function venueRoutes(app: FastifyInstance) {
     const updated = eventsRepo.update(eventId, {
       venue_id: rainPlanVenueId,
       metadata: {
-        previousVenueId: event.venue_id,
+        // Keep the ORIGINAL home on repeat activations (activate → activate
+        // must still restore to the first space, not the backup).
+        previousVenueId: typeof eventMeta.previousVenueId === 'string' && eventMeta.previousVenueId ? eventMeta.previousVenueId : event.venue_id,
         rainPlanActivatedAt: new Date().toISOString(),
         rainPlanRestoredAt: null,
         emergency_active_plan: 'plan-b',
