@@ -73,7 +73,4 @@ export const integrationsSdk = {
     return api.delete(`/api/integrations/${id}`);
   },
 
-  events(id: string): Promise<{ events: SdkIntegrationEvent[] }> {
-    return api.get(`/api/integrations/${id}/events`);
-  },
 };

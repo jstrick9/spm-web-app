@@ -14,6 +14,11 @@ test.use({ viewport: { width: 1440, height: 1400 } });
 
 const BASE = process.env.A11Y_BASE_URL || 'http://localhost:3000';
 
+async function clickSafely(locator: import('@playwright/test').Locator): Promise<void> {
+  await locator.evaluate((el) => el.scrollIntoView({ block: 'center', inline: 'nearest' }));
+  await locator.click();
+}
+
 test('access control shows real names/roles and role changes persist', async ({ page, request }) => {
   const allErrors: string[] = [];
   page.on('console', (msg) => {
@@ -74,6 +79,44 @@ test('access control shows real names/roles and role changes persist', async ({ 
   const updated = members.find((m: any) => m.email === email);
   expect(updated, 'member must exist').toBeTruthy();
   expect(updated.role_id, 'role change must persist server-side').toBe('sys_planner');
+
+  // ── 5. Custom roles: create → rename → delete (regression: created
+  // custom roles could never be renamed or removed) ──
+  await page.getByRole('button', { name: 'Create Custom Role' }).click();
+  const roleName = `Ops Role ${Date.now()}`;
+  await page.locator('#role-name').fill(roleName);
+  await page.locator('#role-key').fill(`ops-${Date.now()}`);
+  await page.locator('#role-desc').fill('Temporary ops role for e2e.');
+  // grant one permission so the create button enables
+  const permCheckbox = page.locator('input[type="checkbox"]').first();
+  await permCheckbox.check();
+  await page.getByRole('button', { name: 'Create Custom Role', exact: true }).last().click();
+  await expect(page.getByText('Custom role created').or(page.getByText(/role created/i)).first()).toBeVisible({ timeout: 15_000 });
+
+  // rename it
+  await page.getByRole('button', { name: 'Rename' }).first().click();
+  const renameDialog = page.getByRole('dialog');
+  await expect(renameDialog).toBeVisible({ timeout: 10_000 });
+  await renameDialog.locator('#prompt-field').fill(`${roleName} Renamed`);
+  await clickSafely(renameDialog.getByRole('button', { name: 'Save' }));
+  await expect(page.getByText('Role updated').first()).toBeVisible({ timeout: 15_000 });
+
+  const rolesRes = await request.get(`/api/orgs/${orgId}/roles`, { headers: { authorization: `Bearer ${token}` } });
+  const { roles } = (await rolesRes.json()) as { roles: Array<any> };
+  const renamed = roles.find((r: any) => r.name === `${roleName} Renamed`);
+  expect(renamed, 'renamed custom role must exist server-side').toBeTruthy();
+  expect(renamed.is_system).toBeFalsy();
+
+  // delete it
+  await page.getByRole('button', { name: 'Delete' }).first().click();
+  const deleteDialog = page.getByRole('dialog');
+  await expect(deleteDialog).toBeVisible({ timeout: 10_000 });
+  await clickSafely(deleteDialog.getByRole('button', { name: /confirm|delete/i }).last());
+  await expect(page.getByText('Role deleted').first()).toBeVisible({ timeout: 15_000 });
+
+  const rolesRes2 = await request.get(`/api/orgs/${orgId}/roles`, { headers: { authorization: `Bearer ${token}` } });
+  const { roles: roles2 } = (await rolesRes2.json()) as { roles: Array<any> };
+  expect(roles2.find((r: any) => r.id === renamed.id), 'deleted custom role must be gone').toBeFalsy();
 
   expect(allErrors, `access control produced console/network errors:\n${allErrors.join('\n')}`).toEqual([]);
 });

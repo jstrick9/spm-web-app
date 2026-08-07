@@ -347,13 +347,6 @@ export async function couplePlanningRoutes(app: FastifyInstance) {
     return reply.code(201).send({ decision: safeRequest(request) });
   });
 
-  app.get('/api/events/:eventId/couple-template-gallery', { preHandler: requireAuth }, async (req) => {
-    const { eventId } = req.params as { eventId: string }; const event = eventsRepo.findById(eventId); if (!event) throw NotFound('event-not-found');
-    const orgMap = eventsRepo.orgMapForUser(req.auth!.userId); if (!can(req.auth!.memberships, { eventId }, 'events.view', orgMap)) throw Forbidden();
-    const templates = catalogRepo.listForOrg(event.organization_id, 'template').filter((item) => item.visible).map((item) => { const spec: any = item.spec || {}; const minGuests = Number(spec.minGuests ?? 0); const maxGuests = Number(spec.maxGuests ?? 0); const count = event.guest_count || 0; return { id: item.id, name: item.name, moment: spec.moment || 'reception', serviceStyle: spec.serviceStyle || null, minGuests, maxGuests, recommended: (!minGuests || count >= minGuests) && (!maxGuests || count <= maxGuests), description: spec.description || '', venueId: spec.venueId || null }; });
-    return { templates, guestCount: event.guest_count, spaces: venuesRepo.listForOrg(event.organization_id).filter((venue) => venue.approval_status === 'approved').map((venue) => ({ id: venue.id, name: venue.name, category: venue.category, capacity: venue.capacity })) };
-  });
-
   app.get('/api/events/:eventId/couple-design', { preHandler: requireAuth }, async (req) => {
     const { eventId } = req.params as { eventId: string };
     const event = eventsRepo.findById(eventId);

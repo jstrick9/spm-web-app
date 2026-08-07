@@ -75,9 +75,12 @@ test('couple uploads a shared document that the venue sees in the hub', async ({
   await expect(page.locator('body')).toContainText(/your wedding hub/i, { timeout: 20_000 });
   await expect(page.getByText(event.title)).toBeVisible({ timeout: 20_000 });
 
-  // ── 2. Upload a sample document ──
+  // ── 2. Upload a sample document (run-unique filename — prior runs leave
+  // same-named docs behind, and .find/.first would hit stale rows) ──
   const docHub = page.locator('#couple-documents');
+  const sampleDocName = `sample-doc-${Date.now()}.pdf`;
   await clickSafely(docHub.getByRole('button', { name: 'Use sample file' }));
+  await fillInput(docHub.getByPlaceholder('Filename'), sampleDocName);
   const uploadBtn = docHub.getByRole('button', { name: 'Upload', exact: true });
   await expect(uploadBtn).toBeVisible({ timeout: 10_000 });
   await clickSafely(uploadBtn);
@@ -89,7 +92,7 @@ test('couple uploads a shared document that the venue sees in the hub', async ({
   });
   expect(docsRes.status()).toBe(200);
   const { documents } = (await docsRes.json()) as { documents: Array<any> };
-  const uploaded = documents.find((d: any) => d.filename === 'sample-document.pdf');
+  const uploaded = documents.find((d: any) => d.filename === sampleDocName);
   expect(uploaded, 'sample document must be recorded server-side').toBeTruthy();
   expect(uploaded.category).toBe('menu'); // default draft category
   expect(uploaded.visibility).toBe('couple_venue');
@@ -98,9 +101,10 @@ test('couple uploads a shared document that the venue sees in the hub', async ({
 
   // ── 3b. Upload a NEW VERSION from the document card (was UI-impossible:
   // versions were displayed as v{n} but never creatable) ──
-  const versionInput = docHub.locator(`input[aria-label="Choose a new version of sample-document.pdf"]`).first();
+  const versionName = `sample-document-v2-${Date.now()}.pdf`;
+  const versionInput = docHub.locator(`input[aria-label="Choose a new version of ${sampleDocName}"]`).first();
   await versionInput.setInputFiles({
-    name: 'sample-document-v2.pdf',
+    name: versionName,
     mimeType: 'application/pdf',
     buffer: Buffer.from('%PDF-1.4 second version'),
   });
@@ -112,8 +116,22 @@ test('couple uploads a shared document that the venue sees in the hub', async ({
   const { documents: documents2 } = (await docsRes2.json()) as { documents: Array<any> };
   const versioned = documents2.find((d: any) => d.id === uploaded.id);
   expect(versioned, 'versioned document must still exist').toBeTruthy();
-  expect(versioned.filename).toBe('sample-document-v2.pdf');
+  expect(versioned.filename).toBe(versionName);
   expect((versioned.version ?? 1)).toBeGreaterThan(versionBefore);
+
+  // ── 3c. Edit document metadata — category/visibility were set once at
+  // upload and could never be corrected (regression: PATCH was UI-less) ──
+  await clickSafely(docHub.getByRole('button', { name: `Edit details of ${versionName}` }).first());
+  await docHub.getByLabel('Document category').selectOption('contract');
+  await clickSafely(docHub.getByRole('button', { name: 'Save changes' }));
+  await expect(page.getByText('Document details updated').first()).toBeVisible({ timeout: 15_000 });
+
+  const docsRes3 = await request.get(`/api/events/${eventId}/couple-documents`, {
+    headers: { authorization: `Bearer ${coupleToken}` },
+  });
+  const { documents: documents3 } = (await docsRes3.json()) as { documents: Array<any> };
+  const edited = documents3.find((d: any) => d.id === uploaded.id);
+  expect(edited.category, 'category edit must persist server-side').toBe('contract');
 
   // venue sees the shared document too
   const venueDocs = await request.get(`/api/events/${eventId}/couple-documents`, {
@@ -121,7 +139,7 @@ test('couple uploads a shared document that the venue sees in the hub', async ({
   });
   expect(venueDocs.status()).toBe(200);
   const { documents: venueDocuments } = (await venueDocs.json()) as { documents: Array<any> };
-  expect(venueDocuments.find((d: any) => d.filename === 'sample-document.pdf')).toBeTruthy();
+  expect(venueDocuments.find((d: any) => d.id === uploaded.id), 'venue must see the shared document').toBeTruthy();
 
   // audit trail: couple uploaded a document
   const auditRes = await request.get('/api/audit?limit=50', { headers: { authorization: `Bearer ${token}` } });

@@ -113,6 +113,19 @@ export function CoupleEventHub({ eventId }: { eventId: string }) {
   const timelineQuery = useQuery({ queryKey: ['couple-timeline', eventId], queryFn: async () => { const response = await sdk.timeline.coupleSchedule(eventId); return { items: response.schedule.map((item) => ({ ...item, startsAt: item.starts_at, endsAt: item.ends_at })) }; }, enabled: !!eventId });
   const dayOfContactQuery = useQuery({ queryKey: ['day-of-contact', eventId], queryFn: () => sdk.events.dayOfContact(eventId), enabled: !!eventId });
   const coupleUpdatesQuery = useQuery({ queryKey: ['couple-event-updates', eventId], queryFn: () => sdk.events.coupleUpdates(eventId), enabled: !!eventId });
+
+  // Mark each Event Week update as VIEWED (once per id per session) — the
+  // venue's "viewed X/Y" acknowledgment panel depends on these rows; without
+  // this call it showed 0 forever even after the couple read every update.
+  const viewedUpdateIds = useRef<Set<string>>(new Set());
+  useEffect(() => {
+    const updates = coupleUpdatesQuery.data?.updates || [];
+    for (const update of updates) {
+      if (viewedUpdateIds.current.has(update.id)) continue;
+      viewedUpdateIds.current.add(update.id);
+      sdk.events.viewCoupleUpdate(eventId, update.id).catch(() => { /* best-effort read receipt */ });
+    }
+  }, [coupleUpdatesQuery.data, eventId]);
   const acknowledgeUpdateMutation = useMutation({ mutationFn: (updateId: string) => sdk.events.acknowledgeCoupleUpdate(eventId, updateId), onSuccess: () => { qc.invalidateQueries({ queryKey: ['couple-event-updates', eventId] }); toast({ title: 'Update acknowledged', variant: 'success' }); } });
   const venueTemplatesQuery = useQuery({ queryKey: ['couple-venue-templates', eventId], queryFn: () => venuesSdk.eventTemplates(eventId), enabled: !!eventId });
   const finalReviewChangesQuery = useQuery({ queryKey: ['couple-final-review-changes', eventId], queryFn: () => sdk.events.finalReviewChangeRequests(eventId), enabled: !!eventId && event?.status === 'final_review' });
@@ -195,6 +208,35 @@ export function CoupleEventHub({ eventId }: { eventId: string }) {
     setDocumentDraft((p) => ({ ...p, filename: 'sample-document.pdf', mimeType: 'application/pdf', dataUri: 'data:application/pdf;base64,JVBERi0xLjQKJcTl8uXrp/Og0MTGCg==' }));
   };
   const [documentDraft, setDocumentDraft] = useState<Record<string, string>>({ filename: 'wedding-menu.pdf', category: 'menu', visibility: 'couple_venue', notes: 'Menu notes for venue review' });
+
+  // Editing a document's metadata (category/visibility/notes) was impossible
+  // — the PATCH endpoint existed but the card only offered Open / New
+  // version / Delete. Editing reuses the creation form row (edit mode).
+  const [documentEditId, setDocumentEditId] = useState<string | null>(null);
+  const documentMetadataMutation = useMutation({
+    mutationFn: () => sdk.couple.updateDocument(eventId, documentEditId!, {
+      category: (documentDraft.category as any) || 'other',
+      visibility: (documentDraft.visibility as any) || 'couple_venue',
+      notes: documentDraft.notes,
+    }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['couple-documents', eventId] });
+      setDocumentEditId(null);
+      setDocumentDraft({ filename: 'wedding-menu.pdf', category: 'menu', visibility: 'couple_venue', notes: 'Menu notes for venue review' });
+      toast({ title: 'Document details updated', variant: 'success' });
+    },
+    onError: (err: any) => toast({ title: 'Could not update document', description: err?.message || 'Please try again.', variant: 'destructive' }),
+  });
+  const startEditDocument = (doc: any) => {
+    setDocumentEditId(doc.id);
+    setDocumentDraft({ filename: doc.filename || '', category: doc.category || 'other', visibility: doc.visibility || 'couple_venue', notes: doc.notes || '' });
+    const docCard = document.getElementById('couple-documents');
+    if (docCard?.scrollIntoView) docCard.scrollIntoView({ behavior: 'smooth' });
+  };
+  const cancelEditDocument = () => {
+    setDocumentEditId(null);
+    setDocumentDraft({ filename: 'wedding-menu.pdf', category: 'menu', visibility: 'couple_venue', notes: 'Menu notes for venue review' });
+  };
   const [messageDraft, setMessageDraft] = useState('');
   const [hasUnsavedDraft, setHasUnsavedDraft] = useState(false);
   const [largeTextMode, setLargeTextMode] = useState(() => { try { return localStorage.getItem('wvi_couple_large_text') === 'true'; } catch { return false; } });
@@ -231,6 +273,51 @@ export function CoupleEventHub({ eventId }: { eventId: string }) {
     onSuccess: () => { setGuestDraft({ fullName: '', email: '', householdName: '' }); qc.invalidateQueries({ queryKey: ['couple-guests', eventId] }); toast({ title: 'Guest added', variant: 'success' }); },
     onError: (err: any) => toast({ title: 'Could not add guest', description: err?.message || 'Please try again.', variant: 'destructive' }),
   });
+
+  // Editing a guest was impossible from the couple hub — a typo'd name or
+  // email meant delete + re-add (losing RSVP history). The server PATCH
+  // existed; this wires it to a per-guest Edit prompt.
+  const updateGuestMutation = useMutation({
+    mutationFn: ({ guestId, input }: { guestId: string; input: Record<string, unknown> }) =>
+      sdk.couple.updateGuest(eventId, guestId, input as any),
+    onSuccess: () => { qc.invalidateQueries({ queryKey: ['couple-guests', eventId] }); toast({ title: 'Guest updated', variant: 'success' }); },
+    onError: (e: any) => toast({ title: 'Could not update guest', description: e.message, variant: 'destructive' }),
+  });
+
+  const editGuest = async (guest: any) => {
+    const values = await askForm({
+      title: `Edit ${guest.fullName}`,
+      fields: [
+        { key: 'fullName', label: 'Full name', required: true, defaultValue: guest.fullName },
+        { key: 'email', label: 'Email', defaultValue: guest.email || '' },
+        { key: 'phone', label: 'Phone', defaultValue: guest.phone || '' },
+        { key: 'householdName', label: 'Household / party', defaultValue: guest.householdName || guest.partyName || '' },
+        { key: 'rsvpStatus', label: 'RSVP status (pending / attending / declined / maybe)', defaultValue: guest.rsvpStatus || 'pending' },
+        { key: 'mealChoice', label: 'Meal choice', defaultValue: guest.mealChoice || '' },
+        { key: 'dietaryRestrictions', label: 'Dietary restrictions', multiline: true, defaultValue: guest.dietaryRestrictions || '' },
+        { key: 'accessibilityNotes', label: 'Accessibility notes', multiline: true, defaultValue: guest.accessibilityNotes || '' },
+        { key: 'notes', label: 'Couple notes', multiline: true, defaultValue: guest.notes || '' },
+      ],
+    });
+    if (!values) return;
+    const status = ['pending', 'attending', 'declined', 'maybe'].includes(values.rsvpStatus.trim())
+      ? values.rsvpStatus.trim()
+      : (guest.rsvpStatus || 'pending');
+    updateGuestMutation.mutate({
+      guestId: guest.id,
+      input: {
+        fullName: values.fullName.trim(),
+        email: values.email.trim() || undefined,
+        phone: values.phone.trim() || undefined,
+        householdName: values.householdName.trim() || undefined,
+        rsvpStatus: status,
+        mealChoice: values.mealChoice.trim() || undefined,
+        dietaryRestrictions: values.dietaryRestrictions.trim() || undefined,
+        accessibilityNotes: values.accessibilityNotes.trim() || undefined,
+        notes: values.notes.trim() || undefined,
+      },
+    });
+  };
   const importPreviewMutation = useMutation({
     mutationFn: () => sdk.couple.importPreview(eventId, importCsv),
   });
@@ -831,6 +918,17 @@ export function CoupleEventHub({ eventId }: { eventId: string }) {
                   <select aria-label="Guest RSVP status" value={guestDraft.rsvpStatus || 'pending'} onChange={(e) => setGuestDraft((p) => ({ ...p, rsvpStatus: e.target.value }))} className="h-9 rounded-md border border-border bg-surface px-2 text-sm"><option value="pending">Pending</option><option value="attending">Attending</option><option value="declined">Declined</option><option value="maybe">Maybe</option></select>
                   <Button size="sm" onClick={() => guestMutation.mutate()} disabled={!guestDraft.fullName} isLoading={guestMutation.isPending}>Add guest</Button>
                 </div>
+                <div className="rounded-lg border border-border bg-surface-2 p-3">
+                  <h4 className="font-bold text-sm">Guest list</h4>
+                  <div className="mt-2 max-h-56 space-y-1 overflow-y-auto text-xs">
+                    {guests.length ? guests.map((g: any) => (
+                      <div key={g.id} className="flex items-center justify-between gap-2 rounded border border-border bg-surface px-2 py-1.5">
+                        <div className="min-w-0"><strong className="truncate">{g.fullName}</strong>{g.email ? <span className="text-fg-muted"> · {g.email}</span> : null}</div>
+                        <div className="flex shrink-0 items-center gap-1"><Badge variant={g.rsvpStatus === 'attending' ? 'success' : g.rsvpStatus === 'declined' ? 'danger' : 'outline'}>{g.rsvpStatus || 'pending'}</Badge><Button size="xs" variant="ghost" onClick={() => void editGuest(g)} aria-label={`Edit guest ${g.fullName}`}>Edit</Button></div>
+                      </div>
+                    )) : <p className="text-fg-muted">No guests yet — add one above or import your list.</p>}
+                  </div>
+                </div>
                 <div className="grid gap-3 lg:grid-cols-2">
                   <div className="rounded-lg border border-border bg-surface-2 p-3"><h4 className="font-bold text-sm">Household manager</h4><div className="mt-2 space-y-1 text-xs text-fg-muted">{(guestsQuery.data?.households || []).slice(0, 6).map((h) => <div key={h.name} className="flex justify-between"><span>{h.name}</span><span>{h.count} guest(s)</span></div>)}</div></div>
                   <div className="rounded-lg border border-border bg-surface-2 p-3"><h4 className="font-bold text-sm">Table assignment review</h4><div className="mt-2 space-y-1 text-xs text-fg-muted">{guests.filter((g: any) => g.tableAssignment || g.seatAssignment).slice(0, 6).map((g: any) => <div key={g.id} className="flex justify-between"><span>{g.fullName}</span><span>{g.tableAssignment || 'No table'} {g.seatAssignment || ''}</span></div>)}{!guests.some((g: any) => g.tableAssignment || g.seatAssignment) && <p>No seating assignments shared yet.</p>}</div></div>
@@ -869,8 +967,8 @@ export function CoupleEventHub({ eventId }: { eventId: string }) {
             <CardHeader><CardTitle className="flex items-center gap-2 text-base"><FileSignature className="h-4 w-4 text-brand" /> Couple Document Hub</CardTitle><CardDescription>Shared client document hub separate from internal gallery and operations evidence. Uploads support PDF/JPG/PNG/WebP up to 8 MB.</CardDescription></CardHeader>
             <CardContent className="space-y-4">
               <div className="grid gap-2 sm:grid-cols-4 text-sm"><div className="rounded-lg border border-border bg-surface-2 p-3"><strong>{documentsQuery.data?.documents.length ?? 0}</strong><p className="text-xs text-fg-muted">documents</p></div><div className="rounded-lg border border-warning/30 bg-warning-soft/20 p-3"><strong>{documentsQuery.data?.reviewQueue.length ?? 0}</strong><p className="text-xs text-warning">needs review</p></div><div className="rounded-lg border border-border bg-surface-2 p-3"><strong>{documentsQuery.data?.postEventGallery.length ?? 0}</strong><p className="text-xs text-fg-muted">post-event gallery</p></div><div className="rounded-lg border border-border bg-surface-2 p-3"><strong>{Math.round((documentsQuery.data?.maxBytes || 0) / 1024 / 1024) || 8} MB</strong><p className="text-xs text-fg-muted">file limit</p></div></div>
-              <div className="grid gap-2 md:grid-cols-5"><input value={documentDraft.filename || ''} onChange={(e) => setDocumentDraft((p) => ({ ...p, filename: e.target.value }))} placeholder="Filename" className="h-9 rounded-md border border-border bg-surface px-2 text-sm" /><select aria-label="Document category" value={documentDraft.category || 'other'} onChange={(e) => setDocumentDraft((p) => ({ ...p, category: e.target.value }))} className="h-9 rounded-md border border-border bg-surface px-2 text-sm">{(documentsQuery.data?.categories || ['inspiration_photo','insurance','vendor_doc','ceremony_doc','playlist','diagram','permit','guest_list','menu','contract','post_event_gallery','other']).map((c) => <option key={c} value={c}>{c}</option>)}</select><select aria-label="Document visibility" value={documentDraft.visibility || 'couple_venue'} onChange={(e) => setDocumentDraft((p) => ({ ...p, visibility: e.target.value }))} className="h-9 rounded-md border border-border bg-surface px-2 text-sm">{(documentsQuery.data?.visibilityOptions || ['couple','couple_venue','planner','vendor','guest_visible']).map((v) => <option key={v} value={v}>{v}</option>)}</select><input value={documentDraft.notes || ''} onChange={(e) => setDocumentDraft((p) => ({ ...p, notes: e.target.value }))} placeholder="Notes" className="h-9 rounded-md border border-border bg-surface px-2 text-sm" /><div className="flex items-center gap-2"><input ref={fileInputRef} type="file" accept=".pdf,.jpg,.jpeg,.png,.webp" className="hidden" aria-label="Choose a document file" onChange={handleDocumentFileChosen} /><Button size="sm" variant={documentDraft.dataUri ? 'default' : 'outline'} onClick={() => fileInputRef.current?.click()}>Choose file</Button>{documentDraft.dataUri ? <Button size="sm" onClick={uploadChosenDocument} isLoading={documentUploadMutation.isPending}>Upload</Button> : <Button size="xs" variant="ghost" onClick={useSampleDocument} className="text-xs">Use sample file</Button>}</div></div>{documentFileError && <p className="text-xs text-danger col-span-5 mt-2">{documentFileError}</p>}
-              <div className="grid gap-2 lg:grid-cols-2">{documentsQuery.isError ? <SectionLoadError label="Documents" onRetry={() => void documentsQuery.refetch()} /> : (<>{(documentsQuery.data?.documents || []).slice(0, 8).map((doc) => <div key={doc.id} className="rounded-lg border border-border bg-surface-2 p-3 text-sm"><div className="flex items-start justify-between gap-2"><div><strong>{doc.filename}</strong><p className="text-xs text-fg-muted">{doc.category} · {doc.visibility} · v{doc.version}</p>{doc.extractedSummary && <p className="mt-1 whitespace-pre-wrap text-xs text-fg-muted">{doc.extractedSummary}</p>}</div><Badge variant={doc.approvalStatus === 'approved' ? 'success' : doc.approvalStatus === 'changes_requested' ? 'warning' : 'outline'}>{doc.approvalStatus}</Badge><div className="flex shrink-0 gap-1"><Button size="xs" variant="outline" onClick={() => downloadAuth(doc.url, doc.filename)}>Open</Button><Button size="xs" variant="outline" onClick={() => documentVersionFileInputs.current?.[doc.id]?.click()} disabled={documentVersionUploadMutation.isPending} aria-label={`Upload new version of ${doc.filename}`}><Upload className="h-3.5 w-3.5" /> New version</Button><input ref={(el) => { if (el) documentVersionFileInputs.current[doc.id] = el; }} type="file" accept=".pdf,.jpg,.jpeg,.png,.webp" className="hidden" aria-label={`Choose a new version of ${doc.filename}`} onChange={handleDocumentVersionChosen(doc.id)} /><Button size="xs" variant="ghost" onClick={() => documentDeleteMutation.mutate(doc.id)} aria-label={`Delete document ${doc.filename}`}><Trash2 className="h-3.5 w-3.5" /></Button></div></div></div>)}</>)}</div>
+              {documentEditId && <p className="col-span-5 rounded-lg border border-brand/20 bg-brand-soft/10 p-2 text-xs text-brand">Editing document details — change category, visibility, or notes, then save.</p>}<div className="grid gap-2 md:grid-cols-5"><input value={documentDraft.filename || ''} onChange={(e) => setDocumentDraft((p) => ({ ...p, filename: e.target.value }))} placeholder="Filename" readOnly={!!documentEditId} className="h-9 rounded-md border border-border bg-surface px-2 text-sm" /><select aria-label="Document category" value={documentDraft.category || 'other'} onChange={(e) => setDocumentDraft((p) => ({ ...p, category: e.target.value }))} className="h-9 rounded-md border border-border bg-surface px-2 text-sm">{(documentsQuery.data?.categories || ['inspiration_photo','insurance','vendor_doc','ceremony_doc','playlist','diagram','permit','guest_list','menu','contract','post_event_gallery','other']).map((c) => <option key={c} value={c}>{c}</option>)}</select><select aria-label="Document visibility" value={documentDraft.visibility || 'couple_venue'} onChange={(e) => setDocumentDraft((p) => ({ ...p, visibility: e.target.value }))} className="h-9 rounded-md border border-border bg-surface px-2 text-sm">{(documentsQuery.data?.visibilityOptions || ['couple','couple_venue','planner','vendor','guest_visible']).map((v) => <option key={v} value={v}>{v}</option>)}</select><input value={documentDraft.notes || ''} onChange={(e) => setDocumentDraft((p) => ({ ...p, notes: e.target.value }))} placeholder="Notes" className="h-9 rounded-md border border-border bg-surface px-2 text-sm" /><div className="flex items-center gap-2">{documentEditId ? (<><Button size="sm" onClick={() => documentMetadataMutation.mutate()} isLoading={documentMetadataMutation.isPending}>Save changes</Button><Button size="sm" variant="ghost" onClick={cancelEditDocument}>Cancel</Button></>) : (<><input ref={fileInputRef} type="file" accept=".pdf,.jpg,.jpeg,.png,.webp" className="hidden" aria-label="Choose a document file" onChange={handleDocumentFileChosen} /><Button size="sm" variant={documentDraft.dataUri ? 'default' : 'outline'} onClick={() => fileInputRef.current?.click()}>Choose file</Button>{documentDraft.dataUri ? <Button size="sm" onClick={uploadChosenDocument} isLoading={documentUploadMutation.isPending}>Upload</Button> : <Button size="xs" variant="ghost" onClick={useSampleDocument} className="text-xs">Use sample file</Button>}</>)}</div></div>{documentFileError && <p className="text-xs text-danger col-span-5 mt-2">{documentFileError}</p>}
+              <div className="grid gap-2 lg:grid-cols-2">{documentsQuery.isError ? <SectionLoadError label="Documents" onRetry={() => void documentsQuery.refetch()} /> : (<>{(documentsQuery.data?.documents || []).slice(0, 8).map((doc) => <div key={doc.id} className="rounded-lg border border-border bg-surface-2 p-3 text-sm"><div className="flex items-start justify-between gap-2"><div><strong>{doc.filename}</strong><p className="text-xs text-fg-muted">{doc.category} · {doc.visibility} · v{doc.version}</p>{doc.extractedSummary && <p className="mt-1 whitespace-pre-wrap text-xs text-fg-muted">{doc.extractedSummary}</p>}</div><Badge variant={doc.approvalStatus === 'approved' ? 'success' : doc.approvalStatus === 'changes_requested' ? 'warning' : 'outline'}>{doc.approvalStatus}</Badge><div className="flex shrink-0 gap-1"><Button size="xs" variant="outline" onClick={() => downloadAuth(doc.url, doc.filename)}>Open</Button><Button size="xs" variant="outline" onClick={() => startEditDocument(doc)} aria-label={`Edit details of ${doc.filename}`}>Edit details</Button><Button size="xs" variant="outline" onClick={() => documentVersionFileInputs.current?.[doc.id]?.click()} disabled={documentVersionUploadMutation.isPending} aria-label={`Upload new version of ${doc.filename}`}><Upload className="h-3.5 w-3.5" /> New version</Button><input ref={(el) => { if (el) documentVersionFileInputs.current[doc.id] = el; }} type="file" accept=".pdf,.jpg,.jpeg,.png,.webp" className="hidden" aria-label={`Choose a new version of ${doc.filename}`} onChange={handleDocumentVersionChosen(doc.id)} /><Button size="xs" variant="ghost" onClick={() => documentDeleteMutation.mutate(doc.id)} aria-label={`Delete document ${doc.filename}`}><Trash2 className="h-3.5 w-3.5" /></Button></div></div></div>)}</>)}</div>
               <div className="grid gap-3 lg:grid-cols-3"><div className="rounded-lg border border-border bg-surface-2 p-3 text-xs"><strong>Supported categories</strong><p className="mt-1 text-fg-muted">Inspiration photos, insurance, vendor docs, ceremony docs, playlists, diagrams, permits, guest spreadsheets, menus, contracts, and post-event gallery.</p></div><div className="rounded-lg border border-border bg-surface-2 p-3 text-xs"><strong>Visibility</strong><p className="mt-1 text-fg-muted">Couple, couple+venue, planner, vendor, or guest-visible. Guest-visible files require venue approval.</p></div><div className="rounded-lg border border-brand/20 bg-brand-soft/10 p-3 text-xs text-brand"><strong>AI extraction review</strong><p className="mt-1">Guest lists, contracts, menu notes, ceremony docs, and playlists get deterministic review hints for venue approval.</p></div></div>
               <div className="flex flex-wrap gap-2"><Button asChild size="sm" variant="outline"><a href={`/api/events/${eventId}/couple-documents/final-packet.txt`} onClick={(e) => { e.preventDefault(); downloadAuth(`/api/events/${eventId}/couple-documents/final-packet.txt`, 'final-packet.txt'); }}>Download final packet</a></Button></div>
             </CardContent>

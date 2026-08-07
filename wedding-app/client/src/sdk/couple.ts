@@ -425,7 +425,6 @@ export const coupleSdk = {
   deleteDocument(eventId: string, documentId: string): Promise<void> {
     return api.delete(`/api/events/${eventId}/couple-documents/${documentId}`);
   },
-  templateGallery(eventId: string): Promise<{ templates: Array<{ id: string; name: string; moment: string; serviceStyle: string | null; minGuests: number; maxGuests: number; recommended: boolean; description: string; venueId: string | null }>; guestCount: number; spaces: Array<{ id: string; name: string; category: string; capacity: number }> }> { return api.get(`/api/events/${eventId}/couple-template-gallery`); },
   design(eventId: string): Promise<CoupleDesignSummary> {
     return api.get(`/api/events/${eventId}/couple-design`);
   },

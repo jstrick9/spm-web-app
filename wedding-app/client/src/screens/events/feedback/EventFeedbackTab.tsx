@@ -95,6 +95,25 @@ export function EventFeedbackTab({ eventId }: Props) {
     onError: (e: any) => toast({ title: 'Error', description: e.message, variant: 'destructive' })
   });
 
+  // The Post-Event Feedback card was display-only ("No feedback collected
+  // yet") with no way to collect it — the POST endpoint existed but nothing
+  // called it. This composer records venue-side feedback records.
+  const [feedbackDraft, setFeedbackDraft] = useState({ target: '', rating: 5, comments: '', submittedBy: '' });
+  const submitFeedbackMutation = useMutation({
+    mutationFn: () => sdk.feedback.submitFeedback(eventId, {
+      target: feedbackDraft.target.trim(),
+      rating: Number(feedbackDraft.rating) || 5,
+      comments: feedbackDraft.comments.trim(),
+      submittedBy: feedbackDraft.submittedBy.trim() || 'Venue team',
+    }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['feedback', eventId] });
+      setFeedbackDraft({ target: '', rating: 5, comments: '', submittedBy: '' });
+      toast({ title: 'Feedback recorded', variant: 'success' });
+    },
+    onError: (e: any) => toast({ title: 'Could not record feedback', description: e.message, variant: 'destructive' }),
+  });
+
   // Render Stars
   const renderStars = (rating: number) => {
     return Array.from({ length: 5 }).map((_, i) => (
@@ -201,10 +220,19 @@ export function EventFeedbackTab({ eventId }: Props) {
               </div>
             </CardHeader>
             <CardContent className="pt-4">
+              <div className="mb-4 rounded-lg border border-border bg-surface-2 p-3 space-y-2">
+                <div className="grid gap-2 sm:grid-cols-[1fr_auto_1fr]">
+                  <Input aria-label="Feedback target" placeholder="Target (e.g., Catering, Coordinator, Ceremony)" value={feedbackDraft.target} onChange={(e) => setFeedbackDraft((d) => ({ ...d, target: e.target.value }))} />
+                  <select aria-label="Feedback rating" className="h-9 rounded-md border border-border bg-surface px-2 text-sm" value={feedbackDraft.rating} onChange={(e) => setFeedbackDraft((d) => ({ ...d, rating: Number(e.target.value) }))}>{[5, 4, 3, 2, 1].map((r) => <option key={r} value={r}>{'★'.repeat(r)}{'☆'.repeat(5 - r)}</option>)}</select>
+                  <Input aria-label="Feedback submitted by" placeholder="Submitted by (default: Venue team)" value={feedbackDraft.submittedBy} onChange={(e) => setFeedbackDraft((d) => ({ ...d, submittedBy: e.target.value }))} />
+                </div>
+                <textarea aria-label="Feedback comments" placeholder="Comments…" className="min-h-16 w-full rounded-md border border-border bg-surface p-2 text-sm" value={feedbackDraft.comments} onChange={(e) => setFeedbackDraft((d) => ({ ...d, comments: e.target.value }))} />
+                <Button size="sm" onClick={() => submitFeedbackMutation.mutate()} disabled={!feedbackDraft.target.trim() || submitFeedbackMutation.isPending} isLoading={submitFeedbackMutation.isPending}>Add feedback</Button>
+              </div>
               {feedback.length === 0 ? (
                 <div className="text-center py-12 text-fg-muted">
                   <Star className="w-12 h-12 mx-auto mb-3 opacity-20" />
-                  <p>No feedback collected yet.</p>
+                  <p>No feedback recorded yet — use the form above to capture notes.</p>
                 </div>
               ) : (
                 <div className="space-y-4">

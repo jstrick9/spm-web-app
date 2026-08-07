@@ -77,6 +77,21 @@ export function AccessControlManager({ orgId }: { orgId: string }) {
     },
   });
 
+  // Custom roles could be CREATED but never renamed or deleted — the
+  // server's PATCH/DELETE /api/roles/:id existed with zero callers, so a
+  // typo'd role name or an abandoned role was permanent clutter.
+  const renameRoleMutation = useMutation({
+    mutationFn: ({ roleId, name, description }: { roleId: string; name: string; description?: string }) =>
+      sdk.roles.updateCustomRole(roleId, { name, description }),
+    onSuccess: () => { qc.invalidateQueries({ queryKey: ['roles', orgId] }); toast({ title: 'Role updated', variant: 'success' }); },
+    onError: (e: any) => toast({ title: 'Could not update role', description: e.message, variant: 'destructive' }),
+  });
+  const deleteRoleMutation = useMutation({
+    mutationFn: (roleId: string) => sdk.roles.deleteCustomRole(roleId),
+    onSuccess: () => { qc.invalidateQueries({ queryKey: ['roles', orgId] }); toast({ title: 'Role deleted', variant: 'success' }); },
+    onError: (e: any) => toast({ title: 'Could not delete role', description: e.message, variant: 'destructive' }),
+  });
+
   const createRoleMutation = useMutation({
     mutationFn: () =>
       sdk.roles.createCustomRole(orgId, {
@@ -314,7 +329,17 @@ export function AccessControlManager({ orgId }: { orgId: string }) {
                 <tr className="bg-surface-2/60 border-b border-border text-[10px] uppercase font-bold tracking-wider text-fg-subtle">
                   <th className="p-3 border-r">Capability</th>
                   {roles.map((r: any) => (
-                    <th key={r.id} className="p-3 text-center min-w-[80px]">{r.name}</th>
+                    <th key={r.id} className="p-3 text-center min-w-[80px]">
+                      <div className="flex flex-col items-center gap-1">
+                        <span>{r.name}</span>
+                        {!r.is_system && (
+                          <span className="flex gap-1.5">
+                            <button type="button" className="text-[9px] text-brand underline" onClick={async () => { const name = await ask({ title: 'Rename role', label: 'Role name', required: true, defaultValue: r.name }); if (name) renameRoleMutation.mutate({ roleId: r.id, name, description: r.description || undefined }); }}>Rename</button>
+                            <button type="button" className="text-[9px] text-danger underline" onClick={async () => { if (await askConfirm({ title: `Delete role ${r.name}?`, description: 'Members assigned this role will need a new role.', destructive: true })) deleteRoleMutation.mutate(r.id); }}>Delete</button>
+                          </span>
+                        )}
+                      </div>
+                    </th>
                   ))}
                 </tr>
               </thead>

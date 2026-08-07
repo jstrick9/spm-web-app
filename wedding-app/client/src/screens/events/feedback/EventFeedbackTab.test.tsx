@@ -29,7 +29,8 @@ vi.mock('../../../sdk', () => ({
           { id: 'f1', target: 'DJ Snake', rating: 5, comments: 'Great mix!', submittedBy: 'Sarah Smith' }
         ] 
       }),
-      createPoll: vi.fn()
+      createPoll: vi.fn(),
+      submitFeedback: vi.fn().mockResolvedValue({ feedback: { id: 'f2', target: 'Catering', rating: 4, comments: 'Great', submittedBy: 'Venue team' } })
     }
   }
 }));
@@ -86,5 +87,33 @@ describe('EventFeedbackTab', () => {
         question: 'Outdoor or Indoor ceremony?'
       }));
     });
+  });
+});
+
+describe('EventFeedbackTab — feedback composer', () => {
+  beforeEach(() => vi.clearAllMocks());
+
+  it('records feedback via the composer (regression: the card was display-only "No feedback collected yet" with no way to collect it)', async () => {
+    render(<EventFeedbackTab eventId="e1" />, { wrapper: ({ children }: any) => <QueryClientProvider client={queryClient}><ToastProvider>{children}</ToastProvider></QueryClientProvider> });
+    await screen.findByText('DJ Snake');
+
+    fireEvent.change(screen.getByLabelText('Feedback target'), { target: { value: 'Catering' } });
+    fireEvent.change(screen.getByLabelText('Feedback rating'), { target: { value: '4' } });
+    fireEvent.change(screen.getByLabelText('Feedback comments'), { target: { value: 'Great service' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Add feedback' }));
+
+    await waitFor(() => {
+      expect(sdk.feedback.submitFeedback).toHaveBeenCalledWith(
+        'e1',
+        expect.objectContaining({ target: 'Catering', rating: 4, comments: 'Great service', submittedBy: 'Venue team' }),
+      );
+    });
+  });
+
+  it('does not submit without a target', async () => {
+    render(<EventFeedbackTab eventId="e1" />, { wrapper: ({ children }: any) => <QueryClientProvider client={queryClient}><ToastProvider>{children}</ToastProvider></QueryClientProvider> });
+    await screen.findByText('DJ Snake');
+    fireEvent.click(screen.getByRole('button', { name: 'Add feedback' }));
+    expect(sdk.feedback.submitFeedback).not.toHaveBeenCalled();
   });
 });

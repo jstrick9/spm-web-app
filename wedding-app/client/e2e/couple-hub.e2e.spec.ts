@@ -209,6 +209,20 @@ test('couple adds a guest and acknowledges a critical event-week update', async 
   expect(created.rsvpStatus).toBe('attending');
   expect(created.tags).toContain('vip');
 
+  // ── 2b. Edit the guest (typo fix) — regression: no UI could edit a guest ──
+  await guestCard.getByRole('button', { name: `Edit guest ${guestName}` }).click();
+  const editDialog = page.getByRole('dialog');
+  await expect(editDialog).toBeVisible({ timeout: 10_000 });
+  await editDialog.locator('#prompt-fullName').fill(`${guestName} Jr.`);
+  await clickSafely(editDialog.getByRole('button', { name: 'Save' }));
+  await expect(page.getByText('Guest updated').first()).toBeVisible({ timeout: 10_000 });
+
+  const guestsRes2 = await request.get(`/api/events/${eventId}/couple-guests`, {
+    headers: { authorization: `Bearer ${coupleToken}` },
+  });
+  const { guests: guests2 } = (await guestsRes2.json()) as { guests: Array<any> };
+  expect(guests2.find((g: any) => g.fullName === `${guestName} Jr.`)).toBeTruthy();
+
   // ── 3. Acknowledge the critical update ───────────────────────────────
   // The update title's parent card holds THIS run's "I understand" button
   // (older runs leave acknowledged/unacknowledged updates behind).
@@ -225,6 +239,17 @@ test('couple adds a guest and acknowledges a critical event-week update', async 
   const acked = updates.find((u: any) => u.id === updateId);
   expect(acked).toBeTruthy();
   expect(acked.acknowledged_at).toBeTruthy();
+
+  // The couple VIEWED the update too — the venue's "viewed X/Y" panel
+  // depends on these read receipts (regression: it stayed 0 forever).
+  const summaryRes = await request.get(`/api/events/${eventId}/couple-updates/summary`, {
+    headers: { authorization: `Bearer ${token}` },
+  });
+  expect(summaryRes.ok()).toBeTruthy();
+  const { updates: summaryUpdates } = (await summaryRes.json()) as { updates: Array<any> };
+  const viewed = summaryUpdates.find((u: any) => u.id === updateId);
+  expect(viewed, 'summary must include the update').toBeTruthy();
+  expect((viewed.viewed_count ?? 0), 'viewed_count must reflect the couple reading the update').toBeGreaterThanOrEqual(1);
 });
 
 test('couple imports their guest list from a CSV in the import concierge', async ({ page, request }) => {

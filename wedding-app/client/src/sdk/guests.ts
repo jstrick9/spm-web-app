@@ -158,9 +158,6 @@ export const guestsSdk = {
 
   // ── Portal token management (authenticated) ───────────────────────────
 
-  rotatePortalToken(guestId: string): Promise<{ token: string }> {
-    return api.post(`/api/guests/${guestId}/portal-token`);
-  },
 
   revokePortalToken(guestId: string): Promise<void> {
     return api.delete(`/api/guests/${guestId}/portal-token`);
