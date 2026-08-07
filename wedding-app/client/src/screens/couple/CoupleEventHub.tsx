@@ -20,6 +20,7 @@ import {
   Smartphone,
   Sparkles,
   Trash2,
+  Upload,
   Users,
 } from 'lucide-react';
 import { sdk, downloadFile } from '../../sdk';
@@ -153,6 +154,7 @@ export function CoupleEventHub({ eventId }: { eventId: string }) {
   const [portalDraft, setPortalDraft] = useState<Record<string, string>>({ welcomeMessage: '', dressCode: '', parkingText: '', shuttleText: '', lodgingText: '', registryLinks: '', kidsPolicy: '', plusOneRules: '', accessibilityNotes: '', guestFaq: '', subEventInstructions: '', travelConcierge: '', language: 'en' });
   const [designDraft, setDesignDraft] = useState<Record<string, string>>({});
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const documentVersionFileInputs = useRef<Record<string, HTMLInputElement>>({});
   const [documentFileError, setDocumentFileError] = useState<string | null>(null);
   const MAX_DOC_BYTES = 8 * 1024 * 1024;
   const ALLOWED_DOC_TYPES = ['application/pdf', 'image/jpeg', 'image/png', 'image/webp'];
@@ -297,6 +299,31 @@ export function CoupleEventHub({ eventId }: { eventId: string }) {
     onSuccess: () => { qc.invalidateQueries({ queryKey: ['couple-documents', eventId] }); toast({ title: 'Document uploaded for venue review', variant: 'success' }); },
     onError: (err: any) => toast({ title: 'Could not upload document', description: err?.message || 'Use a PDF/JPG/PNG/WebP under 8 MB.', variant: 'destructive' }),
   });
+  // Upload a NEW VERSION of an existing document (e.g. an updated contract
+  // or revised menu) — the server supersedes the file and bumps the version;
+  // previously versions were displayed (v{n}) but never creatable from the UI.
+  const documentVersionUploadMutation = useMutation({
+    mutationFn: (input: { documentId: string; filename: string; dataUri: string; mimeType: string; notes?: string }) =>
+      sdk.couple.uploadDocumentVersion(eventId, input.documentId, { filename: input.filename, dataUri: input.dataUri, mimeType: input.mimeType, notes: input.notes }),
+    onSuccess: () => { qc.invalidateQueries({ queryKey: ['couple-documents', eventId] }); toast({ title: 'Document version uploaded', description: 'The previous file was superseded.', variant: 'success' }); },
+    onError: (err: any) => toast({ title: 'Could not upload version', description: err?.message || 'Use a PDF/JPG/PNG/WebP under 8 MB.', variant: 'destructive' }),
+  });
+
+  const handleDocumentVersionChosen = (documentId: string) => (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    event.target.value = '';
+    if (!file) return;
+    if (!ALLOWED_DOC_TYPES.includes(file.type)) {
+      toast({ title: 'Unsupported file type', description: 'Use a PDF, JPG, PNG, or WebP file.', variant: 'destructive' });
+      return;
+    }
+    const reader = new FileReader();
+    reader.onload = () => {
+      documentVersionUploadMutation.mutate({ documentId, filename: file.name, dataUri: String(reader.result), mimeType: file.type });
+    };
+    reader.readAsDataURL(file);
+  };
+
   const documentDeleteMutation = useMutation({
     mutationFn: (documentId: string) => sdk.couple.deleteDocument(eventId, documentId),
     onSuccess: () => { qc.invalidateQueries({ queryKey: ['couple-documents', eventId] }); toast({ title: 'Document removed', variant: 'success' }); },
@@ -843,7 +870,7 @@ export function CoupleEventHub({ eventId }: { eventId: string }) {
             <CardContent className="space-y-4">
               <div className="grid gap-2 sm:grid-cols-4 text-sm"><div className="rounded-lg border border-border bg-surface-2 p-3"><strong>{documentsQuery.data?.documents.length ?? 0}</strong><p className="text-xs text-fg-muted">documents</p></div><div className="rounded-lg border border-warning/30 bg-warning-soft/20 p-3"><strong>{documentsQuery.data?.reviewQueue.length ?? 0}</strong><p className="text-xs text-warning">needs review</p></div><div className="rounded-lg border border-border bg-surface-2 p-3"><strong>{documentsQuery.data?.postEventGallery.length ?? 0}</strong><p className="text-xs text-fg-muted">post-event gallery</p></div><div className="rounded-lg border border-border bg-surface-2 p-3"><strong>{Math.round((documentsQuery.data?.maxBytes || 0) / 1024 / 1024) || 8} MB</strong><p className="text-xs text-fg-muted">file limit</p></div></div>
               <div className="grid gap-2 md:grid-cols-5"><input value={documentDraft.filename || ''} onChange={(e) => setDocumentDraft((p) => ({ ...p, filename: e.target.value }))} placeholder="Filename" className="h-9 rounded-md border border-border bg-surface px-2 text-sm" /><select aria-label="Document category" value={documentDraft.category || 'other'} onChange={(e) => setDocumentDraft((p) => ({ ...p, category: e.target.value }))} className="h-9 rounded-md border border-border bg-surface px-2 text-sm">{(documentsQuery.data?.categories || ['inspiration_photo','insurance','vendor_doc','ceremony_doc','playlist','diagram','permit','guest_list','menu','contract','post_event_gallery','other']).map((c) => <option key={c} value={c}>{c}</option>)}</select><select aria-label="Document visibility" value={documentDraft.visibility || 'couple_venue'} onChange={(e) => setDocumentDraft((p) => ({ ...p, visibility: e.target.value }))} className="h-9 rounded-md border border-border bg-surface px-2 text-sm">{(documentsQuery.data?.visibilityOptions || ['couple','couple_venue','planner','vendor','guest_visible']).map((v) => <option key={v} value={v}>{v}</option>)}</select><input value={documentDraft.notes || ''} onChange={(e) => setDocumentDraft((p) => ({ ...p, notes: e.target.value }))} placeholder="Notes" className="h-9 rounded-md border border-border bg-surface px-2 text-sm" /><div className="flex items-center gap-2"><input ref={fileInputRef} type="file" accept=".pdf,.jpg,.jpeg,.png,.webp" className="hidden" aria-label="Choose a document file" onChange={handleDocumentFileChosen} /><Button size="sm" variant={documentDraft.dataUri ? 'default' : 'outline'} onClick={() => fileInputRef.current?.click()}>Choose file</Button>{documentDraft.dataUri ? <Button size="sm" onClick={uploadChosenDocument} isLoading={documentUploadMutation.isPending}>Upload</Button> : <Button size="xs" variant="ghost" onClick={useSampleDocument} className="text-xs">Use sample file</Button>}</div></div>{documentFileError && <p className="text-xs text-danger col-span-5 mt-2">{documentFileError}</p>}
-              <div className="grid gap-2 lg:grid-cols-2">{documentsQuery.isError ? <SectionLoadError label="Documents" onRetry={() => void documentsQuery.refetch()} /> : (<>{(documentsQuery.data?.documents || []).slice(0, 8).map((doc) => <div key={doc.id} className="rounded-lg border border-border bg-surface-2 p-3 text-sm"><div className="flex items-start justify-between gap-2"><div><strong>{doc.filename}</strong><p className="text-xs text-fg-muted">{doc.category} · {doc.visibility} · v{doc.version}</p>{doc.extractedSummary && <p className="mt-1 whitespace-pre-wrap text-xs text-fg-muted">{doc.extractedSummary}</p>}</div><Badge variant={doc.approvalStatus === 'approved' ? 'success' : doc.approvalStatus === 'changes_requested' ? 'warning' : 'outline'}>{doc.approvalStatus}</Badge><div className="flex shrink-0 gap-1"><Button size="xs" variant="outline" onClick={() => downloadAuth(doc.url, doc.filename)}>Open</Button><Button size="xs" variant="ghost" onClick={() => documentDeleteMutation.mutate(doc.id)} aria-label={`Delete document ${doc.filename}`}><Trash2 className="h-3.5 w-3.5" /></Button></div></div></div>)}</>)}</div>
+              <div className="grid gap-2 lg:grid-cols-2">{documentsQuery.isError ? <SectionLoadError label="Documents" onRetry={() => void documentsQuery.refetch()} /> : (<>{(documentsQuery.data?.documents || []).slice(0, 8).map((doc) => <div key={doc.id} className="rounded-lg border border-border bg-surface-2 p-3 text-sm"><div className="flex items-start justify-between gap-2"><div><strong>{doc.filename}</strong><p className="text-xs text-fg-muted">{doc.category} · {doc.visibility} · v{doc.version}</p>{doc.extractedSummary && <p className="mt-1 whitespace-pre-wrap text-xs text-fg-muted">{doc.extractedSummary}</p>}</div><Badge variant={doc.approvalStatus === 'approved' ? 'success' : doc.approvalStatus === 'changes_requested' ? 'warning' : 'outline'}>{doc.approvalStatus}</Badge><div className="flex shrink-0 gap-1"><Button size="xs" variant="outline" onClick={() => downloadAuth(doc.url, doc.filename)}>Open</Button><Button size="xs" variant="outline" onClick={() => documentVersionFileInputs.current?.[doc.id]?.click()} disabled={documentVersionUploadMutation.isPending} aria-label={`Upload new version of ${doc.filename}`}><Upload className="h-3.5 w-3.5" /> New version</Button><input ref={(el) => { if (el) documentVersionFileInputs.current[doc.id] = el; }} type="file" accept=".pdf,.jpg,.jpeg,.png,.webp" className="hidden" aria-label={`Choose a new version of ${doc.filename}`} onChange={handleDocumentVersionChosen(doc.id)} /><Button size="xs" variant="ghost" onClick={() => documentDeleteMutation.mutate(doc.id)} aria-label={`Delete document ${doc.filename}`}><Trash2 className="h-3.5 w-3.5" /></Button></div></div></div>)}</>)}</div>
               <div className="grid gap-3 lg:grid-cols-3"><div className="rounded-lg border border-border bg-surface-2 p-3 text-xs"><strong>Supported categories</strong><p className="mt-1 text-fg-muted">Inspiration photos, insurance, vendor docs, ceremony docs, playlists, diagrams, permits, guest spreadsheets, menus, contracts, and post-event gallery.</p></div><div className="rounded-lg border border-border bg-surface-2 p-3 text-xs"><strong>Visibility</strong><p className="mt-1 text-fg-muted">Couple, couple+venue, planner, vendor, or guest-visible. Guest-visible files require venue approval.</p></div><div className="rounded-lg border border-brand/20 bg-brand-soft/10 p-3 text-xs text-brand"><strong>AI extraction review</strong><p className="mt-1">Guest lists, contracts, menu notes, ceremony docs, and playlists get deterministic review hints for venue approval.</p></div></div>
               <div className="flex flex-wrap gap-2"><Button asChild size="sm" variant="outline"><a href={`/api/events/${eventId}/couple-documents/final-packet.txt`} onClick={(e) => { e.preventDefault(); downloadAuth(`/api/events/${eventId}/couple-documents/final-packet.txt`, 'final-packet.txt'); }}>Download final packet</a></Button></div>
             </CardContent>

@@ -78,7 +78,7 @@ test('couple uploads a shared document that the venue sees in the hub', async ({
   // ── 2. Upload a sample document ──
   const docHub = page.locator('#couple-documents');
   await clickSafely(docHub.getByRole('button', { name: 'Use sample file' }));
-  const uploadBtn = docHub.getByRole('button', { name: 'Upload' });
+  const uploadBtn = docHub.getByRole('button', { name: 'Upload', exact: true });
   await expect(uploadBtn).toBeVisible({ timeout: 10_000 });
   await clickSafely(uploadBtn);
   await expect(page.getByText('Document uploaded for venue review').first()).toBeVisible({ timeout: 15_000 });
@@ -94,6 +94,26 @@ test('couple uploads a shared document that the venue sees in the hub', async ({
   expect(uploaded.category).toBe('menu'); // default draft category
   expect(uploaded.visibility).toBe('couple_venue');
   expect(uploaded.uploadedByRole || uploaded.createdByRole || 'couple').toBeTruthy();
+  const versionBefore = uploaded.version ?? 1;
+
+  // ── 3b. Upload a NEW VERSION from the document card (was UI-impossible:
+  // versions were displayed as v{n} but never creatable) ──
+  const versionInput = docHub.locator(`input[aria-label="Choose a new version of sample-document.pdf"]`).first();
+  await versionInput.setInputFiles({
+    name: 'sample-document-v2.pdf',
+    mimeType: 'application/pdf',
+    buffer: Buffer.from('%PDF-1.4 second version'),
+  });
+  await expect(page.getByText('Document version uploaded').first()).toBeVisible({ timeout: 15_000 });
+
+  const docsRes2 = await request.get(`/api/events/${eventId}/couple-documents`, {
+    headers: { authorization: `Bearer ${coupleToken}` },
+  });
+  const { documents: documents2 } = (await docsRes2.json()) as { documents: Array<any> };
+  const versioned = documents2.find((d: any) => d.id === uploaded.id);
+  expect(versioned, 'versioned document must still exist').toBeTruthy();
+  expect(versioned.filename).toBe('sample-document-v2.pdf');
+  expect((versioned.version ?? 1)).toBeGreaterThan(versionBefore);
 
   // venue sees the shared document too
   const venueDocs = await request.get(`/api/events/${eventId}/couple-documents`, {
