@@ -24,9 +24,23 @@ function watch(page: Page, sink: string[]): void {
   });
 }
 
-const SURFACES = ['/#/', '/#/calendar', '/#/intelligence', '/#/vendors', '/#/guests', '/#/system', '/#/reports'];
+const SURFACES = [
+  '/#/',
+  '/#/calendar',
+  '/#/intelligence',
+  '/#/vendors',
+  '/#/guests',
+  '/#/system',
+  '/#/system/venue',
+  '/#/system/catalog',
+  '/#/system/inventory',
+  '/#/system/integrations',
+  '/#/reports',
+  '/#/settings/profile',
+];
 
 test('authenticated surfaces render with zero console/network errors', async ({ page }) => {
+  test.setTimeout(150_000);
   const allErrors: string[] = [];
   watch(page, allErrors);
 

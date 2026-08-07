@@ -122,6 +122,15 @@ test('guest portal renders clean and help flows work in both token states', asyn
   await help2.getByRole('button', { name: 'Save' }).click();
   await expect(help2).toBeHidden({ timeout: 10000 });
 
+  // ── 2b. Map tab (wayfinding canvas) renders without console errors ──
+  const mapTab = page.getByRole('button', { name: /map/i }).first();
+  if (await mapTab.count()) {
+    await mapTab.click();
+    await page.waitForTimeout(1500);
+  }
+  await page.getByRole('button', { name: /home/i }).first().click();
+  await page.waitForTimeout(800);
+
   // ── 3. Full-page scroll to mount every lazy section ──
   await page.goto(`${BASE}/#/portal/${eventId}?guest=${guestId}&token=${guestToken}`);
   await page.reload({ waitUntil: 'domcontentloaded' });
