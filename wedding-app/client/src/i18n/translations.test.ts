@@ -46,4 +46,30 @@ describe('translations dictionary parity', () => {
       }
     }
   });
+
+  it('every t() key used by the portal screens is defined (no raw-key leaks)', async () => {
+    // t() falls back to the raw key when a key is missing, so a used-but-
+    // undefined key renders literally (e.g. "home.remindersQuietHoursStart")
+    // to guests — including as an aria-label. Guard against that class.
+    const fs = await import('node:fs');
+    const path = await import('node:path');
+    const { fileURLToPath } = await import('node:url');
+    const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
+    const used = new Set<string>();
+    const walk = (dir: string) => {
+      for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
+        const full = path.join(dir, entry.name);
+        if (entry.isDirectory()) walk(full);
+        else if (/\.(tsx|ts)$/.test(entry.name) && !/\.(test|spec)\./.test(entry.name)) {
+          const src = fs.readFileSync(full, 'utf8');
+          for (const m of src.matchAll(/\bt\(\s*['"]([A-Za-z0-9_.\-]+)['"]/g)) used.add(m[1]);
+        }
+      }
+    };
+    walk(path.join(root, 'screens', 'portal'));
+    walk(path.join(root, 'screens', 'events'));
+    for (const key of [...used].sort()) {
+      expect(translations.en[key], `t('${key}') is used by a screen but missing from the dictionary`).toBeDefined();
+    }
+  });
 });

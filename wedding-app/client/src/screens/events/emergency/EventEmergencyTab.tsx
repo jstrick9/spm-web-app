@@ -100,6 +100,15 @@ export function EventEmergencyTab({ eventId }: Props) {
 
   const event = eventData?.event;
 
+  // Venue spaces for this org — used to resolve the event's current space
+  // and its configured rain-plan backup space (metadata.rainPlanVenueId).
+  const { data: venuesData } = useQuery({
+    queryKey: ['venues', event?.organization_id],
+    queryFn: () => sdk.venues.list(event!.organization_id!),
+    enabled: Boolean(event?.organization_id),
+  });
+  const venues = venuesData?.venues ?? [];
+
   // Memoize metadata parsing
   const metadata = useMemo(() => {
     if (!event?.metadata) return {};
@@ -109,6 +118,15 @@ export function EventEmergencyTab({ eventId }: Props) {
       return {};
     }
   }, [event?.metadata]);
+
+  const parseVenueMetadata = (venue: any): Record<string, any> => {
+    if (!venue?.metadata) return {};
+    try { return typeof venue.metadata === 'string' ? JSON.parse(venue.metadata) : venue.metadata; } catch { return {}; }
+  };
+
+  const currentVenue = venues.find((v: any) => v.id === event?.venue_id) ?? null;
+  const backupVenueId = (currentVenue && parseVenueMetadata(currentVenue).rainPlanVenueId) || null;
+  const backupVenue = venues.find((v: any) => v.id === backupVenueId) ?? null;
 
   // Extract Emergency structures from metadata
   const activePlan = metadata.emergency_active_plan || 'plan-a';
@@ -149,15 +167,85 @@ export function EventEmergencyTab({ eventId }: Props) {
 
   const handleUpdatePlan = (plan: 'plan-a' | 'plan-b') => {
     const nextMeta = { ...metadata, emergency_active_plan: plan };
+
+    if (plan === 'plan-b' && backupVenueId && backupVenue && event?.venue_id !== backupVenueId) {
+      // A backup space is configured: move the event to it (the server
+      // records the previous space so Plan A can restore it).
+      sdk.events.activateRainPlan(eventId)
+        .then(() => {
+          qc.invalidateQueries({ queryKey: ['event', eventId] });
+          saveMetadataMutation.mutate(nextMeta, {
+            onSuccess: () => {
+              toast({
+                title: '🚨 Plan B Weather Contingency Active',
+                description: `The event has been moved to ${backupVenue.name}. Run sheets and the vendor portal now reference the backup space.`,
+                variant: 'success',
+              });
+            },
+          });
+        })
+        .catch((err: any) => {
+          // Still record the plan flag so dashboards reflect the decision,
+          // but surface the wiring problem honestly.
+          saveMetadataMutation.mutate(nextMeta, {
+            onSuccess: () => {
+              toast({
+                title: 'Plan B marked — event not moved',
+                description: `${err?.message ?? 'Could not move the event'}. Open Venue Builder to fix the backup space configuration.`,
+                variant: 'destructive',
+              });
+            },
+          });
+        });
+      return;
+    }
+
+    if (plan === 'plan-a' && typeof metadata.previousVenueId === 'string') {
+      // The event was moved by a rain-plan activation — move it back.
+      sdk.events.activateRainPlan(eventId, { restore: true })
+        .then((res) => {
+          qc.invalidateQueries({ queryKey: ['event', eventId] });
+          saveMetadataMutation.mutate(nextMeta, {
+            onSuccess: () => {
+              toast({
+                title: '☀️ Plan A Standard Layout Active',
+                description: `The event is back at ${res.rainPlan.toVenue}.`,
+                variant: 'success',
+              });
+            },
+          });
+        })
+        .catch((err: any) => {
+          saveMetadataMutation.mutate(nextMeta, {
+            onSuccess: () => {
+              toast({
+                title: 'Could not restore the original space',
+                description: `${err?.message ?? 'Please try again.'}`,
+                variant: 'destructive',
+              });
+            },
+          });
+        });
+      return;
+    }
+
     saveMetadataMutation.mutate(nextMeta, {
       onSuccess: () => {
-        toast({
-          title: plan === 'plan-b' ? '🚨 Plan B Weather Contingency Active' : '☀️ Plan A Standard Layout Active',
-          description: plan === 'plan-b' 
-            ? 'All staff has been directed to transition operations to the Indoor Ballroom.'
-            : 'Outdoor Garden setup restored.',
-          variant: 'success',
-        });
+        if (plan === 'plan-b') {
+          toast({
+            title: '🚨 Plan B Weather Contingency Active',
+            description: backupVenue
+              ? `${backupVenue.name} is the configured backup for ${currentVenue?.name ?? 'this space'}.`
+              : 'No backup space is configured yet — staff layouts will keep showing the current space. Set a backup in Venue Builder to move the event automatically.',
+            variant: 'success',
+          });
+        } else {
+          toast({
+            title: '☀️ Plan A Standard Layout Active',
+            description: currentVenue ? `Standard setup in ${currentVenue.name} restored.` : 'Standard setup restored.',
+            variant: 'success',
+          });
+        }
       },
     });
   };
@@ -336,7 +424,7 @@ export function EventEmergencyTab({ eventId }: Props) {
                 activePlan === 'plan-a' && "bg-paper-ink text-white hover:bg-[#3d3a39]"
               )}
             >
-              ☀️ Plan A: Outdoor Garden
+              ☀️ Plan A: {currentVenue?.name ?? 'Standard Layout'}
             </Button>
             <Button
               variant={activePlan === 'plan-b' ? 'default' : 'outline'}
@@ -346,7 +434,7 @@ export function EventEmergencyTab({ eventId }: Props) {
                 activePlan === 'plan-b' && "bg-amber-600 text-white border-amber-600 hover:bg-amber-700"
               )}
             >
-              🌧️ Plan B: Weather Backup
+              🌧️ Plan B: {backupVenue?.name ?? 'Weather Backup'}
             </Button>
           </div>
         </div>
@@ -357,10 +445,18 @@ export function EventEmergencyTab({ eventId }: Props) {
             <AlertTriangle className="w-5.5 h-5.5 text-amber-600 shrink-0 mt-0.5" />
             <div className="space-y-1 text-sm text-amber-900 font-semibold">
               <p className="font-bold text-base">Plan B: Weather Contingency is ACTIVE</p>
-              <p className="opacity-90 leading-relaxed text-xs sm:text-sm">
-                Staff has been notified in real-time to execute the indoor ballroom physical setup. 
-                Spacing guidelines enforce a 6-foot clearance limit around internal fireplace columns, and floral decorators are directed to transition arches to the grand stage.
-              </p>
+              {backupVenue ? (
+                <p className="opacity-90 leading-relaxed text-xs sm:text-sm">
+                  The event has been moved to <strong>{backupVenue.name}</strong>. Run sheets, the vendor
+                  portal, and staff layout guides now reference the backup space. Use Plan A to restore
+                  the original space.
+                </p>
+              ) : (
+                <p className="opacity-90 leading-relaxed text-xs sm:text-sm">
+                  No backup space is configured for {currentVenue?.name ?? 'this event'} yet — layouts
+                  keep referencing the current space. Open Venue Builder to pick a rain-plan backup space.
+                </p>
+              )}
             </div>
           </div>
         )}
@@ -452,6 +548,9 @@ export function EventEmergencyTab({ eventId }: Props) {
             <div className="space-y-2">
               {PLAN_B_COMPLIANCE_CHECKS.map((check) => {
                 const isChecked = !!complianceStatus[check.id];
+                const label = check.id === 'occupancy' && backupVenue
+                  ? `${backupVenue.name} maximum occupancy threshold not exceeded`
+                  : check.label;
                 return (
                   <div 
                     key={check.id}
@@ -471,7 +570,7 @@ export function EventEmergencyTab({ eventId }: Props) {
                       "text-xs font-semibold",
                       isChecked ? "text-fg-subtle line-through" : "text-fg-muted"
                     )}>
-                      {check.label}
+                      {label}
                     </span>
                   </div>
                 );

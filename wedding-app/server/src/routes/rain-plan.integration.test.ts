@@ -82,9 +82,49 @@ describe('Rain-plan alternate space', () => {
     expect(activated.json().rainPlan).toEqual({ fromVenue: 'Lawn', toVenue: 'Tent' });
     expect(activated.json().event.venue_id).toBe(tentId);
 
+    // Activation records the previous space + plan flag in event metadata so
+    // the coordinator can restore with one click later.
+    const eventMeta = (() => { try { return JSON.parse(activated.json().event.metadata || '{}'); } catch { return {}; } })();
+    expect(eventMeta.previousVenueId).toBe(lawnId);
+    expect(eventMeta.emergency_active_plan).toBe('plan-b');
+
     const audit = db.prepare(`SELECT details FROM audit_logs WHERE action = 'event.rain_plan.activated'`).get() as { details: string } | undefined;
     expect(audit).toBeTruthy();
     expect(JSON.parse(audit!.details).fromVenueId).toBe(lawnId);
     expect(JSON.parse(audit!.details).toVenueId).toBe(tentId);
+  });
+
+  it('restores the event to its original space after activation', async () => {
+    const { token, orgId } = await register();
+    const lawn = await authed(token, 'POST', `/api/orgs/${orgId}/venues`, { name: 'Lawn', capacity: 300 });
+    const tent = await authed(token, 'POST', `/api/orgs/${orgId}/venues`, { name: 'Tent', capacity: 150 });
+    const lawnId = lawn.json().venue.id;
+    const tentId = tent.json().venue.id;
+    const masterLayout = { zones: [{ type: 'exit' }, { type: 'accessible_route' }, { type: 'power' }, { type: 'loading' }] };
+    await authed(token, 'PATCH', `/api/venues/${lawnId}`, { approvalStatus: 'approved', masterLayout });
+    await authed(token, 'PATCH', `/api/venues/${tentId}`, { approvalStatus: 'approved', masterLayout });
+    await authed(token, 'PATCH', `/api/venues/${lawnId}`, { metadata: { rainPlanVenueId: tentId } });
+
+    const evt = await authed(token, 'POST', '/api/events', { organizationId: orgId, title: 'Outdoor Wedding', venueId: lawnId, startDate: '2026-09-12' });
+    const eventId = evt.json().event.id;
+
+    // Restore before any activation → explicit error.
+    const premature = await authed(token, 'POST', `/api/events/${eventId}/activate-rain-plan`, { restore: true });
+    expect(premature.statusCode).toBe(400);
+    expect(premature.json().error).toBe('rain-plan-not-active');
+
+    await authed(token, 'POST', `/api/events/${eventId}/activate-rain-plan`, {});
+    const restored = await authed(token, 'POST', `/api/events/${eventId}/activate-rain-plan`, { restore: true });
+    expect(restored.statusCode).toBe(200);
+    expect(restored.json().restored).toBe(true);
+    expect(restored.json().event.venue_id).toBe(lawnId);
+    expect(restored.json().rainPlan).toEqual({ fromVenue: 'Tent', toVenue: 'Lawn' });
+    const eventMeta = (() => { try { return JSON.parse(restored.json().event.metadata || '{}'); } catch { return {}; } })();
+    expect(eventMeta.previousVenueId ?? null).toBe(null);
+    expect(eventMeta.emergency_active_plan).toBe('plan-a');
+
+    const audit = db.prepare(`SELECT details FROM audit_logs WHERE action = 'event.rain_plan.restored'`).get() as { details: string } | undefined;
+    expect(audit).toBeTruthy();
+    expect(JSON.parse(audit!.details).toVenueId).toBe(lawnId);
   });
 });

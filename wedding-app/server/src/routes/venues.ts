@@ -199,6 +199,38 @@ export async function venueRoutes(app: FastifyInstance) {
     if (!event) throw NotFound('event-not-found');
     const orgMap = eventsRepo.orgMapForUser(req.auth!.userId);
     if (!can(req.auth!.memberships, { eventId }, 'events.edit', orgMap)) throw Forbidden();
+    const body = (req.body ?? {}) as { restore?: boolean };
+    const eventMeta = (() => { try { return JSON.parse(event.metadata || '{}'); } catch { return {}; } })() as Record<string, unknown>;
+
+    // Restore: move the event back to the space it was in before activation.
+    if (body.restore) {
+      const previousVenueId = typeof eventMeta.previousVenueId === 'string' ? eventMeta.previousVenueId : '';
+      if (!previousVenueId) throw BadRequest('rain-plan-not-active');
+      const original = venuesRepo.findById(previousVenueId);
+      if (!original || original.organization_id !== event.organization_id || original.approval_status !== 'approved') {
+        throw BadRequest('invalid-rain-plan-space');
+      }
+      const current = event.venue_id ? venuesRepo.findById(event.venue_id) : undefined;
+      const updated = eventsRepo.update(eventId, {
+        venue_id: previousVenueId,
+        metadata: {
+          previousVenueId: null,
+          rainPlanActivatedAt: null,
+          rainPlanRestoredAt: new Date().toISOString(),
+          emergency_active_plan: 'plan-a',
+        },
+      });
+      auditRepo.log({
+        organizationId: event.organization_id, actorUserId: req.auth!.userId, actorLabel: req.auth!.email,
+        action: 'event.rain_plan.restored', targetType: 'event', targetId: eventId, ip: req.ip,
+        details: { fromVenueId: event.venue_id, fromVenueName: current?.name ?? null, toVenueId: previousVenueId, toVenueName: original.name },
+      });
+      return reply.code(200).send({
+        event: updated, restored: true,
+        rainPlan: { fromVenue: current?.name ?? event.venue_id ?? '', toVenue: original.name },
+      });
+    }
+
     if (!event.venue_id) throw BadRequest('rain-plan-requires-venue');
     const venue = venuesRepo.findById(event.venue_id);
     if (!venue) throw NotFound('venue-not-found');
@@ -209,13 +241,21 @@ export async function venueRoutes(app: FastifyInstance) {
     if (!alternate || alternate.organization_id !== event.organization_id || alternate.approval_status !== 'approved') {
       throw BadRequest('invalid-rain-plan-space');
     }
-    const updated = eventsRepo.update(eventId, { venue_id: rainPlanVenueId });
+    const updated = eventsRepo.update(eventId, {
+      venue_id: rainPlanVenueId,
+      metadata: {
+        previousVenueId: event.venue_id,
+        rainPlanActivatedAt: new Date().toISOString(),
+        rainPlanRestoredAt: null,
+        emergency_active_plan: 'plan-b',
+      },
+    });
     auditRepo.log({
       organizationId: event.organization_id, actorUserId: req.auth!.userId, actorLabel: req.auth!.email,
       action: 'event.rain_plan.activated', targetType: 'event', targetId: eventId, ip: req.ip,
       details: { fromVenueId: event.venue_id, fromVenueName: venue.name, toVenueId: rainPlanVenueId, toVenueName: alternate.name },
     });
-    return reply.code(200).send({ event: updated, rainPlan: { fromVenue: venue.name, toVenue: alternate.name } });
+    return reply.code(200).send({ event: updated, activated: true, rainPlan: { fromVenue: venue.name, toVenue: alternate.name } });
   });
 
   app.delete('/api/venues/:id', { preHandler: requireAuth }, async (req, reply) => {

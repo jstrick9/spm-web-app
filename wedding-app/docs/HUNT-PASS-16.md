@@ -1,77 +1,90 @@
-# Gap-Hunting Pass 16 — Data-Overflow Fix: Documents & Timeline "Show All"
+# HUNT-PASS-16 — Rain-plan wiring, i18n raw-key leak, native-prompt removal
 
-**Date:** 2026-08-07
-**Process:** GAP-HUNTING-PROCESS.md Phase 1.2 (data-truncation scan).
+**Cycle:** Clean Cycle #2 · **Date:** 2026-08-07 · **Status:** verified, pushed to all 4 branches
 
 ---
 
-## Gap found & fixed
+## Findings & fixes
 
-### The Couple hub hard-capped lists and silently hid user data
+### 1. Rain-plan "Plan B" was cosmetic — the backend move was never wired (feature gap)
+**Symptom:** The Emergency tab's Plan A/Plan B toggle only wrote `metadata.emergency_active_plan`.
+The server's `POST /api/events/:eventId/activate-rain-plan` (moves the event to the venue's
+configured backup space) had **zero client callers**; `metadata.rainPlanVenueId` had zero
+client references (not even a UI to configure it). The Plan B banner + toasts hardcoded
+"indoor ballroom"/"Outdoor Garden" copy that lied for any real venue, and the button labels
+were fake-generic ("Plan A: Outdoor Garden", "Plan B: Weather Backup").
 
-The Couple Event Hub truncated long data without any way to see the rest:
+**Root cause:** Backend capability built (route + venue PATCH validation) but never surfaced;
+UI copy promised automatic adjustment that didn't happen.
 
-- the **Document Hub** rendered only the first **8** documents
-  (`documents.slice(0, 8)`), and
-- the **Couple Timeline Review** rendered only the first **10** timeline
-  items (`items.slice(0, 10)`).
+**Fix:**
+- **Server** (`routes/venues.ts`): `activate-rain-plan` now records `previousVenueId` +
+  `rainPlanActivatedAt` + `emergency_active_plan: 'plan-b'` in event metadata on activation,
+  and accepts `{ restore: true }` to move the event back (clears the tracking keys, sets
+  `emergency_active_plan: 'plan-a'`, audits `event.rain_plan.restored`). Response stays
+  shape-compatible (`{ event, rainPlan: { fromVenue, toVenue } }`) with added `activated`/
+  `restored` flags.
+- **SDK** (`sdk/events.ts`): new `activateRainPlan(eventId, { restore? })`.
+- **Client** (`EventEmergencyTab.tsx`): resolves the event's current venue + configured
+  backup space from the org venues; Plan B actually moves the event (with honest error
+  toast + guidance when no backup is configured); Plan A restores when the event was moved;
+  buttons and banner show the **real space names**; occupancy compliance label uses the real
+  backup space name.
+- **Client** (`VenueBuilder.tsx`): new "Rain plan backup space" selector per venue space
+  (lists approved sibling spaces; PATCHes `metadata.rainPlanVenueId`; toast + local state
+  sync). Backend already validated the reference (org + approval) — now reachable from UI.
+- **Type fix:** `SdkEvent` was missing `venue_id`/`rsvp_deadline`/`lead_source`/
+  `organizationName`/`supportEmail` (server returns full rows) — added so typed reads
+  compile instead of requiring `as any`.
 
-For a couple with a busy wedding (contracts, vendor docs, insurance, guest
-spreadsheets, playlists, ceremony docs, plus old versions), anything beyond
-the cap was **permanently unreachable**: no pagination, no "show more", no
-search. The files existed server-side and the counts at the top of each card
-("12 documents") advertised data the grid refused to show — a silent
-data-loss experience exactly like the guest-show caps we fixed in earlier
-passes.
+**Tests:**
+- Server integration (`rain-plan.integration.test.ts`): +2 tests (activate records
+  previousVenueId + plan flag; restore swaps back + audits + resets flag; restore before
+  activation → 400 `rain-plan-not-active`).
+- Client unit (`EventEmergencyTab.test.tsx`): +3 tests (Plan B w/ backup calls
+  `activateRainPlan`; Plan A after activation calls `{ restore: true }`; Plan B w/o backup
+  never moves the event) + updated label assertions to the real-space names.
+- e2e (`rain-plan.e2e.spec.ts`): +3 specs — full activate/restore round-trip with
+  server-side venue_id verification, no-backup honest-guidance path, Venue Builder backup
+  selector with server-side verification.
 
-Worse, the cap had a *functional* bite: the "New version" and "Edit
-details" buttons live on the same cards, so a doc pushed past position 8
-could no longer receive a new version or metadata edits at all.
+### 2. i18n used-but-undefined keys leaked raw key text to guests (a11y/i18n bug)
+**Symptom:** `t('home.remindersQuietHoursStart')` / `t('home.remindersQuietHoursEnd')` were
+called in the guest portal's reminder-preferences card but missing from the dictionary. `t()`
+falls back to the raw key, so the two time inputs rendered `aria-label="home.remindersQuietHoursStart"`
+— screen readers announced raw key names, and es/fr/zh guests saw untranslated strings.
 
-## Fix
+**Root cause:** The parity test only checks cross-locale consistency, not used-vs-defined.
 
-`CoupleEventHub.tsx`:
+**Fix:** Added the two keys to all 4 locales; new regression test in
+`translations.test.ts` scans `screens/portal` + `screens/events` for every `t('…')` call and
+asserts the key exists in the English dictionary.
 
-- `const [showAllDocs, setShowAllDocs] = useState(false)` —
-  `documents.slice(0, showAllDocs ? undefined : 8)`, with a toggle below the
-  grid when `documents.length > 8`: **"Show all N documents" ⇄ "Show
-  fewer"**.
-- `const [showAllTimeline, setShowAllTimeline] = useState(false)` —
-  `items.slice(0, showAllTimeline ? undefined : 10)`, with a matching toggle
-  when `items.length > 10`: **"Show all N timeline items" ⇄ "Show fewer"**.
+**Tests:** `translations.test.ts` +1 (5 tests total; 330 keys × 4 locales).
 
-Toggles render as a centered ghost button and disappear automatically when
-data drops back under the cap. Toggling does not refetch — it only reveals
-already-loaded data, so it is instant and offline-safe.
+### 3. Native `window.prompt` in the layout canvas (UX/code consistency)
+**Symptom:** CanvasPage's "Request reopening" used `window.prompt` while `usePrompt`'s `ask`
+was already imported — jarring native dialog, inconsistent with every other in-app prompt.
 
-## Regression tests
+**Fix:** Replaced with `ask({ title, label, multiline, required })`.
 
-1. **Unit** (`CoupleEventHub.test.tsx`, 2 new):
-   - *"shows ALL documents when a couple has more than 8"* — mocks 11
-     documents; asserts doc-10 is hidden, the "Show all 11 documents" toggle
-     appears, and clicking it reveals doc-10.
-   - *"shows ALL timeline items when a couple has more than 10"* — mocks 13
-     timeline items; asserts item-12 hidden then revealed via the toggle.
-   - The describe-level `beforeEach` also now restores the default documents
-     payload so the new tests cannot pollute the ones after them.
-2. **E2E** (`couple-documents.e2e.spec.ts`, 1 new): seeds 10 real documents
-   through the API (staggered >1s apart because `created_at` has second
-   precision and the list sorts newest-first), logs in as the couple, asserts
-   only 8 cards render with `toggle-doc-1.pdf` hidden, clicks **Show all N
-   documents**, asserts the hidden docs appear, clicks **Show fewer**, and
-   asserts they hide again.
-   - Also hardened the pre-existing spec: it now self-cleans its own
-     leftover `sample-*`/`toggle-*` documents from the demo event before each
-     test. Without cleanup, accumulated docs from prior runs pushed the fresh
-     upload past the 8-card cap and the "New version" input never rendered —
-     a latent test-order bug exposed by the fix itself.
+**Tests:** existing CanvasPage tests cover the surrounding flow (no direct unit assertion
+needed for the swap; e2e layout flows remain green).
+
+---
 
 ## Verification
+- Server vitest: **707 passed** (95 files)
+- Client vitest: **1008 passed** (145 files)
+- e2e: **58 passed** (55 prior + 3 new rain-plan specs); `emergency.e2e` re-verified green
+- tsc clean on server + client; client bundle rebuilt; server restarted on :3000
+- git tree clean after push; all 4 branches pinned
 
-- client `tsc --noEmit`: clean
-- server `tsc --noEmit`: clean
-- client unit: **1002 passed** (144 files)
-- server unit: **702 passed** (94 files)
-- e2e (Playwright, chromium): **54 passed** (was 53)
-- Browser-verified: toggle appears/reveals/hides in a real Chromium session
-  against the running server.
+## Documented (no change) — re-audited this pass
+- `setVendorZoneInspection` (layout per-vendor zone inspections) — server route + SDK exist,
+  no UI promise; floor-walk "vendor zones" boolean covers the intent. Net-new surface;
+  deferred.
+- Decor arrangements/packages, staff areas, webhooks/health, org events/broadcast — backend
+  CRUD with no UI promise; client-side equivalents exist where users would notice. Net-new
+  surfaces; deferred.
+- `sdk.contracts.createGoNoGoFlag` — redundant wrapper (escalation path covers it); harmless.

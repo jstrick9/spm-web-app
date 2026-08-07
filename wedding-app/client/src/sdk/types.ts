@@ -78,8 +78,14 @@ export interface SdkEvent {
   guest_count: number;
   primary_contact_user_id: string | null;
   budget_cents: number | null;
+  rsvp_deadline?: string | null;
+  lead_source?: string | null;
+  venue_id?: string | null;
   metadata: string;       // JSON
   created_at: string;
+  /** Present on the detail payload only. */
+  organizationName?: string | null;
+  supportEmail?: string | null;
 }
 
 // ─── Guests ─────────────────────────────────────────

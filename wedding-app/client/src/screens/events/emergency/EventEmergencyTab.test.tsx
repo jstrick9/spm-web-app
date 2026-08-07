@@ -14,7 +14,11 @@ vi.mock('../../../sdk', () => ({
     events: {
       get: vi.fn(),
       update: vi.fn(),
-    }
+      activateRainPlan: vi.fn(),
+    },
+    venues: {
+      list: vi.fn(),
+    },
   }
 }));
 
@@ -30,6 +34,7 @@ describe('EventEmergencyTab', () => {
         title: 'Manor Autumn Wedding',
         organization_id: 'org-123',
         status: 'planning',
+        venue_id: 'venue-lawn',
         metadata: JSON.stringify({
           emergency_active_plan: 'plan-a',
           emergency_kit_checklist: [
@@ -50,6 +55,18 @@ describe('EventEmergencyTab', () => {
         })
       }
     });
+
+    (sdk.venues.list as any).mockResolvedValue({
+      venues: [
+        { id: 'venue-lawn', name: 'Outdoor Lawn', approval_status: 'approved', metadata: JSON.stringify({ rainPlanVenueId: 'venue-tent' }) },
+        { id: 'venue-tent', name: 'Garden Tent', approval_status: 'approved', metadata: '{}' },
+      ],
+    });
+    (sdk.events.activateRainPlan as any).mockResolvedValue({
+      event: { id: 'evt-1', venue_id: 'venue-tent' },
+      activated: true,
+      rainPlan: { fromVenue: 'Outdoor Lawn', toVenue: 'Garden Tent' },
+    });
   });
 
   const TestWrapper = ({ children }: any) => (
@@ -63,10 +80,10 @@ describe('EventEmergencyTab', () => {
   it('renders all sections and emergency contacts successfully', async () => {
     render(<EventEmergencyTab eventId="evt-1" />, { wrapper: TestWrapper });
 
-    // Header & controls
+    // Header & controls — labels reflect the event's real spaces
     expect(await screen.findByText('Weather & Contingency Status')).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: /Plan A: Outdoor Garden/i })).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: /Plan B: Weather Backup/i })).toBeInTheDocument();
+    expect(await screen.findByRole('button', { name: /Plan A: Outdoor Lawn/i })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /Plan B: Garden Tent/i })).toBeInTheDocument();
 
     // Incident log section
     expect(screen.getByText('On-Site Incident Log')).toBeInTheDocument();
@@ -82,8 +99,66 @@ describe('EventEmergencyTab', () => {
     expect(screen.getByText('Safety Pins (multi-size)')).toBeInTheDocument();
   });
 
-  it('allows toggling active contingency plan to Plan B', async () => {
+  it('toggling Plan B with a configured backup moves the event to the backup space', async () => {
     (sdk.events.update as any).mockResolvedValue({ event: {} });
+
+    render(<EventEmergencyTab eventId="evt-1" />, { wrapper: TestWrapper });
+
+    const planBButton = await screen.findByRole('button', { name: /Plan B: Garden Tent/i });
+    fireEvent.click(planBButton);
+
+    await waitFor(() => {
+      expect(sdk.events.activateRainPlan).toHaveBeenCalledWith('evt-1');
+    });
+    await waitFor(() => {
+      expect(sdk.events.update).toHaveBeenCalledWith('evt-1', expect.objectContaining({
+        metadata: expect.objectContaining({
+          emergency_active_plan: 'plan-b'
+        })
+      }));
+    });
+  });
+
+  it('toggling Plan A after activation restores the original space', async () => {
+    (sdk.events.update as any).mockResolvedValue({ event: {} });
+    (sdk.events.get as any).mockResolvedValue({
+      event: {
+        id: 'evt-1',
+        title: 'Manor Autumn Wedding',
+        organization_id: 'org-123',
+        status: 'planning',
+        venue_id: 'venue-tent',
+        metadata: JSON.stringify({
+          emergency_active_plan: 'plan-b',
+          previousVenueId: 'venue-lawn',
+          emergency_kit_checklist: [],
+          emergency_incidents: [],
+        }),
+      },
+    });
+    (sdk.events.activateRainPlan as any).mockResolvedValue({
+      event: { id: 'evt-1', venue_id: 'venue-lawn' },
+      restored: true,
+      rainPlan: { fromVenue: 'Garden Tent', toVenue: 'Outdoor Lawn' },
+    });
+
+    render(<EventEmergencyTab eventId="evt-1" />, { wrapper: TestWrapper });
+
+    const planAButton = await screen.findByRole('button', { name: /Plan A: Garden Tent/i });
+    fireEvent.click(planAButton);
+
+    await waitFor(() => {
+      expect(sdk.events.activateRainPlan).toHaveBeenCalledWith('evt-1', { restore: true });
+    });
+  });
+
+  it('toggling Plan B without a configured backup records the flag without moving the event', async () => {
+    (sdk.events.update as any).mockResolvedValue({ event: {} });
+    (sdk.venues.list as any).mockResolvedValue({
+      venues: [
+        { id: 'venue-lawn', name: 'Outdoor Lawn', approval_status: 'approved', metadata: '{}' },
+      ],
+    });
 
     render(<EventEmergencyTab eventId="evt-1" />, { wrapper: TestWrapper });
 
@@ -97,6 +172,7 @@ describe('EventEmergencyTab', () => {
         })
       }));
     });
+    expect(sdk.events.activateRainPlan).not.toHaveBeenCalled();
   });
 
   it('allows reporting/adding a new on-site incident', async () => {
