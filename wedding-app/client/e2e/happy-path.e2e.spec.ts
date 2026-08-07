@@ -53,9 +53,11 @@ test('owner can log in and create a wedding event', async ({ page, request }) =>
   // ── 2. Dismiss the onboarding welcome tour (auto-opens for the seeded
   // owner AFTER the dashboard settles — wait for it first; "Resume later"
   // persists and re-opens it, so walk to the last slide and complete it —
-  // status "completed" is what actually keeps it closed).
+  // status "completed" is what actually keeps it closed). The tour is
+  // completed via API in step 0, so this is only a safety net for a failed
+  // write; keep the wait short so the suite is not slowed by it.
   const resumeLater = page.getByRole('button', { name: /resume later/i });
-  await resumeLater.waitFor({ state: 'visible', timeout: 15_000 }).catch(() => {});
+  await resumeLater.waitFor({ state: 'visible', timeout: 3_000 }).catch(() => {});
   if (await resumeLater.isVisible().catch(() => false)) {
     const nextSlide = page.getByRole('button', { name: /^next$/i });
     for (let i = 0; i < 8; i++) {

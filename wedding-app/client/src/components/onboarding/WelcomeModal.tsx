@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { Dialog, DialogContent, DialogTitle, DialogDescription } from '../../ui/Dialog';
 import { Button } from '../../ui/Button';
 import {
@@ -268,6 +268,12 @@ export function WelcomeModal({ memberships, orgId, userConfig, onUserConfigChang
   const [slide, setSlide] = useState(storedState?.currentSlide ?? 0);
   const [saving, setSaving] = useState(false);
 
+  // Once the user (or a spec/API) closes the tour — Finish, Resume later,
+  // Take me there, or dismiss — the config write that follows must NOT
+  // re-trigger the open effect. Only a fresh mount or an explicit restart
+  // may auto-open it again.
+  const intentionallyClosedRef = useRef(false);
+
   const coupleEventId = memberships.find((m) => m.roleKey === 'couple' && m.eventId)?.eventId;
   const slides = useMemo(() => {
     const source = role === 'manager' ? MANAGER_SLIDES : role === 'couple' ? COUPLE_SLIDES : (role === 'owner' || role === 'admin' || role === 'planner' ? OWNER_SLIDES : OTHER_SLIDES);
@@ -304,23 +310,28 @@ export function WelcomeModal({ memberships, orgId, userConfig, onUserConfigChang
   }
 
   useEffect(() => {
-    if (!orgId || slides.length === 0) return;
+    // userConfig loads asynchronously. Until it has ARRIVED we cannot know
+    // whether the user completed/dismissed the tour, so auto-opening in that
+    // window would flash the modal open for completed users (and let a stray
+    // Escape write in_progress server-side). Wait for the config — fresh
+    // users still get the tour because the server returns an (empty) config
+    // object, not undefined.
+    if (!orgId || slides.length === 0 || userConfig === undefined) return;
+    if (intentionallyClosedRef.current) return;
     const status = storedState?.status ?? 'not_started';
     if (status === 'completed' || status === 'dismissed') {
       // The user already finished/dismissed the tour. IMPORTANT: userConfig
-      // loads async — the first effect run can see status 'not_started'
-      // (empty config) and open the modal; when the real config arrives we
-      // MUST close it again. Without this, users who completed the tour see
-      // it re-open on slow loads (and e2e suites flake on the modal).
+      // loads async — never open when the real config says completed.
       setOpen(false);
       return;
     }
     setSlide(Math.min(storedState?.currentSlide ?? 0, slides.length - 1));
     setOpen(true);
-  }, [orgId, slides.length, storedState?.status, storedState?.currentSlide]);
+  }, [orgId, slides.length, userConfig, storedState?.status, storedState?.currentSlide]);
 
   useEffect(() => {
     const restart = () => {
+      intentionallyClosedRef.current = false;
       setSlide(0);
       setOpen(true);
       void saveState({ status: 'in_progress', currentSlide: 0, completedSlides: [] });
@@ -334,13 +345,16 @@ export function WelcomeModal({ memberships, orgId, userConfig, onUserConfigChang
     const handleKeyDown = (e: KeyboardEvent) => {
       if (e.key === 'ArrowRight' && slide < slides.length - 1) setSlide((s) => s + 1);
       if (e.key === 'ArrowLeft' && slide > 0) setSlide((s) => s - 1);
-      if (e.key === 'Escape') void resumeLater();
+      // Escape is handled by the Dialog itself (DismissableLayer) which
+      // routes through onOpenChange → dismiss(). Handling it here too would
+      // double-write the preference.
     };
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [open, slide, slides.length]);
 
   async function completeTour() {
+    intentionallyClosedRef.current = true;
     const completedSlides = slides.map((s) => s.id);
     await saveState({ status: 'completed', currentSlide: slides.length - 1, completedSlides });
     setOpen(false);
@@ -348,17 +362,32 @@ export function WelcomeModal({ memberships, orgId, userConfig, onUserConfigChang
   }
 
   async function resumeLater() {
+    // Explicit in-tour button: the user wants to CONTINUE later, so keep
+    // status in_progress (reopens on the next login at the same slide).
+    intentionallyClosedRef.current = true;
     await saveState({ status: 'in_progress', currentSlide: slide, completedSlides: slides.slice(0, slide).map((s) => s.id) });
     setOpen(false);
     onComplete();
   }
 
+  async function dismiss() {
+    // Escape / backdrop click / close button: the user just wants it GONE.
+    // Persist 'dismissed' so it never auto-reopens — writing 'in_progress'
+    // here is what made the tour "occasionally reappear".
+    intentionallyClosedRef.current = true;
+    await saveState({ status: 'dismissed', currentSlide: slide, completedSlides: slides.slice(0, slide).map((s) => s.id) });
+    setOpen(false);
+    onComplete();
+  }
+
   async function restartTour() {
+    intentionallyClosedRef.current = false;
     setSlide(0);
     await saveState({ status: 'in_progress', currentSlide: 0, completedSlides: [] });
   }
 
   async function takeMeThere() {
+    intentionallyClosedRef.current = true;
     const current = slides[slide];
     if (current.sandbox) {
       localStorage.setItem('wvi_demo_mode', 'true');
@@ -375,7 +404,7 @@ export function WelcomeModal({ memberships, orgId, userConfig, onUserConfigChang
   const currentSlide = slides[slide];
 
   return (
-    <Dialog open={open} onOpenChange={(v) => { if (!v) void resumeLater(); }}>
+    <Dialog open={open} onOpenChange={(v) => { if (!v) void dismiss(); }}>
       <DialogContent className="max-w-2xl p-0 overflow-hidden bg-surface border-none shadow-2xl" aria-label="Welcome tour">
         <div className="relative">
           <div className="absolute top-0 left-0 w-full h-1 bg-surface-2">
