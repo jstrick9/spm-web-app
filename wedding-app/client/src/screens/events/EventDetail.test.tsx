@@ -201,6 +201,36 @@ describe('EventDetail', () => {
     expect(screen.getByRole('button', { name: /Retry failed sections/i })).toBeTruthy();
   });
 
+  it('switches panels when the URL ?tab= changes (back/forward + shared links) — regression: tab state only read the URL at mount', async () => {
+    routerState.query = new URLSearchParams('tab=guests');
+    const { rerender } = render(<EventDetail eventId="e1" user={{ id: 'u1' } as any} />, { wrapper: wrap() });
+    await screen.findByText('Smith Wedding');
+    // guests trigger is active (Radix marks the TRIGGER active in jsdom)
+    await waitFor(() => {
+      const active = document.querySelector('[role="tab"][data-state="active"]');
+      expect(active?.textContent).toMatch(/^Guests/);
+    });
+
+    // simulate hashchange: user presses browser back/forward to ?tab=timeline
+    routerState.query = new URLSearchParams('tab=timeline');
+    rerender(<EventDetail eventId="e1" user={{ id: 'u1' } as any} />, { wrapper: wrap() });
+
+    await waitFor(() => {
+      const active = document.querySelector('[role="tab"][data-state="active"]');
+      expect(active?.textContent).toMatch(/^Timeline/);
+    });
+  });
+
+  it('falls back to overview when the URL ?tab= is unknown', async () => {
+    routerState.query = new URLSearchParams('tab=not-a-real-tab');
+    render(<EventDetail eventId="e1" user={{ id: 'u1' } as any} />, { wrapper: wrap() });
+    await screen.findByText('Smith Wedding');
+    await waitFor(() => {
+      const active = document.querySelector('[role="tab"][data-state="active"]');
+      expect(active?.textContent).toMatch(/^Overview/);
+    });
+  });
+
   it('does not show the failure banner when every section query succeeds', async () => {
     grantAll();
     render(<EventDetail eventId="e1" user={{ id: 'u1', email: 'test@x.com' }} />, { wrapper: wrap() });

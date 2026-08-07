@@ -19,17 +19,18 @@ test('debug rsvp edit remount', async ({ page, request }) => {
   await page.locator('h1').waitFor({ state: 'visible', timeout: 20000 });
   await page.getByRole('button', { name: 'Open RSVP' }).click();
   const form = page.getByRole('form', { name: 'RSVP form' });
-  for (let i = 0; i < 4; i++) { await form.getByRole('button', { name: 'Continue' }).click(); }
+  const clickEl = (loc: import('@playwright/test').Locator) => loc.evaluate((el) => (el as HTMLButtonElement).click());
+  for (let i = 0; i < 4; i++) { await clickEl(form.getByRole('button', { name: 'Continue' })); }
   await form.getByText(/i understand who can see my rsvp/i).click();
-  await form.getByRole('button', { name: 'Submit RSVP' }).click();
+  await clickEl(form.getByRole('button', { name: 'Submit RSVP' }));
   await expect(page.getByText('RSVP saved').first()).toBeVisible({ timeout: 15000 });
 
   await page.getByRole('button', { name: /edit response/i }).click();
-  await form.getByRole('button', { name: 'Continue' }).click();
+  await clickEl(form.getByRole('button', { name: 'Continue' }));
   await form.getByRole('button', { name: 'Regretfully decline' }).click();
-  await form.getByRole('button', { name: 'Continue' }).click();
-  await form.getByRole('button', { name: 'Continue' }).click();
-  await form.getByRole('button', { name: 'Continue' }).click();
+  await clickEl(form.getByRole('button', { name: 'Continue' }));
+  await clickEl(form.getByRole('button', { name: 'Continue' }));
+  await clickEl(form.getByRole('button', { name: 'Continue' }));
   await expect(form.getByRole('button', { name: 'Submit RSVP' })).toBeVisible({ timeout: 10000 });
 
   // Observe what replaces the review section

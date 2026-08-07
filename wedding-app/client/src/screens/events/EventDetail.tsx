@@ -151,7 +151,7 @@ const EventSettingsForm = React.lazy(() =>
   })),
 );
 import { usePermissions } from "../../lib/usePermission";
-import { useEffect, useState, useMemo, type ReactNode } from "react";
+import { useEffect, useState, useMemo, useRef, type ReactNode } from "react";
 
 interface Props {
   eventId: string;
@@ -215,6 +215,20 @@ export function EventDetail({ eventId, user }: Props & { user: any }) {
       navigate(desired, { replace: true });
     }
   }, [tab, eventId, navigate]);
+
+  // Sync the tab FROM the URL when the hash changes — browser back/forward
+  // and manually edited ?tab= links previously did NOT switch panels,
+  // because tab state only read the URL at mount. The ref guards against
+  // fighting the URL-writing effect above (which dispatches a synthetic
+  // hashchange after replaceState).
+  const lastUrlTabRef = useRef<string>(initialTab);
+  useEffect(() => {
+    const next = (query.get("tab") as TabId | null) ?? "overview";
+    if (next === lastUrlTabRef.current) return;
+    lastUrlTabRef.current = next;
+    const known = TAB_DEFS.some((t) => t.id === next);
+    setTab(known ? next : "overview");
+  }, [query]);
 
   const eventQuery = useQuery({
     queryKey: ["event", eventId],
