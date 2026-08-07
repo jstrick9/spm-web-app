@@ -36,7 +36,7 @@ import { render, screen, fireEvent, waitFor, act } from '@testing-library/react'
 
 vi.mock('../../sdk', () => ({
   sdk: {
-    portal:   { info: vi.fn(), status: vi.fn(), submitRsvp: vi.fn(), lookup: vi.fn(), requestHelp: vi.fn(), askQuestion: vi.fn(), requestAccessibility: vi.fn(), requestPrivacy: vi.fn(), saveReminderPreferences: vi.fn(), dayOfHelp: vi.fn(), submitMemory: vi.fn(), submitGuestFeedback: vi.fn(), resendLink: vi.fn(), messages: vi.fn() },
+    portal:   { info: vi.fn(), status: vi.fn(), submitRsvp: vi.fn(), lookup: vi.fn(), requestHelp: vi.fn(), askQuestion: vi.fn(), requestAccessibility: vi.fn(), requestPrivacy: vi.fn(), saveReminderPreferences: vi.fn(), dayOfHelp: vi.fn(), submitMemory: vi.fn(), submitGuestFeedback: vi.fn(), resendLink: vi.fn(), setLanguage: vi.fn(), messages: vi.fn() },
     feedback: { getPolls: vi.fn(), votePoll: vi.fn() },
   },
   ApiError: class ApiError extends Error {
@@ -174,6 +174,7 @@ describe('PublicGuestPortal — handleWheel (any#7 fix + bonus bug)', () => {
     vi.mocked(sdk.portal.askQuestion).mockResolvedValue({ ok: true, requestId: 'q-1', message: 'Your question was sent to the venue/couple team.' });
     vi.mocked(sdk.portal.askQuestion).mockResolvedValue({ ok: true, requestId: 'q-1', message: 'Your question was sent to the venue/couple team.' });
     window.location.hash = '';
+    localStorage.clear();
   });
 
   afterEach(() => { vi.clearAllMocks(); });
@@ -326,6 +327,7 @@ describe('PublicGuestPortal — Phase 34b regression suite', () => {
     vi.mocked(sdk.portal.messages).mockResolvedValue({ helpRequests: [], replies: [], tokenStatus: 'valid', emptyState: 'Venue replies to your guest help requests will appear here.' });
     vi.mocked(sdk.portal.askQuestion).mockResolvedValue({ ok: true, requestId: 'q-1', message: 'Your question was sent to the venue/couple team.' });
     window.location.hash = '';
+    localStorage.clear();
   });
 
   afterEach(() => { vi.clearAllMocks(); });
@@ -462,7 +464,7 @@ describe('PublicGuestPortal — Phase 34b regression suite', () => {
     
     // Check schedule section and tab switches
     expect(await screen.findByText('Guest Schedule')).toBeInTheDocument();
-    expect(await screen.findByRole('button', { name: /Ceremony Run of Show/i })).toBeInTheDocument();
+    expect(await screen.findByRole('button', { name: /^Wedding$/i })).toBeInTheDocument();
     
     const subeventsBtn = screen.getByRole('button', { name: /Weekend Sub-Events/i });
     expect(subeventsBtn).toBeInTheDocument();
@@ -514,8 +516,8 @@ describe('PublicGuestPortal — Phase 34b regression suite', () => {
     expect(await screen.findByText('Guest Memories, Photos & Feedback')).toBeInTheDocument();
     expect(screen.getAllByText('Gallery and memory sharing are open.').length).toBeGreaterThan(0);
     expect(screen.getByRole('link', { name: /Photo gallery/i })).toHaveAttribute('href', 'https://gallery.example.com');
-    fireEvent.change(screen.getByLabelText('Guest photo link'), { target: { value: 'https://photos.example.com/album' } });
-    fireEvent.change(screen.getByLabelText('Guest memory caption'), { target: { value: 'Favorite dance floor moment' } });
+    fireEvent.change(screen.getByLabelText(/Photo\/gallery link/i), { target: { value: 'https://photos.example.com/album' } });
+    fireEvent.change(screen.getByLabelText(/Memory caption or note/i), { target: { value: 'Favorite dance floor moment' } });
     fireEvent.click(screen.getByLabelText(/permission to share/i));
     fireEvent.click(screen.getByRole('button', { name: 'Submit for review' }));
     await waitFor(() => expect(vi.mocked(sdk.portal.submitMemory)).toHaveBeenCalledWith('e-1', expect.objectContaining({ guestId: 'g-1', token: 't-1', photoUrl: 'https://photos.example.com/album', consent: true })));
@@ -563,7 +565,7 @@ describe('PublicGuestPortal — Phase 34b regression suite', () => {
     expect(await screen.findByText('Guest Reminder Preferences')).toBeInTheDocument();
     expect(screen.getByText('Helpful guest reminders only.')).toBeInTheDocument();
     fireEvent.click(screen.getByLabelText('Email reminders'));
-    fireEvent.change(screen.getByLabelText('Reminder channel preference'), { target: { value: 'email' } });
+    fireEvent.change(screen.getByLabelText('Preferred channel'), { target: { value: 'email' } });
     fireEvent.click(screen.getByRole('button', { name: /Send me the schedule/i }));
     await waitFor(() => expect(vi.mocked(sdk.portal.saveReminderPreferences)).toHaveBeenCalledWith('e-1', expect.objectContaining({ guestId: 'g-1', token: 't-1', emailOptIn: true, sendInfo: 'schedule' })));
     expect(await screen.findByText(/Reminder preferences saved/i)).toBeInTheDocument();
@@ -616,8 +618,14 @@ describe('PublicGuestPortal — Phase 34b regression suite', () => {
     expect(screen.getByText('Ramp at main entrance')).toBeInTheDocument();
     fireEvent.click(screen.getByRole('button', { name: /Toggle large text mode/i }));
     fireEvent.click(screen.getByRole('button', { name: /Toggle high contrast mode/i }));
-    fireEvent.change(screen.getByLabelText('Portal shell language'), { target: { value: 'es' } });
-    expect((screen.getByLabelText('Portal shell language') as HTMLSelectElement).value).toBe('es');
+    // Capture the select BEFORE switching — once the language changes the
+    // aria-label is translated too (e.g. 'Idioma del portal').
+    const langSelect = screen.getByLabelText('Portal shell language') as HTMLSelectElement;
+    fireEvent.change(langSelect, { target: { value: 'es' } });
+    expect(langSelect.value).toBe('es');
+    // The rest of the UI now renders in Spanish (labels are translated live);
+    // switch back so subsequent assertions run against the English UI.
+    fireEvent.change(langSelect, { target: { value: 'en' } });
     fireEvent.change(screen.getByLabelText('Mobility needs'), { target: { value: 'Wheelchair access from parking' } });
     fireEvent.change(screen.getByLabelText('Seating needs'), { target: { value: 'Aisle companion seat' } });
     fireEvent.click(screen.getByRole('button', { name: 'Send accessibility request' }));
@@ -765,7 +773,7 @@ describe('PublicGuestPortal — Phase 34b regression suite', () => {
     expect(screen.getByText('Find restroom')).toBeInTheDocument();
     expect(screen.getByText(/Personal-only seating privacy/i)).toBeInTheDocument();
     expect(screen.getAllByText(/West lot/i).length).toBeGreaterThan(0);
-    fireEvent.click(screen.getByRole('button', { name: /Indoor \/ rain-plan map/i }));
+    fireEvent.click(screen.getByRole('button', { name: /Indoor \/ rain-plan/i }));
     expect(screen.getByText(/Use the reception hall entrance for rain plan/i)).toBeInTheDocument();
     expect(screen.getByRole('link', { name: /Open guest walkthrough/i })).toHaveAttribute('href', 'https://example.com/walkthrough');
   });

@@ -258,6 +258,10 @@ export const portalSdk = {
     return api.post(`/api/portal/${eventId}/resend-link`, input, { auth: false });
   },
 
+  setLanguage(eventId: string, input: { guestId: string; token?: string; language: 'en' | 'es' | 'fr' | 'zh' }): Promise<{ ok: boolean; language: string }> {
+    return api.post(`/api/portal/${eventId}/language`, input, { auth: false });
+  },
+
   messages(eventId: string, params: { guest: string; token: string }): Promise<{ helpRequests: Array<Record<string, any>>; replies: Array<{ id: string; requestId: string; channel: 'email' | 'sms' | 'in_app'; body: string; dispatchStatus: string | null; sentByLabel: string; createdAt: string }>; tokenStatus: string; emptyState: string }> {
     return api.get(`/api/portal/${eventId}/messages?guest=${encodeURIComponent(params.guest)}&token=${encodeURIComponent(params.token)}`, { auth: false });
   },

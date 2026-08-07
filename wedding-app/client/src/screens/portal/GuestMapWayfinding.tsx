@@ -6,6 +6,7 @@ import { Badge } from '../../ui/Badge';
 import { Button } from '../../ui/Button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../../ui/Card';
 import { Input } from '../../ui/Input';
+import { useI18n } from '../../i18n/I18nContext';
 import { Label } from '../../ui/Label';
 import type { PortalGuestEntry, PortalInfoResponse, PortalLayoutPayload, LayoutCanvasItem, RoundTableItem, RectTableItem, DanceFloorItem, ChairItem } from '../../sdk/portalTypes';
 
@@ -57,6 +58,7 @@ export function GuestMapWayfinding({
   guestTravel: PortalInfoResponse['guestTravel'] | null;
   guestWayfinding: PortalInfoResponse['guestWayfinding'] | null;
 }) {
+  const { t } = useI18n();
   const [mapSearchQuery, setMapSearchQuery] = useState('');
   const [target, setTarget] = useState<WayfindingTarget>('seat');
   const [mapMode, setMapMode] = useState<'outdoor' | 'indoor'>('outdoor');
@@ -82,7 +84,7 @@ export function GuestMapWayfinding({
   return (
     <div className="space-y-6 flex flex-col relative">
       <div className="text-center space-y-1">
-        <h2 className="text-3xl font-display">Find My Seat / Wayfinding</h2>
+        <h2 className="text-3xl font-display">{t('map.findSeat')} / Wayfinding</h2>
         <p className="text-sm" style={{ color: palette.fgMuted }}>Start with what you need most: your seat, table, lodging, restroom, entrance, or accessible route.</p>
       </div>
 
@@ -105,8 +107,8 @@ export function GuestMapWayfinding({
       <div className="grid gap-3 lg:grid-cols-[minmax(0,1fr)_18rem]">
         <div className="space-y-3">
           <div className="rounded-xl border p-3" style={{ borderColor: palette.border, background: palette.surface }}>
-            <Label htmlFor="mapSearch" className="text-[10px] uppercase font-bold tracking-widest block mb-1" style={{ color: palette.fgSubtle }}><Search className="inline h-3 w-3 mr-1" /> Find My Seat</Label>
-            <Input id="mapSearch" placeholder="Enter your name to locate your seat..." value={mapSearchQuery} onChange={(e) => setMapSearchQuery(e.target.value)} className="bg-surface border-border text-xs h-10 font-semibold" />
+            <Label htmlFor="mapSearch" className="text-[10px] uppercase font-bold tracking-widest block mb-1" style={{ color: palette.fgSubtle }}><Search className="inline h-3 w-3 mr-1" /> {t('map.findSeat')}</Label>
+            <Input id="mapSearch" placeholder={t('map.searchPlaceholder')} value={mapSearchQuery} onChange={(e) => setMapSearchQuery(e.target.value)} className="bg-surface border-border text-xs h-10 font-semibold" />
             {mapFilteredGuests.length > 0 && (
               <div className="mt-2 border rounded-xl p-2 space-y-1 text-left" style={{ borderColor: palette.border, background: palette.accentSoft }}>
                 {mapFilteredGuests.slice(0, 5).map(member => (
@@ -120,8 +122,8 @@ export function GuestMapWayfinding({
 
           <div className="flex flex-wrap items-center justify-between gap-2 rounded-xl border p-3 text-xs" style={{ borderColor: palette.border, background: palette.surface }}>
             <div className="flex flex-wrap gap-2">
-              <Button type="button" size="sm" variant={mapMode === 'outdoor' ? 'default' : 'outline'} onClick={() => setMapMode('outdoor')}>Outdoor / arrival map</Button>
-              <Button type="button" size="sm" variant={mapMode === 'indoor' ? 'default' : 'outline'} onClick={() => setMapMode('indoor')}>Indoor / rain-plan map</Button>
+              <Button type="button" size="sm" variant={mapMode === 'outdoor' ? 'default' : 'outline'} onClick={() => setMapMode('outdoor')}>{t('map.outdoor')} / arrival</Button>
+              <Button type="button" size="sm" variant={mapMode === 'indoor' ? 'default' : 'outline'} onClick={() => setMapMode('indoor')}>{t('map.indoor')} / rain-plan</Button>
             </div>
             <span style={{ color: palette.fgMuted }}>Use two fingers to zoom, then drag the map. You can also use the + / − buttons.</span>
           </div>
@@ -235,6 +237,7 @@ function LodgingSvgNode({ name, icon, x, y, active }: { name: string; icon: stri
 }
 
 function PortalMapViewer({ layout, activeGuestId, labels, mapMode }: { layout: PortalLayoutPayload; activeGuestId: string; labels: Array<{ id: string; type: string; label: string; details: string }>; mapMode: 'outdoor' | 'indoor' }) {
+  const { t } = useI18n();
   const containerRef = React.useRef<HTMLDivElement>(null);
   const [dimensions, setDimensions] = useState({ width: 0, height: 0 });
   const [scale, setScale] = useState(0.8);
@@ -282,8 +285,8 @@ function PortalMapViewer({ layout, activeGuestId, labels, mapMode }: { layout: P
     <div ref={containerRef} className="w-full h-full cursor-grab active:cursor-grabbing relative" role="img" aria-label="Venue floor plan — interactive guest wayfinding map">
       <div className="absolute left-3 top-3 z-20 rounded-lg bg-white/90 px-2 py-1 text-[10px] font-bold uppercase shadow">{mapMode === 'indoor' ? 'Indoor / rain plan' : 'Outdoor / arrival'}</div>
       <div className="absolute right-3 top-3 z-20 flex gap-1 rounded-lg bg-white/90 p-1 shadow">
-        <button type="button" aria-label="Zoom in" className="rounded p-1 border" onClick={() => setScale(s => Math.min(3, s * 1.15))}><ZoomIn className="h-4 w-4" /></button>
-        <button type="button" aria-label="Zoom out" className="rounded p-1 border" onClick={() => setScale(s => Math.max(0.3, s / 1.15))}><ZoomOut className="h-4 w-4" /></button>
+        <button type="button" aria-label={t('map.zoomIn')} className="rounded p-1 border" onClick={() => setScale(s => Math.min(3, s * 1.15))}><ZoomIn className="h-4 w-4" /></button>
+        <button type="button" aria-label={t('map.zoomOut')} className="rounded p-1 border" onClick={() => setScale(s => Math.max(0.3, s / 1.15))}><ZoomOut className="h-4 w-4" /></button>
         <button type="button" aria-label="Reset map" className="rounded p-1 border" onClick={() => { setScale(0.8); setPos({ x: 50, y: 50 }); }}><RotateCcw className="h-4 w-4" /></button>
       </div>
       <Stage width={dimensions.width} height={dimensions.height} onWheel={handleWheel} scaleX={scale} scaleY={scale} x={pos.x} y={pos.y} draggable onDragMove={(e) => { if (e.target === e.target.getStage()) setPos({ x: e.target.x(), y: e.target.y() }); }}>

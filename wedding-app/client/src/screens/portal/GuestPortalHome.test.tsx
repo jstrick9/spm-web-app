@@ -1,8 +1,12 @@
+import React from 'react';
 import { describe, it, expect } from 'vitest';
 import { render, screen } from '@testing-library/react';
+import { I18nProvider } from '../../i18n/I18nContext';
 import { GuestMemoryPhotoSharing, GuestPortalHome } from './GuestPortalHome';
 
 const PALETTE = { surface: '#fff', border: '#ddd', fgMuted: '#666', accentSoft: '#f6f6f6' };
+
+const I18nWrapper = ({ children }: { children: React.ReactNode }) => <I18nProvider>{children}</I18nProvider>;
 
 const BASE_POST = {
   enabled: true,
@@ -32,6 +36,7 @@ describe('GuestMemoryPhotoSharing — guest-visible gallery documents', () => {
           ],
         }}
       />,
+      { wrapper: I18nWrapper },
     );
     expect(screen.getByText('Photos from your day')).toBeTruthy();
     const link = screen.getByRole('link', { name: /ceremony-photos\.pdf/ });
@@ -48,6 +53,7 @@ describe('GuestMemoryPhotoSharing — guest-visible gallery documents', () => {
         palette={PALETTE as never}
         guestPostEvent={{ ...BASE_POST, galleryDocuments: [] }}
       />,
+      { wrapper: I18nWrapper },
     );
     expect(screen.queryByText('Photos from your day')).toBeNull();
   });
@@ -61,6 +67,7 @@ describe('GuestMemoryPhotoSharing — guest-visible gallery documents', () => {
         palette={PALETTE as never}
         guestPostEvent={null}
       />,
+      { wrapper: I18nWrapper },
     );
     expect(screen.getByText(/Guest Memories, Photos & Feedback/)).toBeTruthy();
   });
@@ -70,12 +77,10 @@ describe('GuestPortalHome — event date tiles', () => {
   type PortalHomeProps = Parameters<typeof GuestPortalHome>[0];
   const PORTAL_PROPS = {
     eventId: 'e1',
-    info: { id: 'e1', title: 'Test Wedding', startDate: '2026-09-12' },
+    info: { id: 'e1', title: 'Test Wedding', startDate: '2026-09-12', endDate: null },
     guestHome: null,
     palette: PALETTE as never,
     guestToken: '',
-    guestLanguage: 'en',
-    setGuestLanguage: () => {},
     portalAccess: null,
     lookupQuery: '',
     setLookupQuery: () => {},
@@ -104,7 +109,7 @@ describe('GuestPortalHome — event date tiles', () => {
   } as unknown as PortalHomeProps;
 
   it('renders a date-only start date as a DATE, never a fabricated midnight time', () => {
-    render(<GuestPortalHome {...PORTAL_PROPS} />);
+    render(<GuestPortalHome {...PORTAL_PROPS} />, { wrapper: I18nWrapper });
     // "Date / time" tile label is now honest: the event has no time-of-day data
     expect(screen.getByText('Date')).toBeTruthy();
     // Both the summary tile and the event-day Schedule tile show the date only
@@ -120,6 +125,7 @@ describe('GuestPortalHome — event date tiles', () => {
         {...PORTAL_PROPS}
         info={{ id: 'e1', title: 'Test Wedding', startDate: null, endDate: null }}
       />,
+      { wrapper: I18nWrapper },
     );
     expect(screen.getAllByText('TBD').length).toBeGreaterThanOrEqual(1);
     expect(screen.getByText('Schedule pending')).toBeTruthy();

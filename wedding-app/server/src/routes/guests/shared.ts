@@ -178,6 +178,16 @@ export const guestHelpReplySchema = z.object({
   message: z.string().min(1).max(2000),
   closeRequest: z.boolean().optional(),
 });
+
+/** Portal display languages offered by the guest language selector. */
+export const PORTAL_LANGUAGES = ['en', 'es', 'fr', 'zh'] as const;
+export type PortalLanguage = (typeof PORTAL_LANGUAGES)[number];
+
+export const guestLanguageSchema = z.object({
+  guestId: z.string(),
+  token: z.string().optional(),
+  language: z.enum(PORTAL_LANGUAGES),
+});
 export function guestMetadata(g: NonNullable<ReturnType<typeof guestsRepo.findById>>) {
   try { return JSON.parse(g.metadata || '{}') as Record<string, any>; } catch { return {}; }
 }

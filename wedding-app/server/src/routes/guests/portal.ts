@@ -12,7 +12,7 @@ import { createReadStream, existsSync } from 'node:fs';
 import { assertNoPublicHoneypot, auditPublicSubmission, publicRequestFingerprint } from '../../lib/publicAbuse.js';
 import type { FastifyInstance } from 'fastify';
 import { localDateString } from '../../lib/time.js';
-import { rsvpSchema, guestLookupSchema, guestHelpSchema, guestQuestionSchema, guestAccessibilityRequestSchema, guestPrivacyRequestSchema, guestReminderPreferencesSchema, guestDayOfHelpSchema, guestMemorySubmissionSchema, guestPostEventFeedbackSchema, guestResendSchema, guestMetadata, guestHouseholdKey, publicGuest, publicGuestDirectory, normalizeGuestPostEvent, normalizeGuestDayOf, normalizeGuestReminders, normalizeGuestPrivacy, normalizeGuestCare, normalizeGuestGifts, normalizeGuestFaq, normalizeWayfindingLabels, safeGuestLayoutPayload, verifyGuestPortalToken, activeSmtpIntegrationId, activeSmsIntegrationId, addDaysIso, escapeHtml, isGuestTimelineItem, safeGuestTimelineItem, eventTimezone, guestCalendarIcs, safeGuestHelpRequest, safeGuestHelpReply } from './shared.js';
+import { rsvpSchema, guestLookupSchema, guestHelpSchema, guestQuestionSchema, guestAccessibilityRequestSchema, guestPrivacyRequestSchema, guestReminderPreferencesSchema, guestDayOfHelpSchema, guestMemorySubmissionSchema, guestPostEventFeedbackSchema, guestResendSchema, guestLanguageSchema, guestMetadata, guestHouseholdKey, publicGuest, publicGuestDirectory, normalizeGuestPostEvent, normalizeGuestDayOf, normalizeGuestReminders, normalizeGuestPrivacy, normalizeGuestCare, normalizeGuestGifts, normalizeGuestFaq, normalizeWayfindingLabels, safeGuestLayoutPayload, verifyGuestPortalToken, activeSmtpIntegrationId, activeSmsIntegrationId, addDaysIso, escapeHtml, isGuestTimelineItem, safeGuestTimelineItem, eventTimezone, guestCalendarIcs, safeGuestHelpRequest, safeGuestHelpReply } from './shared.js';
 
 export async function guestPortalRoutes(app: FastifyInstance) {
   app.get('/api/portal/:eventId/status', { config: { rateLimit: { max: 60, timeWindow: '1 minute' } } }, async (req) => {
@@ -128,7 +128,15 @@ export async function guestPortalRoutes(app: FastifyInstance) {
       auditPublicSubmission(req, { organizationId: event.organization_id, action: 'portal.token_failed', targetType: 'guest', targetId: requestedGuest?.id || eventId, details: { tokenStatus, eventId } });
     }
 
+    // The guest's saved portal display language: explicit metadata wins,
+    // then the older reminder-preferences field, then English.
+    const savedLanguage = tokenGuest
+      ? String((guestMetadata(tokenGuest).language || (guestMetadata(tokenGuest).reminderPreferences as any)?.language || 'en'))
+      : 'en';
+    const portalLanguage = ['en', 'es', 'fr', 'zh'].includes(savedLanguage) ? savedLanguage : 'en';
+
     return {
+      language: portalLanguage,
       event: {
         id: event.id, title: event.title,
         startDate: event.start_date, endDate: event.end_date,
@@ -423,6 +431,25 @@ export async function guestPortalRoutes(app: FastifyInstance) {
     }
     auditPublicSubmission(req, { organizationId: event.organization_id, action: 'portal.resend_link', targetType: 'event', targetId: eventId, details: { matched: !!guest, queued, rotated: queued } });
     return reply.code(202).send({ ok: true, queued, message: 'If that email matches an invited guest, a secure RSVP link will be sent.' });
+  });
+
+  // Guest portal display language. Stored on the GUEST record (not inside
+  // reminderPreferences) so switching the shell language can never clobber
+  // the guest's reminder opt-ins, and restored on the next portal load.
+  app.post('/api/portal/:eventId/language', { config: { rateLimit: { max: 20, timeWindow: '1 minute' } } }, async (req, reply) => {
+    const { eventId } = req.params as { eventId: string };
+    const event = eventsRepo.findById(eventId);
+    if (!event) throw NotFound();
+    assertNoPublicHoneypot(req, { organizationId: event.organization_id, action: 'portal.language.blocked', targetType: 'event', targetId: eventId });
+    const parsed = guestLanguageSchema.safeParse(req.body);
+    if (!parsed.success) throw BadRequest('invalid-input', parsed.error.issues);
+    const guest = guestsRepo.findById(parsed.data.guestId);
+    if (!guest || guest.event_id !== eventId) throw BadRequest('guest-not-in-event');
+    if (verifyGuestPortalToken(guest, parsed.data.token) !== 'valid') throw new (await import('../../lib/errors.js')).HttpError(403, 'portal-token-invalid');
+    const meta = guestMetadata(guest);
+    guestsRepo.update(guest.id, { metadata: { ...meta, language: parsed.data.language, languageUpdatedAt: new Date().toISOString() } });
+    auditPublicSubmission(req, { organizationId: event.organization_id, action: 'portal.language.update', targetType: 'guest', targetId: guest.id, details: { eventId, language: parsed.data.language } });
+    return reply.code(200).send({ ok: true, language: parsed.data.language });
   });
 
   app.post('/api/portal/:eventId/memory-submission', { config: { rateLimit: { max: 8, timeWindow: '1 minute' } } }, async (req, reply) => {

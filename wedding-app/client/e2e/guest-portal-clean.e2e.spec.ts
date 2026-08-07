@@ -68,7 +68,7 @@ test('guest portal renders clean and help flows work in both token states', asyn
   await expect(page.getByText(/help request|sent|received/i).first()).toBeVisible({ timeout: 10000 });
 
   // guest-name lookup finds the guest; then "Request secure link" queues a resend
-  await page.getByLabel('Guest lookup name').fill(guestName.split(' ').slice(2).join(' '));
+  await page.getByLabel('Your name').fill(guestName.split(' ').slice(2).join(' '));
   await page.getByRole('button', { name: 'Look up' }).click();
   await expect(page.getByText(/possible match/i)).toBeVisible({ timeout: 15000 });
   await page.getByRole('button', { name: 'Request secure link' }).click();

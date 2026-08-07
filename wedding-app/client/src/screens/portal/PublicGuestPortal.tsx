@@ -27,6 +27,8 @@ import { Label }                   from '../../ui/Label';
 import { usePrompt }              from '../../ui/usePrompt';
 import { formatDateOnly, parseDateOnly } from '../../lib/formatDate';
 import { countdownParts } from './countdown';
+import { I18nProvider, useI18n } from '../../i18n/I18nContext';
+import type { PortalLanguage } from '../../i18n/translations';
 import { Map as MapIcon, Home, Send, CloudRain, HelpCircle, Bus, Gift, Mail, Contrast, Languages, RefreshCw, ShieldAlert, Type } from 'lucide-react';
 import { Badge }                   from '../../ui/Badge';
 import { cn }                      from '../../ui/lib/cn';
@@ -88,31 +90,43 @@ function PrecisionCountdown({ startDate, palette }: { startDate: string; palette
   const minutes = parts.minutes;
   return (
     <div className="text-center py-6 px-4 rounded-2xl border" style={{ borderColor: palette.border, background: palette.surface }}>
-      <span className="text-[10px] uppercase font-bold tracking-widest block mb-1.5" style={{ color: palette.primary }}>Wedding Day Countdown</span>
-      {isPast ? (
-        <div className="font-display text-2xl py-4" style={{ color: palette.primary }}>
-          🎉 Congratulations! It's Celebration Time!
-        </div>
-      ) : (
-        <div className="flex justify-center items-center gap-4 sm:gap-6 py-2">
-          <div className="text-center">
-            <div className="font-display text-4xl sm:text-5xl font-black" style={{ color: palette.primary }}>{days}</div>
-            <div className="text-[9px] uppercase tracking-wider text-fg-subtle mt-0.5 font-sans font-bold">Days</div>
-          </div>
-          <div className="font-display text-2xl sm:text-3xl text-fg-subtle opacity-40">:</div>
-          <div className="text-center">
-            <div className="font-display text-4xl sm:text-5xl font-black" style={{ color: palette.primary }}>{hours}</div>
-            <div className="text-[9px] uppercase tracking-wider text-fg-subtle mt-0.5 font-sans font-bold">Hours</div>
-          </div>
-          <div className="font-display text-2xl sm:text-3xl text-fg-subtle opacity-40">:</div>
-          <div className="text-center">
-            <div className="font-display text-4xl sm:text-5xl font-black" style={{ color: palette.primary }}>{minutes}</div>
-            <div className="text-[9px] uppercase tracking-wider text-fg-subtle mt-0.5 font-sans font-bold">Minutes</div>
-          </div>
-        </div>
-      )}
+      <CountdownLabels>
+        {({ t: tCount }) => (
+          <>
+            <span className="text-[10px] uppercase font-bold tracking-widest block mb-1.5" style={{ color: palette.primary }}>{tCount('shell.countdown')}</span>
+            {isPast ? (
+              <div className="font-display text-2xl py-4" style={{ color: palette.primary }}>
+                {tCount('shell.celebration')}
+              </div>
+            ) : (
+              <div className="flex justify-center items-center gap-4 sm:gap-6 py-2">
+                <div className="text-center">
+                  <div className="font-display text-4xl sm:text-5xl font-black" style={{ color: palette.primary }}>{days}</div>
+                  <div className="text-[9px] uppercase tracking-wider text-fg-subtle mt-0.5 font-sans font-bold">{tCount('shell.countdownDays')}</div>
+                </div>
+                <div className="font-display text-2xl sm:text-3xl text-fg-subtle opacity-40">:</div>
+                <div className="text-center">
+                  <div className="font-display text-4xl sm:text-5xl font-black" style={{ color: palette.primary }}>{hours}</div>
+                  <div className="text-[9px] uppercase tracking-wider text-fg-subtle mt-0.5 font-sans font-bold">{tCount('shell.countdownHours')}</div>
+                </div>
+                <div className="font-display text-2xl sm:text-3xl text-fg-subtle opacity-40">:</div>
+                <div className="text-center">
+                  <div className="font-display text-4xl sm:text-5xl font-black" style={{ color: palette.primary }}>{minutes}</div>
+                  <div className="text-[9px] uppercase tracking-wider text-fg-subtle mt-0.5 font-sans font-bold">{tCount('shell.countdownMinutes')}</div>
+                </div>
+              </div>
+            )}
+          </>
+        )}
+      </CountdownLabels>
     </div>
   );
+}
+
+/** Context bridge for the countdown labels (rendered under the provider). */
+function CountdownLabels({ children }: { children: (i18n: ReturnType<typeof useI18n>) => React.ReactNode }) {
+  const i18n = useI18n();
+  return <>{children(i18n)}</>;
 }
 
 // ── PublicGuestPortal ─────────────────────────────────────────────────────
@@ -121,6 +135,7 @@ export function PublicGuestPortal({ eventId }: { eventId: string }) {
   const { ask, askForm, askConfirm, promptNode } = usePrompt();
   // ── State — fully typed, zero `any` ─────────────────────────────────────
   const [info,            setInfo]           = useState<PortalInfoResponse['event'] | null>(null);
+  const [infoLanguage,    setInfoLanguage]    = useState<PortalLanguage | undefined>(undefined);
   const [guests,          setGuests]         = useState<PortalGuestEntry[]>([]);
   const [layout,          setLayout]         = useState<PortalLayoutPayload | null>(null);
   const [polls,           setPolls]          = useState<Poll[]>([]);
@@ -154,7 +169,6 @@ export function PublicGuestPortal({ eventId }: { eventId: string }) {
   const [highContrastMode,setHighContrastMode] = useState(() => localStorage.getItem('wvi_guest_high_contrast') === '1');
   const [scheduleTab,     setScheduleTab]    = useState<'wedding' | 'subevents'>('wedding');
   const [guestToken,      setGuestToken]      = useState('');
-  const [guestLanguage,   setGuestLanguage]   = useState('en');
   const [lookupQuery,     setLookupQuery]     = useState('');
   const [lookupEmail,     setLookupEmail]     = useState('');
   const [lookupResults,   setLookupResults]   = useState<Array<{ id: string; label: string; partyName: string | null; requiresSecureLink: boolean }>>([]);
@@ -212,6 +226,7 @@ export function PublicGuestPortal({ eventId }: { eventId: string }) {
     sdk.portal.info(eventId, guestParam ? { guest: guestParam, token: tokenParam } : undefined)
       .then((r: any) => {
         setInfo(r.event);
+        if (r.language === 'en' || r.language === 'es' || r.language === 'fr' || r.language === 'zh') setInfoLanguage(r.language);
         setGuests(r.guests);   // any#2 fixed
         setLayout(r.layout);   // any#3 fixed
         setSubEvents(r.subEvents || []);
@@ -398,23 +413,37 @@ export function PublicGuestPortal({ eventId }: { eventId: string }) {
     URL.revokeObjectURL(url);
   }
 
+  // Persist the guest's chosen portal language to their guest record when
+  // they hold a secure link (anonymous guests persist to localStorage only).
+  const persistLanguage = useCallback((language: PortalLanguage) => {
+    const guest = guests.find((g) => g.id === selectedGuestId);
+    if (!guest?.id || !guestToken) return;
+    Promise.resolve(sdk.portal.setLanguage(eventId, { guestId: guest.id, token: guestToken, language })).catch(() => { /* best-effort sync */ });
+  }, [eventId, guests, selectedGuestId, guestToken]);
+
   // ── Guards ───────────────────────────────────────────────────────────────
   if (error && !info) {
-    return <GuestPortalRecoveryCenter eventId={eventId} error={error} portalStatus={portalStatus} onRetry={() => window.location.reload()} />;
+    return (
+      <I18nProvider>
+        <GuestPortalRecoveryCenter eventId={eventId} error={error} portalStatus={portalStatus} onRetry={() => window.location.reload()} />
+      </I18nProvider>
+    );
   }
 
   if (!info) {
     return (
-      <div
-        className="min-h-screen flex items-center justify-center"
-        style={{ background: portalPalette.bg }}
-        aria-busy="true"
-        aria-label="Loading wedding portal"
-      >
-        <div className="animate-pulse" style={{ color: portalPalette.fgMuted }}>
-          Loading Portal…
+      <I18nProvider>
+        <div
+          className="min-h-screen flex items-center justify-center"
+          style={{ background: portalPalette.bg }}
+          aria-busy="true"
+          aria-label="Loading wedding portal"
+        >
+          <div className="animate-pulse" style={{ color: portalPalette.fgMuted }}>
+            Loading Portal…
+          </div>
         </div>
-      </div>
+      </I18nProvider>
     );
   }
 
@@ -433,35 +462,21 @@ export function PublicGuestPortal({ eventId }: { eventId: string }) {
   } as React.CSSProperties;
 
   return (
-    <div
-      className={cn("min-h-screen font-serif flex flex-col relative pb-20", largeTextMode && "text-lg")}
-      style={{ background: portalPalette.bg, color: portalPalette.fg, ...themeVars }}
-    >
-      {promptNode}
-      {/* Header */}
-      <header
-        className="py-6 px-4 text-center sticky top-0 z-10 shadow-sm"
-        style={{ background: portalPalette.surface, borderBottom: `1px solid ${portalPalette.border}` }}
+    <I18nProvider initialLang={infoLanguage} onLangChange={persistLanguage}>
+      <div
+        className={cn("min-h-screen font-serif flex flex-col relative pb-20", largeTextMode && "text-lg")}
+        style={{ background: portalPalette.bg, color: portalPalette.fg, ...themeVars }}
       >
-        <h1 className="text-2xl md:text-4xl font-display font-bold tracking-widest">
-          {info.title}
-        </h1>
-        {portalBranding?.platformName && (
-          <div className="mt-1 text-[10px] uppercase tracking-widest font-bold" style={{ color: portalPalette.fgMuted }}>
-            {portalBranding.platformName}
-          </div>
-        )}
-        <p className="mt-2 text-sm uppercase tracking-widest" style={{ color: portalPalette.fgMuted }}>
-          {info.startDate
-            ? (() => { const d = parseDateOnly(info.startDate) ?? new Date(info.startDate); return d.toLocaleDateString(undefined, { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' }); })()
-            : 'TBD'}
-        </p>
-        <div className="mt-3 flex flex-wrap items-center justify-center gap-2" aria-label="Public portal accessibility preferences">
-          <Button type="button" size="sm" variant="outline" onClick={() => setLargeTextMode((v) => !v)} aria-pressed={largeTextMode} aria-label="Toggle large text mode"><Type className="h-3.5 w-3.5 mr-1" /> Large text</Button>
-          <Button type="button" size="sm" variant="outline" onClick={() => setHighContrastMode((v) => !v)} aria-pressed={highContrastMode} aria-label="Toggle high contrast mode"><Contrast className="h-3.5 w-3.5 mr-1" /> High contrast</Button>
-          <label className="inline-flex h-8 items-center gap-1 rounded-md border px-2 text-xs font-bold" style={{ borderColor: portalPalette.border, background: portalPalette.surface }}><Languages className="h-3.5 w-3.5" /><span className="sr-only">Portal language</span><select value={guestLanguage} onChange={(e) => setGuestLanguage(e.target.value)} aria-label="Portal shell language" className="bg-transparent"><option value="en">English</option><option value="es">Español</option><option value="fr">Français</option><option value="zh">中文</option></select></label>
-        </div>
-      </header>
+        {promptNode}
+        <PortalShellHeader
+          info={info}
+          platformName={portalBranding?.platformName}
+          portalPalette={portalPalette}
+          largeTextMode={largeTextMode}
+          setLargeTextMode={setLargeTextMode}
+          highContrastMode={highContrastMode}
+          setHighContrastMode={setHighContrastMode}
+        />
 
       <main className="flex-1 max-w-4xl mx-auto w-full p-4 md:p-8">
 
@@ -475,12 +490,16 @@ export function PublicGuestPortal({ eventId }: { eventId: string }) {
             >
               {/* Dark scrim — keeps headline ≥3:1 contrast over any accent colour */}
               <div className="absolute inset-0 bg-black/45" aria-hidden="true" />
-              <h2
-                className="relative z-10 text-brand-fg font-display text-4xl md:text-5xl lg:text-6xl text-center px-4 leading-tight"
-                style={{ textShadow: '0 1px 4px rgba(0,0,0,0.6)' }}
-              >
-                We can't wait to <br /> celebrate with you.
-              </h2>
+              <PortalTranslations>
+                {({ t: tHero }) => (
+                  <h2
+                    className="relative z-10 text-brand-fg font-display text-4xl md:text-5xl lg:text-6xl text-center px-4 leading-tight"
+                    style={{ textShadow: '0 1px 4px rgba(0,0,0,0.6)' }}
+                  >
+                    {tHero('shell.welcomeTitle')}
+                  </h2>
+                )}
+              </PortalTranslations>
             </div>
 
             <Suspense fallback={<Card><CardContent className="pt-6"><div className="h-64 animate-pulse rounded-lg bg-surface-2" /></CardContent></Card>}>
@@ -491,8 +510,6 @@ export function PublicGuestPortal({ eventId }: { eventId: string }) {
                 activeGuest={activeGuest}
                 palette={portalPalette}
                 guestToken={guestToken}
-                guestLanguage={guestLanguage}
-                setGuestLanguage={setGuestLanguage}
                 portalAccess={portalAccess}
                 lookupQuery={lookupQuery}
                 setLookupQuery={setLookupQuery}
@@ -530,10 +547,16 @@ export function PublicGuestPortal({ eventId }: { eventId: string }) {
               <Card style={{ background: portalPalette.surface, borderColor: portalPalette.border }}>
                 <CardContent className="p-5 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
                   <div className="space-y-1">
-                    <span className="text-[9px] uppercase font-bold tracking-widest block" style={{ color: portalPalette.primary }}>Weather &amp; Rain Plan</span>
-                    <h4 className="text-base font-serif font-black text-brand flex items-center gap-1.5">
-                      <CloudRain className="w-5 h-5 text-brand" aria-hidden="true" /> From the venue team
-                    </h4>
+                    <PortalTranslations>
+                      {({ t: tWeather }) => (
+                        <>
+                          <span className="text-[9px] uppercase font-bold tracking-widest block" style={{ color: portalPalette.primary }}>{tWeather('shell.weatherRain')}</span>
+                          <h4 className="text-base font-serif font-black text-brand flex items-center gap-1.5">
+                            <CloudRain className="w-5 h-5 text-brand" aria-hidden="true" /> {tWeather('shell.venueTeam')}
+                          </h4>
+                        </>
+                      )}
+                    </PortalTranslations>
                     <p className="text-sm whitespace-pre-wrap max-w-xl" style={{ color: portalPalette.fgMuted }}>
                       {guestTravel.weatherRainPlanNote}
                     </p>
@@ -552,94 +575,101 @@ export function PublicGuestPortal({ eventId }: { eventId: string }) {
 
             {/* Guest welcome card */}
             {activeGuest && (
-              <Card style={{ background: portalPalette.surface, borderColor: portalPalette.border }}>
-                <CardContent className="text-center py-6">
-                  <h3 className="text-xl font-display mb-2">
-                    Welcome, {activeGuest.fullName}
-                  </h3>
-                  <p className="text-sm mb-6 max-w-md mx-auto" style={{ color: portalPalette.fgMuted }}>
-                    We are so excited to share our special day with you. Please browse the
-                    venue map to find your seat, or submit your RSVP!
-                  </p>
-                  <div className="flex flex-wrap gap-4 justify-center">
-                    <Button
-                      variant="outline"
-                      onClick={() => handleTabChange('map')}
-                      style={{ borderColor: portalPalette.border, color: portalPalette.fg }}
-                    >
-                      <MapIcon className="w-4 h-4 mr-2" aria-hidden="true" /> View Map
-                    </Button>
-                    <Button
-                      onClick={() => handleTabChange('rsvp')}
-                      style={{ background: portalPalette.primary, color: portalPalette.primaryFg }}
-                    >
-                      <Send className="w-4 h-4 mr-2" aria-hidden="true" /> RSVP Now
-                    </Button>
-                  </div>
-                </CardContent>
-              </Card>
+              <PortalTranslations>
+                {({ t: tWelcome }) => (
+                  <Card style={{ background: portalPalette.surface, borderColor: portalPalette.border }}>
+                    <CardContent className="text-center py-6">
+                      <h3 className="text-xl font-display mb-2">
+                        {tWelcome('home.scheduleWelcome', { name: activeGuest.fullName })}
+                      </h3>
+                      <p className="text-sm mb-6 max-w-md mx-auto" style={{ color: portalPalette.fgMuted }}>
+                        {tWelcome('shell.welcomeBody')}
+                      </p>
+                      <div className="flex flex-wrap gap-4 justify-center">
+                        <Button
+                          variant="outline"
+                          onClick={() => handleTabChange('map')}
+                          style={{ borderColor: portalPalette.border, color: portalPalette.fg }}
+                        >
+                          <MapIcon className="w-4 h-4 mr-2" aria-hidden="true" /> {tWelcome('shell.viewMap')}
+                        </Button>
+                        <Button
+                          onClick={() => handleTabChange('rsvp')}
+                          style={{ background: portalPalette.primary, color: portalPalette.primaryFg }}
+                        >
+                          <Send className="w-4 h-4 mr-2" aria-hidden="true" /> {tWelcome('shell.rsvpNow')}
+                        </Button>
+                      </div>
+                    </CardContent>
+                  </Card>
+                )}
+              </PortalTranslations>
             )}
 
             {/* Polls — any#8 (p:any→Poll) + any#9 (poll:any→Poll) + any#10 (opt:any→PollOption) */}
             {polls.length > 0 && activeGuest && (
-              <div className="space-y-4">
-                <h3
-                  className="font-display text-2xl text-center pt-8"
-                  style={{ borderTop: `1px solid ${portalPalette.border}` }}
-                >
-                  Optional Guest Polls
-                </h3>
+              <PortalTranslations>
+                {({ t: tPoll }) => (
+                  <div className="space-y-4">
+                    <h3
+                      className="font-display text-2xl text-center pt-8"
+                      style={{ borderTop: `1px solid ${portalPalette.border}` }}
+                    >
+                      {tPoll('shell.polls')}
+                    </h3>
 
-                {/* any#8 fixed: p is Poll, not any */}
-                {polls.filter((p: Poll) => p.status === 'active').map((poll: Poll) => (
-                  <Card key={poll.id} style={{ borderColor: portalPalette.border }}>
-                    <CardContent className="p-6">
-                      <p className="mb-2 text-xs" style={{ color: portalPalette.fgMuted }}>Optional and event-appropriate: answer only if you want to.</p><h4 className="font-semibold text-lg mb-4">{poll.question}</h4>
-                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    {/* any#8 fixed: p is Poll, not any */}
+                    {polls.filter((p: Poll) => p.status === 'active').map((poll: Poll) => (
+                      <Card key={poll.id} style={{ borderColor: portalPalette.border }}>
+                        <CardContent className="p-6">
+                          <p className="mb-2 text-xs" style={{ color: portalPalette.fgMuted }}>{tPoll('shell.pollOptional')}</p><h4 className="font-semibold text-lg mb-4">{poll.question}</h4>
+                          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
 
-                        {/* any#10 fixed: opt is PollOption, not any */}
-                        {poll.options.map((opt: PollOption) => (
-                          <Button
-                            key={opt.id}
-                            variant="outline"
-                            className="justify-between h-auto py-3 whitespace-normal text-left"
-                            style={{ borderColor: portalPalette.border, color: portalPalette.fg }}
-                            onClick={async () => {
-                              try {
-                                await sdk.feedback.votePoll(eventId, poll.id, opt.id);
-                              } catch (voteErr: any) {
-                                // One vote per device session (server-enforced):
-                                // a repeat tap is not an error to the guest.
-                                if (voteErr?.code !== 'already-voted') {
-                                  setError('Could not record your vote. Please try again.');
-                                }
-                              }
-                              try {
-                                const res = await sdk.feedback.getPolls(eventId);
-                                setPolls(res.polls);
-                              } catch { /* poll list refresh is best-effort */ }
-                            }}
-                            aria-label={`Vote for: ${opt.text} (${opt.votes} ${opt.votes === 1 ? 'vote' : 'votes'})`}
-                          >
-                            <span>{opt.text}</span>
-                            <Badge
-                              variant="outline"
-                              className="ml-2 text-[10px]"
-                              style={{
-                                borderColor:  portalPalette.border,
-                                background:   portalPalette.accentSoft,
-                                color:        portalPalette.fg,
-                              }}
-                            >
-                              {opt.votes} {opt.votes === 1 ? "vote" : "votes"}
-                            </Badge>
-                          </Button>
-                        ))}
-                      </div>
-                    </CardContent>
-                  </Card>
-                ))}
-              </div>
+                            {/* any#10 fixed: opt is PollOption, not any */}
+                            {poll.options.map((opt: PollOption) => (
+                              <Button
+                                key={opt.id}
+                                variant="outline"
+                                className="justify-between h-auto py-3 whitespace-normal text-left"
+                                style={{ borderColor: portalPalette.border, color: portalPalette.fg }}
+                                onClick={async () => {
+                                  try {
+                                    await sdk.feedback.votePoll(eventId, poll.id, opt.id);
+                                  } catch (voteErr: any) {
+                                    // One vote per device session (server-enforced):
+                                    // a repeat tap is not an error to the guest.
+                                    if (voteErr?.code !== 'already-voted') {
+                                      setError(tPoll('shell.pollError'));
+                                    }
+                                  }
+                                  try {
+                                    const res = await sdk.feedback.getPolls(eventId);
+                                    setPolls(res.polls);
+                                  } catch { /* poll list refresh is best-effort */ }
+                                }}
+                                aria-label={`${tPoll('shell.pollVoteFor')} ${opt.text} (${opt.votes} ${opt.votes === 1 ? tPoll('shell.pollVote', { count: opt.votes }) : tPoll('shell.pollVotes', { count: opt.votes })})`}
+                              >
+                                <span>{opt.text}</span>
+                                <Badge
+                                  variant="outline"
+                                  className="ml-2 text-[10px]"
+                                  style={{
+                                    borderColor:  portalPalette.border,
+                                    background:   portalPalette.accentSoft,
+                                    color:        portalPalette.fg,
+                                  }}
+                                >
+                                  {opt.votes === 1 ? tPoll('shell.pollVote', { count: opt.votes }) : tPoll('shell.pollVotes', { count: opt.votes })}
+                                </Badge>
+                              </Button>
+                            ))}
+                          </div>
+                        </CardContent>
+                      </Card>
+                    ))}
+                  </div>
+                )}
+              </PortalTranslations>
             )}
 
             {/* No guest selected — prompt to RSVP */}
@@ -702,57 +732,112 @@ export function PublicGuestPortal({ eventId }: { eventId: string }) {
       </main>
 
       {/* Bottom nav */}
-      <nav
-        className="fixed bottom-0 left-0 w-full pb-safe z-50"
-        style={{ background: portalPalette.surface, borderTop: `1px solid ${portalPalette.border}` }}
-        aria-label="Portal navigation"
-      >
-        <div className="flex items-center justify-around h-16 max-w-md mx-auto">
-          {(
-            [
-              ['home', Home,    'Home'] as const,
-              ['map',  MapIcon, 'Map' ] as const,
-              ['rsvp', Send,    'RSVP'] as const,
-            ]
-          ).map(([tab, Icon, label]) => (
-            <button
-              key={tab}
-              onClick={() => handleTabChange(tab)}
-              aria-current={activeTab === tab ? 'page' : undefined}
-              aria-label={label}
-              className="flex flex-col items-center gap-1 w-20 transition-colors"
-              style={{ color: activeTab === tab ? portalPalette.primary : portalPalette.fgMuted }}
-            >
-              <Icon className="w-5 h-5" aria-hidden="true" />
-              <span className="text-[10px] uppercase font-bold tracking-widest">{label}</span>
-            </button>
-          ))}
+      <PortalNav activeTab={activeTab} onTabChange={(tab) => void handleTabChange(tab)} portalPalette={portalPalette} />
+      </div>
+    </I18nProvider>
+  );
+}
+
+/** Small context bridge: exposes the i18n api to inline JSX blocks. */
+function PortalTranslations({ children }: { children: (i18n: ReturnType<typeof useI18n>) => React.ReactNode }) {
+  const i18n = useI18n();
+  return <>{children(i18n)}</>;
+}
+
+/** Sticky portal header with the accessibility + language controls. */
+function PortalShellHeader({ info, platformName, portalPalette, largeTextMode, setLargeTextMode, highContrastMode, setHighContrastMode }: {
+  info: PortalInfoResponse['event'];
+  platformName?: string;
+  portalPalette: Palette;
+  largeTextMode: boolean;
+  setLargeTextMode: (next: boolean) => void;
+  highContrastMode: boolean;
+  setHighContrastMode: (next: boolean) => void;
+}) {
+  const { lang, setLang, t } = useI18n();
+  return (
+    <header
+      className="py-6 px-4 text-center sticky top-0 z-10 shadow-sm"
+      style={{ background: portalPalette.surface, borderBottom: `1px solid ${portalPalette.border}` }}
+    >
+      <h1 className="text-2xl md:text-4xl font-display font-bold tracking-widest">
+        {info.title}
+      </h1>
+      {platformName && (
+        <div className="mt-1 text-[10px] uppercase tracking-widest font-bold" style={{ color: portalPalette.fgMuted }}>
+          {platformName}
         </div>
-      </nav>
-    </div>
+      )}
+      <p className="mt-2 text-sm uppercase tracking-widest" style={{ color: portalPalette.fgMuted }}>
+        {info.startDate
+          ? (() => { const d = parseDateOnly(info.startDate) ?? new Date(info.startDate); return d.toLocaleDateString(lang === 'zh' ? 'zh-CN' : lang === 'es' ? 'es' : lang === 'fr' ? 'fr' : 'en-US', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' }); })()
+          : t('common.tbd')}
+      </p>
+      <div className="mt-3 flex flex-wrap items-center justify-center gap-2" aria-label={t('shell.a11y')}>
+        <Button type="button" size="sm" variant="outline" onClick={() => setLargeTextMode(!largeTextMode)} aria-pressed={largeTextMode} aria-label={t('shell.toggleLargeText')}><Type className="h-3.5 w-3.5 mr-1" /> {t('shell.largeText')}</Button>
+        <Button type="button" size="sm" variant="outline" onClick={() => setHighContrastMode(!highContrastMode)} aria-pressed={highContrastMode} aria-label={t('shell.toggleHighContrast')}><Contrast className="h-3.5 w-3.5 mr-1" /> {t('shell.highContrast')}</Button>
+        <label className="inline-flex h-8 items-center gap-1 rounded-md border px-2 text-xs font-bold" style={{ borderColor: portalPalette.border, background: portalPalette.surface }}><Languages className="h-3.5 w-3.5" /><span className="sr-only">{t('shell.language')}</span><select value={lang} onChange={(e) => setLang(e.target.value as PortalLanguage)} aria-label={t('shell.language')} className="bg-transparent"><option value="en">English</option><option value="es">Español</option><option value="fr">Français</option><option value="zh">中文</option></select></label>
+      </div>
+    </header>
+  );
+}
+
+/** Fixed bottom tab navigation (Home / Map / RSVP). */
+type PortalTab = 'home' | 'map' | 'rsvp';
+
+function PortalNav({ activeTab, onTabChange, portalPalette }: { activeTab: PortalTab; onTabChange: (tab: PortalTab) => void; portalPalette: Palette }) {
+  const { t } = useI18n();
+  const items: Array<[PortalTab, typeof Home, string]> = [
+    ['home', Home, t('shell.home')],
+    ['map', MapIcon, t('shell.map')],
+    ['rsvp', Send, t('shell.rsvp')],
+  ];
+  return (
+    <nav
+      className="fixed bottom-0 left-0 w-full pb-safe z-50"
+      style={{ background: portalPalette.surface, borderTop: `1px solid ${portalPalette.border}` }}
+      aria-label={t('shell.nav')}
+    >
+      <div className="flex items-center justify-around h-16 max-w-md mx-auto">
+        {items.map(([tab, Icon, label]) => (
+          <button
+            key={tab}
+            onClick={() => onTabChange(tab)}
+            aria-current={activeTab === tab ? 'page' : undefined}
+            aria-label={label}
+            className="flex flex-col items-center gap-1 w-20 transition-colors"
+            style={{ color: activeTab === tab ? portalPalette.primary : portalPalette.fgMuted }}
+          >
+            <Icon className="w-5 h-5" aria-hidden="true" />
+            <span className="text-[10px] uppercase font-bold tracking-widest">{label}</span>
+          </button>
+        ))}
+      </div>
+    </nav>
   );
 }
 
 
 function GuestPortalRecoveryCenter({ eventId, error, portalStatus, onRetry }: { eventId: string; error: string; portalStatus: { event?: { title: string; startDate: string | null }; status?: 'available' | 'disabled'; support?: { label: string; email: string; phone: string }; message?: string } | null; onRetry: () => void }) {
+  const { t } = useI18n();
   const isNetwork = error.toLowerCase().includes('network') || error.toLowerCase().includes('temporarily unavailable');
-  const title = portalStatus?.status === 'disabled' ? 'Guest portal is not available yet' : isNetwork ? 'Portal temporarily unavailable' : 'We could not verify this guest link';
+  const title = portalStatus?.status === 'disabled' ? t('recovery.unavailable') : isNetwork ? t('recovery.network') : t('recovery.unverified');
   const body = portalStatus?.message || error;
   const support = portalStatus?.support;
   return (
     <div className="min-h-screen bg-surface-2 px-4 py-10">
       <Card className="mx-auto max-w-2xl border-warning/30">
         <CardHeader>
-          <CardTitle className="font-display text-3xl flex items-center gap-2"><ShieldAlert className="h-6 w-6" /> Guest portal recovery center</CardTitle>
-          <CardDescription>Status page-style help for invalid, expired, disabled, or temporarily unavailable portal links.</CardDescription>
+          <CardTitle className="font-display text-3xl flex items-center gap-2"><ShieldAlert className="h-6 w-6" /> {t('recovery.title')}</CardTitle>
+          <CardDescription>{t('recovery.subtitle')}</CardDescription>
         </CardHeader>
         <CardContent className="space-y-4 text-sm">
           <div className="rounded-xl border border-warning/30 bg-warning-soft/20 p-4 text-warning"><strong>{title}</strong><p className="mt-1">{body}</p></div>
           <div className="grid gap-2 sm:grid-cols-2">
-            <div className="rounded-xl border p-3"><strong>What may have happened</strong><ul className="mt-2 list-disc pl-5 text-xs text-fg-muted"><li>The portal may not be live yet.</li><li>Your link may have expired, been revoked, or been copied incorrectly.</li><li>Your internet connection or the server may be temporarily unavailable.</li></ul></div>
-            <div className="rounded-xl border p-3"><strong>How to get help</strong><p className="mt-2 text-xs text-fg-muted">Use the support contact from your invitation, request a new secure link, or ask the venue/couple team to confirm your invitation.</p>{support?.email && <a className="mt-2 block font-bold underline" href={`mailto:${support.email}`}>{support.email}</a>}{support?.phone && <a className="mt-1 block font-bold underline" href={`tel:${support.phone}`}>{support.phone}</a>}</div>
+            <div className="rounded-xl border p-3"><strong>{t('recovery.whatHappened')}</strong><ul className="mt-2 list-disc pl-5 text-xs text-fg-muted"><li>{t('recovery.whatHappened1')}</li><li>{t('recovery.whatHappened2')}</li><li>{t('recovery.whatHappened3')}</li></ul></div>
+            <div className="rounded-xl border p-3"><strong>{t('recovery.howToHelp')}</strong><p className="mt-2 text-xs text-fg-muted">{t('recovery.howToHelpCopy')}</p>{support?.email && <a className="mt-2 block font-bold underline" href={`mailto:${support.email}`}>{support.email}</a>}{support?.phone && <a className="mt-1 block font-bold underline" href={`tel:${support.phone}`}>{support.phone}</a>}</div>
           </div>
-          <div className="rounded-xl border p-3"><strong>Recovery actions</strong><div className="mt-3 flex flex-wrap gap-2"><Button type="button" onClick={onRetry}><RefreshCw className="h-4 w-4 mr-1" /> Try again</Button><Button type="button" variant="outline" onClick={() => { window.location.href = `mailto:${support?.email || ''}?subject=${encodeURIComponent('Guest portal help')}&body=${encodeURIComponent(`I need help with guest portal ${eventId}.`)}`; }} disabled={!support?.email}>Email support</Button></div></div>
+          <div className="rounded-xl border p-3"><strong>{t('recovery.actions')}</strong><div className="mt-3 flex flex-wrap gap-2"><Button type="button" onClick={onRetry}><RefreshCw className="h-4 w-4 mr-1" /> {t('recovery.tryAgain')}</Button><Button type="button" variant="outline" onClick={() => { window.location.href = `mailto:${support?.email || ''}?subject=${encodeURIComponent(t('recovery.subject'))}&body=${encodeURIComponent(t('recovery.body', { eventId }))}`; }} disabled={!support?.email}>{t('recovery.emailSupport')}</Button></div></div>
         </CardContent>
       </Card>
     </div>
@@ -760,13 +845,14 @@ function GuestPortalRecoveryCenter({ eventId, error, portalStatus, onRetry }: { 
 }
 
 function PortalInfoModules({ config, branding, palette, activeGuest, access }: { config: Record<string, any>; branding: PortalInfoResponse['branding'] | null; palette: Palette; activeGuest?: PortalGuestEntry; access: PortalInfoResponse['access'] | null }) {
+  const { t } = useI18n();
   const registryLinks = String(config.registryLinks || '').split(',').map((s) => s.trim()).filter(Boolean);
   return (
     <div className="grid gap-4 md:grid-cols-2">
-      {(config.faqText || config.transportationText) && <Card id="guest-faq-info" style={{ background: palette.surface, borderColor: palette.border }}><CardHeader><CardTitle className="text-base flex items-center gap-2"><HelpCircle className="h-4 w-4" /> Guest FAQ</CardTitle></CardHeader><CardContent className="space-y-3 text-sm"><p className="whitespace-pre-wrap">{config.faqText || 'FAQ details will be posted here.'}</p>{branding?.supportEmail && <p className="text-xs"><Mail className="inline h-3.5 w-3.5 mr-1" />Need help? <a className="font-bold underline" href={`mailto:${branding.supportEmail}`}>{branding.supportEmail}</a></p>}</CardContent></Card>}
-      {config.transportationText && <Card id="guest-travel-info" style={{ background: palette.surface, borderColor: palette.border }}><CardHeader><CardTitle className="text-base flex items-center gap-2"><Bus className="h-4 w-4" /> Transportation / shuttle</CardTitle></CardHeader><CardContent className="text-sm whitespace-pre-wrap">{config.transportationText}</CardContent></Card>}
-      {(registryLinks.length > 0 || config.rsvpEditWindowDays !== undefined) && <Card style={{ background: palette.surface, borderColor: palette.border }}><CardHeader><CardTitle className="text-base flex items-center gap-2"><Gift className="h-4 w-4" /> Registry & RSVP rules</CardTitle></CardHeader><CardContent className="space-y-2 text-sm">{registryLinks.map((link) => <a key={link} href={link} target="_blank" rel="noreferrer" className="block underline font-bold">{link}</a>)}{config.rsvpEditWindowDays !== undefined && <p className="text-xs" style={{ color: palette.fgMuted }}>RSVP edits may close {config.rsvpEditWindowDays} day(s) before the event.</p>}{access?.endsAt && <p className="text-xs" style={{ color: palette.fgMuted }}>Portal access window ends {new Date(access.endsAt).toLocaleString()}.</p>}</CardContent></Card>}
-      {activeGuest?.allowLodgingAccess && <Card id="guest-lodging-info" style={{ background: palette.surface, borderColor: palette.border }}><CardHeader><CardTitle className="text-base">Lodging / cabin request</CardTitle></CardHeader><CardContent className="text-sm">Your lodging details: <strong>{activeGuest.roomAssignment || 'Request lodging from the RSVP notes field.'}</strong></CardContent></Card>}
+      {(config.faqText || config.transportationText) && <Card id="guest-faq-info" style={{ background: palette.surface, borderColor: palette.border }}><CardHeader><CardTitle className="text-base flex items-center gap-2"><HelpCircle className="h-4 w-4" /> {t('shell.faq')}</CardTitle></CardHeader><CardContent className="space-y-3 text-sm"><p className="whitespace-pre-wrap">{config.faqText || 'FAQ details will be posted here.'}</p>{branding?.supportEmail && <p className="text-xs"><Mail className="inline h-3.5 w-3.5 mr-1" />{t('shell.needHelp')} <a className="font-bold underline" href={`mailto:${branding.supportEmail}`}>{branding.supportEmail}</a></p>}</CardContent></Card>}
+      {config.transportationText && <Card id="guest-travel-info" style={{ background: palette.surface, borderColor: palette.border }}><CardHeader><CardTitle className="text-base flex items-center gap-2"><Bus className="h-4 w-4" /> {t('shell.transportation')}</CardTitle></CardHeader><CardContent className="text-sm whitespace-pre-wrap">{config.transportationText}</CardContent></Card>}
+      {(registryLinks.length > 0 || config.rsvpEditWindowDays !== undefined) && <Card style={{ background: palette.surface, borderColor: palette.border }}><CardHeader><CardTitle className="text-base flex items-center gap-2"><Gift className="h-4 w-4" /> {t('shell.registryRules')}</CardTitle></CardHeader><CardContent className="space-y-2 text-sm">{registryLinks.map((link) => <a key={link} href={link} target="_blank" rel="noreferrer" className="block underline font-bold">{link}</a>)}{config.rsvpEditWindowDays !== undefined && <p className="text-xs" style={{ color: palette.fgMuted }}>{t('shell.editsClose', { days: config.rsvpEditWindowDays })}</p>}{access?.endsAt && <p className="text-xs" style={{ color: palette.fgMuted }}>{t('shell.accessEnds', { date: new Date(access.endsAt).toLocaleString() })}</p>}</CardContent></Card>}
+      {activeGuest?.allowLodgingAccess && <Card id="guest-lodging-info" style={{ background: palette.surface, borderColor: palette.border }}><CardHeader><CardTitle className="text-base">{t('shell.lodging')}</CardTitle></CardHeader><CardContent className="text-sm">{t('shell.lodgingDetails')} <strong>{activeGuest.roomAssignment || 'Request lodging from the RSVP notes field.'}</strong></CardContent></Card>}
     </div>
   );
 }

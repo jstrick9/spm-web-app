@@ -106,6 +106,8 @@ export interface PortalLayoutPayload {
 // ── Full portal info response ─────────────────────────────────────────────
 
 export interface PortalInfoResponse {
+  /** Guest's saved portal display language ('en' | 'es' | 'fr' | 'zh'). */
+  language?: string;
   event: {
     id: string;
     title: string;

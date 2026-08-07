@@ -1,5 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, fireEvent, waitFor } from '@testing-library/react';
+import { I18nProvider } from '../../i18n/I18nContext';
+import React from 'react';
 import { GuestRsvpWizard } from './GuestRsvpWizard';
 import { sdk } from '../../sdk';
 
@@ -19,7 +21,7 @@ const GUESTS = [
 
 function renderWizard(overrides: Record<string, unknown> = {}) {
   return render(
-    <GuestRsvpWizard
+    <I18nProvider><GuestRsvpWizard
       eventId="e-1"
       info={{ id: 'e-1', title: 'Smith Wedding', startDate: '2026-09-12', endDate: null } as any}
       guests={GUESTS}
@@ -33,7 +35,7 @@ function renderWizard(overrides: Record<string, unknown> = {}) {
       onReturnHome={() => {}}
       onFindSeat={() => {}}
       {...overrides}
-    />,
+    /></I18nProvider>,
   );
 }
 

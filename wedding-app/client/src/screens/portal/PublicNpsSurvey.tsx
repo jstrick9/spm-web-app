@@ -5,8 +5,18 @@ import { Button } from '../../ui/Button';
 import { Label } from '../../ui/Label';
 import { Input } from '../../ui/Input';
 import { Heart, Send, Sparkles } from 'lucide-react';
+import { I18nProvider, useI18n } from '../../i18n/I18nContext';
 
 export function PublicNpsSurvey({ eventId }: { eventId: string }) {
+  return (
+    <I18nProvider>
+      <PublicNpsSurveyInner eventId={eventId} />
+    </I18nProvider>
+  );
+}
+
+function PublicNpsSurveyInner({ eventId }: { eventId: string }) {
+  const { t } = useI18n();
   const [eventTitle, setEventTitle] = useState('Your Wedding Experience');
   const [score, setScore] = useState<number | null>(null);
   const [comment, setComment] = useState('');
@@ -30,7 +40,7 @@ export function PublicNpsSurvey({ eventId }: { eventId: string }) {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (score === null) {
-      setError('Please select a score from 0 to 10.');
+      setError(t('survey.required'));
       return;
     }
     setSubmitting(true);
@@ -48,7 +58,7 @@ export function PublicNpsSurvey({ eventId }: { eventId: string }) {
         // the guest's experience.
         setDone(true);
       } else {
-        setError(err?.message || 'Could not submit feedback.');
+        setError(err?.message || t('survey.failed'));
       }
     } finally {
       setSubmitting(false);
@@ -66,9 +76,9 @@ export function PublicNpsSurvey({ eventId }: { eventId: string }) {
               </div>
             </div>
             <div className="space-y-2">
-              <h2 className="text-2xl font-serif font-bold text-fg">Thank You!</h2>
+              <h2 className="text-2xl font-serif font-bold text-fg">{t('survey.thanksTitle')}</h2>
               <p className="text-sm text-fg-muted">
-                Your feedback has been joyfully received. We appreciate your partnership in making every wedding at {eventTitle} exceptional.
+                {t('survey.thanksBody')}
               </p>
             </div>
           </CardContent>
@@ -84,9 +94,9 @@ export function PublicNpsSurvey({ eventId }: { eventId: string }) {
           <div className="mx-auto h-12 w-12 bg-brand-soft rounded-full flex items-center justify-center text-brand mb-3">
             <Sparkles className="h-6 w-6" />
           </div>
-          <CardTitle className="font-serif text-3xl font-bold">Post-Event Feedback</CardTitle>
+          <CardTitle className="font-serif text-3xl font-bold">{t('survey.title')}</CardTitle>
           <CardDescription className="text-sm text-fg-muted mt-2">
-            Share your experience celebrating <strong className="text-fg">{eventTitle}</strong>.
+            {t('survey.share')} <strong className="text-fg">{eventTitle}</strong>.
           </CardDescription>
         </CardHeader>
         <CardContent className="pt-4">
@@ -94,7 +104,7 @@ export function PublicNpsSurvey({ eventId }: { eventId: string }) {
             {/* NPS Score Selector */}
             <div className="space-y-3">
               <Label className="text-sm font-semibold text-fg">
-                How likely are you to recommend our venue to a friend or colleague?
+                {t('survey.question')}
               </Label>
               <div className="flex items-center justify-between gap-1 sm:gap-2">
                 {[...Array(11).keys()].map((val) => {
@@ -117,32 +127,32 @@ export function PublicNpsSurvey({ eventId }: { eventId: string }) {
                 })}
               </div>
               <div className="flex justify-between text-[11px] text-fg-subtle px-1">
-                <span>0 - Extremely Unlikely</span>
-                <span>10 - Extremely Likely</span>
+                <span>{t('survey.scaleLow')}</span>
+                <span>{t('survey.scaleHigh')}</span>
               </div>
             </div>
 
             {/* Comment Area */}
             <div className="space-y-1.5">
-              <Label htmlFor="comments">What did you love most, or what could we improve?</Label>
+              <Label htmlFor="comments">{t('survey.whatLoved')}</Label>
               <textarea
                 id="comments"
                 value={comment}
                 onChange={(e) => setComment(e.target.value)}
                 className="w-full min-h-[120px] p-3 rounded-lg border border-border bg-surface text-sm focus:ring-2 focus:ring-brand focus:outline-none resize-none mt-1"
-                placeholder="Share your thoughts about our service, coordination, and venue quality..."
+                placeholder={t('survey.placeholder')}
               />
             </div>
 
             {/* Submitted By */}
             <div className="space-y-1.5">
-              <Label htmlFor="name">Your Name (Optional)</Label>
+              <Label htmlFor="name">{t('survey.yourName')}</Label>
               <Input
                 id="name"
                 type="text"
                 value={submittedBy}
                 onChange={(e) => setSubmittedBy(e.target.value)}
-                placeholder="Jane & John"
+                placeholder={t('survey.namePlaceholder')}
                 className="mt-1"
               />
             </div>
@@ -160,7 +170,7 @@ export function PublicNpsSurvey({ eventId }: { eventId: string }) {
               className="w-full h-11 tracking-wider font-semibold"
             >
               <Send className="h-4 w-4 mr-2" />
-              SUBMIT FEEDBACK
+              {t('survey.submit')}
             </Button>
           </form>
         </CardContent>
