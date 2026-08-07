@@ -223,17 +223,17 @@ export function AccessControlManager({ orgId }: { orgId: string }) {
               <p className="text-[11px] text-fg-subtle py-4 text-center">No staff found.</p>
             ) : (
               members.map((m: any) => (
-                <div key={m.userId} className="flex justify-between items-center bg-white p-3 rounded-xl border border-border shadow-sm">
+                <div key={m.user_id || m.userId} className="flex justify-between items-center bg-white p-3 rounded-xl border border-border shadow-sm">
                   <div className="min-w-0 flex-1 pr-2">
-                    <div className="text-xs font-bold text-fg truncate">{m.fullName || m.email}</div>
+                    <div className="text-xs font-bold text-fg truncate">{m.full_name || m.fullName || m.email}</div>
                     <div className="text-[9px] text-fg-subtle truncate">{m.email}</div>
                     
                     {/* Editable staff role dropdown select (dynamic sync!) */}
                     <div className="mt-1.5">
                       <select
                         className="h-7 rounded border border-border bg-surface-2 px-1 text-[10px] font-semibold text-fg cursor-pointer max-w-[130px]"
-                        value={m.roleId}
-                        onChange={(e) => updateMemberRoleMutation.mutate({ userId: m.userId, targetRoleId: e.target.value })}
+                        value={m.role_id || m.roleId}
+                        onChange={(e) => updateMemberRoleMutation.mutate({ userId: m.user_id || m.userId, targetRoleId: e.target.value })}
                       >
                         {roles.map((r: any) => (
                           <option key={r.id} value={r.id}>{r.name}</option>
@@ -242,8 +242,8 @@ export function AccessControlManager({ orgId }: { orgId: string }) {
                     </div>
                   </div>
                   <Button variant="ghost" size="icon" className="h-8 w-8 text-danger hover:bg-danger/10 shrink-0" onClick={async () => {
-                     if (await askConfirm({ title: `Revoke staff access for ${m.fullName || m.email}?`, destructive: true })) {
-                       removeMutation.mutate(m.userId);
+                     if (await askConfirm({ title: `Revoke staff access for ${m.full_name || m.fullName || m.email}?`, destructive: true })) {
+                       removeMutation.mutate(m.user_id || m.userId);
                      }
                   }}>
                     <Trash2 className="h-3.5 w-3.5" />

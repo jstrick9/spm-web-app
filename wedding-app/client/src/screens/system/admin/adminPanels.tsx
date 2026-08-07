@@ -44,7 +44,7 @@ export function ManagerConfigurationViewer({ orgId }: { orgId: string }) {
   const roles = rolesQuery.data?.roles || [];
   const managerRole = roles.find((role: any) => role.key === 'manager' || /manager/i.test(role.name));
   const members = (membersQuery.data as any)?.members || [];
-  const ownerContacts = members.filter((m: any) => /owner|admin/i.test(`${m.roleName} ${m.roleKey || ''}`)).slice(0, 4);
+  const ownerContacts = members.filter((m: any) => /owner|admin/i.test(`${m.role_name || m.roleName} ${m.role_key || m.roleKey || ''}`)).slice(0, 4);
   const requests = requestsQuery.data?.requests || [];
   const configSummary = [
     ['Brand/theme', (config as any).theme?.brand ? 'Configured' : 'Default'],
@@ -106,7 +106,7 @@ export function ManagerConfigurationViewer({ orgId }: { orgId: string }) {
             <CardContent className="space-y-3 text-sm">
               <div className="rounded-lg border border-border bg-surface-2 p-3"><strong>{managerRole?.name || 'Venue Manager'}</strong><p className="mt-1 text-xs text-fg-muted">{managerRole?.permissions?.length || 0} permissions in policy. Managers run operations, staff/vendor/guest workflows, layout review, timeline, and escalations without owner-only admin powers.</p></div>
               <div className="grid gap-2 text-xs"><Badge variant="success">Can run event operations</Badge><Badge variant="outline">Can view configuration</Badge><Badge variant="warning">Must request owner/admin changes</Badge><Badge variant="outline">Finance/admin visibility depends on permissions</Badge></div>
-              <div><h3 className="mb-2 text-xs font-bold uppercase text-fg-subtle">Owner/admin escalation contacts</h3>{ownerContacts.length ? ownerContacts.map((m: any) => <div key={m.userId} className="rounded-lg border border-border bg-surface p-2 text-xs"><strong>{m.fullName || m.email}</strong><div className="text-fg-muted">{m.roleName || 'Owner/Admin'} · {m.email}</div></div>) : <p className="text-xs text-fg-muted">No owner/admin contact found. Ask your venue administrator to update team records.</p>}</div>
+              <div><h3 className="mb-2 text-xs font-bold uppercase text-fg-subtle">Owner/admin escalation contacts</h3>{ownerContacts.length ? ownerContacts.map((m: any) => <div key={m.user_id || m.userId} className="rounded-lg border border-border bg-surface p-2 text-xs"><strong>{m.full_name || m.fullName || m.email}</strong><div className="text-fg-muted">{m.role_name || m.roleName || 'Owner/Admin'} · {m.email}</div></div>) : <p className="text-xs text-fg-muted">No owner/admin contact found. Ask your venue administrator to update team records.</p>}</div>
             </CardContent>
           </Card>
         </div>
