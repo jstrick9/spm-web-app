@@ -108,6 +108,9 @@ export interface PortalLayoutPayload {
 export interface PortalInfoResponse {
   /** Guest's saved portal display language ('en' | 'es' | 'fr' | 'zh'). */
   language?: string;
+  /** True when the portal is password-protected and this payload is the
+   *  locked shell (event title only) — the client must show the unlock gate. */
+  passwordLocked?: boolean;
   event: {
     id: string;
     title: string;

@@ -209,9 +209,13 @@ export const portalSdk = {
    * The old `SdkPortalInfo` type is preserved in types.ts for other
    * consumers; this method is the only one that needs the richer type.
    */
-  info(eventId: string, params?: { guest?: string; token?: string }): Promise<PortalInfoResponse> {
-    const qs = params?.guest ? `?guest=${encodeURIComponent(params.guest)}${params.token ? `&token=${encodeURIComponent(params.token)}` : ''}` : '';
-    return api.get(`/api/portal/${eventId}/info${qs}`, { auth: false });
+  info(eventId: string, params?: { guest?: string; token?: string; pw?: string }): Promise<PortalInfoResponse> {
+    const qs = [
+      params?.guest ? `guest=${encodeURIComponent(params.guest)}` : '',
+      params?.token ? `token=${encodeURIComponent(params.token)}` : '',
+      params?.pw ? `pw=${encodeURIComponent(params.pw)}` : '',
+    ].filter(Boolean).join('&');
+    return api.get(`/api/portal/${eventId}/info${qs ? `?${qs}` : ''}`, { auth: false });
   },
 
   lookup(eventId: string, input: { query: string; email?: string }): Promise<{ matches: Array<{ id: string; label: string; partyName: string | null; requiresSecureLink: boolean }>; privacy: string }> {
@@ -266,7 +270,7 @@ export const portalSdk = {
     return api.get(`/api/portal/${eventId}/messages?guest=${encodeURIComponent(params.guest)}&token=${encodeURIComponent(params.token)}`, { auth: false });
   },
 
-  verifyPassword(eventId: string, password: string): Promise<{ ok: boolean }> {
+  verifyPassword(eventId: string, password: string): Promise<{ ok: boolean; token?: string }> {
     return api.post(`/api/portal/${eventId}/verify-password`, { password }, { auth: false });
   },
 

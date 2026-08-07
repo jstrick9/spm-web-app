@@ -136,6 +136,12 @@ export function PublicGuestPortal({ eventId }: { eventId: string }) {
   // ── State — fully typed, zero `any` ─────────────────────────────────────
   const [info,            setInfo]           = useState<PortalInfoResponse['event'] | null>(null);
   const [infoLanguage,    setInfoLanguage]    = useState<PortalLanguage | undefined>(undefined);
+  // Password-protected portal gate: the venue can require a password, which
+  // the server now ENFORCES (previously the toggle stored a hash but
+  // nothing gated the payload). The proof is a short-lived HMAC token.
+  const [passwordLocked,  setPasswordLocked]  = useState(false);
+  const [pwError,         setPwError]         = useState('');
+  const [pwBusy,          setPwBusy]          = useState(false);
   const [guests,          setGuests]         = useState<PortalGuestEntry[]>([]);
   const [layout,          setLayout]         = useState<PortalLayoutPayload | null>(null);
   const [polls,           setPolls]          = useState<Poll[]>([]);
@@ -222,9 +228,23 @@ export function PublicGuestPortal({ eventId }: { eventId: string }) {
     if (guestParam) setSelectedGuestId(guestParam);
     if (tokenParam) setGuestToken(tokenParam);
 
+    // Reuse a previously issued password proof so back/forward or the 5-min
+    // polling refresh don't re-prompt mid-session (proofs are short-lived
+    // server-side; a stale one simply locks the portal again → gate).
+    let pwProof = '';
+    try { pwProof = sessionStorage.getItem(`wvi_portal_pw_${eventId}`) || ''; } catch { /* ignore */ }
+
     // any#1 fixed (Phase 34b): r is PortalInfoResponse, not any
-    sdk.portal.info(eventId, guestParam ? { guest: guestParam, token: tokenParam } : undefined)
+    sdk.portal.info(eventId, { ...(guestParam ? { guest: guestParam, token: tokenParam } : {}), ...(pwProof ? { pw: pwProof } : {}) })
       .then((r: any) => {
+        if (r.passwordLocked) {
+          // The server returned only the locked shell (event title) — set
+          // info so the loading guard passes, then the gate renders.
+          setPasswordLocked(true);
+          setInfo(r.event);
+          return;
+        }
+        setPasswordLocked(false);
         setInfo(r.event);
         if (r.language === 'en' || r.language === 'es' || r.language === 'fr' || r.language === 'zh') setInfoLanguage(r.language);
         setGuests(r.guests);   // any#2 fixed
@@ -421,6 +441,28 @@ export function PublicGuestPortal({ eventId }: { eventId: string }) {
     Promise.resolve(sdk.portal.setLanguage(eventId, { guestId: guest.id, token: guestToken, language })).catch(() => { /* best-effort sync */ });
   }, [eventId, guests, selectedGuestId, guestToken]);
 
+  // Unlock a password-protected portal: verify the password, stash the
+  // short-lived proof, and reload the full payload.
+  const unlockPortal = async (password: string) => {
+    if (!password) { setPwError('Enter the portal password.'); return; }
+    setPwBusy(true);
+    setPwError('');
+    try {
+      const res = await sdk.portal.verifyPassword(eventId, password);
+      if (res.ok && res.token) {
+        try { sessionStorage.setItem(`wvi_portal_pw_${eventId}`, res.token); } catch { /* ignore */ }
+        setPasswordLocked(false);
+        loadPortalData();
+      } else {
+        setPwError('That password is not correct. Please try again.');
+      }
+    } catch {
+      setPwError('That password is not correct. Please try again.');
+    } finally {
+      setPwBusy(false);
+    }
+  };
+
   // ── Guards ───────────────────────────────────────────────────────────────
   if (error && !info) {
     return (
@@ -443,6 +485,21 @@ export function PublicGuestPortal({ eventId }: { eventId: string }) {
             Loading Portal…
           </div>
         </div>
+      </I18nProvider>
+    );
+  }
+
+  // Password-protected portal: the server refused the guest payload (only
+  // the event title came back). Show the unlock gate before anything else.
+  if (passwordLocked) {
+    return (
+      <I18nProvider>
+        <PortalPasswordGate
+          eventTitle={info.title}
+          error={pwError}
+          busy={pwBusy}
+          onSubmit={(pw) => void unlockPortal(pw)}
+        />
       </I18nProvider>
     );
   }
@@ -742,6 +799,47 @@ export function PublicGuestPortal({ eventId }: { eventId: string }) {
 function PortalTranslations({ children }: { children: (i18n: ReturnType<typeof useI18n>) => React.ReactNode }) {
   const i18n = useI18n();
   return <>{children(i18n)}</>;
+}
+
+/** Unlock screen for password-protected guest portals. */
+function PortalPasswordGate({ eventTitle, error, busy, onSubmit }: {
+  eventTitle: string;
+  error: string;
+  busy: boolean;
+  onSubmit: (password: string) => void;
+}) {
+  const { t } = useI18n();
+  const [password, setPassword] = useState('');
+  return (
+    <div className="min-h-screen flex items-center justify-center p-4" style={{ background: 'rgb(var(--color-bg))' }}>
+      <div className="w-full max-w-md rounded-2xl border border-border bg-surface p-8 shadow-card">
+        <div className="mb-4 flex justify-center"><ShieldAlert className="h-10 w-10 text-brand" aria-hidden="true" /></div>
+        <h1 className="text-center font-display text-2xl font-semibold">{eventTitle}</h1>
+        <p className="mt-2 text-center text-sm text-fg-muted">{t('gate.title')}</p>
+        <p className="mt-1 text-center text-xs text-fg-muted">{t('gate.subtitle')}</p>
+        <form
+          className="mt-6 space-y-3"
+          onSubmit={(e) => { e.preventDefault(); onSubmit(password); }}
+        >
+          <label className="block text-sm">
+            <span className="text-xs font-bold uppercase tracking-wider text-fg-subtle">{t('gate.password')}</span>
+            <input
+              type="password"
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+              autoFocus
+              className="mt-1 h-11 w-full rounded-lg border border-border bg-surface px-3 text-sm outline-none focus:border-brand"
+              aria-label={t('gate.password')}
+            />
+          </label>
+          {error && <p className="rounded-lg border border-danger/30 bg-danger-soft/30 p-2 text-xs text-danger" role="alert">{error}</p>}
+          <Button type="submit" className="w-full" disabled={busy || !password.trim()} isLoading={busy}>
+            {t('gate.unlock')}
+          </Button>
+        </form>
+      </div>
+    </div>
+  );
 }
 
 /** Sticky portal header with the accessibility + language controls. */

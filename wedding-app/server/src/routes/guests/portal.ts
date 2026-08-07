@@ -8,6 +8,7 @@ import { can } from '../../lib/rbac.js';
 import { broadcastSSE } from '../sse.js';
 import { BadRequest, NotFound } from '../../lib/errors.js';
 import { privateFilePath } from '../../lib/fileStorage.js';
+import { issuePortalPasswordProof, validPortalPasswordProof } from '../../lib/portalGate.js';
 import { createReadStream, existsSync } from 'node:fs';
 import { assertNoPublicHoneypot, auditPublicSubmission, publicRequestFingerprint } from '../../lib/publicAbuse.js';
 import type { FastifyInstance } from 'fastify';
@@ -51,7 +52,22 @@ export async function guestPortalRoutes(app: FastifyInstance) {
     const requiresPassword = !!cfg?.password_hash;
     // Security: return 404 if portal is explicitly disabled
     if (cfg && !cfg.enabled) throw NotFound("portal-disabled");
-    const q = req.query as { guest?: string; token?: string };
+    const q = req.query as { guest?: string; token?: string; pw?: string };
+    // Password-protected portal: refuse the guest payload until the client
+    // presents a valid short-lived proof from verify-password. Previously
+    // the toggle stored a hash but NOTHING enforced it — a false sense of
+    // security for the venue.
+    const passwordRequired = !!cfg?.password_hash;
+    const passwordUnlocked = !passwordRequired || validPortalPasswordProof(q.pw, eventId);
+    if (passwordRequired && !passwordUnlocked) {
+      auditPublicSubmission(req, { organizationId: event.organization_id, action: 'portal.password_required', targetType: 'event', targetId: eventId, details: { mode: q.guest ? 'tokenized' : 'lookup_required' } });
+      return {
+        passwordLocked: true,
+        requiresPassword: true,
+        portalEnabled: !!cfg?.enabled,
+        event: { id: event.id, title: event.title, startDate: null, endDate: null },
+      };
+    }
     const requestedGuest = q.guest ? guestsRepo.findById(q.guest) : undefined;
     const tokenStatus = requestedGuest && requestedGuest.event_id === eventId ? verifyGuestPortalToken(requestedGuest, q.token) : q.guest ? 'invalid' as const : 'missing' as const;
     const tokenGuest = requestedGuest && requestedGuest.event_id === eventId && tokenStatus === 'valid' ? requestedGuest : null;
@@ -661,7 +677,10 @@ export async function guestPortalRoutes(app: FastifyInstance) {
       passwordHash: cfg.password_hash, passwordSalt: cfg.password_salt,
     });
     auditPublicSubmission(req, { organizationId: event?.organization_id, action: ok ? 'portal.verify_password' : 'portal.verify_password_failed', targetType: 'event', targetId: eventId, details: { ok } });
-    return reply.code(ok ? 200 : 401).send({ ok });
+    if (!ok) return reply.code(401).send({ ok: false });
+    // Issue a short-lived, single-purpose proof so the client can unlock
+    // the (previously unenforced) password-protected portal.
+    return reply.code(200).send({ ok: true, token: issuePortalPasswordProof(eventId) });
   });
 
   app.post('/api/portal/:eventId/rsvp', { config: { rateLimit: { max: 20, timeWindow: '1 minute' } } }, async (req, reply) => {
