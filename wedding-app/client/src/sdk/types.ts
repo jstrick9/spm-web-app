@@ -26,6 +26,8 @@ export interface SdkMembership {
   roleId: string;     // 'sys_owner' or uuid
   roleKey: string;    // 'owner' / 'admin' / 'catering-lead' / ...
   roleName: string;   // display name
+  /** Effective permission ids for this membership (auth/me + login payloads). */
+  permissions?: string[];
 }
 
 // ─── Orgs ───────────────────────────────────────────

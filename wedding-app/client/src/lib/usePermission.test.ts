@@ -72,6 +72,40 @@ describe('usePermission', () => {
     expect(result.current).toBe(false);
   });
 
+  it('resolves permissions from the embedded membership list when the roles query is not available (staff lacks roles.view)', async () => {
+    // Regression: staff/planner do NOT have roles.view, so GET roles 403s and
+    // the role map stays empty — the embedded permissions array (auth/me)
+    // must keep every gate working instead of locking staff out of the app.
+    setPermissionContext('org1', [{
+      organizationId: 'org1', roleId: 'sys_staff', roleKey: 'staff', roleName: 'Staff',
+      permissions: ['events.view', 'guests.view', 'staff.view', 'timeline.view'],
+    }]);
+
+    const { result, rerender } = renderHook(
+      () => usePermissions(['events.view', 'guests.view', 'staff.manage', 'platform.manage']),
+      { wrapper },
+    );
+    await new Promise(r => setTimeout(r, 100));
+    rerender();
+    expect(result.current['events.view']).toBe(true);
+    expect(result.current['guests.view']).toBe(true);
+    expect(result.current['staff.manage']).toBe(false);
+    expect(result.current['platform.manage']).toBe(false);
+  });
+
+  it('usePermissionGate allows a staff-like membership via embedded permissions', async () => {
+    setPermissionContext('org1', [{
+      organizationId: 'org1', roleId: 'sys_staff', roleKey: 'staff', roleName: 'Staff',
+      permissions: ['events.view'],
+    }]);
+
+    const { result, rerender } = renderHook(() => usePermissionGate('events.view'), { wrapper });
+    await new Promise(r => setTimeout(r, 100));
+    rerender();
+    expect(result.current.isLoading).toBe(false);
+    expect(result.current.allowed).toBe(true);
+  });
+
   it('usePermissionGate exposes loading and allowed states for route guards', async () => {
     setPermissionContext('org1', [{ organizationId: 'org1', roleId: 'sys_owner', roleKey: 'owner', roleName: 'Owner' }]);
 

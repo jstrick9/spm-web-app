@@ -21,14 +21,43 @@ import { sdk } from '../sdk';
 import type { SdkMembership } from '../sdk/types';
 
 /**
+ * Resolve the permission set for one membership: the org's role map when it
+ * is available (roles.view holders), otherwise the effective permissions the
+ * server embedded in the membership itself (auth/me). The embedded list is
+ * the fallback that keeps staff/other roles WITHOUT roles.view fully gated
+ * instead of being locked out of every surface.
+ */
+function permsFor(m: SdkMembership, roleMap: Map<string, Set<string>>): Set<string> | undefined {
+  return roleMap.get(m.roleId) ?? (m.permissions?.length ? new Set(m.permissions) : undefined);
+}
+
+/**
+ * True when every membership already carries its effective permissions — in
+ * that case the roles query (which requires roles.view and 403s for staff)
+ * can be skipped entirely.
+ */
+function membershipsCarryPermissions(memberships: SdkMembership[]): boolean {
+  return memberships.length > 0 && memberships.every((m) => Array.isArray(m.permissions) && m.permissions.length > 0);
+}
+
+/**
  * Fetches the full role permission map for the org, caches it.
  * Returns a Map<roleId, Set<permissionId>>.
+ *
+ * Only fired as a fallback when some membership lacks its embedded
+ * permission list (stale payloads); the auth/me memberships are the primary
+ * source so roles WITHOUT roles.view (staff) stay fully gated.
  */
 function useRolePermissionState(orgId: string | null) {
+  const memberships = _ctx.memberships;
+  // Empty memberships = context not mounted yet — don't fire the roles query
+  // against the pre-login orgId (it would 403 for roles without roles.view
+  // and pollute the console with errors on every gated surface).
+  const skipQuery = memberships.length === 0 || membershipsCarryPermissions(memberships);
   const { data, isLoading, isFetching } = useQuery({
     queryKey: ['roles', orgId],
     queryFn: () => sdk.roles.listRoles(orgId!),
-    enabled: !!orgId,
+    enabled: !!orgId && !skipQuery,
     staleTime: 5 * 60_000, // 5 min cache — roles rarely change
   });
 
@@ -41,7 +70,7 @@ function useRolePermissionState(orgId: string | null) {
     return map;
   }, [data]);
 
-  return { roleMap, isLoading: !!orgId && !data && (isLoading || isFetching) };
+  return { roleMap, memberships, isLoading: !skipQuery && !!orgId && !data && (isLoading || isFetching) };
 }
 
 function useRolePermissionMap(orgId: string | null) {
@@ -65,16 +94,15 @@ export function setPermissionContext(orgId: string | null, memberships: SdkMembe
  * Returns `true` if any of their roles grant the permission.
  */
 export function usePermission(permissionId: string): boolean {
-  const roleMap = useRolePermissionMap(_ctx.orgId);
+  const { roleMap, memberships } = useRolePermissionState(_ctx.orgId);
 
   return useMemo(() => {
-    for (const m of _ctx.memberships) {
-      const roleId = m.roleId;
-      const perms = roleMap.get(roleId);
+    for (const m of memberships) {
+      const perms = permsFor(m, roleMap);
       if (perms?.has(permissionId)) return true;
     }
     return false;
-  }, [roleMap, permissionId]);
+  }, [roleMap, permissionId, memberships]);
 }
 
 /**
@@ -82,14 +110,14 @@ export function usePermission(permissionId: string): boolean {
  * Returns an object with boolean values for each permission.
  */
 export function usePermissions<T extends string>(permissionIds: readonly T[]): Record<T, boolean> {
-  const roleMap = useRolePermissionMap(_ctx.orgId);
+  const { roleMap, memberships } = useRolePermissionState(_ctx.orgId);
 
   return useMemo(() => {
     const result = {} as Record<T, boolean>;
     for (const pid of permissionIds) {
       result[pid] = false;
-      for (const m of _ctx.memberships) {
-        const perms = roleMap.get(m.roleId);
+      for (const m of memberships) {
+        const perms = permsFor(m, roleMap);
         if (perms?.has(pid)) {
           result[pid] = true;
           break;
@@ -97,7 +125,7 @@ export function usePermissions<T extends string>(permissionIds: readonly T[]): R
       }
     }
     return result;
-  }, [roleMap, permissionIds]);
+  }, [roleMap, permissionIds, memberships]);
 }
 
 /**
@@ -106,15 +134,15 @@ export function usePermissions<T extends string>(permissionIds: readonly T[]): R
  * of flashing AccessDenied while the permission catalog is being fetched.
  */
 export function usePermissionGate(permissionId: string): { allowed: boolean; isLoading: boolean } {
-  const { roleMap, isLoading } = useRolePermissionState(_ctx.orgId);
+  const { roleMap, memberships, isLoading } = useRolePermissionState(_ctx.orgId);
 
   const allowed = useMemo(() => {
-    for (const m of _ctx.memberships) {
-      const perms = roleMap.get(m.roleId);
+    for (const m of memberships) {
+      const perms = permsFor(m, roleMap);
       if (perms?.has(permissionId)) return true;
     }
     return false;
-  }, [roleMap, permissionId]);
+  }, [roleMap, permissionId, memberships]);
 
   return { allowed, isLoading };
 }

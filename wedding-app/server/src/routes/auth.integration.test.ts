@@ -659,3 +659,52 @@ describe('Auth: logout', () => {
     expect(me.json().memberships[0].roleKey).toBe('owner');
   });
 });
+
+describe('Auth: admin tier can manage couple invitations (roles.ts isVenueOwnerOrManager)', () => {
+  it('lets an admin (not just owner/manager) list and send couple invitations', async () => {
+    const owner = await register();
+    // Find the org id via the owner's memberships.
+    const me = await app.inject({ method: 'GET', url: '/api/auth/me', headers: { authorization: `Bearer ${owner.token}` } });
+    const ownerOrgId = me.json().memberships.find((m: any) => m.organizationId)?.organizationId as string;
+    expect(ownerOrgId).toBeTruthy();
+
+    // Create the event as owner.
+    const evt = await app.inject({ method: 'POST', url: '/api/events',
+      payload: { organizationId: ownerOrgId, title: 'Admin Couple Wedding', startDate: '2026-09-12' },
+      headers: { authorization: `Bearer ${owner.token}`, 'content-type': 'application/json' } });
+    const eventId = evt.json().event.id as string;
+
+    // Register an admin member and add them to the org.
+    const admin = await register(`admin-${Math.random().toString(36).slice(2)}@x.com`);
+    const add = await app.inject({ method: 'POST', url: `/api/orgs/${ownerOrgId}/members`,
+      payload: { userEmail: admin.email, roleId: 'sys_admin' },
+      headers: { authorization: `Bearer ${owner.token}`, 'content-type': 'application/json' } });
+    expect(add.statusCode).toBe(201);
+
+    // Regression: before the fix, the admin got 403 because the gate only
+    // allowed roleKey owner|manager despite the admin holding the
+    // events.members.invite permission.
+    const list = await app.inject({ method: 'GET', url: `/api/events/${eventId}/couple-invitations`,
+      headers: { authorization: `Bearer ${admin.token}` } });
+    expect(list.statusCode).toBe(200);
+
+    const send = await app.inject({ method: 'POST', url: `/api/events/${eventId}/couple-invitations`,
+      payload: { email: 'admin-couple@example.com' },
+      headers: { authorization: `Bearer ${admin.token}`, 'content-type': 'application/json' } });
+    expect(send.statusCode).toBe(201);
+
+    // A planner still cannot (they hold the permission but are not the
+    // venue-management tier).
+    const planner = await register(`planner-${Math.random().toString(36).slice(2)}@x.com`);
+    await app.inject({ method: 'POST', url: `/api/orgs/${ownerOrgId}/members`,
+      payload: { userEmail: planner.email, roleId: 'sys_planner' },
+      headers: { authorization: `Bearer ${owner.token}`, 'content-type': 'application/json' } });
+    const plannerList = await app.inject({ method: 'GET', url: `/api/events/${eventId}/couple-invitations`,
+      headers: { authorization: `Bearer ${planner.token}` } });
+    expect(plannerList.statusCode).toBe(403);
+    const plannerSend = await app.inject({ method: 'POST', url: `/api/events/${eventId}/couple-invitations`,
+      payload: { email: 'planner-couple@example.com' },
+      headers: { authorization: `Bearer ${planner.token}`, 'content-type': 'application/json' } });
+    expect(plannerSend.statusCode).toBe(403);
+  });
+});

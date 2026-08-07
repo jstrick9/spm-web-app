@@ -73,7 +73,9 @@ function validatePermissions(ids: string[]): PermissionId[] {
 }
 
 function isVenueOwnerOrManager(memberships: any[], organizationId: string) {
-  return memberships.some((membership) => membership.organizationId === organizationId && ['owner', 'manager'].includes(String(membership.roleKey).toLowerCase()));
+  // Admin outranks manager and holds every permission except org.manage, so
+  // owner/admin/manager are the org's venue-management tier.
+  return memberships.some((membership) => membership.organizationId === organizationId && ['owner', 'admin', 'manager'].includes(String(membership.roleKey).toLowerCase()));
 }
 
 export async function roleRoutes(app: FastifyInstance) {
@@ -374,7 +376,9 @@ export async function roleRoutes(app: FastifyInstance) {
         ok: true,
         status: 'invitation_sent',
         invitation: { id: invitation.row.id, email: invitation.row.email, role_id: invitation.row.role_id, expires_at: invitation.row.expires_at },
-        ...(process.env.NODE_ENV !== 'production' || process.env.TEST_DB === ':memory:' ? { token: invitation.token } : {}),
+        // E2E mode returns the token so specs can register through the REAL
+        // invite flow (joining the venue org without creating their own).
+        ...(process.env.NODE_ENV !== 'production' || process.env.TEST_DB === ':memory:' || process.env.E2E_RATE_LIMIT_BYPASS === '1' ? { token: invitation.token } : {}),
       });
     },
   );

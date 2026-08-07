@@ -574,6 +574,9 @@ export function EventDetail({ eventId, user }: Props & { user: any }) {
                 event={event}
                 counts={guestsQuery.data?.counts}
                 canInviteCouple={perms['events.members.invite'] === true}
+                canManageCoupleInvites={perms['events.members.invite'] === true && (currentUserQuery.data?.memberships?.some((membership: any) => membership.organizationId === event.organization_id && ['owner', 'admin', 'manager'].includes(String(membership.roleKey).toLowerCase())) ?? false)}
+                canStageTransition={perms['events.stage.transition'] === true}
+                canDecideFinalReview={perms['events.final_review.decide'] === true}
                 canAccessSetupPacket={currentUserQuery.data?.memberships?.some((membership: any) => (membership.organizationId === event.organization_id || membership.eventId === eventId) && ['owner', 'admin', 'manager', 'staff', 'planner'].includes(String(membership.roleKey).toLowerCase())) ?? false}
               />
             </TabsContent>

@@ -14,7 +14,7 @@ declare module 'fastify' {
       userId: string;
       email: string;
       sessionVersion: number;
-      memberships: Array<Membership & { roleKey: string; roleName: string; eventOrganizationId?: string }>;
+      memberships: Array<Membership & { roleKey: string; roleName: string; eventOrganizationId?: string; permissions?: string[] }>;
     };
   }
 }
@@ -67,20 +67,42 @@ export async function requireAuth(
      WHERE em.user_id = ? AND em.status = 'active' AND e.deleted_at IS NULL`
   ).all(payload.sub) as Array<{ event_id: string; event_organization_id: string; role_id: string; role_key: string; role_name: string }>;
 
+  const memberships = [
+    ...orgMems.map((m) => ({
+      organizationId: m.organization_id,
+      roleId: m.role_id, roleKey: m.role_key, roleName: m.role_name,
+    })),
+    ...eventMems.map((m) => ({
+      eventId: m.event_id,
+      eventOrganizationId: m.event_organization_id,
+      roleId: m.role_id, roleKey: m.role_key, roleName: m.role_name,
+    })),
+  ];
+
+  // Effective permission ids per role, embedded in each membership so the
+  // client can resolve usePermission() WITHOUT calling GET /api/orgs/:id/roles
+  // (that endpoint requires roles.view, which staff does not have — staff
+  // used to get an empty permission map and an AccessRestricted home screen).
+  const roleIds = [...new Set(memberships.map((m) => m.roleId))];
+  const permsByRole = new Map<string, Set<string>>();
+  if (roleIds.length > 0) {
+    const rows = db.prepare(
+      `SELECT role_id, permission_id FROM role_permissions WHERE role_id IN (${roleIds.map(() => '?').join(',')})`
+    ).all(...roleIds) as Array<{ role_id: string; permission_id: string }>;
+    for (const row of rows) {
+      let set = permsByRole.get(row.role_id);
+      if (!set) { set = new Set(); permsByRole.set(row.role_id, set); }
+      set.add(row.permission_id);
+    }
+  }
+
   req.auth = {
     userId: userRow.id,
     email: userRow.email,
     sessionVersion: userRow.session_version,
-    memberships: [
-      ...orgMems.map((m) => ({
-        organizationId: m.organization_id,
-        roleId: m.role_id, roleKey: m.role_key, roleName: m.role_name,
-      })),
-      ...eventMems.map((m) => ({
-        eventId: m.event_id,
-        eventOrganizationId: m.event_organization_id,
-        roleId: m.role_id, roleKey: m.role_key, roleName: m.role_name,
-      })),
-    ],
+    memberships: memberships.map((m) => ({
+      ...m,
+      permissions: [...(permsByRole.get(m.roleId) ?? [])],
+    })),
   };
 }
