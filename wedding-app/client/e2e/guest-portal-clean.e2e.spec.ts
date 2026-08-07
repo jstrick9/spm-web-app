@@ -7,6 +7,19 @@ import { test, expect } from '@playwright/test';
 
 const BASE = process.env.A11Y_BASE_URL || 'http://localhost:3000';
 
+/** Reload with retry — a SW update can abort the navigation (net::ERR_ABORTED). */
+async function reloadSafely(page: import('@playwright/test').Page): Promise<void> {
+  for (let i = 0; i < 3; i++) {
+    try {
+      await page.reload({ waitUntil: 'domcontentloaded' });
+      return;
+    } catch {
+      await page.waitForTimeout(800);
+    }
+  }
+  await page.reload({ waitUntil: 'domcontentloaded' });
+}
+
 function watch(page: import('@playwright/test').Page, sink: string[]): void {
   page.on('console', (msg) => {
     if (msg.type() === 'error') sink.push(`[console.error] ${msg.text().slice(0, 260)}`);
@@ -83,7 +96,7 @@ test('guest portal renders clean and help flows work in both token states', asyn
   // Hash-only navigation does NOT remount the portal (SW-served shell), so
   // reload to re-read the token/guest query params at mount.
   await page.goto(`${BASE}/#/portal/${eventId}?guest=${guestId}&token=${guestToken}`);
-  await page.reload({ waitUntil: 'domcontentloaded' });
+  await reloadSafely(page);
   await expect(page.getByRole('heading', { level: 1 }).first()).toBeVisible({ timeout: 20000 });
   await page.waitForTimeout(2000);
 
@@ -133,7 +146,7 @@ test('guest portal renders clean and help flows work in both token states', asyn
 
   // ── 3. Full-page scroll to mount every lazy section ──
   await page.goto(`${BASE}/#/portal/${eventId}?guest=${guestId}&token=${guestToken}`);
-  await page.reload({ waitUntil: 'domcontentloaded' });
+  await reloadSafely(page);
   await page.waitForTimeout(2500);
   await page.evaluate(async () => {
     for (let y = 0; y < document.body.scrollHeight; y += 600) {
