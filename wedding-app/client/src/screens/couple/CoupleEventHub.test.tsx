@@ -190,7 +190,15 @@ describe('CoupleEventHub', () => {
 });
 
 describe('CoupleEventHub — update read-receipts, guest editing, document metadata editing', () => {
-  beforeEach(() => vi.clearAllMocks());
+  beforeEach(() => {
+    vi.clearAllMocks();
+    // restore the default documents payload (other tests override it)
+    (sdk.couple.documents as any).mockResolvedValue({
+      documents: [{ id: 'd1', filename: 'menu.pdf', url: '/uploads/menu.pdf', mimeType: 'application/pdf', category: 'menu', visibility: 'couple_venue', approvalStatus: 'pending', version: 1, notes: 'Menu', extractedSummary: 'Possible menu/tasting document', history: [], reviewedBy: null, reviewedAt: null, createdAt: '2026-01-01', updatedAt: '2026-01-01' }],
+      counts: { menu: 1 }, reviewQueue: [], postEventGallery: [], allowedTypes: ['application/pdf'], maxBytes: 8388608,
+      categories: ['menu', 'contract'], visibilityOptions: ['couple_venue', 'planner'],
+    });
+  });
 
   it('marks every Event Week update as VIEWED once (regression: the venue "viewed X/Y" panel stayed 0 forever)', async () => {
     (sdk.events.coupleUpdates as any).mockResolvedValue({
@@ -222,6 +230,43 @@ describe('CoupleEventHub — update read-receipts, guest editing, document metad
         expect.objectContaining({ fullName: 'Guest One Renamed', rsvpStatus: 'attending' }),
       );
     });
+  });
+
+  it('shows ALL documents when a couple has more than 8 (regression: the 8-cap silently hid older documents forever)', async () => {
+    const manyDocs = Array.from({ length: 11 }, (_, i) => ({
+      id: `d${i}`, filename: `doc-${i}.pdf`, url: `/u${i}`, mimeType: 'application/pdf',
+      category: 'menu' as const, visibility: 'couple_venue' as const, approvalStatus: 'pending' as const,
+      version: 1, notes: '', history: [],
+    }));
+    (sdk.couple.documents as any).mockResolvedValue({
+      documents: manyDocs, counts: {}, reviewQueue: [], postEventGallery: [],
+      allowedTypes: [], maxBytes: 0, categories: ['menu'], visibilityOptions: ['couple_venue'],
+    });
+    render(<CoupleEventHub eventId="e1" />, { wrapper: wrapper() });
+    await screen.findByText('doc-0.pdf');
+    // only the first 8 are listed, plus a Show-all affordance
+    expect(screen.queryByText('doc-10.pdf')).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: /show all 11 documents/i }));
+    expect(screen.getByText('doc-10.pdf')).toBeInTheDocument();
+  });
+
+  it('shows ALL timeline items when a couple has more than 10 (regression: the 10-cap silently hid older items forever)', async () => {
+    const manyItems = Array.from({ length: 13 }, (_, i) => ({
+      id: `ct${i}`, title: `Timeline item ${i}`, category: 'ceremony',
+      startsAt: '2026-09-12T16:30:00', endsAt: null, durationMin: 30,
+      location: 'Garden Lawn', notes: null,
+    }));
+    (sdk.couple.timeline as any).mockResolvedValue({
+      items: manyItems, hiddenInternalCount: 0, subEvents: [], rehearsal: null,
+      approval: { status: 'not_requested', note: null, updatedAt: null },
+      changeRequests: [], versionHistory: [], education: [],
+    });
+    render(<CoupleEventHub eventId="e1" />, { wrapper: wrapper() });
+    await screen.findByText('Timeline item 0');
+    // only the first 10 are listed, plus a Show-all affordance
+    expect(screen.queryByText('Timeline item 12')).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: /show all 13 timeline items/i }));
+    expect(screen.getByText('Timeline item 12')).toBeInTheDocument();
   });
 
   it('edits document metadata via the shared form row (regression: category/visibility were set once and never fixable)', async () => {

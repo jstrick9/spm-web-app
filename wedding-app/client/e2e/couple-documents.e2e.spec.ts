@@ -21,6 +21,28 @@ async function clickSafely(locator: Locator): Promise<void> {
 }
 
 /**
+ * Self-cleaning: this spec's earlier runs leave sample-prefixed and
+ * toggle-prefixed docs in the demo event forever. Without cleanup the fresh
+ * upload can land beyond the hub's 8-card grid cap (docs sort newest-first)
+ * and the test's "New version" card never renders. Delete this spec's own
+ * leftovers before each test.
+ */
+async function cleanupLeftoverSpecDocs(request: import('@playwright/test').APIRequestContext, token: string, eventId: string): Promise<void> {
+  const res = await request.get(`/api/events/${eventId}/couple-documents`, {
+    headers: { authorization: `Bearer ${token}` },
+  });
+  if (res.status() !== 200) return;
+  const { documents } = (await res.json()) as { documents: Array<any> };
+  for (const doc of documents) {
+    if (/^(sample-|toggle-)/.test(doc.filename)) {
+      await request.delete(`/api/events/${eventId}/couple-documents/${doc.id}`, {
+        headers: { authorization: `Bearer ${token}` },
+      });
+    }
+  }
+}
+
+/**
  * Couple document hub end-to-end: a fresh couple uploads a document from
  * the hub ("Use sample file" → Upload), the toast confirms it, and the
  * server records the document + an audit entry. The venue can see it in
@@ -44,6 +66,7 @@ test('couple uploads a shared document that the venue sees in the hub', async ({
   const events = (await (await request.get(`/api/orgs/${orgId}/events`, { headers: { authorization: `Bearer ${token}` } })).json()).events;
   const event = events.find((e: any) => e.title === 'Smith & Jones Wedding') ?? events[0];
   const eventId = event.id as string;
+  await cleanupLeftoverSpecDocs(request, token, eventId);
 
   const invite = await request.post(`/api/events/${eventId}/couple-invitations`, {
     headers: { authorization: `Bearer ${token}`, 'content-type': 'application/json' },
@@ -148,4 +171,88 @@ test('couple uploads a shared document that the venue sees in the hub', async ({
     const entry = entries.find((e: any) => e.action === 'couple.document.upload' || e.action === 'document.upload');
     expect(entry, 'audit must record the couple document upload').toBeTruthy();
   }
+});
+
+/**
+ * Regression: the hub hard-capped the document grid at 8 with no way to see
+ * the rest — a couple with more files silently lost access to older ones.
+ * The toggle reveals everything.
+ */
+test('couple hub shows all documents beyond the 8-card cap via Show all / Show fewer', async ({ page, request }) => {
+  test.setTimeout(90_000); // staggered seeding of 10 docs takes ~11s
+  // ── API setup: fresh couple + membership (same pattern as above) ──
+  const coupleEmail = `couple-toggle-${Date.now()}@example.com`;
+  const reg = await request.post('/api/auth/register', {
+    data: { email: coupleEmail, password: 'testpass123', fullName: 'Casey Couple', orgName: 'Tmp' },
+  });
+  expect(reg.ok()).toBeTruthy();
+
+  const login = await request.post('/api/auth/login', { data: { email: 'owner@demo.local', password: 'wedding123' } });
+  const { token } = await login.json();
+  const orgId = (await (await request.get('/api/orgs', { headers: { authorization: `Bearer ${token}` } })).json()).organizations[0].id;
+  const events = (await (await request.get(`/api/orgs/${orgId}/events`, { headers: { authorization: `Bearer ${token}` } })).json()).events;
+  const event = events.find((e: any) => e.title === 'Smith & Jones Wedding') ?? events[0];
+  const eventId = event.id as string;
+  await cleanupLeftoverSpecDocs(request, token, eventId);
+
+  await request.post(`/api/events/${eventId}/couple-invitations`, {
+    headers: { authorization: `Bearer ${token}`, 'content-type': 'application/json' },
+    data: { email: coupleEmail, roleKey: 'couple' },
+  });
+
+  const coupleLogin = await request.post('/api/auth/login', { data: { email: coupleEmail, password: 'testpass123' } });
+  const coupleToken = (await coupleLogin.json()).token;
+  const coupleOrgs = await (await request.get('/api/orgs', { headers: { authorization: `Bearer ${coupleToken}` } })).json();
+  const coupleOrgId = coupleOrgs.organizations[0].id;
+  await request.put('/api/users/me/preferences', {
+    headers: { authorization: `Bearer ${coupleToken}`, 'content-type': 'application/json' },
+    data: {
+      onboarding: {
+        welcomeTourByOrg: {
+          [coupleOrgId]: { status: 'completed', currentSlide: 0, completedSlides: [], completedAt: new Date().toISOString() },
+        },
+      },
+    },
+  });
+
+  // ── seed 10 documents via API (all 'menu' category, newest first in UI) ──
+  // created_at has 1-second precision, so stagger uploads >1s apart to make
+  // the ORDER BY category, created_at DESC ordering deterministic.
+  for (let i = 0; i < 10; i += 1) {
+    const upload = await request.post(`/api/events/${eventId}/couple-documents`, {
+      headers: { authorization: `Bearer ${coupleToken}`, 'content-type': 'application/json' },
+      data: {
+        filename: `toggle-doc-${i}.pdf`,
+        dataUri: `data:application/pdf;base64,JVBERi0xLjQKJcTl8uXrp/Og0MTGCjEwIDAgb2JqCjw8L0xlbmd0aCAxMT4+CnN0cmVhbQpCRFIKc3RhcnR4cmVmCjExCiUlRU9GCg==`,
+        mimeType: 'application/pdf',
+        category: 'menu',
+        visibility: 'couple_venue',
+      },
+    });
+    expect(upload.status(), `seed upload ${i} must succeed`).toBe(201);
+    if (i < 9) await new Promise((r) => setTimeout(r, 1100));
+  }
+
+  // ── couple opens the hub ──
+  await page.goto('/#/');
+  await page.getByLabel(/email address/i).fill(coupleEmail);
+  await page.getByLabel(/^password$/i).fill('testpass123');
+  await page.getByRole('button', { name: /sign in securely/i }).click();
+  await expect(page.locator('body')).toContainText(/your wedding hub/i, { timeout: 20_000 });
+
+  const docHub = page.locator('#couple-documents');
+  // newest-first ordering: toggle-doc-9 … toggle-doc-0; the 8-cap hides the last 2
+  await expect(docHub.getByText('toggle-doc-9.pdf')).toBeVisible({ timeout: 20_000 });
+  await expect(docHub.getByText('toggle-doc-1.pdf')).not.toBeVisible();
+
+  const showAll = docHub.getByRole('button', { name: /show all \d+ documents/i });
+  await expect(showAll).toBeVisible();
+  await clickSafely(showAll);
+
+  await expect(docHub.getByText('toggle-doc-1.pdf')).toBeVisible();
+  await expect(docHub.getByText('toggle-doc-0.pdf')).toBeVisible();
+
+  const showFewer = docHub.getByRole('button', { name: 'Show fewer' });
+  await clickSafely(showFewer);
+  await expect(docHub.getByText('toggle-doc-1.pdf')).not.toBeVisible();
 });
