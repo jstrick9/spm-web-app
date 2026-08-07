@@ -37,6 +37,7 @@ import type { CoupleRequestType } from '../../sdk/couple';
 
 const CouplePostEventCloseout = lazy(() => import('./CouplePostEventCloseout').then((m) => ({ default: m.CouplePostEventCloseout })));
 const CoupleReminderCenter = lazy(() => import('./CoupleReminderCenter').then((m) => ({ default: m.CoupleReminderCenter })));
+const CoupleIntakePanel = lazy(() => import('./CoupleIntakePanel').then((m) => ({ default: m.CoupleIntakePanel })));
 const CoupleAdvancedPlanning = lazy(() => import('./CoupleAdvancedPlanning').then((m) => ({ default: m.CoupleAdvancedPlanning })));
 
 
@@ -873,6 +874,10 @@ export function CoupleEventHub({ eventId }: { eventId: string }) {
               <div className="rounded-lg border border-border bg-surface-2 p-3 text-xs text-fg-muted"><strong>Unsaved draft protection:</strong> If you edit a form and try to leave before saving/submitting, the browser will warn you. Use the mobile bottom bar for one-hand access to Ask, RSVP, Guests, Timeline, Docs, and Offline.</div>
             </CardContent>
           </Card>
+
+          <Suspense fallback={<Card><CardContent className="pt-6"><Skeleton className="h-40 w-full" /></CardContent></Card>}>
+            <CoupleIntakePanel eventId={eventId} />
+          </Suspense>
 
           <Suspense fallback={<Card><CardContent className="pt-6"><Skeleton className="h-40 w-full" /></CardContent></Card>}>
             <CoupleReminderCenter eventId={eventId} />

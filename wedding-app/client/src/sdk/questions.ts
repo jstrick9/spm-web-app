@@ -25,6 +25,14 @@ export const questionsSdk = {
     return api.delete(`/api/questions/${questionId}`);
   },
 
+  /** Org intake questions scoped to an event (couples answer their own forms). */
+  listForEvent(eventId: string): Promise<{ questions: SdkEventQuestion[] }> {
+    return api.get(`/api/events/${eventId}/questions`);
+  },
+  /** Org-wide answers for one question (venue Questions Studio viewer). */
+  listQuestionAnswers(orgId: string, questionId: string): Promise<{ answers: Array<{ event_id: string; event_title: string; answer: string; answered_at: string }> }> {
+    return api.get(`/api/orgs/${orgId}/questions/${questionId}/answers`);
+  },
   listAnswers(eventId: string): Promise<{ answers: SdkEventAnswer[] }> {
     return api.get(`/api/events/${eventId}/answers`);
   },

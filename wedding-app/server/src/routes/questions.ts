@@ -3,6 +3,7 @@ import { z } from 'zod';
 import { requireAuth } from '../middleware/auth.js';
 import { can } from '../lib/rbac.js';
 import { eventQuestionsRepo, eventAnswersRepo, eventsRepo } from '../db/repos/index.js';
+import { db } from '../db/database.js';
 import { BadRequest, Forbidden, NotFound } from '../lib/errors.js';
 
 const questionSchema = z.object({
@@ -50,6 +51,35 @@ export async function questionRoutes(app: FastifyInstance) {
   });
 
   // ─── Answers ───────────────────────────────────────────
+  // Couples answer the venue's intake questions for THEIR event (the
+  // feature was dead-ended: the studio created questions and the answers
+  // API existed, but no UI let couples fill them and the SDK had zero
+  // callers). Questions are org-level; answers are per-event.
+  app.get('/api/events/:eventId/questions', { preHandler: requireAuth }, async (req) => {
+    const { eventId } = req.params as { eventId: string };
+    const event = eventsRepo.findById(eventId);
+    if (!event) throw NotFound('event-not-found');
+    const orgMap = eventsRepo.orgMapForUser(req.auth!.userId);
+    if (!can(req.auth!.memberships, { eventId }, 'events.view', orgMap)) throw Forbidden();
+    return { questions: eventQuestionsRepo.listForOrg(event.organization_id) };
+  });
+
+  // Org-wide answers for one question (venue Questions Studio viewer) —
+  // avoids the client scanning every event one-by-one.
+  app.get('/api/orgs/:orgId/questions/:questionId/answers', { preHandler: requireAuth }, async (req) => {
+    const { orgId, questionId } = req.params as { orgId: string; questionId: string };
+    if (!can(req.auth!.memberships, { organizationId: orgId }, 'questions.view')) throw Forbidden();
+    const rows = db.prepare(`
+      SELECT a.event_id, e.title AS event_title, a.answer, a.answered_at
+      FROM event_answers a
+      JOIN events e ON e.id = a.event_id AND e.organization_id = ?
+      WHERE a.question_id = ?
+      ORDER BY a.answered_at DESC
+      LIMIT 50
+    `).all(orgId, questionId) as Array<{ event_id: string; event_title: string; answer: string; answered_at: string }>;
+    return { answers: rows };
+  });
+
   app.get('/api/events/:eventId/answers', { preHandler: requireAuth }, async (req) => {
     const { eventId } = req.params as { eventId: string };
     const orgMap = eventsRepo.orgMapForUser(req.auth!.userId);
@@ -60,7 +90,13 @@ export async function questionRoutes(app: FastifyInstance) {
   app.put('/api/events/:eventId/answers/:questionId', { preHandler: requireAuth }, async (req) => {
     const { eventId, questionId } = req.params as { eventId: string; questionId: string };
     const orgMap = eventsRepo.orgMapForUser(req.auth!.userId);
-    if (!can(req.auth!.memberships, { eventId }, 'events.edit', orgMap)) throw Forbidden();
+    // The event's COUPLE members answer their own intake forms (same rule
+    // as canWriteCoupleData); venue roles with events.edit may also record
+    // answers in a support capacity.
+    const isCoupleMember = req.auth!.memberships.some(
+      (m) => m.eventId === eventId && String((m as any).roleKey ?? '').toLowerCase() === 'couple',
+    );
+    if (!isCoupleMember && !can(req.auth!.memberships, { eventId }, 'events.edit', orgMap)) throw Forbidden();
     const parsed = z.object({ answer: z.string() }).safeParse(req.body);
     if (!parsed.success) throw BadRequest('invalid-input', parsed.error.issues);
     return {

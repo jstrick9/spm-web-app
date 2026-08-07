@@ -293,8 +293,9 @@ export function EventQuestionsStudio({ orgId }: Props) {
                                     <span className="font-semibold text-xs text-fg">{q.question}</span>
                                     {q.required === 1 && <span className="text-danger text-lg leading-none">*</span>}
                                  </div>
-                                 <div className="flex gap-2">
+                                 <div className="flex flex-wrap items-center gap-2">
                                     <Badge variant="outline" className="text-[9px] uppercase text-fg-muted bg-surface">{q.answer_type}</Badge>
+                                    <QuestionAnswers orgId={orgId} questionId={q.id} />
                                     {(() => {
                                       try {
                                         const opts = JSON.parse(q.options || '[]');
@@ -335,5 +336,48 @@ export function EventQuestionsStudio({ orgId }: Props) {
          )}
       </PageBody>
     </>
+  );
+}
+
+/**
+ * Venue-side answers viewer for the intake questionnaire. The answers API
+ * existed but the studio never showed them — couples can now fill the forms
+ * from their hub, and this expander shows each couple's answer via a single
+ * org-wide query.
+ */
+function QuestionAnswers({ orgId, questionId }: { orgId: string; questionId: string }) {
+  const [open, setOpen] = useState(false);
+  const answersQuery = useQuery({
+    queryKey: ['question-answers', orgId, questionId],
+    queryFn: () => sdk.questions.listQuestionAnswers(orgId, questionId),
+    enabled: open,
+  });
+
+  return (
+    <div className="text-xs">
+      <button
+        type="button"
+        className="font-bold text-brand underline"
+        onClick={() => setOpen((v) => !v)}
+        aria-expanded={open}
+      >
+        {open ? 'Hide answers' : 'View answers'}
+      </button>
+      {open && (
+        <div className="mt-2 space-y-1 rounded-lg border border-border bg-surface-2/50 p-2">
+          {answersQuery.isLoading && <p className="text-fg-muted">Loading answers…</p>}
+          {answersQuery.isError && <p className="text-danger">Could not load answers.</p>}
+          {!answersQuery.isLoading && !answersQuery.isError && (answersQuery.data?.answers?.length ?? 0) === 0 && (
+            <p className="text-fg-muted">No answers yet. Couples answer these from their wedding hub.</p>
+          )}
+          {(answersQuery.data?.answers ?? []).map((row) => (
+            <div key={row.event_id} className="rounded-md border border-border bg-surface p-2">
+              <div className="font-bold">{row.event_title}</div>
+              <div className="whitespace-pre-wrap text-fg-muted">{row.answer}</div>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
   );
 }
