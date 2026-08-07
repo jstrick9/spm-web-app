@@ -58,7 +58,8 @@ test('access control shows real names/roles and role changes persist', async ({ 
   await expect(page.getByText('Alex Access').first()).toBeVisible({ timeout: 10_000 });
 
   // ── 3. The role select shows the ACTUAL role (Venue Manager) ──
-  const row = page.locator('div').filter({ hasText: /Alex Access/ }).filter({ has: page.locator('select') }).last();
+  // scope to THIS run's member (prior runs leave same-named rows behind)
+  const row = page.locator('div').filter({ hasText: email }).filter({ has: page.locator('select') }).last();
   const roleSelect = row.locator('select').first();
   await expect(roleSelect).toHaveValue('sys_manager', { timeout: 10_000 });
 
