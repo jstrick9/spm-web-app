@@ -62,6 +62,33 @@ jobs:
       - name: Smoke
         run: npm run smoke
 
+  # ── Production container validation ────────────────────────────────
+  docker:
+    name: Docker build · runtime health
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build production image
+        working-directory: wedding-app
+        run: docker build --pull -t wedding-app-ci:${{ github.sha }} .
+      - name: Start image and verify health endpoint
+        run: |
+          set -euo pipefail
+          name=wedding-app-ci-${{ github.run_id }}
+          trap 'docker rm -f "$name" >/dev/null 2>&1 || true' EXIT
+          docker run -d --name "$name" -p 127.0.0.1:3000:3000 \
+            -e JWT_SECRET="$(openssl rand -hex 32)" \
+            -e WEDDING_SECRETS_KEY="$(openssl rand -hex 32)" \
+            wedding-app-ci:${{ github.sha }}
+          for _ in $(seq 1 45); do
+            if curl --fail --silent --show-error http://127.0.0.1:3000/api/health; then
+              exit 0
+            fi
+            sleep 1
+          done
+          docker logs "$name"
+          exit 1
+
   # ── Browser quality gates: axe-core (public surfaces) + e2e happy path ──
   # The a11y harness (scripts/a11y-test.sh) builds, seeds, and boots the real
   # server, then runs every *.a11y.spec.ts and *.e2e.spec.ts in Playwright.
