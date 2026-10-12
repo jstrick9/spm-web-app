@@ -255,7 +255,12 @@ export async function buildApp() {
   if (existsSync(CLIENT_DIST)) {
     await app.register(fastifyStatic, { root: CLIENT_DIST, prefix: '/' });
     app.setNotFoundHandler((req, reply) => {
-      if (req.url.startsWith('/api/')) return reply.code(404).send({ error: 'not-found' });
+      // Never let an unknown upload path fall through to the SPA shell. In
+      // particular, `/uploads/private/*` is an authorization boundary: private
+      // files are served only by authenticated route handlers.
+      if (req.url.startsWith('/api/') || req.url.startsWith('/uploads/')) {
+        return reply.code(404).send({ error: 'not-found' });
+      }
       return reply.sendFile('index.html');
     });
   }
